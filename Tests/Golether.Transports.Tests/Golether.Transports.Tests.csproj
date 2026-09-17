@@ -1,0 +1,10 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- Tests of message framing, the mutual-TLS transport, router port mapping and the TURN relay. -->
+  <ItemGroup>
+    <ProjectReference Include="../../Sources/Transports/Golether.Transports.Tls/Golether.Transports.Tls.csproj" />
+    <ProjectReference Include="../../Sources/Transports/Golether.Transports.PortMapping/Golether.Transports.PortMapping.csproj" />
+    <ProjectReference Include="../../Sources/Transports/Golether.Transports.Relay/Golether.Transports.Relay.csproj" />
+  </ItemGroup>
+
+</Project>

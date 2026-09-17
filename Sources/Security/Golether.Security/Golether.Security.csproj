@@ -1,0 +1,17 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- Device identity, secret protection, invitations, verification codes and admission of participants. -->
+  <PropertyGroup>
+    <RootNamespace>Golether.Security</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="System.Security.Cryptography.ProtectedData" />
+    <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\Core\Golether.Core\Golether.Core.csproj" />
+  </ItemGroup>
+
+</Project>

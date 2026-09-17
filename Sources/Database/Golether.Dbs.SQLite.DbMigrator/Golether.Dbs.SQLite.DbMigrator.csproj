@@ -1,0 +1,13 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- Console migrator of the Golether SQLite database (the application also migrates on start). -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <RootNamespace>Golether.Dbs.SQLite.DbMigrator</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\Core\Golether.Core.Data.Migrations.SQLite\Golether.Core.Data.Migrations.SQLite.csproj" />
+  </ItemGroup>
+
+</Project>

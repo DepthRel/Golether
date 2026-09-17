@@ -1,0 +1,15 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- Provider-independent FluentMigrator infrastructure: script migrations and the runner. -->
+  <PropertyGroup>
+    <RootNamespace>Golether.Core.Data.Migrations</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="FluentMigrator" />
+    <PackageReference Include="FluentMigrator.Runner.Core" />
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection" />
+    <PackageReference Include="Microsoft.Extensions.Logging" />
+  </ItemGroup>
+
+</Project>

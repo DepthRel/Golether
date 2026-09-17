@@ -1,0 +1,8 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- Tests of chunked media sharing and caching. -->
+  <ItemGroup>
+    <ProjectReference Include="../../Sources/Media/Golether.Media.Streaming/Golether.Media.Streaming.csproj" />
+  </ItemGroup>
+
+</Project>

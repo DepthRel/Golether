@@ -1,0 +1,20 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    Cameras and voices over WebRTC with GStreamer (webrtcbin): one capture pipeline with echo cancellation and a
+    single encoder, one pipeline per remote participant, one mixing playback pipeline. Native interop by P/Invoke.
+  -->
+  <PropertyGroup>
+    <RootNamespace>Golether.Media.Conference.GStreamer</RootNamespace>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Golether.Media.Conference\Golether.Media.Conference.csproj" />
+  </ItemGroup>
+
+</Project>

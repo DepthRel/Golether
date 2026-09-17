@@ -1,0 +1,8 @@
+-- Reverts 0001_InitialSchema.
+DROP TABLE IF EXISTS Settings;
+DROP INDEX IF EXISTS IX_Tunnels_PeerId;
+DROP INDEX IF EXISTS UX_Tunnels_Role_OfferId;
+DROP TABLE IF EXISTS Tunnels;
+DROP TABLE IF EXISTS HostTunnelInterfaces;
+DROP INDEX IF EXISTS IX_Contacts_LastSeenAt;
+DROP TABLE IF EXISTS Contacts;

@@ -1,0 +1,12 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- Transport-independent contracts: authenticated peer streams, connectors, listeners and message framing. -->
+  <PropertyGroup>
+    <RootNamespace>Golether.Transports</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\Core\Golether.Core\Golether.Core.csproj" />
+  </ItemGroup>
+
+</Project>

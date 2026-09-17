@@ -1,0 +1,15 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    Contract of camera and voice conferencing (WebRTC through GStreamer webrtcbin in the next stage) and the
+    placeholder used until the GStreamer backend is available.
+  -->
+  <PropertyGroup>
+    <RootNamespace>Golether.Media.Conference</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\Core\Golether.Core\Golether.Core.csproj" />
+  </ItemGroup>
+
+</Project>

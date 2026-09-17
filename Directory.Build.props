@@ -1,0 +1,45 @@
+<Project>
+
+  <!--
+    Shared build settings for every Golether project.
+    GenerateDocumentationFile together with CS1591 in WarningsAsErrors makes a missing XML documentation comment
+    a build error, which enforces the documentation rule from AGENTS.md.
+  -->
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <LangVersion>latest</LangVersion>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <WarningsAsErrors>$(WarningsAsErrors);CS1591;nullable</WarningsAsErrors>
+    <NuGetAudit>false</NuGetAudit>
+  </PropertyGroup>
+
+  <PropertyGroup>
+    <Product>Golether</Product>
+    <Authors>Golether contributors</Authors>
+    <Copyright>Copyright © Golether contributors. Licensed under GPL-3.0-or-later.</Copyright>
+    <PackageLicenseExpression>GPL-3.0-or-later</PackageLicenseExpression>
+    <Version>0.1.0</Version>
+  </PropertyGroup>
+
+  <!--
+    Test projects (Tests/*) are xUnit v3 executables on Microsoft.Testing.Platform (see global.json) and are never
+    packed. Their common packages are referenced here, so test project files only list project references.
+  -->
+  <PropertyGroup Condition="$(MSBuildProjectName.EndsWith('.Tests'))">
+    <IsPackable>false</IsPackable>
+    <IsTestProject>true</IsTestProject>
+    <OutputType>Exe</OutputType>
+  </PropertyGroup>
+
+  <ItemGroup Condition="$(MSBuildProjectName.EndsWith('.Tests'))">
+    <PackageReference Include="Microsoft.NET.Test.Sdk" />
+    <PackageReference Include="xunit.v3" />
+    <PackageReference Include="xunit.runner.visualstudio" PrivateAssets="all" IncludeAssets="runtime; build; native; contentfiles; analyzers; buildtransitive" />
+    <PackageReference Include="NSubstitute" />
+    <PackageReference Include="Microsoft.Extensions.TimeProvider.Testing" />
+    <Using Include="Xunit" />
+  </ItemGroup>
+
+</Project>

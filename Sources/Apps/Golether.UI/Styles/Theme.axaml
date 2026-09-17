@@ -1,0 +1,217 @@
+<Styles xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+  <!--
+    Golether dark theme: ink ground, tungsten-amber accent (projector lamp), teal for security,
+    semantic green / yellow / red for synchronization health.
+  -->
+  <Styles.Resources>
+    <ResourceDictionary>
+      <Color x:Key="GoletherBackgroundColor">#0A0F11</Color>
+      <Color x:Key="GoletherPanelColor">#10181B</Color>
+      <Color x:Key="GoletherPanel2Color">#162226</Color>
+      <Color x:Key="GoletherLineColor">#223036</Color>
+      <Color x:Key="GoletherTextColor">#DDE7E5</Color>
+      <Color x:Key="GoletherMutedColor">#7F9491</Color>
+      <Color x:Key="GoletherAccentColor">#F0A860</Color>
+      <Color x:Key="GoletherAccentInkColor">#1A1208</Color>
+      <Color x:Key="GoletherSecureColor">#4FB3A5</Color>
+      <Color x:Key="GoletherGoodColor">#62C28E</Color>
+      <Color x:Key="GoletherWarnColor">#E6C34A</Color>
+      <Color x:Key="GoletherBadColor">#E0685A</Color>
+
+      <SolidColorBrush x:Key="GoletherBackground" Color="{StaticResource GoletherBackgroundColor}" />
+      <SolidColorBrush x:Key="GoletherPanel" Color="{StaticResource GoletherPanelColor}" />
+      <SolidColorBrush x:Key="GoletherPanel2" Color="{StaticResource GoletherPanel2Color}" />
+      <SolidColorBrush x:Key="GoletherLine" Color="{StaticResource GoletherLineColor}" />
+      <SolidColorBrush x:Key="GoletherText" Color="{StaticResource GoletherTextColor}" />
+      <SolidColorBrush x:Key="GoletherMuted" Color="{StaticResource GoletherMutedColor}" />
+      <SolidColorBrush x:Key="GoletherAccent" Color="{StaticResource GoletherAccentColor}" />
+      <SolidColorBrush x:Key="GoletherAccentInk" Color="{StaticResource GoletherAccentInkColor}" />
+      <SolidColorBrush x:Key="GoletherSecure" Color="{StaticResource GoletherSecureColor}" />
+      <SolidColorBrush x:Key="GoletherGood" Color="{StaticResource GoletherGoodColor}" />
+      <SolidColorBrush x:Key="GoletherWarn" Color="{StaticResource GoletherWarnColor}" />
+      <SolidColorBrush x:Key="GoletherBad" Color="{StaticResource GoletherBadColor}" />
+      <SolidColorBrush x:Key="GoletherSecureTint" Color="#144FB3A5" />
+      <SolidColorBrush x:Key="GoletherBadTint" Color="#24E0685A" />
+
+      <FontFamily x:Key="GoletherMono">Cascadia Mono, Consolas, Menlo, DejaVu Sans Mono, monospace</FontFamily>
+
+      <!-- Fluent accent follows the Golether amber. -->
+      <Color x:Key="SystemAccentColor">#F0A860</Color>
+      <Color x:Key="SystemAccentColorLight1">#F4BC84</Color>
+      <Color x:Key="SystemAccentColorDark1">#D98E45</Color>
+    </ResourceDictionary>
+  </Styles.Resources>
+
+  <Style Selector="Window">
+    <Setter Property="Background" Value="{StaticResource GoletherBackground}" />
+    <Setter Property="Foreground" Value="{StaticResource GoletherText}" />
+  </Style>
+
+  <!-- Text roles -->
+  <Style Selector="TextBlock.muted">
+    <Setter Property="Foreground" Value="{StaticResource GoletherMuted}" />
+  </Style>
+  <Style Selector="TextBlock.label">
+    <Setter Property="FontFamily" Value="{StaticResource GoletherMono}" />
+    <Setter Property="FontSize" Value="11" />
+    <Setter Property="FontWeight" Value="SemiBold" />
+    <Setter Property="LetterSpacing" Value="1" />
+    <Setter Property="Foreground" Value="{StaticResource GoletherMuted}" />
+  </Style>
+  <Style Selector="TextBlock.mono">
+    <Setter Property="FontFamily" Value="{StaticResource GoletherMono}" />
+  </Style>
+  <Style Selector="TextBlock.title">
+    <Setter Property="FontSize" Value="20" />
+    <Setter Property="FontWeight" Value="SemiBold" />
+  </Style>
+  <Style Selector="TextBlock.logo">
+    <Setter Property="FontSize" Value="15" />
+    <Setter Property="FontWeight" Value="Bold" />
+    <Setter Property="LetterSpacing" Value="0.5" />
+  </Style>
+
+  <!-- Surfaces -->
+  <Style Selector="Border.panel">
+    <Setter Property="Background" Value="{StaticResource GoletherPanel}" />
+  </Style>
+  <Style Selector="Border.card">
+    <Setter Property="Background" Value="{StaticResource GoletherPanel}" />
+    <Setter Property="BorderBrush" Value="{StaticResource GoletherLine}" />
+    <Setter Property="BorderThickness" Value="1" />
+    <Setter Property="CornerRadius" Value="12" />
+    <Setter Property="Padding" Value="20" />
+  </Style>
+  <Style Selector="Border.tile">
+    <Setter Property="Background" Value="{StaticResource GoletherPanel2}" />
+    <Setter Property="BorderBrush" Value="{StaticResource GoletherLine}" />
+    <Setter Property="BorderThickness" Value="1" />
+    <Setter Property="CornerRadius" Value="10" />
+    <Setter Property="ClipToBounds" Value="True" />
+  </Style>
+  <Style Selector="Border.speakingFrame">
+    <Setter Property="BorderBrush" Value="{StaticResource GoletherGood}" />
+    <Setter Property="BorderThickness" Value="2" />
+    <Setter Property="CornerRadius" Value="10" />
+    <Setter Property="BoxShadow" Value="0 0 12 0 #8062C28E" />
+  </Style>
+
+  <!-- Toolbar items folded into the "more" button keep their size but cannot be seen, clicked or focused. -->
+  <Style Selector=":is(Control).overflowed">
+    <Setter Property="Opacity" Value="0" />
+    <Setter Property="IsHitTestVisible" Value="False" />
+  </Style>
+  <Style Selector="Button.overflowed">
+    <Setter Property="IsTabStop" Value="False" />
+  </Style>
+  <Style Selector="Border.chip">
+    <Setter Property="BorderBrush" Value="{StaticResource GoletherLine}" />
+    <Setter Property="BorderThickness" Value="1" />
+    <Setter Property="CornerRadius" Value="999" />
+    <Setter Property="Padding" Value="10,4" />
+    <Setter Property="VerticalAlignment" Value="Center" />
+  </Style>
+  <Style Selector="Border.chip > TextBlock">
+    <Setter Property="FontFamily" Value="{StaticResource GoletherMono}" />
+    <Setter Property="FontSize" Value="11" />
+    <Setter Property="FontWeight" Value="SemiBold" />
+  </Style>
+  <Style Selector="Border.chip.secure">
+    <Setter Property="BorderBrush" Value="#734FB3A5" />
+    <Setter Property="Background" Value="{StaticResource GoletherSecureTint}" />
+  </Style>
+  <Style Selector="Border.chip.secure > TextBlock">
+    <Setter Property="Foreground" Value="{StaticResource GoletherSecure}" />
+  </Style>
+  <Style Selector="Border.code">
+    <Setter Property="Background" Value="{StaticResource GoletherSecureTint}" />
+    <Setter Property="BorderBrush" Value="#734FB3A5" />
+    <Setter Property="BorderThickness" Value="1" />
+    <Setter Property="CornerRadius" Value="7" />
+    <Setter Property="Padding" Value="12,6" />
+    <Setter Property="Margin" Value="0,0,8,8" />
+  </Style>
+  <Style Selector="Border.code > TextBlock">
+    <Setter Property="FontFamily" Value="{StaticResource GoletherMono}" />
+    <Setter Property="FontSize" Value="15" />
+    <Setter Property="FontWeight" Value="SemiBold" />
+    <Setter Property="Foreground" Value="{StaticResource GoletherSecure}" />
+  </Style>
+
+  <!-- Buttons -->
+  <Style Selector="Button">
+    <Setter Property="CornerRadius" Value="7" />
+    <Setter Property="Padding" Value="14,7" />
+  </Style>
+  <Style Selector="Button.accent">
+    <Setter Property="Background" Value="{StaticResource GoletherAccent}" />
+    <Setter Property="Foreground" Value="{StaticResource GoletherAccentInk}" />
+    <Setter Property="FontWeight" Value="SemiBold" />
+  </Style>
+  <Style Selector="Button.accent /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="{StaticResource GoletherAccent}" />
+    <Setter Property="Foreground" Value="{StaticResource GoletherAccentInk}" />
+  </Style>
+  <Style Selector="Button.accent:disabled /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="#5A4632" />
+    <Setter Property="Foreground" Value="#1A1208" />
+  </Style>
+  <Style Selector="Button.accent:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="#F4BC84" />
+    <Setter Property="Foreground" Value="{StaticResource GoletherAccentInk}" />
+  </Style>
+  <Style Selector="Button.accent:pressed /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="#D98E45" />
+    <Setter Property="Foreground" Value="{StaticResource GoletherAccentInk}" />
+  </Style>
+  <Style Selector="Button.ghost">
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="BorderBrush" Value="{StaticResource GoletherLine}" />
+    <Setter Property="BorderThickness" Value="1" />
+  </Style>
+  <Style Selector="Button.danger">
+    <Setter Property="Background" Value="{StaticResource GoletherBadTint}" />
+    <Setter Property="Foreground" Value="{StaticResource GoletherBad}" />
+    <Setter Property="BorderBrush" Value="#66E0685A" />
+    <Setter Property="BorderThickness" Value="1" />
+  </Style>
+  <Style Selector="Button.danger:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="#40E0685A" />
+    <Setter Property="Foreground" Value="{StaticResource GoletherBad}" />
+  </Style>
+  <Style Selector="Button.round">
+    <Setter Property="Width" Value="42" />
+    <Setter Property="Height" Value="42" />
+    <Setter Property="CornerRadius" Value="21" />
+    <Setter Property="Padding" Value="0" />
+    <Setter Property="HorizontalContentAlignment" Value="Center" />
+    <Setter Property="VerticalContentAlignment" Value="Center" />
+  </Style>
+  <Style Selector="Button.square">
+    <Setter Property="Width" Value="36" />
+    <Setter Property="Height" Value="36" />
+    <Setter Property="Padding" Value="0" />
+    <Setter Property="HorizontalContentAlignment" Value="Center" />
+    <Setter Property="VerticalContentAlignment" Value="Center" />
+  </Style>
+  <Style Selector="PathIcon">
+    <Setter Property="Width" Value="16" />
+    <Setter Property="Height" Value="16" />
+  </Style>
+
+  <!-- Inputs -->
+  <Style Selector="TextBox.package">
+    <Setter Property="FontFamily" Value="{StaticResource GoletherMono}" />
+    <Setter Property="FontSize" Value="12" />
+    <Setter Property="TextWrapping" Value="Wrap" />
+    <Setter Property="AcceptsReturn" Value="True" />
+    <Setter Property="MinHeight" Value="72" />
+    <Setter Property="MaxHeight" Value="140" />
+  </Style>
+
+  <!-- Timeline -->
+  <Style Selector="Slider.timeline">
+    <Setter Property="Foreground" Value="{StaticResource GoletherAccent}" />
+  </Style>
+</Styles>

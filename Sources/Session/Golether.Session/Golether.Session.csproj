@@ -1,0 +1,24 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    Watch sessions: the host session (admission, authority, media sharing) and the participant session
+    (joining, clock synchronization, remote media, following the host).
+  -->
+  <PropertyGroup>
+    <RootNamespace>Golether.Session</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\Core\Golether.Core.Data\Golether.Core.Data.csproj" />
+    <ProjectReference Include="..\..\Media\Golether.Media.Conference\Golether.Media.Conference.csproj" />
+    <ProjectReference Include="..\..\Media\Golether.Media.Streaming\Golether.Media.Streaming.csproj" />
+    <ProjectReference Include="..\..\Security\Golether.Security\Golether.Security.csproj" />
+    <ProjectReference Include="..\..\Sync\Golether.Sync\Golether.Sync.csproj" />
+    <ProjectReference Include="..\..\Transports\Golether.Transports.Abstractions\Golether.Transports.Abstractions.csproj" />
+  </ItemGroup>
+
+</Project>

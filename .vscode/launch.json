@@ -1,0 +1,81 @@
+{
+  // Pick a profile in "Run and Debug" and press F5. Every profile runs its own "build: <project>" task, which builds
+  // only that project and its references (not the whole solution).
+  // Each local node keeps its database, keys and tunnel configurations in .vscode/dev/<node>/data (ignored by git),
+  // so "Host + Guest" runs two independent devices on one computer: invite with the 127.0.0.1 address.
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Golether: ведущий",
+      "type": "coreclr",
+      "request": "launch",
+      "preLaunchTask": "build: Golether",
+      "program": "${workspaceFolder}/Sources/Apps/Golether.UI/bin/Debug/net10.0/Golether.dll",
+      "cwd": "${workspaceFolder}/Sources/Apps/Golether.UI/bin/Debug/net10.0",
+      "env": { "GOLETHER_DATA_DIR": "${workspaceFolder}/.vscode/dev/host/data" },
+      "console": "internalConsole",
+      "stopAtEntry": false,
+      "justMyCode": true
+    },
+    {
+      "name": "Golether: участник",
+      "type": "coreclr",
+      "request": "launch",
+      "preLaunchTask": "build: Golether",
+      "program": "${workspaceFolder}/Sources/Apps/Golether.UI/bin/Debug/net10.0/Golether.dll",
+      "cwd": "${workspaceFolder}/Sources/Apps/Golether.UI/bin/Debug/net10.0",
+      "env": { "GOLETHER_DATA_DIR": "${workspaceFolder}/.vscode/dev/guest/data" },
+      "console": "internalConsole",
+      "stopAtEntry": false,
+      "justMyCode": true
+    },
+    {
+      "name": "DbMigrator",
+      "type": "coreclr",
+      "request": "launch",
+      "preLaunchTask": "build: DbMigrator",
+      "program": "${workspaceFolder}/Sources/Database/Golether.Dbs.SQLite.DbMigrator/bin/Debug/net10.0/Golether.Dbs.SQLite.DbMigrator.dll",
+      "args": "${input:migratorArgs}",
+      "cwd": "${workspaceFolder}/.vscode/dev",
+      "console": "integratedTerminal",
+      "stopAtEntry": false,
+      "justMyCode": true
+    },
+    {
+      "name": "Golether: ведущий (без сборки)",
+      "type": "coreclr",
+      "request": "launch",
+      "program": "${workspaceFolder}/Sources/Apps/Golether.UI/bin/Debug/net10.0/Golether.dll",
+      "cwd": "${workspaceFolder}/Sources/Apps/Golether.UI/bin/Debug/net10.0",
+      "env": { "GOLETHER_DATA_DIR": "${workspaceFolder}/.vscode/dev/host/data" },
+      "console": "internalConsole",
+      "presentation": { "hidden": true }
+    },
+    {
+      "name": "Golether: участник (без сборки)",
+      "type": "coreclr",
+      "request": "launch",
+      "program": "${workspaceFolder}/Sources/Apps/Golether.UI/bin/Debug/net10.0/Golether.dll",
+      "cwd": "${workspaceFolder}/Sources/Apps/Golether.UI/bin/Debug/net10.0",
+      "env": { "GOLETHER_DATA_DIR": "${workspaceFolder}/.vscode/dev/guest/data" },
+      "console": "internalConsole",
+      "presentation": { "hidden": true }
+    }
+  ],
+  "compounds": [
+    {
+      "name": "Golether: ведущий + участник",
+      "configurations": [ "Golether: ведущий (без сборки)", "Golether: участник (без сборки)" ],
+      "preLaunchTask": "build: Golether",
+      "stopAll": true
+    }
+  ],
+  "inputs": [
+    {
+      "id": "migratorArgs",
+      "type": "promptString",
+      "description": "DbMigrator arguments (--database <file> | --connection <cs>, --list, --down <version>, --help)",
+      "default": "--database host/data/golether.db --list"
+    }
+  ]
+}

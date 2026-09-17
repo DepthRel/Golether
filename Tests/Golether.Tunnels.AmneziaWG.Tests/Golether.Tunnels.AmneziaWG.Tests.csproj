@@ -1,0 +1,8 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- Tests of AmneziaWG keys, configuration, packages and tunnel control. -->
+  <ItemGroup>
+    <ProjectReference Include="../../Sources/Tunnels/Golether.Tunnels.AmneziaWG/Golether.Tunnels.AmneziaWG.csproj" />
+  </ItemGroup>
+
+</Project>

@@ -1,0 +1,10 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- Integration tests of host and participant sessions over loopback TLS. -->
+  <ItemGroup>
+    <ProjectReference Include="../../Sources/Session/Golether.Session/Golether.Session.csproj" />
+    <ProjectReference Include="../../Sources/Transports/Golether.Transports.Tls/Golether.Transports.Tls.csproj" />
+    <ProjectReference Include="../../Sources/Media/Golether.Media.Player/Golether.Media.Player.csproj" />
+  </ItemGroup>
+
+</Project>

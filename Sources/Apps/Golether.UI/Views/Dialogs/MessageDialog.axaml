@@ -1,0 +1,12 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        x:Class="Golether.UI.Views.Dialogs.MessageDialog"
+        Width="460" SizeToContent="Height" CanResize="False"
+        WindowStartupLocation="CenterOwner" Icon="/Assets/golether.ico">
+  <!-- A simple message with an OK button. -->
+  <StackPanel Margin="22" Spacing="14">
+    <TextBlock x:Name="TitleText" Classes="title" TextWrapping="Wrap" />
+    <TextBlock x:Name="MessageText" TextWrapping="Wrap" Classes="muted" />
+    <Button Classes="accent" HorizontalAlignment="Right" Content="Понятно" Click="OnOk" IsDefault="True" />
+  </StackPanel>
+</Window>

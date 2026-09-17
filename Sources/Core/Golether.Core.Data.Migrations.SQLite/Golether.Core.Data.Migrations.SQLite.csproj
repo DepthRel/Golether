@@ -1,0 +1,21 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- SQLite migrations: version classes and embedded SQL scripts. -->
+  <PropertyGroup>
+    <RootNamespace>Golether.Core.Data.Migrations.SQLite</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="FluentMigrator.Runner.SQLite" />
+    <PackageReference Include="Microsoft.Data.Sqlite" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Golether.Core.Data.Migrations\Golether.Core.Data.Migrations.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <EmbeddedResource Include="Scripts\*.sql" LogicalName="Golether.Core.Data.Migrations.SQLite.Scripts.%(Filename)%(Extension)" />
+  </ItemGroup>
+
+</Project>

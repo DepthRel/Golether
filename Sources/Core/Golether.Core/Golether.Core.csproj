@@ -1,0 +1,8 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- Domain model of Golether: identities, playback state, session time, drift correction, data paths. -->
+  <PropertyGroup>
+    <RootNamespace>Golether.Core</RootNamespace>
+  </PropertyGroup>
+
+</Project>

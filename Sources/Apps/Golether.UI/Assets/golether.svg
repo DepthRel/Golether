@@ -1,0 +1,26 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024">
+  <!-- Golether icon: a minimalist TV whose screen shows a person avatar. Raster versions: Scripts/generate-icon.ps1 -->
+  <defs>
+    <linearGradient id="amber" x1="112" y1="232" x2="912" y2="812" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#F6BE82"/>
+      <stop offset="1" stop-color="#E08E3C"/>
+    </linearGradient>
+    <linearGradient id="teal" x1="312" y1="356" x2="712" y2="756" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#7FD1C4"/>
+      <stop offset="1" stop-color="#3C9A8D"/>
+    </linearGradient>
+    <clipPath id="screen">
+      <rect x="168" y="288" width="688" height="468" rx="64"/>
+    </clipPath>
+  </defs>
+  <g stroke="#EDA35A" stroke-width="40" stroke-linecap="round" fill="none">
+    <path d="M512 232 L380 96 M512 232 L644 96"/>
+    <path d="M300 800 L270 900 M724 800 L754 900"/>
+  </g>
+  <rect x="112" y="232" width="800" height="580" rx="110" fill="url(#amber)"/>
+  <rect x="168" y="288" width="688" height="468" rx="64" fill="#0C1315"/>
+  <g clip-path="url(#screen)" fill="url(#teal)">
+    <circle cx="512" cy="452" r="96"/>
+    <ellipse cx="512" cy="768" rx="200" ry="180"/>
+  </g>
+</svg>

@@ -1,0 +1,403 @@
+using System.Globalization;
+using System.Net;
+using System.Text;
+using Golether.Core.Networking;
+using Golether.Tunnels.AmneziaWG.Keys;
+
+namespace Golether.Tunnels.AmneziaWG.Configuration;
+
+/// <summary>
+/// The <c>[Interface]</c> section of an AmneziaWG configuration.
+/// </summary>
+public sealed record AwgInterface
+{
+    /// <summary>
+    /// Gets the base64 private key.
+    /// </summary>
+    public required string PrivateKey { get; init; }
+
+    /// <summary>
+    /// Gets the tunnel address with prefix, for example <c>10.77.41.1/24</c>.
+    /// </summary>
+    public required string Address { get; init; }
+
+    /// <summary>
+    /// Gets the UDP listening port, or <see langword="null"/> for a random port.
+    /// </summary>
+    public int? ListenPort { get; init; }
+
+    /// <summary>
+    /// Gets the MTU, or <see langword="null"/> for the default.
+    /// </summary>
+    public int? Mtu { get; init; }
+
+    /// <summary>
+    /// Gets the junk packet parameters of this side.
+    /// </summary>
+    public required JunkParameters Junk { get; init; }
+
+    /// <summary>
+    /// Gets the shared obfuscation parameters.
+    /// </summary>
+    public required SharedObfuscation Obfuscation { get; init; }
+
+    /// <summary>
+    /// Returns the section without exposing the private key in logs.
+    /// </summary>
+    /// <returns>The address and port.</returns>
+    public override string ToString() => $"AwgInterface {{ Address = {Address}, ListenPort = {ListenPort} }}";
+}
+
+/// <summary>
+/// A <c>[Peer]</c> section of an AmneziaWG configuration.
+/// </summary>
+public sealed record AwgPeer
+{
+    /// <summary>
+    /// Gets the comment written above the section (the participant name).
+    /// </summary>
+    public string? Comment { get; init; }
+
+    /// <summary>
+    /// Gets the base64 public key.
+    /// </summary>
+    public required string PublicKey { get; init; }
+
+    /// <summary>
+    /// Gets the base64 preshared key.
+    /// </summary>
+    public string? PresharedKey { get; init; }
+
+    /// <summary>
+    /// Gets the allowed addresses, for example <c>10.77.41.2/32</c>.
+    /// </summary>
+    public required IReadOnlyList<string> AllowedIps { get; init; }
+
+    /// <summary>
+    /// Gets the endpoint, or <see langword="null"/> when the peer connects to us.
+    /// </summary>
+    public PeerEndpoint? Endpoint { get; init; }
+
+    /// <summary>
+    /// Gets the keepalive interval in seconds, or <see langword="null"/>.
+    /// </summary>
+    public int? PersistentKeepalive { get; init; }
+
+    /// <summary>
+    /// Returns the section without exposing the preshared key in logs.
+    /// </summary>
+    /// <returns>The public key and addresses.</returns>
+    public override string ToString() => $"AwgPeer {{ PublicKey = {PublicKey}, AllowedIps = {string.Join(", ", AllowedIps)} }}";
+}
+
+/// <summary>
+/// A complete AmneziaWG configuration compatible with <c>awg-quick</c>, AmneziaVPN and AmneziaWG for Windows.
+/// </summary>
+/// <param name="Interface">The interface section.</param>
+/// <param name="Peers">The peer sections.</param>
+public sealed record AwgConfiguration(AwgInterface Interface, IReadOnlyList<AwgPeer> Peers)
+{
+    /// <summary>
+    /// Validates the configuration.
+    /// </summary>
+    /// <exception cref="FormatException">A value is invalid.</exception>
+    public void Validate()
+    {
+        if (!AwgKeys.IsValidKey(Interface.PrivateKey))
+        {
+            throw new FormatException("PrivateKey is invalid.");
+        }
+
+        if (!IPv4Cidr.TryParse(Interface.Address, out _))
+        {
+            throw new FormatException($"Address '{Interface.Address}' is not an IPv4 address with prefix.");
+        }
+
+        if (Interface.ListenPort is < 1 or > 65535)
+        {
+            throw new FormatException("ListenPort must be 1–65535.");
+        }
+
+        if (Interface.Mtu is < 576 or > 9000)
+        {
+            throw new FormatException("MTU must be 576–9000.");
+        }
+
+        Interface.Junk.Validate();
+        Interface.Obfuscation.Validate();
+
+        foreach (var peer in Peers)
+        {
+            if (!AwgKeys.IsValidKey(peer.PublicKey) || (peer.PresharedKey is not null && !AwgKeys.IsValidKey(peer.PresharedKey)))
+            {
+                throw new FormatException("A peer key is invalid.");
+            }
+
+            if (peer.AllowedIps.Count == 0 || peer.AllowedIps.Any(ip => !IPv4Cidr.TryParse(ip, out _)))
+            {
+                throw new FormatException("AllowedIPs must contain IPv4 addresses with prefix.");
+            }
+
+            if (peer.PersistentKeepalive is < 0 or > 65535)
+            {
+                throw new FormatException("PersistentKeepalive must be 0–65535.");
+            }
+        }
+
+        if (Peers.Select(p => p.PublicKey).Distinct(StringComparer.Ordinal).Count() != Peers.Count)
+        {
+            throw new FormatException("Peers must have distinct public keys.");
+        }
+    }
+
+    /// <summary>
+    /// Formats the configuration file.
+    /// </summary>
+    /// <returns>The file text with LF line endings.</returns>
+    /// <exception cref="FormatException">The configuration is invalid.</exception>
+    public string Render()
+    {
+        Validate();
+        var text = new StringBuilder();
+        text.Append("# Generated by Golether. Keep this file private: it contains keys.\n");
+        text.Append("[Interface]\n");
+        Line(text, "PrivateKey", Interface.PrivateKey);
+        Line(text, "Address", Interface.Address);
+        if (Interface.ListenPort is { } port)
+        {
+            Line(text, "ListenPort", port);
+        }
+
+        if (Interface.Mtu is { } mtu)
+        {
+            Line(text, "MTU", mtu);
+        }
+
+        Line(text, "Jc", Interface.Junk.Jc);
+        Line(text, "Jmin", Interface.Junk.Jmin);
+        Line(text, "Jmax", Interface.Junk.Jmax);
+        Line(text, "S1", Interface.Obfuscation.S1);
+        Line(text, "S2", Interface.Obfuscation.S2);
+        Line(text, "H1", Interface.Obfuscation.H1);
+        Line(text, "H2", Interface.Obfuscation.H2);
+        Line(text, "H3", Interface.Obfuscation.H3);
+        Line(text, "H4", Interface.Obfuscation.H4);
+
+        foreach (var peer in Peers)
+        {
+            text.Append('\n');
+            if (!string.IsNullOrWhiteSpace(peer.Comment))
+            {
+                text.Append("# ").Append(SanitizeComment(peer.Comment)).Append('\n');
+            }
+
+            text.Append("[Peer]\n");
+            Line(text, "PublicKey", peer.PublicKey);
+            if (peer.PresharedKey is not null)
+            {
+                Line(text, "PresharedKey", peer.PresharedKey);
+            }
+
+            Line(text, "AllowedIPs", string.Join(", ", peer.AllowedIps));
+            if (peer.Endpoint is { } endpoint)
+            {
+                Line(text, "Endpoint", endpoint.ToString());
+            }
+
+            if (peer.PersistentKeepalive is { } keepalive)
+            {
+                Line(text, "PersistentKeepalive", keepalive);
+            }
+        }
+
+        return text.ToString();
+    }
+
+    /// <summary>
+    /// Parses a configuration file.
+    /// </summary>
+    /// <param name="text">The file text.</param>
+    /// <returns>The configuration.</returns>
+    /// <exception cref="FormatException">The file is malformed or invalid.</exception>
+    public static AwgConfiguration Parse(string text)
+    {
+        ArgumentNullException.ThrowIfNull(text);
+        if (text.Length > 64 * 1024)
+        {
+            throw new FormatException("The configuration file is too large.");
+        }
+
+        Dictionary<string, string>? iface = null;
+        var peers = new List<(Dictionary<string, string> Values, string? Comment)>();
+        Dictionary<string, string>? current = null;
+        string? pendingComment = null;
+        var lineNumber = 0;
+        foreach (var rawLine in text.Split('\n'))
+        {
+            lineNumber++;
+            var line = rawLine.Trim();
+            if (line.Length == 0)
+            {
+                continue;
+            }
+
+            if (line.StartsWith('#'))
+            {
+                pendingComment = line[1..].Trim();
+                continue;
+            }
+
+            if (line.Equals("[Interface]", StringComparison.OrdinalIgnoreCase))
+            {
+                if (iface is not null)
+                {
+                    throw new FormatException($"Line {lineNumber}: duplicate [Interface].");
+                }
+
+                current = iface = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+                continue;
+            }
+
+            if (line.Equals("[Peer]", StringComparison.OrdinalIgnoreCase))
+            {
+                current = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+                peers.Add((current, pendingComment));
+                pendingComment = null;
+                continue;
+            }
+
+            var separator = line.IndexOf('=');
+            if (current is null || separator <= 0)
+            {
+                throw new FormatException($"Line {lineNumber}: expected 'Key = Value' inside a section.");
+            }
+
+            var key = line[..separator].Trim();
+            var value = line[(separator + 1)..].Trim();
+            if (!current.TryAdd(key, value))
+            {
+                throw new FormatException($"Line {lineNumber}: duplicate key '{key}'.");
+            }
+        }
+
+        if (iface is null)
+        {
+            throw new FormatException("The [Interface] section is missing.");
+        }
+
+        var configuration = new AwgConfiguration(
+            new AwgInterface
+            {
+                PrivateKey = Required(iface, "PrivateKey"),
+                Address = Required(iface, "Address"),
+                ListenPort = OptionalInt(iface, "ListenPort"),
+                Mtu = OptionalInt(iface, "MTU"),
+                Junk = new JunkParameters(OptionalInt(iface, "Jc") ?? 0, OptionalInt(iface, "Jmin") ?? 0, OptionalInt(iface, "Jmax") ?? 0),
+                Obfuscation = new SharedObfuscation(
+                    OptionalInt(iface, "S1") ?? 0,
+                    OptionalInt(iface, "S2") ?? 0,
+                    OptionalUInt(iface, "H1") ?? 1,
+                    OptionalUInt(iface, "H2") ?? 2,
+                    OptionalUInt(iface, "H3") ?? 3,
+                    OptionalUInt(iface, "H4") ?? 4),
+            },
+            peers.Select(p => new AwgPeer
+            {
+                Comment = p.Comment,
+                PublicKey = Required(p.Values, "PublicKey"),
+                PresharedKey = p.Values.GetValueOrDefault("PresharedKey"),
+                AllowedIps = Required(p.Values, "AllowedIPs").Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries),
+                Endpoint = p.Values.TryGetValue("Endpoint", out var endpoint)
+                    ? PeerEndpoint.TryParse(endpoint, out var parsed) ? parsed : throw new FormatException($"Endpoint '{endpoint}' is invalid.")
+                    : null,
+                PersistentKeepalive = OptionalInt(p.Values, "PersistentKeepalive"),
+            }).ToArray());
+        configuration.Validate();
+        return configuration;
+    }
+
+    /// <summary>
+    /// Appends a key-value line.
+    /// </summary>
+    /// <param name="text">The builder.</param>
+    /// <param name="key">The key.</param>
+    /// <param name="value">The value.</param>
+    private static void Line(StringBuilder text, string key, object value)
+        => text.Append(key).Append(" = ").Append(Convert.ToString(value, CultureInfo.InvariantCulture)).Append('\n');
+
+    /// <summary>
+    /// Removes line breaks and control characters from a comment.
+    /// </summary>
+    /// <param name="comment">The comment.</param>
+    /// <returns>A single-line comment.</returns>
+    private static string SanitizeComment(string comment) => new(comment.Where(c => !char.IsControl(c)).Take(100).ToArray());
+
+    /// <summary>
+    /// Reads a required value.
+    /// </summary>
+    /// <param name="values">The section.</param>
+    /// <param name="key">The key.</param>
+    /// <returns>The value.</returns>
+    private static string Required(Dictionary<string, string> values, string key)
+        => values.TryGetValue(key, out var value) && value.Length > 0 ? value : throw new FormatException($"'{key}' is missing.");
+
+    /// <summary>
+    /// Reads an optional integer.
+    /// </summary>
+    /// <param name="values">The section.</param>
+    /// <param name="key">The key.</param>
+    /// <returns>The value or <see langword="null"/>.</returns>
+    private static int? OptionalInt(Dictionary<string, string> values, string key)
+        => !values.TryGetValue(key, out var value) ? null
+            : int.TryParse(value, NumberStyles.None, CultureInfo.InvariantCulture, out var number) ? number
+            : throw new FormatException($"'{key}' must be a non-negative integer.");
+
+    /// <summary>
+    /// Reads an optional unsigned integer.
+    /// </summary>
+    /// <param name="values">The section.</param>
+    /// <param name="key">The key.</param>
+    /// <returns>The value or <see langword="null"/>.</returns>
+    private static uint? OptionalUInt(Dictionary<string, string> values, string key)
+        => !values.TryGetValue(key, out var value) ? null
+            : uint.TryParse(value, NumberStyles.None, CultureInfo.InvariantCulture, out var number) ? number
+            : throw new FormatException($"'{key}' must be a non-negative integer.");
+}
+
+/// <summary>
+/// An IPv4 address with a prefix length.
+/// </summary>
+/// <param name="Address">The address.</param>
+/// <param name="PrefixLength">The prefix length, 0–32.</param>
+public readonly record struct IPv4Cidr(IPAddress Address, int PrefixLength)
+{
+    /// <summary>
+    /// Parses <c>a.b.c.d/n</c>.
+    /// </summary>
+    /// <param name="text">The text.</param>
+    /// <param name="value">The parsed value.</param>
+    /// <returns><see langword="true"/> when valid.</returns>
+    public static bool TryParse(string? text, out IPv4Cidr value)
+    {
+        value = default;
+        var slash = text?.IndexOf('/') ?? -1;
+        if (slash <= 0
+            || !IPAddress.TryParse(text![..slash], out var address)
+            || address.AddressFamily != System.Net.Sockets.AddressFamily.InterNetwork
+            || text[..slash].Count(c => c == '.') != 3
+            || !int.TryParse(text[(slash + 1)..], NumberStyles.None, CultureInfo.InvariantCulture, out var prefix)
+            || prefix > 32)
+        {
+            return false;
+        }
+
+        value = new IPv4Cidr(address, prefix);
+        return true;
+    }
+
+    /// <summary>
+    /// Formats the value as <c>a.b.c.d/n</c>.
+    /// </summary>
+    /// <returns>The text.</returns>
+    public override string ToString() => $"{Address}/{PrefixLength.ToString(CultureInfo.InvariantCulture)}";
+}

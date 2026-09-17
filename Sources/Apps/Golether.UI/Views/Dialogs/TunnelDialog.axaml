@@ -1,0 +1,82 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="using:Golether.UI.ViewModels.Dialogs"
+        x:Class="Golether.UI.Views.Dialogs.TunnelDialog"
+        x:DataType="vm:TunnelDialogViewModel"
+        Title="Туннель AmneziaWG"
+        Width="720" Height="720" MinWidth="560" MinHeight="520"
+        WindowStartupLocation="CenterOwner" Icon="/Assets/golether.ico">
+  <!--
+    Peer-to-peer AmneziaWG without a server: the host creates an offer, the participant returns an answer.
+    Private keys never leave the device; the preshared key is agreed by ECDH.
+  -->
+  <DockPanel Margin="22">
+    <StackPanel DockPanel.Dock="Top" Spacing="8" Margin="0,0,0,12">
+      <TextBlock Classes="title" Text="Туннель AmneziaWG между участниками" />
+      <TextBlock Classes="muted" TextWrapping="Wrap"
+                 Text="Используйте, если прямое подключение заблокировано. Пакеты передаются вручную: в мессенджере, почтой или файлом. Закрытые ключи не покидают устройство." />
+      <TextBlock TextWrapping="Wrap" Text="{Binding AvailabilityText}"
+                 Classes.muted="{Binding !IsAvailable}" />
+      <StackPanel Spacing="4">
+        <TextBlock Classes="label" Text="ВНЕШНИЙ АДРЕС ЭТОГО УСТРОЙСТВА (НЕОБЯЗАТЕЛЬНО)" />
+        <TextBox Text="{Binding PublicAddress}" PlaceholderText="203.0.113.24:51944 — если порт проброшен на роутере" />
+      </StackPanel>
+    </StackPanel>
+
+    <StackPanel DockPanel.Dock="Bottom" Spacing="8" Margin="0,12,0,0">
+      <ProgressBar IsIndeterminate="True" IsVisible="{Binding IsBusy}" />
+      <TextBlock TextWrapping="Wrap" Foreground="{StaticResource GoletherSecure}" Text="{Binding Message}" />
+      <Button Classes="ghost" HorizontalAlignment="Right" Content="Закрыть" Click="OnClose" IsCancel="True" />
+    </StackPanel>
+
+    <TabControl>
+      <TabItem Header="Я ведущий">
+        <ScrollViewer>
+          <StackPanel Spacing="10" Margin="0,12,8,0">
+            <TextBlock Classes="label" Text="ШАГ 1 · СОЗДАЙТЕ ПРЕДЛОЖЕНИЕ И ОТПРАВЬТЕ ЕГО УЧАСТНИКУ" />
+            <StackPanel Orientation="Horizontal" Spacing="8">
+              <Button Classes="accent" Content="Создать предложение" Command="{Binding CreateOfferCommand}" />
+              <Button Classes="ghost" Content="Скопировать" Command="{Binding CopyOfferCommand}" />
+            </StackPanel>
+            <TextBox Classes="package" IsReadOnly="True" Text="{Binding OfferText}" PlaceholderText="golether-awg:offer:v1:…" />
+            <TextBlock Classes="label" Text="ШАГ 2 · ВСТАВЬТЕ ОТВЕТ УЧАСТНИКА" />
+            <TextBox Classes="package" Text="{Binding AnswerInput}" PlaceholderText="golether-awg:answer:v1:…" />
+            <StackPanel Orientation="Horizontal" Spacing="8">
+              <Button Classes="ghost" Content="Вставить" Command="{Binding PasteAnswerCommand}" />
+              <Button Classes="accent" Content="Принять ответ" Command="{Binding CompleteOfferCommand}" />
+            </StackPanel>
+            <TextBlock TextWrapping="Wrap" Text="{Binding HostResult}" />
+            <StackPanel Orientation="Horizontal" Spacing="8" IsVisible="{Binding HasHostConfiguration}">
+              <Button Classes="accent" Content="Поднять туннель" Command="{Binding ApplyHostCommand}" />
+              <Button Classes="ghost" Content="Экспорт .conf" Command="{Binding ExportHostCommand}" />
+            </StackPanel>
+          </StackPanel>
+        </ScrollViewer>
+      </TabItem>
+      <TabItem Header="Я участник">
+        <ScrollViewer>
+          <StackPanel Spacing="10" Margin="0,12,8,0">
+            <TextBlock Classes="label" Text="ШАГ 1 · ВСТАВЬТЕ ПРЕДЛОЖЕНИЕ ВЕДУЩЕГО" />
+            <TextBox Classes="package" Text="{Binding OfferInput}" PlaceholderText="golether-awg:offer:v1:…" />
+            <Grid ColumnDefinitions="Auto,12,160,*">
+              <Button Classes="ghost" Content="Вставить" Command="{Binding PasteOfferCommand}" VerticalAlignment="Bottom" />
+              <StackPanel Grid.Column="2" Spacing="4">
+                <TextBlock Classes="label" Text="UDP-ПОРТ" />
+                <NumericUpDown Value="{Binding ListenPort}" Minimum="1024" Maximum="65535" FormatString="0" />
+              </StackPanel>
+            </Grid>
+            <Button Classes="accent" Content="Принять предложение" Command="{Binding AcceptOfferCommand}" />
+            <TextBlock TextWrapping="Wrap" Text="{Binding ParticipantResult}" />
+            <TextBlock Classes="label" Text="ШАГ 2 · ОТПРАВЬТЕ ОТВЕТ ВЕДУЩЕМУ" />
+            <TextBox Classes="package" IsReadOnly="True" Text="{Binding AnswerText}" PlaceholderText="golether-awg:answer:v1:…" />
+            <StackPanel Orientation="Horizontal" Spacing="8">
+              <Button Classes="ghost" Content="Скопировать ответ" Command="{Binding CopyAnswerCommand}" />
+              <Button Classes="accent" Content="Поднять туннель" Command="{Binding ApplyParticipantCommand}" IsVisible="{Binding HasParticipantConfiguration}" />
+              <Button Classes="ghost" Content="Экспорт .conf" Command="{Binding ExportParticipantCommand}" IsVisible="{Binding HasParticipantConfiguration}" />
+            </StackPanel>
+          </StackPanel>
+        </ScrollViewer>
+      </TabItem>
+    </TabControl>
+  </DockPanel>
+</Window>

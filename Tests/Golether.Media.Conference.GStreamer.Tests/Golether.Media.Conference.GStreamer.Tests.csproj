@@ -1,0 +1,11 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- Tests of WebRTC conferencing with GStreamer (need the GStreamer bundle from Native/ or the component cache). -->
+  <ItemGroup>
+    <ProjectReference Include="../../Sources/Media/Golether.Media.Conference.GStreamer/Golether.Media.Conference.GStreamer.csproj" />
+    <ProjectReference Include="../../Sources/Components/Golether.Components/Golether.Components.csproj" />
+    <ProjectReference Include="../../Sources/Transports/Golether.Transports.Relay/Golether.Transports.Relay.csproj" />
+    <ProjectReference Include="../../Sources/Media/Golether.Media.Streaming/Golether.Media.Streaming.csproj" />
+  </ItemGroup>
+
+</Project>

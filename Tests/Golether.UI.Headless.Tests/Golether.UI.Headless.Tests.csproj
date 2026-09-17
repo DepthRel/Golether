@@ -1,0 +1,12 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- Tests of the main window in the Avalonia headless platform: menus, pop-ups and pointer input without a screen. -->
+  <ItemGroup>
+    <PackageReference Include="Avalonia.Headless" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="../../Sources/Apps/Golether.UI/Golether.UI.csproj" />
+  </ItemGroup>
+
+</Project>

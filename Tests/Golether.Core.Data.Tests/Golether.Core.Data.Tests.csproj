@@ -1,0 +1,10 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- Tests of migrations and EF Core stores. -->
+  <ItemGroup>
+    <ProjectReference Include="../../Sources/Core/Golether.Core.Data/Golether.Core.Data.csproj" />
+    <ProjectReference Include="../../Sources/Core/Golether.Core.Data.Migrations.SQLite/Golether.Core.Data.Migrations.SQLite.csproj" />
+    <ProjectReference Include="../../Sources/Database/Golether.Dbs.SQLite.DbMigrator/Golether.Dbs.SQLite.DbMigrator.csproj" />
+  </ItemGroup>
+
+</Project>

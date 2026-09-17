@@ -1,0 +1,82 @@
+<Solution>
+  <Folder Name="/Solution Items/">
+    <File Path=".editorconfig" />
+    <File Path="AGENTS.md" />
+    <File Path="Directory.Build.props" />
+    <File Path="Directory.Packages.props" />
+    <File Path="global.json" />
+    <File Path="README.md" />
+  </Folder>
+  <Folder Name="/Docs/">
+    <File Path="Docs/Architecture.md" />
+    <File Path="Docs/Development.md" />
+    <File Path="Docs/Protocol.md" />
+    <File Path="Docs/UserGuide.md" />
+    <File Path="Native/README.md" />
+  </Folder>
+  <Folder Name="/Scripts/">
+    <File Path="Scripts/generate-icon.ps1" />
+    <File Path="Scripts/publish-common.sh" />
+    <File Path="Scripts/publish-linux.sh" />
+    <File Path="Scripts/publish-macos.sh" />
+    <File Path="Scripts/publish-win.ps1" />
+  </Folder>
+  <Folder Name="/Sources/" />
+  <Folder Name="/Sources/Apps/">
+    <Project Path="Sources/Apps/Golether.UI/Golether.UI.csproj" />
+  </Folder>
+  <Folder Name="/Sources/Components/">
+    <Project Path="Sources/Components/Golether.Components/Golether.Components.csproj" />
+  </Folder>
+  <Folder Name="/Sources/Core/">
+    <Project Path="Sources/Core/Golether.Core/Golether.Core.csproj" />
+    <Project Path="Sources/Core/Golether.Core.Data/Golether.Core.Data.csproj" />
+    <Project Path="Sources/Core/Golether.Core.Data.Migrations/Golether.Core.Data.Migrations.csproj" />
+    <Project Path="Sources/Core/Golether.Core.Data.Migrations.SQLite/Golether.Core.Data.Migrations.SQLite.csproj" />
+  </Folder>
+  <Folder Name="/Sources/Database/">
+    <Project Path="Sources/Database/Golether.Dbs.SQLite.DbMigrator/Golether.Dbs.SQLite.DbMigrator.csproj" />
+  </Folder>
+  <Folder Name="/Sources/Media/">
+    <Project Path="Sources/Media/Golether.Media.Conference/Golether.Media.Conference.csproj" />
+    <Project Path="Sources/Media/Golether.Media.Conference.GStreamer/Golether.Media.Conference.GStreamer.csproj" />
+    <Project Path="Sources/Media/Golether.Media.Player/Golether.Media.Player.csproj" />
+    <Project Path="Sources/Media/Golether.Media.Streaming/Golether.Media.Streaming.csproj" />
+  </Folder>
+  <Folder Name="/Sources/Security/">
+    <Project Path="Sources/Security/Golether.Security/Golether.Security.csproj" />
+  </Folder>
+  <Folder Name="/Sources/Session/">
+    <Project Path="Sources/Session/Golether.Session/Golether.Session.csproj" />
+  </Folder>
+  <Folder Name="/Sources/Sync/">
+    <Project Path="Sources/Sync/Golether.Sync/Golether.Sync.csproj" />
+  </Folder>
+  <Folder Name="/Sources/Tools/">
+    <Project Path="Sources/Tools/Golether.Tools.Components/Golether.Tools.Components.csproj" />
+  </Folder>
+  <Folder Name="/Sources/Transports/">
+    <Project Path="Sources/Transports/Golether.Transports.Abstractions/Golether.Transports.Abstractions.csproj" />
+    <Project Path="Sources/Transports/Golether.Transports.PortMapping/Golether.Transports.PortMapping.csproj" />
+    <Project Path="Sources/Transports/Golether.Transports.Relay/Golether.Transports.Relay.csproj" />
+    <Project Path="Sources/Transports/Golether.Transports.Tls/Golether.Transports.Tls.csproj" />
+  </Folder>
+  <Folder Name="/Sources/Tunnels/">
+    <Project Path="Sources/Tunnels/Golether.Tunnels.AmneziaWG/Golether.Tunnels.AmneziaWG.csproj" />
+  </Folder>
+  <Folder Name="/Tests/">
+    <Project Path="Tests/Golether.Components.Tests/Golether.Components.Tests.csproj" />
+    <Project Path="Tests/Golether.Core.Data.Tests/Golether.Core.Data.Tests.csproj" />
+    <Project Path="Tests/Golether.Core.Tests/Golether.Core.Tests.csproj" />
+    <Project Path="Tests/Golether.Media.Conference.GStreamer.Tests/Golether.Media.Conference.GStreamer.Tests.csproj" />
+    <Project Path="Tests/Golether.Media.Player.Tests/Golether.Media.Player.Tests.csproj" />
+    <Project Path="Tests/Golether.Media.Streaming.Tests/Golether.Media.Streaming.Tests.csproj" />
+    <Project Path="Tests/Golether.Security.Tests/Golether.Security.Tests.csproj" />
+    <Project Path="Tests/Golether.Session.Tests/Golether.Session.Tests.csproj" />
+    <Project Path="Tests/Golether.Sync.Tests/Golether.Sync.Tests.csproj" />
+    <Project Path="Tests/Golether.Transports.Tests/Golether.Transports.Tests.csproj" />
+    <Project Path="Tests/Golether.Tunnels.AmneziaWG.Tests/Golether.Tunnels.AmneziaWG.Tests.csproj" />
+    <Project Path="Tests/Golether.UI.Headless.Tests/Golether.UI.Headless.Tests.csproj" />
+    <Project Path="Tests/Golether.UI.Tests/Golether.UI.Tests.csproj" />
+  </Folder>
+</Solution>

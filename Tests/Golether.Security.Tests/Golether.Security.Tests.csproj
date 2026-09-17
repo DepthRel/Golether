@@ -1,0 +1,8 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- Tests of device identity, invitations, verification codes and admission. -->
+  <ItemGroup>
+    <ProjectReference Include="../../Sources/Security/Golether.Security/Golether.Security.csproj" />
+  </ItemGroup>
+
+</Project>

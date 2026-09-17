@@ -1,0 +1,21 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    Peer-to-peer AmneziaWG tunnels without a server: key generation, obfuscation parameters, signed offer/answer
+    packages exchanged by users, configuration files and tunnel control through the AmneziaWG command-line tools.
+  -->
+  <PropertyGroup>
+    <RootNamespace>Golether.Tunnels.AmneziaWG</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="NSec.Cryptography" />
+    <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\Core\Golether.Core\Golether.Core.csproj" />
+    <ProjectReference Include="..\..\Security\Golether.Security\Golether.Security.csproj" />
+  </ItemGroup>
+
+</Project>

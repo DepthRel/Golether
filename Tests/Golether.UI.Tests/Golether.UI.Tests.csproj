@@ -1,0 +1,8 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- Tests of the UI services and view models (no Avalonia controls are created). -->
+  <ItemGroup>
+    <ProjectReference Include="../../Sources/Apps/Golether.UI/Golether.UI.csproj" />
+  </ItemGroup>
+
+</Project>

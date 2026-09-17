@@ -1,0 +1,75 @@
+{
+  // Each "build: <project>" task runs "dotnet build <csproj>": MSBuild compiles only that project and its
+  // ProjectReference closure, never the whole solution.
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "build: Golether",
+      "detail": "Golether.UI (Avalonia application) and its dependencies",
+      "type": "process",
+      "command": "dotnet",
+      "args": [
+        "build",
+        "${workspaceFolder}/Sources/Apps/Golether.UI/Golether.UI.csproj",
+        "-nologo",
+        "/property:GenerateFullPaths=true",
+        "/consoleloggerparameters:NoSummary;ForceNoAlign"
+      ],
+      "group": "build",
+      "presentation": { "reveal": "silent", "panel": "dedicated", "clear": true },
+      "problemMatcher": "$msCompile"
+    },
+    {
+      "label": "build: DbMigrator",
+      "detail": "Golether.Dbs.SQLite.DbMigrator and its dependencies",
+      "type": "process",
+      "command": "dotnet",
+      "args": [
+        "build",
+        "${workspaceFolder}/Sources/Database/Golether.Dbs.SQLite.DbMigrator/Golether.Dbs.SQLite.DbMigrator.csproj",
+        "-nologo",
+        "/property:GenerateFullPaths=true",
+        "/consoleloggerparameters:NoSummary;ForceNoAlign"
+      ],
+      "group": "build",
+      "presentation": { "reveal": "silent", "panel": "dedicated", "clear": true },
+      "problemMatcher": "$msCompile"
+    },
+    {
+      "label": "build: solution",
+      "detail": "Full solution build (only when you really need it)",
+      "type": "process",
+      "command": "dotnet",
+      "args": [
+        "build",
+        "${workspaceFolder}/Golether.slnx",
+        "-nologo",
+        "/property:GenerateFullPaths=true",
+        "/consoleloggerparameters:NoSummary;ForceNoAlign"
+      ],
+      "group": { "kind": "build", "isDefault": true },
+      "presentation": { "reveal": "silent", "panel": "dedicated", "clear": true },
+      "problemMatcher": "$msCompile"
+    },
+    {
+      "label": "test: all",
+      "detail": "All test projects (Microsoft.Testing.Platform, see global.json)",
+      "type": "process",
+      "command": "dotnet",
+      "args": [ "test", "--solution", "${workspaceFolder}/Golether.slnx" ],
+      "group": { "kind": "test", "isDefault": true },
+      "presentation": { "reveal": "always", "panel": "dedicated", "clear": true },
+      "problemMatcher": "$msCompile"
+    },
+    {
+      "label": "publish: zip (current OS)",
+      "detail": "Self-contained Release package for this operating system",
+      "type": "shell",
+      "windows": { "command": "powershell -NoProfile -ExecutionPolicy Bypass -File ${workspaceFolder}/Scripts/publish-win.ps1" },
+      "linux": { "command": "bash ${workspaceFolder}/Scripts/publish-linux.sh" },
+      "osx": { "command": "bash ${workspaceFolder}/Scripts/publish-macos.sh" },
+      "presentation": { "reveal": "always", "panel": "dedicated", "clear": true },
+      "problemMatcher": []
+    }
+  ]
+}

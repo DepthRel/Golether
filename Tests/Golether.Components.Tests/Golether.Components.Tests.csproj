@@ -1,0 +1,8 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- Tests of the native component catalog, locator and installer. -->
+  <ItemGroup>
+    <ProjectReference Include="../../Sources/Components/Golether.Components/Golether.Components.csproj" />
+  </ItemGroup>
+
+</Project>

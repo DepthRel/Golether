@@ -1,0 +1,8 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- Tests of the domain model. -->
+  <ItemGroup>
+    <ProjectReference Include="../../Sources/Core/Golether.Core/Golether.Core.csproj" />
+  </ItemGroup>
+
+</Project>

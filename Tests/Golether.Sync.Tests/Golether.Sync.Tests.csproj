@@ -1,0 +1,8 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- Tests of the protocol, clock estimation, authority and follower. -->
+  <ItemGroup>
+    <ProjectReference Include="../../Sources/Sync/Golether.Sync/Golether.Sync.csproj" />
+  </ItemGroup>
+
+</Project>

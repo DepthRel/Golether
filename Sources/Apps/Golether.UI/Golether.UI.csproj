@@ -1,0 +1,58 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- The Golether desktop application (Avalonia). -->
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <RootNamespace>Golether.UI</RootNamespace>
+    <!-- The video host subclasses its native window on Windows. -->
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <AssemblyName>Golether</AssemblyName>
+    <BuiltInComInteropSupport>true</BuiltInComInteropSupport>
+    <AvaloniaUseCompiledBindingsByDefault>true</AvaloniaUseCompiledBindingsByDefault>
+    <ApplicationIcon>Assets\golether.ico</ApplicationIcon>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <AvaloniaResource Include="Assets\**" />
+  </ItemGroup>
+
+  <!--
+    Native runtimes (libmpv, later GStreamer) placed by the developer or the publish scripts in
+    <repository>/Native/<runtime identifier>/ are copied to the "native" folder next to the application.
+  -->
+  <PropertyGroup>
+    <GoletherNativeRid>$(RuntimeIdentifier)</GoletherNativeRid>
+    <GoletherNativeRid Condition="'$(GoletherNativeRid)' == ''">$(NETCoreSdkRuntimeIdentifier)</GoletherNativeRid>
+    <GoletherNativeDir>$([MSBuild]::NormalizeDirectory('$(MSBuildThisFileDirectory)', '..', '..', '..', 'Native', '$(GoletherNativeRid)'))</GoletherNativeDir>
+  </PropertyGroup>
+
+  <ItemGroup Condition="Exists('$(GoletherNativeDir)')">
+    <None Include="$(GoletherNativeDir)**\*" Link="native\%(RecursiveDir)%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" Visible="false" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Avalonia" />
+    <PackageReference Include="Avalonia.Desktop" />
+    <PackageReference Include="Avalonia.Themes.Fluent" />
+    <PackageReference Include="Avalonia.Fonts.Inter" />
+    <PackageReference Include="CommunityToolkit.Mvvm" />
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection" />
+    <PackageReference Include="Microsoft.Extensions.Logging" />
+    <PackageReference Include="Microsoft.Extensions.Logging.Debug" />
+    <PackageReference Include="Microsoft.Extensions.Logging.Console" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="../../Components/Golether.Components/Golether.Components.csproj" />
+    <ProjectReference Include="../../Core/Golether.Core.Data.Migrations.SQLite/Golether.Core.Data.Migrations.SQLite.csproj" />
+    <ProjectReference Include="../../Media/Golether.Media.Conference.GStreamer/Golether.Media.Conference.GStreamer.csproj" />
+    <ProjectReference Include="../../Media/Golether.Media.Player/Golether.Media.Player.csproj" />
+    <ProjectReference Include="../../Session/Golether.Session/Golether.Session.csproj" />
+    <ProjectReference Include="../../Transports/Golether.Transports.PortMapping/Golether.Transports.PortMapping.csproj" />
+    <ProjectReference Include="../../Transports/Golether.Transports.Relay/Golether.Transports.Relay.csproj" />
+    <ProjectReference Include="../../Transports/Golether.Transports.Tls/Golether.Transports.Tls.csproj" />
+    <ProjectReference Include="../../Tunnels/Golether.Tunnels.AmneziaWG/Golether.Tunnels.AmneziaWG.csproj" />
+  </ItemGroup>
+
+</Project>
