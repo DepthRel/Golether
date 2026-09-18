@@ -117,6 +117,41 @@ public sealed class VolumeAndModerationTests
     }
 
     /// <summary>
+    /// The voice volume of a tile is clamped, muted and restored locally; a stored value is shown without being
+    /// applied or stored again.
+    /// </summary>
+    [Fact]
+    public void Tile_ChangesVoiceVolumeLocally()
+    {
+        var peer = PeerId.Parse(new string('a', 64));
+        var changes = new List<double>();
+        var tile = new ParticipantItemViewModel(peer, voiceVolumeChanged: (p, v) =>
+        {
+            Assert.Equal(peer, p);
+            changes.Add(v);
+        });
+        Assert.Equal("100 %", tile.VoiceVolumeText);
+
+        tile.VoiceVolume = 137.4;
+        Assert.Equal(137, tile.VoiceVolume);
+        tile.VoiceVolume = 500;
+        Assert.Equal(200, tile.VoiceVolume);
+
+        tile.ToggleVoiceMuteCommand.Execute(null);
+        Assert.True(tile.IsVoiceMuted);
+        Assert.Equal(("заглушён у вас", "Вернуть звук"), (tile.VoiceVolumeText, tile.VoiceMuteText));
+        tile.ToggleVoiceMuteCommand.Execute(null);
+        Assert.Equal(200, tile.VoiceVolume);
+        tile.ResetVoiceVolumeCommand.Execute(null);
+        Assert.Equal([137d, 200d, 0d, 200d, 100d], changes);
+
+        changes.Clear();
+        tile.RestoreVoiceVolume(40);
+        Assert.Empty(changes);
+        Assert.Equal("40 %", tile.VoiceVolumeText);
+    }
+
+    /// <summary>
     /// Creates a participant view.
     /// </summary>
     /// <param name="peer">The participant.</param>

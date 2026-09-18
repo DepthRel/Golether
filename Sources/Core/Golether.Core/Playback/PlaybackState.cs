@@ -54,6 +54,16 @@ public enum PlaybackCause
     /// The host resumed playback after all participants had buffered enough data.
     /// </summary>
     ParticipantsReady = 5,
+
+    /// <summary>
+    /// The media reached its end; playback stopped on the last position.
+    /// </summary>
+    Ended = 6,
+
+    /// <summary>
+    /// The host started playback without waiting any longer for participants that were not ready.
+    /// </summary>
+    StartedWithoutWaiting = 7,
 }
 
 /// <summary>
@@ -131,6 +141,18 @@ public sealed record PlaybackState
 
         var elapsed = (long)((sessionTime - ReferenceTime) * Rate);
         return Position + Microseconds.ToTimeSpan(elapsed);
+    }
+
+    /// <summary>
+    /// Returns the expected position, never beyond the end of the media.
+    /// </summary>
+    /// <param name="sessionTime">The session time in microseconds.</param>
+    /// <param name="duration">The media duration, or <see langword="null"/> while unknown.</param>
+    /// <returns>The position.</returns>
+    public TimeSpan ExpectedPositionAt(long sessionTime, TimeSpan? duration)
+    {
+        var position = ExpectedPositionAt(sessionTime);
+        return duration is { } end && end > TimeSpan.Zero && position > end ? end : position;
     }
 
     /// <summary>

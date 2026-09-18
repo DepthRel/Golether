@@ -77,6 +77,9 @@ public sealed class PlayerHost : IPlaybackController, ILocalPlayerControls
     public event EventHandler<VideoPointerAction>? VideoPointer;
 
     /// <inheritdoc />
+    public event EventHandler? TracksChanged;
+
+    /// <inheritdoc />
     public bool IsAvailable => _mpv is not null;
 
     /// <summary>
@@ -112,6 +115,7 @@ public sealed class PlayerHost : IPlaybackController, ILocalPlayerControls
         }
 
         player!.VideoPointer += (_, action) => VideoPointer?.Invoke(this, action);
+        player.TracksChanged += (_, _) => TracksChanged?.Invoke(this, EventArgs.Empty);
         ApplyAudio(player);
         _mpv = player;
         UnavailableReason = null;
@@ -137,6 +141,7 @@ public sealed class PlayerHost : IPlaybackController, ILocalPlayerControls
             await player.DisposeAsync().ConfigureAwait(false);
             UnavailableReason = "Окно видео закрыто.";
             BackendChanged?.Invoke(this, EventArgs.Empty);
+            TracksChanged?.Invoke(this, EventArgs.Empty);
         }
     }
 
@@ -158,6 +163,44 @@ public sealed class PlayerHost : IPlaybackController, ILocalPlayerControls
         {
             ApplyAudio(player);
         }
+    }
+
+    /// <inheritdoc />
+    public IReadOnlyList<MediaTrack> GetTracks()
+    {
+        try
+        {
+            return _mpv?.GetTracks() ?? [];
+        }
+        catch (ObjectDisposedException)
+        {
+            return [];
+        }
+    }
+
+    /// <inheritdoc />
+    public void SelectTrack(MediaTrackKind kind, long? id) => _mpv?.SelectTrack(kind, id);
+
+    /// <inheritdoc />
+    public void AddSubtitleFile(string path)
+    {
+        if (_mpv is not { } player)
+        {
+            throw new InvalidOperationException("Субтитры можно добавить, когда видео открыто.");
+        }
+
+        player.AddSubtitleFile(path);
+    }
+
+    /// <inheritdoc />
+    public void AddAudioFile(string path)
+    {
+        if (_mpv is not { } player)
+        {
+            throw new InvalidOperationException("Звуковую дорожку можно добавить, когда видео открыто.");
+        }
+
+        player.AddAudioFile(path);
     }
 
     /// <inheritdoc />

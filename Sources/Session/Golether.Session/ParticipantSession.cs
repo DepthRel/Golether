@@ -128,6 +128,16 @@ public sealed class ParticipantSession : IAsyncDisposable
     private Invite? _invite;
 
     /// <summary>
+    /// The ticket that lets this device come back to the session without a new invitation.
+    /// </summary>
+    private string? _reconnectTicket;
+
+    /// <summary>
+    /// Whether this is a return to a session this device was already admitted to.
+    /// </summary>
+    private bool _returning;
+
+    /// <summary>
     /// The host endpoint that answered.
     /// </summary>
     private PeerEndpoint _hostEndpoint;
@@ -262,9 +272,36 @@ public sealed class ParticipantSession : IAsyncDisposable
     public event EventHandler<SessionEvent>? EventRaised;
 
     /// <summary>
+    /// Raised for chat lines and reactions relayed by the host, including this device's own. Raised on a background
+    /// thread.
+    /// </summary>
+    public event EventHandler<ChatEntry>? ChatReceived;
+
+    /// <summary>
     /// Gets the participant name.
     /// </summary>
     public string DisplayName { get; }
+
+    /// <summary>
+    /// Comes back to a session this device was admitted to, using the ticket instead of an invitation. The host is
+    /// asked again.
+    /// </summary>
+    /// <param name="ticket">The invitation carrying the ticket (see <see cref="ReconnectInvite"/>).</param>
+    /// <param name="cancellationToken">The cancellation token.</param>
+    /// <returns>A task that completes when the session is joined.</returns>
+    public Task RejoinAsync(Invite ticket, CancellationToken cancellationToken)
+    {
+        _returning = true;
+        return JoinAsync(ticket, cancellationToken);
+    }
+
+    /// <summary>
+    /// Gets the invitation that brings this device back to the session, or <see langword="null"/> without a ticket.
+    /// </summary>
+    public Invite? ReconnectInvite
+        => _invite is { } invite && _reconnectTicket is { Length: > 0 } ticket
+            ? invite with { Token = ticket, ExpiresAt = _timeProvider.GetUtcNow().AddHours(12) }
+            : null;
 
     /// <summary>
     /// Connects to the host and waits until the host admits or rejects this device.
@@ -281,7 +318,7 @@ public sealed class ParticipantSession : IAsyncDisposable
             throw new InvalidOperationException("The session was already joined.");
         }
 
-        if (invite.ExpiresAt <= _timeProvider.GetUtcNow())
+        if (!_returning && invite.ExpiresAt <= _timeProvider.GetUtcNow())
         {
             throw new SessionJoinException("Срок действия приглашения истёк. Попросите ведущего прислать новое.");
         }
@@ -333,6 +370,7 @@ public sealed class ParticipantSession : IAsyncDisposable
             _mediaStreams = Math.Clamp(welcome.MediaDataStreams, 1, 16);
             _participants = welcome.Participants.Select(p => new ParticipantView(p, null, p.PeerId == _identity.PeerId)).ToArray();
             _latestState = welcome.Playback;
+            _reconnectTicket = welcome.ReconnectTicket is { Length: > 0 and <= 64 } ticket && ticket.All(char.IsAsciiHexDigit) ? ticket : null;
         }
 
         SetState(SessionState.Active);
@@ -404,6 +442,22 @@ public sealed class ParticipantSession : IAsyncDisposable
         }
 
         await channel.SendAsync(new PlaybackRequestMessage(request), cancellationToken).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Sends a chat line or a reaction; it is shown when the host relays it back.
+    /// </summary>
+    /// <param name="kind">The kind.</param>
+    /// <param name="text">The text or reaction.</param>
+    /// <param name="cancellationToken">The cancellation token.</param>
+    /// <returns>A task that completes when the message was sent.</returns>
+    public async Task SendChatAsync(ChatKind kind, string text, CancellationToken cancellationToken)
+    {
+        var channel = _channel ?? throw new InvalidOperationException("The session is not joined.");
+        if (ChatMessage.Create(kind, text) is { } message)
+        {
+            await channel.SendAsync(message, cancellationToken).ConfigureAwait(false);
+        }
     }
 
     /// <summary>
@@ -552,6 +606,9 @@ public sealed class ParticipantSession : IAsyncDisposable
                         }
 
                         break;
+                    case ChatMessage chat when chat.Sender is { } sender && chat.Sanitize() is { } clean:
+                        OnChat(clean, sender);
+                        break;
                     case ByeMessage bye:
                         reason = bye.Reason ?? "Ведущий завершил сеанс.";
                         return;
@@ -577,6 +634,24 @@ public sealed class ParticipantSession : IAsyncDisposable
                 Raise(null, reason);
             }
         }
+    }
+
+    /// <summary>
+    /// Shows a chat message relayed by the host.
+    /// </summary>
+    /// <param name="message">The clean message.</param>
+    /// <param name="sender">The sender authenticated by the host.</param>
+    private void OnChat(ChatMessage message, PeerId sender)
+    {
+        string name;
+        lock (_gate)
+        {
+            name = _participants.FirstOrDefault(p => p.Info.PeerId == sender)?.Info.DisplayName ?? "Участник";
+        }
+
+        ChatReceived?.Invoke(
+            this,
+            new ChatEntry(message.Id, sender, name, message.Kind, message.Text, _timeProvider.GetLocalNow(), sender == _identity.PeerId));
     }
 
     /// <summary>

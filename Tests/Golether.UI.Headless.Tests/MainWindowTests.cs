@@ -65,8 +65,8 @@ public sealed class MainWindowTests
     private static readonly PeerId Guest = PeerId.Parse(new string('b', 64));
 
     /// <summary>
-    /// A right click on a participant tile opens the menu with the two switch-off commands; the host's own tile has
-    /// no menu; the menu command asks the session to switch the microphone off.
+    /// A right click on a participant tile opens the menu: the local voice volume, and for the host the two
+    /// switch-off commands; the own tile has no menu; the commands reach the session and the conference.
     /// </summary>
     /// <returns>A task that completes when the test is done.</returns>
     [Fact]
@@ -81,41 +81,92 @@ public sealed class MainWindowTests
         fixture.Click(guestTile, MouseButton.Right);
         var menu = guestTile.ContextMenu!;
         Assert.True(menu.IsOpen);
+        await fixture.Settle();
         var items = menu.Items.OfType<MenuItem>().ToArray();
-        Assert.Equal(["Выключить микрофон", "Выключить камеру"], items.Select(i => (string)i.Header!));
-        Assert.DoesNotContain(items, i => ((string)i.Header!).Contains("Включить", StringComparison.Ordinal));
+        var texts = items.Select(i => i.Header as string).ToArray();
+        Assert.Equal([null, "Заглушить у себя", "Обычная громкость (100 %)", "Выключить микрофон", "Выключить камеру"], texts);
+        Assert.All(items, i => Assert.True(i.IsVisible));
+        Assert.DoesNotContain(texts, t => t?.Contains("Включить", StringComparison.Ordinal) == true);
 
-        items[0].Command!.Execute(null);
+        items[3].Command!.Execute(null);
         await fixture.Settle();
         await fixture.Sessions.Received(1).SwitchOffParticipantDevicesAsync(Guest, true, false);
+
+        // The voice volume changes only here and is remembered for this participant.
+        var slider = menu.GetLogicalDescendants().OfType<Slider>().Single();
+        Assert.Equal((0d, 200d, 70d), (slider.Minimum, slider.Maximum, slider.Value));
+        slider.Value = 50;
+        await fixture.Settle();
+        fixture.Conference.Received().SetVoiceVolume(Guest, 0.5);
+        items[1].Command!.Execute(null);
+        fixture.Conference.Received().SetVoiceVolume(Guest, 0);
+        Assert.Equal("Вернуть звук", items[1].Header);
+        await Task.Delay(MainWindowViewModel.VoiceVolumeSaveDelay + TimeSpan.FromMilliseconds(300));
+        await fixture.Settings.Received(1).SetAsync(MainWindowViewModel.VoiceVolumeSettingPrefix + Guest.Value, "0", Arg.Any<CancellationToken>());
         menu.Close();
 
         // A microphone that is already off cannot be switched off again.
         fixture.GuestMicrophoneOff = true;
         fixture.ViewModel.Refresh();
         await fixture.Settle();
-        Assert.False(items[0].Command!.CanExecute(null));
+        Assert.False(items[3].Command!.CanExecute(null));
+
+        // A participant (not the host) gets only the volume.
+        fixture.IsHost = false;
+        fixture.ViewModel.Refresh();
+        await fixture.Settle();
+        fixture.Click(guestTile, MouseButton.Right);
+        await fixture.Settle();
+        Assert.True(menu.IsOpen);
+        Assert.Equal([true, true, true, false, false], items.Select(i => i.IsVisible));
+        menu.Close();
     });
 
     /// <summary>
-    /// A click on the event feed hides it; the header shows it again.
+    /// A stored voice volume is applied when the participant appears.
+    /// </summary>
+    /// <returns>A task that completes when the test is done.</returns>
+    [Fact]
+    public Task StoredVoiceVolume_IsApplied() => RunAsync(async fixture =>
+    {
+        await fixture.Settle();
+        var tile = fixture.ViewModel.Participants.Single(p => p.PeerId == Guest);
+        Assert.Equal(70, tile.VoiceVolume);
+        fixture.Conference.Received().SetVoiceVolume(Guest, 0.7);
+        fixture.Conference.DidNotReceive().SetVoiceVolume(Host, Arg.Any<double>());
+    });
+
+    /// <summary>
+    /// The events tab shows the feed; a click on the feed hides it; the tab shows it again; the chat tab switches.
     /// </summary>
     /// <returns>A task that completes when the test is done.</returns>
     [Fact]
     public Task EventFeed_FoldsAndUnfolds() => RunAsync(async fixture =>
     {
         var feed = fixture.Window.FindControl<ScrollViewer>("EventFeed")!;
+        var chat = fixture.Window.FindControl<TextBox>("ChatInput")!;
+        var tab = fixture.Window.GetVisualDescendants().OfType<Button>().Single(b => AutomationName(b) == "Лента событий");
+        Assert.False(feed.IsVisible);
+        Assert.True(chat.IsEffectivelyVisible);
+
+        fixture.Click(tab, MouseButton.Left);
+        await fixture.Settle();
         Assert.True(feed.IsVisible);
+        Assert.False(chat.IsEffectivelyVisible);
 
         fixture.Click(feed, MouseButton.Left);
         await fixture.Settle();
         Assert.False(feed.IsVisible);
         Assert.False(fixture.ViewModel.EventsExpanded);
 
-        var header = fixture.Window.GetVisualDescendants().OfType<Button>().Single(b => AutomationName(b) == "Лента событий");
-        fixture.Click(header, MouseButton.Left);
+        fixture.Click(tab, MouseButton.Left);
         await fixture.Settle();
         Assert.True(feed.IsVisible);
+
+        fixture.Click(fixture.Window.GetVisualDescendants().OfType<Button>().Single(b => AutomationName(b) == "Чат"), MouseButton.Left);
+        await fixture.Settle();
+        Assert.False(feed.IsVisible);
+        Assert.True(chat.IsEffectivelyVisible);
     });
 
     /// <summary>
@@ -219,9 +270,12 @@ public sealed class MainWindowTests
             Assert.True(IsInside(child, fixture.Window), $"{child} leaves the window.");
         }
 
-        var items = ((MenuFlyout)more.Flyout!).Items.OfType<MenuItem>().ToArray();
-        Assert.Equal(["Туннели AWG", "Пригласить", "Завершить"], items.Select(i => (string)i.Header!));
-        Assert.Same(fixture.ViewModel.LeaveCommand, items[2].Command);
+        more.Flyout!.ShowAt(more);
+        await fixture.Settle();
+        var items = ((MenuFlyout)more.Flyout).Items.OfType<MenuItem>().ToArray();
+        Assert.Equal(["Туннели AWG", "Пригласить", "Отчёт для диагностики…", "Завершить"], items.Select(i => (string)i.Header!));
+        Assert.Same(fixture.ViewModel.LeaveCommand, items[3].Command);
+        more.Flyout.Hide();
 
         fixture.Window.Width = 1600;
         await fixture.Settle();
@@ -275,6 +329,284 @@ public sealed class MainWindowTests
     });
 
     /// <summary>
+    /// At the end of the film the play button becomes "watch from the beginning" and restarts everybody at zero.
+    /// </summary>
+    /// <returns>A task that completes when the test is done.</returns>
+    [Fact]
+    public Task EndedFilm_OffersReplay() => RunAsync(async fixture =>
+    {
+        var play = fixture.Window.GetVisualDescendants().OfType<Button>().Single(b => AutomationName(b) == "Пуск или пауза");
+        Assert.False(fixture.ViewModel.IsEnded);
+
+        fixture.Ended = true;
+        fixture.ViewModel.Refresh();
+        await fixture.Settle();
+        Assert.True(fixture.ViewModel.IsEnded);
+        Assert.Equal("Смотреть сначала", fixture.ViewModel.PlayButtonText);
+        var icons = play.GetVisualDescendants().OfType<PathIcon>().Where(i => i.IsVisible).ToArray();
+        Assert.Same(fixture.Window.FindResource("IconReplay"), Assert.Single(icons).Data);
+
+        fixture.Click(play, MouseButton.Left);
+        await fixture.Settle();
+        await fixture.Sessions.Received(1).RequestAsync(
+            Arg.Is<PlaybackRequest>(r => r.Kind == PlaybackRequestKind.Play && r.Position == TimeSpan.Zero), Arg.Any<CancellationToken>());
+    });
+
+    /// <summary>
+    /// After a click on a player button, Space still toggles playback and does not press that button again.
+    /// </summary>
+    /// <returns>A task that completes when the test is done.</returns>
+    [Fact]
+    public Task Space_TogglesPlaybackAfterButtonClick() => RunAsync(async fixture =>
+    {
+        var back = fixture.Window.GetVisualDescendants().OfType<Button>().Single(b => AutomationName(b) == "Назад на 10 секунд");
+        fixture.Click(back, MouseButton.Left);
+        await fixture.Settle();
+        Assert.False(back.IsFocused, "Player buttons do not take the keyboard focus.");
+        foreach (var name in new[] { "Пуск или пауза", "Вперёд на 10 секунд", "Звук", "Полный экран" })
+        {
+            Assert.False(fixture.Window.GetVisualDescendants().OfType<Button>().Single(b => AutomationName(b) == name).Focusable, name);
+        }
+
+        await fixture.Sessions.Received(1).RequestAsync(Arg.Is<PlaybackRequest>(r => r.Kind == PlaybackRequestKind.Seek), Arg.Any<CancellationToken>());
+        fixture.Sessions.ClearReceivedCalls();
+
+        fixture.Window.KeyPress(Key.Space, RawInputModifiers.None, PhysicalKey.Space, " ");
+        fixture.Window.KeyRelease(Key.Space, RawInputModifiers.None, PhysicalKey.Space, " ");
+        await fixture.Settle();
+
+        await fixture.Sessions.Received(1).RequestAsync(Arg.Is<PlaybackRequest>(r => r.Kind == PlaybackRequestKind.Play), Arg.Any<CancellationToken>());
+        await fixture.Sessions.DidNotReceive().RequestAsync(Arg.Is<PlaybackRequest>(r => r.Kind == PlaybackRequestKind.Seek), Arg.Any<CancellationToken>());
+    });
+
+    /// <summary>
+    /// Typing in the chat sends on Enter and does not control playback; a reaction opens the overlay over the video.
+    /// </summary>
+    /// <returns>A task that completes when the test is done.</returns>
+    [Fact]
+    public Task Chat_SendsOnEnterAndShowsReactions() => RunAsync(async fixture =>
+    {
+        var input = fixture.Window.FindControl<TextBox>("ChatInput")!;
+        Assert.True(input.IsEffectivelyVisible);
+        input.Focus();
+        fixture.Window.KeyTextInput("Всем привет");
+        fixture.Window.KeyPress(Key.Space, RawInputModifiers.None, PhysicalKey.Space, " ");
+        fixture.Window.KeyTextInput(" ");
+        fixture.Window.KeyRelease(Key.Space, RawInputModifiers.None, PhysicalKey.Space, " ");
+        fixture.Window.KeyTextInput("!");
+        await fixture.Settle();
+        Assert.Equal("Всем привет !", input.Text);
+        await fixture.Sessions.DidNotReceive().RequestAsync(Arg.Any<PlaybackRequest>(), Arg.Any<CancellationToken>());
+
+        fixture.Window.KeyPress(Key.Enter, RawInputModifiers.None, PhysicalKey.Enter, null);
+        await fixture.Settle();
+        await fixture.Sessions.Received(1).SendChatAsync(ChatKind.Text, "Всем привет !", Arg.Any<CancellationToken>());
+        Assert.True(string.IsNullOrEmpty(input.Text));
+
+        // Слой реакций открыт весь сеанс и пуст, пока реакций нет.
+        var overlay = fixture.Window.FindControl<Popup>("ReactionOverlay")!;
+        Assert.True(overlay.IsOpen);
+        Assert.DoesNotContain(overlay.Child!.GetVisualDescendants().OfType<TextBlock>(), t => t.Classes.Contains("emoji"));
+        fixture.Sessions.ChatReceived += Raise.Event<EventHandler<ChatEntry>>(
+            fixture.Sessions,
+            new ChatEntry("01", Guest, "Марина", ChatKind.Reaction, "🔥", DateTimeOffset.Now, false));
+        fixture.Sessions.ChatReceived += Raise.Event<EventHandler<ChatEntry>>(
+            fixture.Sessions,
+            new ChatEntry("02", Guest, "Марина", ChatKind.Text, "Отличная сцена", DateTimeOffset.Now, false));
+        await fixture.SettleFor(TimeSpan.FromMilliseconds(400));
+        Assert.True(overlay.IsOpen);
+        Assert.Contains(overlay.Child!.GetVisualDescendants().OfType<TextBlock>(), t => t.Text == "🔥");
+        Assert.Contains(fixture.Window.GetVisualDescendants().OfType<SelectableTextBlock>(), t => t.Text == "Отличная сцена");
+
+        var folder = Environment.GetEnvironmentVariable("GOLETHER_TEST_SCREENSHOTS");
+        if (!string.IsNullOrEmpty(folder))
+        {
+            Directory.CreateDirectory(folder);
+            using var file = File.Create(Path.Combine(folder, "chat.png"));
+            fixture.Window.CaptureRenderedFrame()!.Save(file, Avalonia.Media.Imaging.PngBitmapEncoderOptions.Default);
+            if (TopLevel.GetTopLevel(overlay.Child) is { } popupRoot && popupRoot.CaptureRenderedFrame() is { } popupFrame)
+            {
+                using var popupFile = File.Create(Path.Combine(folder, "reaction.png"));
+                popupFrame.Save(popupFile, Avalonia.Media.Imaging.PngBitmapEncoderOptions.Default);
+            }
+        }
+
+        fixture.ViewModel.Chat.Reactions.Clear();
+        await fixture.Settle();
+        Assert.DoesNotContain(overlay.Child!.GetVisualDescendants().OfType<TextBlock>(), t => t.Classes.Contains("emoji"));
+    });
+
+    /// <summary>
+    /// The timeline shows what can be played without waiting: the whole film for the host, the cached parts for a
+    /// participant; the participant marker stands exactly over the thumb.
+    /// </summary>
+    /// <returns>A task that completes when the test is done.</returns>
+    [Fact]
+    public Task Timeline_ShowsBufferedParts() => RunAsync(async fixture =>
+    {
+        var timeline = fixture.Window.FindControl<TimelineSlider>("Timeline")!;
+        Assert.Equal([new FractionRange(0, 1)], timeline.BufferedRanges);
+        Assert.NotNull(timeline.Bar.Parent);
+        Assert.Contains(timeline.GetVisualDescendants(), v => ReferenceEquals(v, timeline.Bar));
+
+        fixture.IsHost = false;
+        fixture.Buffered = [new MediaTimeRange(TimeSpan.Zero, TimeSpan.FromMinutes(12)), new MediaTimeRange(TimeSpan.FromMinutes(60), TimeSpan.FromMinutes(90))];
+        fixture.Position = TimeSpan.FromMinutes(60);
+        fixture.ViewModel.Refresh();
+        await fixture.SettleFor(TimeSpan.FromMilliseconds(500));
+        Assert.Equal([new FractionRange(0, 0.1), new FractionRange(0.5, 0.75)], timeline.BufferedRanges);
+        Assert.Same(timeline.BufferedRanges, timeline.Bar.Ranges);
+        Assert.True(timeline.Bar.Bounds.Width > 100);
+
+        var thumb = timeline.GetVisualDescendants().OfType<Thumb>().Single();
+        var marker = fixture.Window.GetVisualDescendants().OfType<FractionPanel>().Single().Children
+            .Single(c => c.DataContext is ParticipantItemViewModel { Name: "Вы" });
+        var thumbCenter = thumb.TranslatePoint(new Point(thumb.Bounds.Width / 2, 0), fixture.Window)!.Value.X;
+        var markerCenter = marker.TranslatePoint(new Point(marker.Bounds.Width / 2, 0), fixture.Window)!.Value.X;
+        Assert.InRange(markerCenter - thumbCenter, -1.5, 1.5);
+
+        var folder = Environment.GetEnvironmentVariable("GOLETHER_TEST_SCREENSHOTS");
+        if (!string.IsNullOrEmpty(folder))
+        {
+            Directory.CreateDirectory(folder);
+            using var file = File.Create(Path.Combine(folder, "timeline.png"));
+            fixture.Window.CaptureRenderedFrame()!.Save(file, Avalonia.Media.Imaging.PngBitmapEncoderOptions.Default);
+        }
+    });
+
+    /// <summary>
+    /// The track menu lists the tracks, a click switches one, and the chosen track is marked afterwards.
+    /// </summary>
+    /// <returns>A task that completes when the test is done.</returns>
+    [Fact]
+    public Task TrackMenu_SwitchesTracks() => RunAsync(async fixture =>
+    {
+        fixture.Tracks =
+        [
+            new MediaTrack(1, MediaTrackKind.Audio, "Original", "eng", "dts", 6, true, false, true),
+            new MediaTrack(2, MediaTrackKind.Audio, "Дубляж", "rus", "ac3", 6, false, false, false),
+            new MediaTrack(1, MediaTrackKind.Subtitle, null, "rus", "subrip", null, false, false, false),
+        ];
+        fixture.ViewModel.Tracks!.Refresh();
+        await fixture.Settle();
+
+        var button = fixture.Window.FindControl<Button>("TracksButton")!;
+        Assert.True(button.IsVisible);
+        button.Flyout!.ShowAt(button);
+        await fixture.Settle();
+        var entries = fixture.Window.GetVisualDescendants().OfType<Button>().Where(b => b.Classes.Contains("trackOption")).ToArray();
+        var labels = entries.Select(e => (e.DataContext as TrackOptionViewModel)?.Label ?? string.Empty).ToArray();
+        Assert.Equal(4, labels.Length);
+        Assert.StartsWith("Original · ", labels[0], StringComparison.Ordinal);
+        Assert.StartsWith("Дубляж · ", labels[1], StringComparison.Ordinal);
+        Assert.Equal("Без субтитров", labels[2]);
+        Assert.EndsWith("SUBRIP", labels[3], StringComparison.Ordinal);
+
+        Invoke(entries[1]);
+        await fixture.Settle();
+
+        var folder = Environment.GetEnvironmentVariable("GOLETHER_TEST_SCREENSHOTS");
+        if (!string.IsNullOrEmpty(folder))
+        {
+            Directory.CreateDirectory(folder);
+            button.Flyout!.ShowAt(button);
+            await fixture.SettleFor(TimeSpan.FromMilliseconds(300));
+            using var file = File.Create(Path.Combine(folder, "tracks.png"));
+            fixture.Window.CaptureRenderedFrame()!.Save(file, Avalonia.Media.Imaging.PngBitmapEncoderOptions.Default);
+        }
+
+        fixture.Player.Received(1).SelectTrack(MediaTrackKind.Audio, 2);
+        Assert.True(fixture.ViewModel.Tracks.AudioTracks[1].IsSelected, "The chosen track is marked.");
+        Assert.False(fixture.ViewModel.Tracks.AudioTracks[0].IsSelected);
+    });
+
+    /// <summary>
+    /// A reaction floats away and leaves no trace: a later one is alone on the overlay.
+    /// </summary>
+    /// <returns>A task that completes when the test is done.</returns>
+    [Fact]
+    public Task Reactions_DoNotPileUp() => RunAsync(async fixture =>
+    {
+        var overlay = fixture.Window.FindControl<Popup>("ReactionOverlay")!;
+        string[] Shown() => overlay.Child is { } child
+            ? [.. child.GetVisualDescendants().OfType<TextBlock>().Where(t => t.Classes.Contains("emoji")).Select(t => t.Text ?? string.Empty)]
+            : [];
+
+        fixture.Sessions.ChatReceived += Raise.Event<EventHandler<ChatEntry>>(
+            fixture.Sessions, new ChatEntry("01", Guest, "Марина", ChatKind.Reaction, "🔥", DateTimeOffset.Now, false));
+        await fixture.Settle();
+        Assert.Single(fixture.ViewModel.Chat.Reactions);
+        Assert.Equal(["🔥"], Shown().Distinct());
+
+        // The reaction lives three seconds; after that nothing of it is left.
+        await fixture.SettleFor(ChatViewModel.ReactionLifetime + TimeSpan.FromMilliseconds(700));
+        Assert.Empty(fixture.ViewModel.Chat.Reactions);
+        Assert.Empty(Shown());
+        Assert.True(overlay.IsOpen, "Слой висит весь сеанс: закрытое окно не следит за списком.");
+
+        fixture.Sessions.ChatReceived += Raise.Event<EventHandler<ChatEntry>>(
+            fixture.Sessions, new ChatEntry("02", Guest, "Марина", ChatKind.Reaction, "❤️", DateTimeOffset.Now, false));
+        await fixture.SettleFor(TimeSpan.FromMilliseconds(400));
+        Assert.Equal(["❤️"], Shown().Distinct());
+
+        var folder = Environment.GetEnvironmentVariable("GOLETHER_TEST_SCREENSHOTS");
+        if (!string.IsNullOrEmpty(folder))
+        {
+            Directory.CreateDirectory(folder);
+            var reactions = fixture.Window.FindControl<Button>("ReactionsButton")!;
+            reactions.Flyout!.ShowAt(reactions);
+            await fixture.SettleFor(TimeSpan.FromMilliseconds(300));
+            using var file = File.Create(Path.Combine(folder, "reactions-menu.png"));
+            fixture.Window.CaptureRenderedFrame()!.Save(file, Avalonia.Media.Imaging.PngBitmapEncoderOptions.Default);
+        }
+    });
+
+    /// <summary>
+    /// A weak connection to a participant marks their tile until it recovers.
+    /// </summary>
+    /// <returns>A task that completes when the test is done.</returns>
+    [Fact]
+    public Task WeakConnection_MarksTile() => RunAsync(async fixture =>
+    {
+        TextBlock Mark(string name) => fixture.Tile(name).GetVisualDescendants().OfType<TextBlock>().Single(t => t.Text == "эконом");
+        Assert.False(Mark("Марина").IsEffectivelyVisible);
+
+        fixture.Conference.VideoQualityChanged += Raise.Event<EventHandler<VideoQualityChange>>(fixture.Conference, new VideoQualityChange(Guest, VideoQuality.Low));
+        await fixture.Settle();
+        Assert.True(Mark("Марина").IsEffectivelyVisible);
+        Assert.False(Mark("Вы").IsEffectivelyVisible);
+
+        fixture.Conference.VideoQualityChanged += Raise.Event<EventHandler<VideoQualityChange>>(fixture.Conference, new VideoQualityChange(Guest, VideoQuality.High));
+        await fixture.Settle();
+        Assert.False(Mark("Марина").IsEffectivelyVisible);
+    });
+
+    /// <summary>
+    /// A seek moves the timeline and the participant marker smoothly instead of jumping.
+    /// </summary>
+    /// <returns>A task that completes when the test is done.</returns>
+    [Fact]
+    public Task Seek_GlidesTimelineAndMarkers() => RunAsync(async fixture =>
+    {
+        var timeline = fixture.Window.FindControl<Slider>("Timeline")!;
+        var marker = fixture.Window.GetVisualDescendants().OfType<FractionPanel>().Single().Children
+            .Single(c => c.DataContext is ParticipantItemViewModel { Name: "Вы" });
+        await fixture.SettleFor(TimeSpan.FromMilliseconds(500));
+        Assert.Equal(60, timeline.Value, 3);
+        Assert.Equal(60 / 7200.0, FractionPanel.GetShownFraction(marker)!.Value, 6);
+
+        fixture.Position = TimeSpan.FromMinutes(90);
+        fixture.ViewModel.Refresh();
+        await fixture.Settle();
+        Assert.InRange(timeline.Value, 60, 5400 - 1);
+        Assert.InRange(FractionPanel.GetShownFraction(marker)!.Value, 60 / 7200.0, 0.75 - 1e-6);
+
+        await fixture.SettleFor(TimeSpan.FromMilliseconds(500));
+        Assert.Equal(5400, timeline.Value, 3);
+        Assert.Equal(0.75, FractionPanel.GetShownFraction(marker)!.Value, 6);
+    });
+
+    /// <summary>
     /// Renders the window: the rendering must not fail, and with <c>GOLETHER_TEST_SCREENSHOTS</c> set to a folder the
     /// frames are saved for a visual check (narrow window with folded actions, speaking frame, play button).
     /// </summary>
@@ -314,6 +646,17 @@ public sealed class MainWindowTests
     }
 
     /// <summary>
+    /// Presses a control the way a screen reader or a test automation tool does.
+    /// </summary>
+    /// <param name="control">The control.</param>
+    private static void Invoke(Control control)
+    {
+        var peer = Avalonia.Automation.Peers.ControlAutomationPeer.CreatePeerForElement(control);
+        Assert.NotNull(peer);
+        ((Avalonia.Automation.Provider.IInvokeProvider)peer).Invoke();
+    }
+
+    /// <summary>
     /// Returns the automation name of a control.
     /// </summary>
     /// <param name="control">The control.</param>
@@ -324,23 +667,46 @@ public sealed class MainWindowTests
     /// Runs a test on the UI thread with a fresh window.
     /// </summary>
     /// <param name="test">The test.</param>
-    /// <returns>A task that completes when the test is done.</returns>
+    /// <returns>A task that completes when the test is done and fails with the test's exception.</returns>
     private static Task RunAsync(Func<WindowFixture, Task> test)
         => Session.Value.Dispatch(
-            async () =>
+            () =>
             {
-                var fixture = new WindowFixture();
-                try
+                // The UI loop runs here until the test finishes, so its continuations execute and its failures (or a
+                // hang) are reported instead of being lost with an unobserved task.
+                var body = RunBodyAsync(test);
+                using var done = new CancellationTokenSource();
+                using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(60));
+                using var stop = CancellationTokenSource.CreateLinkedTokenSource(done.Token, timeout.Token);
+                body.ContinueWith(_ => done.Cancel(), TaskScheduler.Default);
+                if (!body.IsCompleted)
                 {
-                    await fixture.Settle();
-                    await test(fixture);
+                    Dispatcher.UIThread.MainLoop(stop.Token);
                 }
-                finally
-                {
-                    fixture.Window.Close();
-                }
+
+                Assert.True(body.IsCompleted, "The UI test did not finish within 60 seconds.");
+                body.GetAwaiter().GetResult();
             },
             TestContext.Current.CancellationToken);
+
+    /// <summary>
+    /// Creates the window, runs the test and closes the window.
+    /// </summary>
+    /// <param name="test">The test.</param>
+    /// <returns>A task that completes when the test is done.</returns>
+    private static async Task RunBodyAsync(Func<WindowFixture, Task> test)
+    {
+        var fixture = new WindowFixture();
+        try
+        {
+            await fixture.Settle();
+            await test(fixture);
+        }
+        finally
+        {
+            fixture.Window.Close();
+        }
+    }
 
     /// <summary>
     /// A main window in a hosted session with one participant, backed by substitutes.
@@ -353,6 +719,7 @@ public sealed class MainWindowTests
         public WindowFixture()
         {
             Sessions.GetSnapshot().Returns(_ => Snapshot());
+            Settings.GetAsync(MainWindowViewModel.VoiceVolumeSettingPrefix + Guest.Value, Arg.Any<CancellationToken>()).Returns("70");
             Sessions.RequestAsync(default!, default).ReturnsForAnyArgs(Task.CompletedTask);
             var components = Substitute.For<IComponentService>();
             foreach (var id in new[] { ComponentId.Video, ComponentId.Conference })
@@ -364,7 +731,7 @@ public sealed class MainWindowTests
             ViewModel = new MainWindowViewModel(
                 Sessions,
                 Substitute.For<IDialogService>(),
-                Substitute.For<ISettingsStore>(),
+                Settings,
                 new InlineDispatcher(),
                 _ => throw new NotSupportedException(),
                 "A249-B9CC",
@@ -381,6 +748,16 @@ public sealed class MainWindowTests
         /// Gets the session service.
         /// </summary>
         public ISessionService Sessions { get; } = Substitute.For<ISessionService>();
+
+        /// <summary>
+        /// Gets the settings.
+        /// </summary>
+        public ISettingsStore Settings { get; } = Substitute.For<ISettingsStore>();
+
+        /// <summary>
+        /// Gets or sets a value indicating whether this device hosts the session.
+        /// </summary>
+        public bool IsHost { get; set; } = true;
 
         /// <summary>
         /// Gets the conferencing backend.
@@ -408,6 +785,39 @@ public sealed class MainWindowTests
         public bool GuestMicrophoneOff { get; set; }
 
         /// <summary>
+        /// Gets or sets a value indicating whether the film has ended.
+        /// </summary>
+        public bool Ended { get; set; }
+
+        /// <summary>
+        /// Gets or sets the position reported by the local player.
+        /// </summary>
+        public TimeSpan Position { get; set; } = TimeSpan.FromMinutes(1);
+
+        /// <summary>
+        /// Gets or sets the parts cached by the local player.
+        /// </summary>
+        public IReadOnlyList<MediaTimeRange>? Buffered { get; set; }
+
+        /// <summary>
+        /// Gets or sets the tracks the player reports.
+        /// </summary>
+        public IReadOnlyList<MediaTrack> Tracks
+        {
+            get => _tracks;
+            set
+            {
+                _tracks = value;
+                Player.GetTracks().Returns(_ => _tracks);
+            }
+        }
+
+        /// <summary>
+        /// The tracks of the player.
+        /// </summary>
+        private IReadOnlyList<MediaTrack> _tracks = [];
+
+        /// <summary>
         /// Lets bindings, layout and rendering catch up.
         /// </summary>
         /// <returns>A task that completes when the UI is idle.</returns>
@@ -419,6 +829,23 @@ public sealed class MainWindowTests
                 AvaloniaHeadlessPlatform.ForceRenderTimerTick();
                 await Task.Yield();
             }
+        }
+
+        /// <summary>
+        /// Keeps rendering frames for a while (animations run on the real clock).
+        /// </summary>
+        /// <param name="duration">How long.</param>
+        /// <returns>A task that completes after the duration.</returns>
+        public async Task SettleFor(TimeSpan duration)
+        {
+            var deadline = DateTime.UtcNow + duration;
+            while (DateTime.UtcNow < deadline)
+            {
+                await Settle();
+                await Task.Delay(15);
+            }
+
+            await Settle();
         }
 
         /// <summary>
@@ -471,19 +898,24 @@ public sealed class MainWindowTests
         /// <returns>The snapshot.</returns>
         private SessionSnapshot Snapshot()
         {
-            var player = new PlayerSnapshot(true, TimeSpan.FromMinutes(1), TimeSpan.FromHours(2), true, false, TimeSpan.FromSeconds(20), 1.0);
+            var player = new PlayerSnapshot(true, Position, TimeSpan.FromHours(2), true, false, TimeSpan.FromSeconds(20), 1.0) { Buffered = Buffered };
             return new SessionSnapshot
             {
-                IsHost = true,
+                IsHost = IsHost,
                 State = SessionState.Active,
                 SessionName = "Вечер кино",
                 HostPeerId = Host,
                 Participants =
                 [
-                    new ParticipantView(new ParticipantInfo(Host, "Вы", true), new ParticipantStatus { PeerId = Host }, true),
+                    new ParticipantView(new ParticipantInfo(Host, "Вы", true), new ParticipantStatus { PeerId = Host, Position = Position }, true),
                     new ParticipantView(new ParticipantInfo(Guest, "Марина", false), new ParticipantStatus { PeerId = Guest, MicrophoneOff = GuestMicrophoneOff }, false),
                 ],
-                Playback = PlaybackState.Initial(Host, 0) with { State = PlayState.Paused, Position = TimeSpan.FromMinutes(1) },
+                Playback = PlaybackState.Initial(Host, 0) with
+                {
+                    State = PlayState.Paused,
+                    Position = Ended ? TimeSpan.FromHours(2) : TimeSpan.FromMinutes(1),
+                    Cause = Ended ? PlaybackCause.Ended : PlaybackCause.Pause,
+                },
                 Media = new MediaDescriptor { FileName = "Dune.mkv", Length = 1024 * 1024, QuickId = new string('c', 64) },
                 Local = new Sync.Engine.FollowerStatus(player, TimeSpan.FromMinutes(1), TimeSpan.Zero, null),
             };

@@ -45,7 +45,7 @@ public sealed class MpvInputTests
     /// Finds libmpv in the repository.
     /// </summary>
     /// <returns>The path or <see langword="null"/>.</returns>
-    private static string? FindLibrary()
+    internal static string? FindLibrary()
     {
         if (!OperatingSystem.IsWindows())
         {

@@ -50,6 +50,11 @@ public sealed class ConferenceHost : IConferenceMedia, Golether.UI.ViewModels.IC
     private string? _relay;
 
     /// <summary>
+    /// The voice volumes, applied again when the backend changes.
+    /// </summary>
+    private readonly System.Collections.Concurrent.ConcurrentDictionary<PeerId, double> _voiceVolumes = new();
+
+    /// <summary>
     /// Initializes a new instance of the <see cref="ConferenceHost"/> class.
     /// </summary>
     /// <param name="loggerFactory">The logger factory.</param>
@@ -131,9 +136,14 @@ public sealed class ConferenceHost : IConferenceMedia, Golether.UI.ViewModels.IC
         media.VideoFrameReceived += (_, frame) => VideoFrameReceived?.Invoke(this, frame);
         media.SignalReady += (_, signal) => SignalReady?.Invoke(this, signal);
         media.SpeakingChanged += (_, change) => SpeakingChanged?.Invoke(this, change);
+        media.VideoQualityChanged += (_, change) => VideoQualityChanged?.Invoke(this, change);
         media.DataReceived += (_, peer, data) => DataReceived?.Invoke(this, peer, data);
         media.SetMuted(_microphoneMuted, _cameraOff);
         media.SetRelay(_relay);
+        foreach (var (peer, volume) in _voiceVolumes)
+        {
+            media.SetVoiceVolume(peer, volume);
+        }
         _current = media;
         BackendChanged?.Invoke(this, EventArgs.Empty);
         return true;
@@ -184,6 +194,9 @@ public sealed class ConferenceHost : IConferenceMedia, Golether.UI.ViewModels.IC
     public event EventHandler<SpeakingChange>? SpeakingChanged;
 
     /// <inheritdoc />
+    public event EventHandler<VideoQualityChange>? VideoQualityChanged;
+
+    /// <inheritdoc />
     public event PeerDataHandler? DataReceived;
 
     /// <inheritdoc />
@@ -197,6 +210,13 @@ public sealed class ConferenceHost : IConferenceMedia, Golether.UI.ViewModels.IC
     {
         _relay = turnServer;
         _current.SetRelay(turnServer);
+    }
+
+    /// <inheritdoc />
+    public void SetVoiceVolume(PeerId peer, double volume)
+    {
+        _voiceVolumes[peer] = volume;
+        _current.SetVoiceVolume(peer, volume);
     }
 
     /// <inheritdoc />

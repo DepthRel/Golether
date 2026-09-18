@@ -1,6 +1,13 @@
 namespace Golether.Core.Playback;
 
 /// <summary>
+/// A part of the media timeline.
+/// </summary>
+/// <param name="Start">The start.</param>
+/// <param name="End">The end.</param>
+public readonly record struct MediaTimeRange(TimeSpan Start, TimeSpan End);
+
+/// <summary>
 /// A snapshot of the local player.
 /// </summary>
 /// <param name="IsLoaded">Whether a media file is loaded.</param>
@@ -23,6 +30,12 @@ public readonly record struct PlayerSnapshot(
     /// Gets the snapshot of a player without media.
     /// </summary>
     public static PlayerSnapshot Empty { get; } = new(false, null, null, true, false, TimeSpan.Zero, 1.0);
+
+    /// <summary>
+    /// Gets the parts of the media that can be played without waiting (the player's cache), or
+    /// <see langword="null"/> when unknown.
+    /// </summary>
+    public IReadOnlyList<MediaTimeRange>? Buffered { get; init; }
 }
 
 /// <summary>

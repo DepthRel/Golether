@@ -25,6 +25,7 @@ namespace Golether.Sync.Protocol;
 [JsonDerivedType(typeof(ByeMessage), "bye")]
 [JsonDerivedType(typeof(ConferenceSignalMessage), "rtc")]
 [JsonDerivedType(typeof(ModerationMessage), "moderate")]
+[JsonDerivedType(typeof(ChatMessage), "chat")]
 public abstract record SessionMessage
 {
     /// <summary>
@@ -66,6 +67,12 @@ public sealed record WelcomeMessage(
     /// receive these credentials.
     /// </summary>
     public RelayCredentials? Relay { get; init; }
+
+    /// <summary>
+    /// Gets the ticket that lets this participant come back to the same session without a new invitation, or
+    /// <see langword="null"/>. It is valid while the session runs and only for this device.
+    /// </summary>
+    public string? ReconnectTicket { get; init; }
 
     /// <summary>
     /// Returns the relay when its fields are sane.
@@ -155,6 +162,11 @@ public enum PlaybackRequestKind
     /// Change the position.
     /// </summary>
     Seek = 2,
+
+    /// <summary>
+    /// Start playback at once, without waiting for participants that are not ready.
+    /// </summary>
+    PlayNow = 3,
 }
 
 /// <summary>

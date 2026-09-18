@@ -4,6 +4,7 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Golether.Components.Catalog;
 using Golether.Core.Data.Stores;
+using Golether.Core.Identity;
 using Golether.Core.Playback;
 using Golether.Media.Conference;
 using Golether.Media.Player;
@@ -14,6 +15,22 @@ using Golether.UI.Services;
 using Golether.UI.ViewModels.Dialogs;
 
 namespace Golether.UI.ViewModels;
+
+/// <summary>
+/// The tabs of the side panel.
+/// </summary>
+public enum SideTab
+{
+    /// <summary>
+    /// The chat.
+    /// </summary>
+    Chat = 0,
+
+    /// <summary>
+    /// The event feed.
+    /// </summary>
+    Events = 1,
+}
 
 /// <summary>
 /// The main window: the start screen and the running session.
@@ -31,6 +48,21 @@ public sealed partial class MainWindowViewModel : ObservableObject
     public const string EventsExpandedSetting = "ui.eventsExpanded";
 
     /// <summary>
+    /// The setting with the open tab of the side panel (<c>chat</c> or <c>events</c>).
+    /// </summary>
+    public const string SideTabSetting = "ui.sideTab";
+
+    /// <summary>
+    /// The prefix of the settings with the local voice volume of a participant (by device identifier).
+    /// </summary>
+    public const string VoiceVolumeSettingPrefix = "voice.volume.";
+
+    /// <summary>
+    /// How long a voice volume change waits before it is stored.
+    /// </summary>
+    internal static TimeSpan VoiceVolumeSaveDelay { get; set; } = TimeSpan.FromMilliseconds(600);
+
+    /// <summary>
     /// The setting that allows opening the port on the router (<c>true</c> or <c>false</c>).
     /// </summary>
     public const string OpenRouterPortSetting = "network.openRouterPort";
@@ -44,6 +76,11 @@ public sealed partial class MainWindowViewModel : ObservableObject
     /// The seek step of the back/forward buttons.
     /// </summary>
     private static readonly TimeSpan SeekStep = TimeSpan.FromSeconds(10);
+
+    /// <summary>
+    /// The readiness rules of the host, used to name the participants playback waits for.
+    /// </summary>
+    private static readonly Golether.Sync.Engine.PlaybackAuthorityOptions ReadinessOptions = new();
 
     /// <summary>
     /// The session service.
@@ -81,6 +118,41 @@ public sealed partial class MainWindowViewModel : ObservableObject
     private int _refreshQueued;
 
     /// <summary>
+    /// Remembers where films were stopped.
+    /// </summary>
+    private readonly ResumeTracker _resume;
+
+    /// <summary>
+    /// The media whose stored position was looked up.
+    /// </summary>
+    private string? _resumeMedia;
+
+    /// <summary>
+    /// Saves diagnostic reports, or <see langword="null"/>.
+    /// </summary>
+    private readonly IDiagnosticsWriter? _diagnostics;
+
+    /// <summary>
+    /// Looks for new versions, or <see langword="null"/>.
+    /// </summary>
+    private readonly IUpdateService? _updates;
+
+    /// <summary>
+    /// The folder for downloaded updates.
+    /// </summary>
+    private readonly string _updateFolder;
+
+    /// <summary>
+    /// The release offered to the user, or <see langword="null"/>.
+    /// </summary>
+    private UpdateInfo? _update;
+
+    /// <summary>
+    /// Counts voice volume changes, so only the last one is stored.
+    /// </summary>
+    private long _voiceVolumeVersion;
+
+    /// <summary>
     /// Initializes a new instance of the <see cref="MainWindowViewModel"/> class.
     /// </summary>
     /// <param name="session">The session service.</param>
@@ -92,6 +164,9 @@ public sealed partial class MainWindowViewModel : ObservableObject
     /// <param name="conference">The conferencing backend.</param>
     /// <param name="components">The native components.</param>
     /// <param name="playerControls">The volume of the player on this device, or <see langword="null"/>.</param>
+    /// <param name="diagnostics">Saves diagnostic reports, or <see langword="null"/> when they are not offered.</param>
+    /// <param name="updates">Looks for new versions, or <see langword="null"/> when updates are not offered.</param>
+    /// <param name="updateFolder">The folder for downloaded updates.</param>
     public MainWindowViewModel(
         ISessionService session,
         IDialogService dialogs,
@@ -101,7 +176,10 @@ public sealed partial class MainWindowViewModel : ObservableObject
         string deviceFingerprint,
         IConferenceMedia conference,
         IComponentService components,
-        ILocalPlayerControls? playerControls = null)
+        ILocalPlayerControls? playerControls = null,
+        IDiagnosticsWriter? diagnostics = null,
+        IUpdateService? updates = null,
+        string? updateFolder = null)
     {
         ArgumentNullException.ThrowIfNull(components);
         VideoComponent = new ComponentItemViewModel(ComponentId.Video, components, dialogs);
@@ -130,6 +208,12 @@ public sealed partial class MainWindowViewModel : ObservableObject
         _tunnelDialogFactory = tunnelDialogFactory ?? throw new ArgumentNullException(nameof(tunnelDialogFactory));
         _conference = conference ?? throw new ArgumentNullException(nameof(conference));
         Volume = playerControls is null ? null : new VolumeViewModel(playerControls, _settings);
+        Tracks = playerControls is null ? null : new TracksViewModel(playerControls, _settings, _dialogs, _dispatcher);
+        _resume = new ResumeTracker(_settings);
+        _diagnostics = diagnostics;
+        _updates = updates;
+        _updateFolder = updateFolder ?? Path.Combine(Path.GetTempPath(), "golether-updates");
+        Chat = new ChatViewModel(_session, _dispatcher);
         conference.MuteChanged += (_, _) => _dispatcher.Post(() =>
         {
             // The host may switch devices off; the toggles show what is really in effect.
@@ -141,6 +225,13 @@ public sealed partial class MainWindowViewModel : ObservableObject
             }
         });
         conference.SpeakingChanged += (_, change) => _dispatcher.Post(() => ShowSpeaking(change));
+        conference.VideoQualityChanged += (_, change) => _dispatcher.Post(() =>
+        {
+            if (Participants.FirstOrDefault(p => p.PeerId == change.Peer) is { } participant)
+            {
+                participant.WeakConnection = change.Quality == VideoQuality.Low;
+            }
+        });
         Devices = conference is ICaptureDeviceSelector selector ? new DevicesViewModel(selector, _settings) : null;
         DeviceFingerprint = deviceFingerprint;
         UpdateConferenceNotice();
@@ -206,10 +297,53 @@ public sealed partial class MainWindowViewModel : ObservableObject
     public VolumeViewModel? Volume { get; }
 
     /// <summary>
-    /// Gets or sets a value indicating whether the event feed is shown.
+    /// Gets the sound and subtitle tracks chosen on this device, or <see langword="null"/> without a player.
+    /// </summary>
+    public TracksViewModel? Tracks { get; }
+
+    /// <summary>
+    /// Gets the session chat and reactions.
+    /// </summary>
+    public ChatViewModel Chat { get; }
+
+    /// <summary>
+    /// Gets or sets a value indicating whether the side panel (chat or event feed) is shown.
     /// </summary>
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(ShowChat), nameof(ShowEvents), nameof(SidePanelArrow))]
     public partial bool EventsExpanded { get; set; } = true;
+
+    /// <summary>
+    /// Gets or sets the tab of the side panel.
+    /// </summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(ShowChat), nameof(ShowEvents), nameof(IsChatTab), nameof(IsEventsTab))]
+    public partial SideTab SideTab { get; set; }
+
+    /// <summary>
+    /// Gets a value indicating whether the chat is shown.
+    /// </summary>
+    public bool ShowChat => EventsExpanded && SideTab == SideTab.Chat;
+
+    /// <summary>
+    /// Gets a value indicating whether the event feed is shown.
+    /// </summary>
+    public bool ShowEvents => EventsExpanded && SideTab == SideTab.Events;
+
+    /// <summary>
+    /// Gets a value indicating whether the chat tab is selected.
+    /// </summary>
+    public bool IsChatTab => SideTab == SideTab.Chat;
+
+    /// <summary>
+    /// Gets a value indicating whether the event tab is selected.
+    /// </summary>
+    public bool IsEventsTab => SideTab == SideTab.Events;
+
+    /// <summary>
+    /// Gets the arrow of the side panel button.
+    /// </summary>
+    public string SidePanelArrow => EventsExpanded ? "▾" : "▸";
 
     /// <summary>
     /// Gets the camera and microphone choice, or <see langword="null"/> when the backend cannot list devices.
@@ -229,14 +363,55 @@ public sealed partial class MainWindowViewModel : ObservableObject
     public partial bool CameraOff { get; set; }
 
     /// <summary>
-    /// Shows or hides the event feed and remembers the choice.
+    /// Shows or hides the side panel and remembers the choice.
     /// </summary>
     [RelayCommand]
     private void ToggleEvents()
     {
         EventsExpanded = !EventsExpanded;
-        _ = _settings.SetAsync(EventsExpandedSetting, EventsExpanded ? "true" : "false", CancellationToken.None);
+        SaveSidePanel();
     }
+
+    /// <summary>
+    /// Opens a tab of the side panel; a click on the open tab hides the panel.
+    /// </summary>
+    /// <param name="tab">The tab.</param>
+    [RelayCommand]
+    private void ShowTab(SideTab tab)
+    {
+        if (tab == SideTab && EventsExpanded)
+        {
+            EventsExpanded = false;
+        }
+        else
+        {
+            SideTab = tab;
+            EventsExpanded = true;
+        }
+
+        SaveSidePanel();
+    }
+
+    /// <summary>
+    /// Remembers the side panel and tells the chat whether it is visible.
+    /// </summary>
+    private void SaveSidePanel()
+    {
+        _ = _settings.SetAsync(EventsExpandedSetting, EventsExpanded ? "true" : "false", CancellationToken.None);
+        _ = _settings.SetAsync(SideTabSetting, SideTab == SideTab.Events ? "events" : "chat", CancellationToken.None);
+    }
+
+    /// <summary>
+    /// Keeps the chat informed whether it can be seen.
+    /// </summary>
+    /// <param name="value">The new value.</param>
+    partial void OnEventsExpandedChanged(bool value) => Chat.IsExpanded = ShowChat;
+
+    /// <summary>
+    /// Keeps the chat informed whether it can be seen.
+    /// </summary>
+    /// <param name="value">The new value.</param>
+    partial void OnSideTabChanged(SideTab value) => Chat.IsExpanded = ShowChat;
 
     /// <summary>
     /// Mutes or unmutes the microphone.
@@ -334,6 +509,7 @@ public sealed partial class MainWindowViewModel : ObservableObject
     /// Gets or sets a value indicating whether this device hosts.
     /// </summary>
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(CanStartNow))]
     public partial bool IsHost { get; set; }
 
     /// <summary>
@@ -394,6 +570,7 @@ public sealed partial class MainWindowViewModel : ObservableObject
     /// Gets or sets the media duration in seconds.
     /// </summary>
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(TimelineAdvance))]
     public partial double DurationSeconds { get; set; } = 1;
 
     /// <summary>
@@ -412,7 +589,98 @@ public sealed partial class MainWindowViewModel : ObservableObject
     /// Gets or sets a value indicating whether the session plays.
     /// </summary>
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(ShowPlayIcon), nameof(ShowPauseIcon), nameof(PlayButtonText))]
     public partial bool IsPlaying { get; set; }
+
+    /// <summary>
+    /// Gets or sets a value indicating whether the picture is really moving on this device: the session plays, the
+    /// scheduled start has come, and the player is neither paused nor waiting for data. The timeline moves only then.
+    /// </summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(TimelineAdvance))]
+    public partial bool IsAdvancing { get; set; }
+
+    /// <summary>
+    /// Gets how fast the timeline moves between updates, in fractions of the film per second.
+    /// </summary>
+    public double TimelineAdvance => IsAdvancing ? 1 / DurationSeconds : 0;
+
+    /// <summary>
+    /// Gets or sets the parts of the film this device can play without waiting, as fractions of the duration.
+    /// </summary>
+    [ObservableProperty]
+    public partial IReadOnlyList<Controls.FractionRange> BufferedRanges { get; set; } = [];
+
+    /// <summary>
+    /// Computes the parts of the film this device can play without waiting.
+    /// </summary>
+    /// <param name="snapshot">The session.</param>
+    /// <param name="duration">The duration.</param>
+    /// <returns>The parts as fractions; the whole film when the file is on this device.</returns>
+    internal static IReadOnlyList<Controls.FractionRange> ComputeBufferedRanges(SessionSnapshot snapshot, TimeSpan? duration)
+    {
+        if (snapshot.Media is null || duration is not { TotalSeconds: > 0 } total)
+        {
+            return [];
+        }
+
+        if (snapshot.IsHost || snapshot.UsesLocalCopy)
+        {
+            return [new Controls.FractionRange(0, 1)];
+        }
+
+        return snapshot.Local?.Snapshot.Buffered is { Count: > 0 } ranges
+            ? [.. ranges.Select(r => new Controls.FractionRange(
+                Math.Clamp(r.Start / total, 0, 1),
+                Math.Clamp(r.End / total, 0, 1))).Where(r => r.End > r.Start)]
+            : [];
+    }
+
+    /// <summary>
+    /// Gets or sets a value indicating whether the film reached its end.
+    /// </summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(ShowPlayIcon), nameof(PlayButtonText))]
+    public partial bool IsEnded { get; set; }
+
+    /// <summary>
+    /// Gets a value indicating whether the play triangle is shown (not playing and not at the end).
+    /// </summary>
+    public bool ShowPlayIcon => !IsPlaying && !IsEnded && !IsWaiting;
+
+    /// <summary>
+    /// Gets a value indicating whether the pause bars are shown (playing, or about to play once everybody is ready).
+    /// </summary>
+    public bool ShowPauseIcon => IsPlaying || IsWaiting;
+
+    /// <summary>
+    /// Gets or sets a value indicating whether playback waits until every participant is ready.
+    /// </summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(ShowPlayIcon), nameof(ShowPauseIcon), nameof(PlayButtonText), nameof(CanStartNow))]
+    public partial bool IsWaiting { get; set; }
+
+    /// <summary>
+    /// Gets a value indicating whether the host may start without waiting.
+    /// </summary>
+    public bool CanStartNow => IsWaiting && IsHost;
+
+    /// <summary>
+    /// Gets or sets the state of an automatic reconnection, or an empty string.
+    /// </summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(IsReconnecting))]
+    public partial string ReconnectText { get; set; } = string.Empty;
+
+    /// <summary>
+    /// Gets a value indicating whether the connection to the host is being restored.
+    /// </summary>
+    public bool IsReconnecting => ReconnectText.Length > 0;
+
+    /// <summary>
+    /// Gets the name of the play button for tooltips and screen readers.
+    /// </summary>
+    public string PlayButtonText => IsEnded ? "Смотреть сначала" : IsWaiting ? "Отменить старт" : IsPlaying ? "Пауза" : "Пуск";
 
     /// <summary>
     /// Gets or sets the countdown text of a scheduled start.
@@ -492,11 +760,25 @@ public sealed partial class MainWindowViewModel : ObservableObject
         }
 
         OpenRouterPort = await _settings.GetAsync(OpenRouterPortSetting, CancellationToken.None) != "false";
+        UpdateUrl = await _settings.GetAsync(UpdateService.UrlSetting, CancellationToken.None) ?? string.Empty;
+        if (_updates is not null)
+        {
+            _updates.ManifestUrl = UpdateUrl;
+            _ = CheckUpdatesAsync();
+        }
+
+        SideTab = await _settings.GetAsync(SideTabSetting, CancellationToken.None) == "events" ? SideTab.Events : SideTab.Chat;
         EventsExpanded = await _settings.GetAsync(EventsExpandedSetting, CancellationToken.None) != "false";
         if (Volume is not null)
         {
             await Volume.LoadAsync();
         }
+
+        if (Tracks is not null)
+        {
+            await Tracks.LoadAsync();
+        }
+
 
         if (Devices is not null)
         {
@@ -562,12 +844,20 @@ public sealed partial class MainWindowViewModel : ObservableObject
     {
         Interlocked.Exchange(ref _refreshQueued, 0);
         var snapshot = _session.GetSnapshot();
-        IsInSession = snapshot is not null && snapshot.State != SessionState.Ended;
+        ReconnectText = _session.ReconnectMessage;
+        IsInSession = (snapshot is not null && snapshot.State != SessionState.Ended) || IsReconnecting;
         if (snapshot is null)
         {
             Participants.Clear();
             IsHost = false;
             IsAwaitingApproval = false;
+            _resumeMedia = null;
+            ResumeOffer = null;
+            if (Chat.HasLines || Chat.Reactions.Count > 0)
+            {
+                Chat.Reset();
+            }
+
             return;
         }
 
@@ -585,14 +875,28 @@ public sealed partial class MainWindowViewModel : ObservableObject
         DurationSeconds = Math.Max(1, duration?.TotalSeconds ?? 1);
         DurationText = DisplayFormat.Position(duration);
         var position = local?.Snapshot.Position ?? local?.Expected;
-        if (!IsScrubbing)
+        var seeking = local?.Snapshot is { IsLoaded: true, IsBuffering: true };
+        if (!IsScrubbing && !seeking)
         {
+            // While the player seeks or waits for data its position is stale: the timeline would jump back.
             PositionSeconds = Math.Clamp(position?.TotalSeconds ?? 0, 0, DurationSeconds);
         }
 
         PositionText = DisplayFormat.Position(position);
         IsPlaying = snapshot.Playback?.State == PlayState.Playing;
-        CountdownText = local?.StartsIn is { } startsIn ? $"Старт через {Math.Ceiling(startsIn.TotalSeconds):0}…" : string.Empty;
+        IsAdvancing = IsPlaying && local?.StartsIn is null && local?.Snapshot is { IsPaused: false, IsBuffering: false };
+        IsEnded = snapshot.Playback is { State: PlayState.Paused, Cause: PlaybackCause.Ended };
+        IsWaiting = snapshot.Playback is { State: PlayState.Paused, Cause: PlaybackCause.WaitingForParticipants };
+        CountdownText = IsWaiting
+            ? DescribeWaiting(snapshot, duration)
+            : local?.StartsIn is { } startsIn ? $"Старт через {Math.Ceiling(startsIn.TotalSeconds):0}…" : string.Empty;
+        UpdateResume(snapshot, position, duration);
+        var buffered = ComputeBufferedRanges(snapshot, duration);
+        if (!buffered.SequenceEqual(BufferedRanges))
+        {
+            BufferedRanges = buffered;
+        }
+        Chat.Tick();
 
         UpdateParticipants(snapshot, duration);
         UpdateSyncChip(snapshot);
@@ -606,6 +910,255 @@ public sealed partial class MainWindowViewModel : ObservableObject
             : snapshot.ClockUncertainty is { } uncertainty
                 ? $"Часы: ±{(int)uncertainty.TotalMilliseconds} мс · пинг {DisplayFormat.Ping((int?)snapshot.RoundTrip?.TotalMilliseconds)}"
                 : "Часы: синхронизация…";
+    }
+
+    /// <summary>
+    /// Gets or sets the stored position of the current film the host may continue from.
+    /// </summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasResumeOffer), nameof(ResumeText))]
+    public partial TimeSpan? ResumeOffer { get; set; }
+
+    /// <summary>
+    /// Gets a value indicating whether continuing is offered.
+    /// </summary>
+    public bool HasResumeOffer => ResumeOffer is not null;
+
+    /// <summary>
+    /// Gets the text of the continue offer.
+    /// </summary>
+    public string ResumeText => ResumeOffer is { } offer ? $"В прошлый раз вы остановились на {DisplayFormat.Position(offer)}" : string.Empty;
+
+    /// <summary>
+    /// Remembers the position of the current film and offers the host to continue a film stopped earlier.
+    /// </summary>
+    /// <param name="snapshot">The session.</param>
+    /// <param name="position">The local position.</param>
+    /// <param name="duration">The duration.</param>
+    private void UpdateResume(SessionSnapshot snapshot, TimeSpan? position, TimeSpan? duration)
+    {
+        if (snapshot.Media is not { } media)
+        {
+            _resumeMedia = null;
+            ResumeOffer = null;
+            return;
+        }
+
+        if (duration is null)
+        {
+            return;
+        }
+
+        var id = media.QuickId;
+        if (id != _resumeMedia)
+        {
+            _resumeMedia = id;
+            ResumeOffer = null;
+            _ = BeginResumeAsync(id, duration, snapshot.IsHost);
+            return;
+        }
+
+        if (position is { } current)
+        {
+            _resume.Report(id, current, duration, IsPlaying, DateTimeOffset.UtcNow);
+            if (current >= ResumeTracker.MinimumPosition)
+            {
+                ResumeOffer = null;
+            }
+        }
+    }
+
+    /// <summary>
+    /// Reads the stored position of a film.
+    /// </summary>
+    /// <param name="mediaId">The media.</param>
+    /// <param name="duration">The duration.</param>
+    /// <param name="host">Whether this device leads the session.</param>
+    /// <returns>A task that completes when the offer is shown.</returns>
+    private async Task BeginResumeAsync(string mediaId, TimeSpan? duration, bool host)
+    {
+        var offer = await _resume.BeginAsync(mediaId, duration);
+        if (host && _resumeMedia == mediaId && PositionSeconds < ResumeTracker.MinimumPosition.TotalSeconds)
+        {
+            ResumeOffer = offer;
+        }
+    }
+
+    /// <summary>
+    /// Continues the film for everybody from the stored position.
+    /// </summary>
+    /// <returns>A task that completes when the request is sent.</returns>
+    [RelayCommand]
+    private Task ResumeAsync()
+    {
+        if (ResumeOffer is not { } offer)
+        {
+            return Task.CompletedTask;
+        }
+
+        ResumeOffer = null;
+        return SeekToAsync(offer.TotalSeconds);
+    }
+
+    /// <summary>
+    /// Hides the continue offer.
+    /// </summary>
+    [RelayCommand]
+    private void DismissResume() => ResumeOffer = null;
+
+    /// <summary>
+    /// Gets a value indicating whether a diagnostic report can be saved.
+    /// </summary>
+    public bool CanSaveReport => _diagnostics is not null;
+
+    /// <summary>
+    /// Gets or sets the address of the update source; an empty address switches the check off.
+    /// </summary>
+    [ObservableProperty]
+    public partial string UpdateUrl { get; set; } = string.Empty;
+
+    /// <summary>
+    /// Gets or sets the offer to update, or an empty string.
+    /// </summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasUpdate))]
+    public partial string UpdateText { get; set; } = string.Empty;
+
+    /// <summary>
+    /// Gets or sets what the new version brings.
+    /// </summary>
+    [ObservableProperty]
+    public partial string UpdateNotes { get; set; } = string.Empty;
+
+    /// <summary>
+    /// Gets or sets the progress of the download, 0–100.
+    /// </summary>
+    [ObservableProperty]
+    public partial double UpdateProgress { get; set; }
+
+    /// <summary>
+    /// Gets or sets a value indicating whether the update is being downloaded.
+    /// </summary>
+    [ObservableProperty]
+    public partial bool IsDownloadingUpdate { get; set; }
+
+    /// <summary>
+    /// Gets a value indicating whether a newer version is offered.
+    /// </summary>
+    public bool HasUpdate => UpdateText.Length > 0;
+
+    /// <summary>
+    /// Stores the address of the update source and looks there at once.
+    /// </summary>
+    /// <param name="value">The new address.</param>
+    partial void OnUpdateUrlChanged(string value)
+    {
+        if (_updates is null || value == _updates.ManifestUrl)
+        {
+            return;
+        }
+
+        _updates.ManifestUrl = value.Trim();
+        _ = _settings.SetAsync(UpdateService.UrlSetting, _updates.ManifestUrl, CancellationToken.None);
+        _ = CheckUpdatesAsync();
+    }
+
+    /// <summary>
+    /// Asks the update source whether a newer version exists.
+    /// </summary>
+    /// <returns>A task that completes when the answer is shown.</returns>
+    public async Task CheckUpdatesAsync()
+    {
+        if (_updates is not { } updates)
+        {
+            return;
+        }
+
+        var found = await updates.CheckAsync(CancellationToken.None);
+        _update = found;
+        UpdateText = found is null
+            ? string.Empty
+            : $"Есть версия {found.Version}{(UpdateService.DescribeSize(found.Size) is { Length: > 0 } size ? " · " + size : string.Empty)}";
+        UpdateNotes = found?.Notes ?? string.Empty;
+    }
+
+    /// <summary>
+    /// Downloads the offered version, checks its hash and shows where it is.
+    /// </summary>
+    /// <returns>A task that completes when the file is downloaded.</returns>
+    [RelayCommand]
+    private async Task DownloadUpdateAsync()
+    {
+        if (_updates is not { } updates || _update is not { } update || IsDownloadingUpdate)
+        {
+            return;
+        }
+
+        IsDownloadingUpdate = true;
+        UpdateProgress = 0;
+        try
+        {
+            var progress = new Progress<double>(value => _dispatcher.Post(() => UpdateProgress = value * 100));
+            var path = await updates.DownloadAsync(update, _updateFolder, progress, CancellationToken.None);
+            UpdateText = string.Empty;
+            await _dialogs.ShowMessageAsync(
+                "Обновление загружено",
+                $"Файл проверен по контрольной сумме и лежит здесь:{Environment.NewLine}{path}{Environment.NewLine}{Environment.NewLine}" +
+                "Закройте Golether и запустите его, чтобы обновиться. Ваши данные в папке data не тронутся.");
+        }
+        catch (Exception ex) when (ex is HttpRequestException or IOException or InvalidDataException or TaskCanceledException or UnauthorizedAccessException)
+        {
+            await _dialogs.ShowErrorAsync("Обновление не загружено", ex.Message);
+        }
+        finally
+        {
+            IsDownloadingUpdate = false;
+        }
+    }
+
+    /// <summary>
+    /// Hides the offer until the next check.
+    /// </summary>
+    [RelayCommand]
+    private void DismissUpdate() => UpdateText = string.Empty;
+
+    /// <summary>
+    /// Saves a report about this device and the session: what is installed, how the session goes and the tail of the
+    /// log. Keys and tokens are cut out of it.
+    /// </summary>
+    /// <returns>A task that completes when the report is saved.</returns>
+    [RelayCommand]
+    private async Task SaveReportAsync()
+    {
+        if (_diagnostics is not { } diagnostics)
+        {
+            return;
+        }
+
+        try
+        {
+            var notes = new List<string>
+            {
+                $"Плеер: {(PlayerNotice.Length > 0 ? PlayerNotice : "работает")}",
+                $"Камеры и голос: {(ConferenceAvailable ? "работают" : ConferenceNotice)}",
+                $"Микрофон {(MicrophoneMuted ? "выключен" : "включён")}, камера {(CameraOff ? "выключена" : "включена")}",
+                $"Синхронизация: {SyncText}",
+            };
+            if (ReconnectText.Length > 0)
+            {
+                notes.Add("Переподключение: " + ReconnectText);
+            }
+
+            var path = await diagnostics.SaveAsync(_session.GetSnapshot(), notes);
+            await _dialogs.ShowMessageAsync(
+                "Отчёт готов",
+                $"Отчёт сохранён в файл:{Environment.NewLine}{path}{Environment.NewLine}{Environment.NewLine}" +
+                "В нём нет ключей и паролей. Его можно отправить тому, кто помогает разобраться.");
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            await _dialogs.ShowErrorAsync("Отчёт не сохранён", ex.Message);
+        }
     }
 
     /// <summary>
@@ -670,7 +1223,43 @@ public sealed partial class MainWindowViewModel : ObservableObject
     /// <returns>A task that completes when the intent was sent.</returns>
     [RelayCommand]
     private Task TogglePlayAsync()
-        => SendAsync(new PlaybackRequest(IsPlaying ? PlaybackRequestKind.Pause : PlaybackRequestKind.Play, IsPlaying ? TimeSpan.FromSeconds(PositionSeconds) : null));
+        => SendAsync(IsEnded
+            ? new PlaybackRequest(PlaybackRequestKind.Play, TimeSpan.Zero)
+            : IsWaiting
+                ? new PlaybackRequest(PlaybackRequestKind.Pause, TimeSpan.FromSeconds(PositionSeconds))
+                : new PlaybackRequest(IsPlaying ? PlaybackRequestKind.Pause : PlaybackRequestKind.Play, IsPlaying ? TimeSpan.FromSeconds(PositionSeconds) : null));
+
+    /// <summary>
+    /// Starts playback for everybody without waiting for participants that are not ready (host).
+    /// </summary>
+    /// <returns>A task that completes when the intent was sent.</returns>
+    [RelayCommand]
+    private Task StartNowAsync() => SendAsync(new PlaybackRequest(PlaybackRequestKind.PlayNow, null));
+
+    /// <summary>
+    /// Names the participants playback waits for.
+    /// </summary>
+    /// <param name="snapshot">The session.</param>
+    /// <param name="duration">The media duration.</param>
+    /// <returns>The text, for example <c>Ждём: Марина и Олег…</c>.</returns>
+    internal static string DescribeWaiting(SessionSnapshot snapshot, TimeSpan? duration)
+    {
+        var target = snapshot.Playback?.Position ?? TimeSpan.Zero;
+        var names = snapshot.Participants
+            .Where(p => !p.Info.IsHost && (p.Status is not { } status
+                || !ReadinessOptions.IsReady(status, duration)
+                || status.Position is not { } position
+                || (position - target).Duration() > ReadinessOptions.WaitThreshold))
+            .Select(p => p.Info.DisplayName)
+            .ToArray();
+        return names.Length switch
+        {
+            0 => "Ждём готовности участников…",
+            1 => $"Ждём: {names[0]}…",
+            2 => $"Ждём: {names[0]} и {names[1]}…",
+            _ => $"Ждём: {names[0]}, {names[1]} и ещё {names.Length - 2}…",
+        };
+    }
 
     /// <summary>
     /// Seeks back by ten seconds.
@@ -842,12 +1431,59 @@ public sealed partial class MainWindowViewModel : ObservableObject
             var item = Participants.FirstOrDefault(p => p.PeerId == views[i].Info.PeerId);
             if (item is null)
             {
-                item = new ParticipantItemViewModel(views[i].Info.PeerId, SwitchOffParticipantDevicesAsync);
+                item = new ParticipantItemViewModel(views[i].Info.PeerId, SwitchOffParticipantDevicesAsync, ChangeVoiceVolume);
                 Participants.Insert(Math.Min(i, Participants.Count), item);
+                if (!views[i].IsLocal)
+                {
+                    _ = RestoreVoiceVolumeAsync(item);
+                }
             }
 
             item.Update(views[i], duration);
             item.CanModerate = IsHost && !item.IsLocal;
+        }
+    }
+
+    /// <summary>
+    /// Applies the local volume of a participant's voice and remembers it for later sessions.
+    /// </summary>
+    /// <param name="peer">The participant.</param>
+    /// <param name="percent">The volume in percent.</param>
+    private void ChangeVoiceVolume(PeerId peer, double percent)
+    {
+        _conference.SetVoiceVolume(peer, percent / 100);
+        var version = Interlocked.Increment(ref _voiceVolumeVersion);
+        _ = SaveVoiceVolumeLaterAsync(peer, percent, version);
+    }
+
+    /// <summary>
+    /// Stores a voice volume once the slider has stopped.
+    /// </summary>
+    /// <param name="peer">The participant.</param>
+    /// <param name="percent">The volume in percent.</param>
+    /// <param name="version">The change number; newer changes replace this one.</param>
+    /// <returns>A task that completes when the value is stored.</returns>
+    private async Task SaveVoiceVolumeLaterAsync(PeerId peer, double percent, long version)
+    {
+        await Task.Delay(VoiceVolumeSaveDelay).ConfigureAwait(false);
+        if (Interlocked.Read(ref _voiceVolumeVersion) == version)
+        {
+            await _settings.SetAsync(VoiceVolumeSettingPrefix + peer.Value, percent.ToString(CultureInfo.InvariantCulture), CancellationToken.None).ConfigureAwait(false);
+        }
+    }
+
+    /// <summary>
+    /// Applies the stored voice volume of a participant.
+    /// </summary>
+    /// <param name="item">The participant tile.</param>
+    /// <returns>A task that completes when the volume is applied.</returns>
+    private async Task RestoreVoiceVolumeAsync(ParticipantItemViewModel item)
+    {
+        var stored = await _settings.GetAsync(VoiceVolumeSettingPrefix + item.PeerId.Value, CancellationToken.None);
+        if (double.TryParse(stored, NumberStyles.Float, CultureInfo.InvariantCulture, out var percent) && percent != item.VoiceVolume)
+        {
+            item.RestoreVoiceVolume(percent);
+            _conference.SetVoiceVolume(item.PeerId, item.VoiceVolume / 100);
         }
     }
 
@@ -901,7 +1537,7 @@ public sealed partial class MainWindowViewModel : ObservableObject
         var drifts = snapshot.Participants.Select(p => p.Status).OfType<Core.Session.ParticipantStatus>().Where(s => s.Position is not null).ToArray();
         if (drifts.Length == 0 || snapshot.Playback?.State != PlayState.Playing)
         {
-            SyncText = snapshot.Playback?.State == PlayState.Playing ? "Синхронизация…" : "На паузе";
+            SyncText = snapshot.Playback?.State == PlayState.Playing ? "Синхронизация…" : IsEnded ? "Фильм закончился" : "На паузе";
             SyncLevel = IndicatorLevel.Neutral;
             return;
         }

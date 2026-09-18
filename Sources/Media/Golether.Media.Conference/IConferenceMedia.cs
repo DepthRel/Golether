@@ -136,11 +136,24 @@ public interface IConferenceMedia : IAsyncDisposable
     event EventHandler<SpeakingChange>? SpeakingChanged;
 
     /// <summary>
+    /// Raised when the camera quality sent to a participant changes with their connection. May be raised on any
+    /// thread.
+    /// </summary>
+    event EventHandler<VideoQualityChange>? VideoQualityChanged;
+
+    /// <summary>
     /// Sets the TURN relay used by connections created from now on.
     /// </summary>
     /// <param name="turnServer">The relay, for example <c>turn://user:pass@host:port?transport=tcp</c>, or
     /// <see langword="null"/> for direct connections only.</param>
     void SetRelay(string? turnServer);
+
+    /// <summary>
+    /// Sets how loud a participant's voice is played on this device. Other participants are not affected.
+    /// </summary>
+    /// <param name="peer">The participant.</param>
+    /// <param name="volume">The volume: 0 silent, 1 unchanged, up to <see cref="PcmGain.MaxVolume"/>.</param>
+    void SetVoiceVolume(PeerId peer, double volume);
 
     /// <summary>
     /// Gets a value indicating whether the microphone is muted.
@@ -269,6 +282,11 @@ public sealed class UnavailableConferenceMedia : IConferenceMedia
     }
 
     /// <inheritdoc />
+    public void SetVoiceVolume(PeerId peer, double volume)
+    {
+    }
+
+    /// <inheritdoc />
     public event PeerDataHandler? DataReceived
     {
         add { }
@@ -283,6 +301,13 @@ public sealed class UnavailableConferenceMedia : IConferenceMedia
 
     /// <inheritdoc />
     public event EventHandler<SpeakingChange>? SpeakingChanged
+    {
+        add { }
+        remove { }
+    }
+
+    /// <inheritdoc />
+    public event EventHandler<VideoQualityChange>? VideoQualityChanged
     {
         add { }
         remove { }

@@ -103,6 +103,11 @@ public sealed class HostSession : IAsyncDisposable
     private readonly ConcurrentDictionary<PeerId, Connection> _participants = new();
 
     /// <summary>
+    /// The tickets that let admitted participants come back without a new invitation while the session runs.
+    /// </summary>
+    private readonly ConcurrentDictionary<PeerId, string> _reconnectTickets = new();
+
+    /// <summary>
     /// Serializes player access.
     /// </summary>
     private readonly SemaphoreSlim _playerGate = new(1, 1);
@@ -195,6 +200,11 @@ public sealed class HostSession : IAsyncDisposable
     /// Raised for the event feed. Raised on a background thread.
     /// </summary>
     public event EventHandler<SessionEvent>? EventRaised;
+
+    /// <summary>
+    /// Raised for chat lines and reactions, including this device's own. Raised on a background thread.
+    /// </summary>
+    public event EventHandler<ChatEntry>? ChatReceived;
 
     /// <summary>
     /// Gets the session name.
@@ -329,6 +339,24 @@ public sealed class HostSession : IAsyncDisposable
         {
             await PublishAsync(state, cancellationToken).ConfigureAwait(false);
         }
+    }
+
+    /// <summary>
+    /// Sends a chat line or a reaction to everybody.
+    /// </summary>
+    /// <param name="kind">The kind.</param>
+    /// <param name="text">The text or reaction.</param>
+    /// <returns>A task that completes when the message was sent.</returns>
+    public async Task SendChatAsync(ChatKind kind, string text)
+    {
+        if (ChatMessage.Create(kind, text) is not { } message)
+        {
+            return;
+        }
+
+        var signed = message with { Sender = _identity.PeerId };
+        RaiseChat(signed);
+        await BroadcastAsync(signed).ConfigureAwait(false);
     }
 
     /// <summary>
@@ -568,7 +596,11 @@ public sealed class HostSession : IAsyncDisposable
         }
 
         var contact = _contacts is null ? null : await _contacts.FindAsync(peer, cancellationToken).ConfigureAwait(false);
-        var trusted = contact?.IsTrusted == true;
+        var returning = hello.InviteToken is { Length: > 0 } ticket
+            && _reconnectTickets.TryGetValue(peer, out var known)
+            && System.Security.Cryptography.CryptographicOperations.FixedTimeEquals(
+                System.Text.Encoding.UTF8.GetBytes(known), System.Text.Encoding.UTF8.GetBytes(ticket));
+        var trusted = contact?.IsTrusted == true || returning;
         if (!trusted)
         {
             var check = _invites.TryConsume(hello.InviteToken);
@@ -598,6 +630,8 @@ public sealed class HostSession : IAsyncDisposable
             await _contacts.TouchAsync(peer, name, remoteAddress, cancellationToken).ConfigureAwait(false);
         }
 
+        // The ticket lets the participant come back after a broken connection; the host is asked again every time.
+        var reconnectTicket = _reconnectTickets.GetOrAdd(peer, _ => Convert.ToHexString(System.Security.Cryptography.RandomNumberGenerator.GetBytes(24)));
         var connection = new Connection(new ParticipantInfo(peer, name, false), channel, _timeProvider.GetUtcNow());
         if (_participants.TryGetValue(peer, out var previous))
         {
@@ -608,7 +642,7 @@ public sealed class HostSession : IAsyncDisposable
         _participants[peer] = connection;
         var participants = GetSnapshot().Participants.Select(p => p.Info).ToArray();
         await channel.SendAsync(
-            new WelcomeMessage(SessionName, participants, _authority.Current, _media.Descriptor, _options.MediaDataStreams) { Relay = Relay },
+            new WelcomeMessage(SessionName, participants, _authority.Current, _media.Descriptor, _options.MediaDataStreams) { Relay = Relay, ReconnectTicket = reconnectTicket },
             cancellationToken).ConfigureAwait(false);
         Raise(peer, $"{name} присоединяется");
         _ = SyncConferenceAsync();
@@ -660,6 +694,18 @@ public sealed class HostSession : IAsyncDisposable
                 {
                     // Relay between participants; the source is the authenticated sender, never taken from the message.
                     await TrySendAsync(target, signal with { Peer = connection.Info.PeerId }).ConfigureAwait(false);
+                }
+
+                break;
+
+            case ChatMessage chat:
+                if (chat.Sanitize() is { } clean
+                    && connection.ChatLimiter.TryAcquire(clean.Kind, _timeProvider.GetTimestamp(), _timeProvider))
+                {
+                    // The sender is the authenticated connection, never taken from the message.
+                    var relayed = clean with { Sender = connection.Info.PeerId };
+                    RaiseChat(relayed);
+                    await BroadcastAsync(relayed).ConfigureAwait(false);
                 }
 
                 break;
@@ -743,6 +789,11 @@ public sealed class HostSession : IAsyncDisposable
                 if (_localStatus?.Snapshot.Duration is { } duration)
                 {
                     _authority.Duration = duration;
+                }
+
+                if (_authority.EvaluateEnd() is { } ended)
+                {
+                    await PublishAsync(ended, cancellationToken).ConfigureAwait(false);
                 }
 
                 if (_timeProvider.GetElapsedTime(lastBroadcast) < _options.StatusInterval)
@@ -856,6 +907,18 @@ public sealed class HostSession : IAsyncDisposable
     }
 
     /// <summary>
+    /// Shows a chat message on this device.
+    /// </summary>
+    /// <param name="message">The message with its sender.</param>
+    private void RaiseChat(ChatMessage message)
+    {
+        var sender = message.Sender!.Value;
+        ChatReceived?.Invoke(
+            this,
+            new ChatEntry(message.Id, sender, NameOf(sender), message.Kind, message.Text, _timeProvider.GetLocalNow(), sender == _identity.PeerId));
+    }
+
+    /// <summary>
     /// An admitted participant.
     /// </summary>
     private sealed class Connection
@@ -897,6 +960,11 @@ public sealed class HostSession : IAsyncDisposable
         /// Gets or sets the latest status.
         /// </summary>
         public ParticipantStatus? Status { get; set; }
+
+        /// <summary>
+        /// Gets the chat limit of the participant.
+        /// </summary>
+        public ChatRateLimiter ChatLimiter { get; } = new();
 
         /// <summary>
         /// Gets a token that is cancelled when the admission ends.

@@ -141,7 +141,13 @@ public sealed class SharingTests : IAsyncLifetime
         var borisExchange = Exchange(network.Join(Boris), new ChunkCache());
         await using var swarm = new SwarmChunkSource(host, borisExchange);
         anna.Announce();
+        // The announcement travels through the fake network: wait until Boris knows Anna has the chunks.
+        for (var i = 0; i < 200 && borisExchange.PeersHaving(0).Count == 0; i++)
+        {
+            await Task.Delay(10, token);
+        }
 
+        Assert.NotEmpty(borisExchange.PeersHaving(0));
         Assert.Equal(Chunk(0), await swarm.GetChunkAsync(0, token));
         Assert.Equal(Chunk(5), await swarm.GetChunkAsync(5, token));
         Assert.Equal(0, server.ChunksServed);

@@ -51,6 +51,10 @@ public sealed class AvaloniaDialogService : IDialogService
         => new MessageDialog(title, message).ShowDialog(_owner);
 
     /// <inheritdoc />
+    public Task ShowMessageAsync(string title, string message)
+        => new MessageDialog(title, message).ShowDialog(_owner);
+
+    /// <inheritdoc />
     public async Task<string?> PickMediaFileAsync()
     {
         var files = await _owner.StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
@@ -60,6 +64,38 @@ public sealed class AvaloniaDialogService : IDialogService
             FileTypeFilter =
             [
                 new FilePickerFileType("Видео") { Patterns = ["*.mkv", "*.mp4", "*.m4v", "*.avi", "*.mov", "*.webm", "*.ts", "*.m2ts", "*.wmv", "*.flv"] },
+                FilePickerFileTypes.All,
+            ],
+        });
+        return files.Count > 0 ? files[0].TryGetLocalPath() : null;
+    }
+
+    /// <inheritdoc />
+    public async Task<string?> PickSubtitleFileAsync()
+    {
+        var files = await _owner.StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
+        {
+            Title = "Выберите субтитры",
+            AllowMultiple = false,
+            FileTypeFilter =
+            [
+                new FilePickerFileType("Субтитры") { Patterns = ["*.srt", "*.ass", "*.ssa", "*.vtt", "*.sub", "*.sup", "*.idx"] },
+                FilePickerFileTypes.All,
+            ],
+        });
+        return files.Count > 0 ? files[0].TryGetLocalPath() : null;
+    }
+
+    /// <inheritdoc />
+    public async Task<string?> PickAudioFileAsync()
+    {
+        var files = await _owner.StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
+        {
+            Title = "Выберите звуковую дорожку",
+            AllowMultiple = false,
+            FileTypeFilter =
+            [
+                new FilePickerFileType("Звук") { Patterns = ["*.mka", "*.mp3", "*.aac", "*.ac3", "*.dts", "*.flac", "*.opus", "*.wav", "*.m4a"] },
                 FilePickerFileTypes.All,
             ],
         });

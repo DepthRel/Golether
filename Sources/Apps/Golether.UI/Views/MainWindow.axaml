@@ -21,6 +21,12 @@
     <StreamGeometry x:Key="IconForward">M4,6 L12,12 L4,18 Z M12,6 L20,12 L12,18 Z</StreamGeometry>
     <StreamGeometry x:Key="IconFullScreen">M3,3 H10 V5 H5 V10 H3 Z M14,3 H21 V10 H19 V5 H14 Z M3,14 H5 V19 H10 V21 H3 Z M19,14 H21 V21 H14 V19 H19 Z</StreamGeometry>
     <StreamGeometry x:Key="IconLock">M6,10 V7 C6,3.7 8.7,1 12,1 C15.3,1 18,3.7 18,7 V10 H20 V22 H4 V10 Z M9,10 H15 V7 C15,5.3 13.7,4 12,4 C10.3,4 9,5.3 9,7 Z</StreamGeometry>
+    <!-- "Replay" from Material Icons (Apache License 2.0): a circular arrow with a clear head. -->
+    <StreamGeometry x:Key="IconReplay">M0,0 H0.01 V0.01 Z M23.99,23.99 H24 V24 H23.99 Z M12,5 V1 L7,6 L12,11 V7 C15.31,7 18,9.69 18,13 C18,16.31 15.31,19 12,19 C8.69,19 6,16.31 6,13 H4 C4,17.42 7.58,21 12,21 C16.42,21 20,17.42 20,13 C20,8.58 16.42,5 12,5 Z</StreamGeometry>
+    <!-- Рамка с двумя строками текста: не путается с кнопкой остановки. -->
+    <StreamGeometry x:Key="IconSubtitles">M2,4 H22 V6.2 H2 Z M2,17.8 H22 V20 H2 Z M2,4 H4.2 V20 H2 Z M19.8,4 H22 V20 H19.8 Z M5.5,9 H13 V11 H5.5 Z M15,9 H18.5 V11 H15 Z M5.5,13 H10 V15 H5.5 Z M12,13 H18.5 V15 H12 Z</StreamGeometry>
+    <StreamGeometry x:Key="IconReaction">F1 M12,2 A10,10 0 1 1 11.99,2 Z M12,3.8 A8.2,8.2 0 1 0 12.01,3.8 Z M8.5,7.4 A1.5,1.5 0 1 1 8.49,7.4 Z M15.5,7.4 A1.5,1.5 0 1 1 15.49,7.4 Z M7.2,12.8 H8.9 A3.2,3.2 0 0 0 15.1,12.8 H16.8 A4.9,4.9 0 0 1 7.2,12.8 Z</StreamGeometry>
+    <StreamGeometry x:Key="IconSend">M2,21 L23,12 L2,3 V10 L17,12 L2,14 Z</StreamGeometry>
     <StreamGeometry x:Key="IconFolder">M2,5 H10 L12,7 H22 V20 H2 Z</StreamGeometry>
     <!-- Speaker icons share the 24x24 frame (corner dots), so they are scaled alike. -->
     <StreamGeometry x:Key="IconSpeakerMuted">M0,0 H0.01 V0.01 Z M23.99,23.99 H24 V24 H23.99 Z M2,9 H6 L11,4 V20 L6,15 H2 Z M14.2,9.2 L15.6,7.8 L18,10.2 L20.4,7.8 L21.8,9.2 L19.4,11.6 L21.8,14 L20.4,15.4 L18,13 L15.6,15.4 L14.2,14 L16.6,11.6 Z</StreamGeometry>
@@ -64,6 +70,8 @@
                   <MenuFlyout Placement="BottomEdgeAlignedRight">
                     <MenuItem Header="Туннели AWG" Command="{Binding OpenTunnelsCommand}" />
                     <MenuItem Header="Пригласить" Command="{Binding InviteCommand}" IsVisible="{Binding IsHost}" />
+                    <MenuItem Header="Отчёт для диагностики…" Command="{Binding SaveReportCommand}" IsVisible="{Binding CanSaveReport}"
+                              ToolTip.Tip="Сохранить файл с состоянием приложения и журналом без ключей" />
                     <MenuItem Header="Завершить" Command="{Binding LeaveCommand}" IsVisible="{Binding IsInSession}"
                               Foreground="{StaticResource GoletherBad}" />
                   </MenuFlyout>
@@ -112,6 +120,10 @@
                   <TextBox Text="{Binding NewSessionName}" MaxLength="64" />
                   <TextBlock Classes="label" Text="ПОРТ" />
                   <NumericUpDown Value="{Binding Port}" Minimum="1024" Maximum="65535" FormatString="0" Width="160" HorizontalAlignment="Left" />
+                  <TextBlock Classes="label" Text="ИСТОЧНИК ОБНОВЛЕНИЙ" />
+                  <TextBox Text="{Binding UpdateUrl}" MaxLength="300" PlaceholderText="https://…/golether-updates.json"
+                           AutomationProperties.Name="Источник обновлений"
+                           ToolTip.Tip="Адрес файла со списком версий. Пусто — проверка обновлений выключена. Ничего не ставится само: вы решаете." />
                   <CheckBox IsChecked="{Binding OpenRouterPort}" AutomationProperties.Name="Открыть порт на роутере">
                     <TextBlock TextWrapping="Wrap" Text="Открыть порт на роутере автоматически (UPnP / NAT-PMP), чтобы подключались из других сетей. Порт закрывается, когда сеанс завершён." />
                   </CheckBox>
@@ -190,11 +202,40 @@
           <DockPanel Grid.Column="0">
             <Border DockPanel.Dock="Bottom" Classes="panel" BorderBrush="{StaticResource GoletherLine}" BorderThickness="0,1,1,0" Padding="16,10,16,12">
               <StackPanel Spacing="8">
+                <!-- The connection to the host broke: the session comes back by itself, with the host's approval. -->
+                <Border Classes="reconnect" IsVisible="{Binding IsReconnecting}" CornerRadius="8" Padding="12,6"
+                        Background="{StaticResource GoletherPanel2}" BorderBrush="{StaticResource GoletherWarn}" BorderThickness="1">
+                  <DockPanel>
+                    <Button DockPanel.Dock="Right" Focusable="False" Classes="ghost" Margin="12,0,0,0" Command="{Binding LeaveCommand}"
+                            Content="Выйти" ToolTip.Tip="Прекратить попытки и выйти из сеанса" />
+                    <ProgressBar DockPanel.Dock="Left" IsIndeterminate="True" Width="80" Margin="0,0,12,0" VerticalAlignment="Center" />
+                    <TextBlock VerticalAlignment="Center" TextTrimming="CharacterEllipsis" Foreground="{StaticResource GoletherWarn}"
+                               Text="{Binding ReconnectText}" ToolTip.Tip="{Binding ReconnectText}" />
+                  </DockPanel>
+                </Border>
+                <!-- Continue where this device stopped the same film last time (host only). -->
+                <Border Classes="resumeOffer" IsVisible="{Binding HasResumeOffer}" CornerRadius="8" Padding="12,6"
+                        Background="{StaticResource GoletherPanel2}" BorderBrush="{StaticResource GoletherLine}" BorderThickness="1">
+                  <DockPanel>
+                    <Button DockPanel.Dock="Right" Focusable="False" Classes="ghost square" Command="{Binding DismissResumeCommand}"
+                            AutomationProperties.Name="Скрыть предложение продолжить" ToolTip.Tip="Смотреть с начала">
+                      <TextBlock Text="✕" />
+                    </Button>
+                    <Button DockPanel.Dock="Right" Focusable="False" Classes="accent" Margin="12,0,6,0" Command="{Binding ResumeCommand}"
+                            AutomationProperties.Name="Продолжить просмотр">
+                      <StackPanel Orientation="Horizontal" Spacing="6">
+                        <PathIcon Width="14" Height="14" Data="{StaticResource IconPlay}" Foreground="{StaticResource GoletherAccentInk}" />
+                        <TextBlock Text="Продолжить для всех" />
+                      </StackPanel>
+                    </Button>
+                    <TextBlock VerticalAlignment="Center" TextTrimming="CharacterEllipsis" Text="{Binding ResumeText}" />
+                  </DockPanel>
+                </Border>
                 <Panel Height="34">
                   <ItemsControl ItemsSource="{Binding Participants}" VerticalAlignment="Top" Margin="0,0,0,0" IsHitTestVisible="False">
                     <ItemsControl.ItemsPanel>
                       <ItemsPanelTemplate>
-                        <controls:FractionPanel />
+                        <controls:FractionPanel Inset="10" AdvancePerSecond="{Binding $parent[ItemsControl].((vm:MainWindowViewModel)DataContext).TimelineAdvance}" />
                       </ItemsPanelTemplate>
                     </ItemsControl.ItemsPanel>
                     <ItemsControl.Styles>
@@ -212,32 +253,39 @@
                       </DataTemplate>
                     </ItemsControl.ItemTemplate>
                   </ItemsControl>
-                  <Slider x:Name="Timeline" Classes="timeline" VerticalAlignment="Bottom" Margin="0,0,0,-8"
-                          Minimum="0" Maximum="{Binding DurationSeconds}" Value="{Binding PositionSeconds}"
+                  <controls:TimelineSlider x:Name="Timeline" Classes="timeline" VerticalAlignment="Bottom" Margin="0,0,0,-8"
+                          BufferedRanges="{Binding BufferedRanges}" ToolTip.Tip="Светлым отмечено то, что можно смотреть без ожидания"
+                          Minimum="0" Maximum="{Binding DurationSeconds}"
                           IsEnabled="{Binding HasMedia}" />
                 </Panel>
-                <Grid ColumnDefinitions="Auto,Auto,Auto,Auto,Auto,*,Auto,Auto,Auto">
-                  <Button Classes="ghost square" Command="{Binding SeekBackCommand}" AutomationProperties.Name="Назад на 10 секунд" ToolTip.Tip="Назад на 10 с (←)">
+                <Grid ColumnDefinitions="Auto,Auto,Auto,Auto,Auto,*,Auto,Auto,Auto,Auto,Auto">
+                  <Button Focusable="False" Classes="ghost square" Command="{Binding SeekBackCommand}" AutomationProperties.Name="Назад на 10 секунд" ToolTip.Tip="Назад на 10 с (←)">
                     <PathIcon Data="{StaticResource IconBack}" />
                   </Button>
-                  <Button Grid.Column="1" Classes="accent round" Margin="10,0" Command="{Binding TogglePlayCommand}" AutomationProperties.Name="Пуск или пауза" ToolTip.Tip="Пуск или пауза для всех (пробел)">
+                  <Button Focusable="False" Grid.Column="1" Classes="accent round" Margin="10,0" Command="{Binding TogglePlayCommand}" AutomationProperties.Name="Пуск или пауза"
+                          ToolTip.Tip="{Binding PlayButtonText, StringFormat='{}{0} для всех (пробел)'}">
                     <Panel>
-                      <PathIcon Data="{StaticResource IconPlay}" IsVisible="{Binding !IsPlaying}" Foreground="{StaticResource GoletherAccentInk}" />
-                      <PathIcon Data="{StaticResource IconPause}" IsVisible="{Binding IsPlaying}" Foreground="{StaticResource GoletherAccentInk}" />
+                      <PathIcon Width="19" Height="19" Data="{StaticResource IconPlay}" IsVisible="{Binding ShowPlayIcon}" Foreground="{StaticResource GoletherAccentInk}" />
+                      <PathIcon Width="19" Height="19" Data="{StaticResource IconReplay}" IsVisible="{Binding IsEnded}" Foreground="{StaticResource GoletherAccentInk}" />
+                      <PathIcon Width="19" Height="19" Data="{StaticResource IconPause}" IsVisible="{Binding ShowPauseIcon}" Foreground="{StaticResource GoletherAccentInk}" />
                     </Panel>
                   </Button>
-                  <Button Grid.Column="2" Classes="ghost square" Command="{Binding SeekForwardCommand}" AutomationProperties.Name="Вперёд на 10 секунд" ToolTip.Tip="Вперёд на 10 с (→)">
+                  <Button Focusable="False" Grid.Column="2" Classes="ghost square" Command="{Binding SeekForwardCommand}" AutomationProperties.Name="Вперёд на 10 секунд" ToolTip.Tip="Вперёд на 10 с (→)">
                     <PathIcon Data="{StaticResource IconForward}" />
                   </Button>
                   <StackPanel Grid.Column="3" Orientation="Horizontal" VerticalAlignment="Center" Margin="14,0,0,0">
                     <TextBlock Classes="mono" FontWeight="SemiBold" Text="{Binding PositionText}" />
                     <TextBlock Classes="mono muted" Text="{Binding DurationText, StringFormat=' / {0}'}" />
                   </StackPanel>
-                  <TextBlock Grid.Column="4" Margin="16,0,0,0" VerticalAlignment="Center" FontWeight="SemiBold"
-                             Foreground="{StaticResource GoletherAccent}" Text="{Binding CountdownText}" />
+                  <StackPanel Grid.Column="4" Margin="16,0,0,0" Orientation="Horizontal" Spacing="10" VerticalAlignment="Center">
+                    <TextBlock VerticalAlignment="Center" FontWeight="SemiBold" MaxWidth="260" TextTrimming="CharacterEllipsis"
+                               Foreground="{StaticResource GoletherAccent}" Text="{Binding CountdownText}" ToolTip.Tip="{Binding CountdownText}" />
+                    <Button Focusable="False" Classes="ghost" Padding="10,3" IsVisible="{Binding CanStartNow}" Command="{Binding StartNowCommand}"
+                            Content="Начать без них" ToolTip.Tip="Запустить у всех сейчас: отставшие догонят сами" />
+                  </StackPanel>
                   <TextBlock Grid.Column="5" Margin="16,0" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"
                              Classes="muted" Text="{Binding LastEvent}" />
-                  <Button Grid.Column="6" Classes="ghost" Margin="0,0,8,0" Command="{Binding PickFileCommand}"
+                  <Button Focusable="False" Grid.Column="6" Classes="ghost" Margin="0,0,8,0" Command="{Binding PickFileCommand}"
                           ToolTip.Tip="Ведущий выбирает файл для показа, участник может указать свою копию того же файла">
                     <StackPanel Orientation="Horizontal" Spacing="6">
                       <PathIcon Data="{StaticResource IconFolder}" Width="14" Height="14" />
@@ -247,9 +295,98 @@
                       </Panel>
                     </StackPanel>
                   </Button>
+                  <!-- Reactions float over everybody's video for a few seconds. -->
+                  <Button Focusable="False" x:Name="ReactionsButton" Grid.Column="7" Classes="ghost square" Margin="0,0,4,0"
+                          IsVisible="{Binding IsInSession}" AutomationProperties.Name="Реакции" ToolTip.Tip="Реакция для всех">
+                    <PathIcon Data="{StaticResource IconReaction}" />
+                    <Button.Flyout>
+                      <Flyout Placement="Top">
+                        <ItemsControl ItemsSource="{Binding Chat.AvailableReactions}">
+                          <ItemsControl.ItemsPanel>
+                            <ItemsPanelTemplate>
+                              <StackPanel Orientation="Horizontal" Spacing="4" />
+                            </ItemsPanelTemplate>
+                          </ItemsControl.ItemsPanel>
+                          <ItemsControl.ItemTemplate>
+                            <DataTemplate x:DataType="x:String">
+                              <Button Classes="ghost reaction" Focusable="False" Padding="0" Width="48" Height="48" Click="OnReactionChosen"
+                                      Command="{Binding $parent[ItemsControl].((vm:MainWindowViewModel)DataContext).Chat.ReactCommand}"
+                                      CommandParameter="{Binding}" AutomationProperties.Name="{Binding}">
+                                <!-- Цветной глиф эмодзи выходит за текстовую рамку: поля дают ему место, иначе его срезает. -->
+                                <TextBlock Classes="emoji" Text="{Binding}" FontSize="24" Padding="8,11,8,5" TextAlignment="Center"
+                                           HorizontalAlignment="Center" VerticalAlignment="Center" />
+                              </Button>
+                            </DataTemplate>
+                          </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                      </Flyout>
+                    </Button.Flyout>
+                  </Button>
+                  <!-- Sound and subtitle tracks of this device only: every participant picks their own. -->
+                  <Button Focusable="False" x:Name="TracksButton" Grid.Column="8" Classes="ghost square" Margin="0,0,4,0"
+                          IsVisible="{Binding Tracks.HasTracks, FallbackValue=False}"
+                          AutomationProperties.Name="Звук и субтитры" ToolTip.Tip="{Binding Tracks.Summary, FallbackValue={x:Null}}">
+                    <Panel>
+                      <PathIcon Data="{StaticResource IconSubtitles}" IsVisible="{Binding !Tracks.SubtitlesShown, FallbackValue=True}" />
+                      <PathIcon Data="{StaticResource IconSubtitles}" IsVisible="{Binding Tracks.SubtitlesShown, FallbackValue=False}"
+                                Foreground="{StaticResource GoletherAccent}" />
+                    </Panel>
+                    <Button.Flyout>
+                      <Flyout Placement="TopEdgeAlignedRight">
+                        <ScrollViewer MaxHeight="420" MaxWidth="380">
+                          <StackPanel Spacing="4" Margin="2">
+                            <TextBlock Classes="muted" FontSize="11" Text="ЗВУК · только у вас" Margin="6,0,0,2" />
+                            <ItemsControl ItemsSource="{Binding Tracks.AudioTracks, FallbackValue={x:Null}}">
+                              <ItemsControl.ItemTemplate>
+                                <DataTemplate x:DataType="vm:TrackOptionViewModel">
+                                  <Button Classes="ghost trackOption" Command="{Binding SelectCommand}" Click="OnTrackChosen"
+                                          HorizontalAlignment="Stretch" HorizontalContentAlignment="Left">
+                                    <StackPanel Orientation="Horizontal" Spacing="8">
+                                      <TextBlock Width="14" Text="✓" Foreground="{StaticResource GoletherAccent}" IsVisible="{Binding IsSelected}" />
+                                      <TextBlock Width="14" IsVisible="{Binding !IsSelected}" />
+                                      <TextBlock Text="{Binding Label}" TextTrimming="CharacterEllipsis" />
+                                    </StackPanel>
+                                  </Button>
+                                </DataTemplate>
+                              </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                            <TextBlock Classes="muted" FontSize="11" Text="СУБТИТРЫ · только у вас" Margin="6,8,0,2" />
+                            <ItemsControl ItemsSource="{Binding Tracks.SubtitleTracks, FallbackValue={x:Null}}">
+                              <ItemsControl.ItemTemplate>
+                                <DataTemplate x:DataType="vm:TrackOptionViewModel">
+                                  <Button Classes="ghost trackOption" Command="{Binding SelectCommand}" Click="OnTrackChosen"
+                                          HorizontalAlignment="Stretch" HorizontalContentAlignment="Left">
+                                    <StackPanel Orientation="Horizontal" Spacing="8">
+                                      <TextBlock Width="14" Text="✓" Foreground="{StaticResource GoletherAccent}" IsVisible="{Binding IsSelected}" />
+                                      <TextBlock Width="14" IsVisible="{Binding !IsSelected}" />
+                                      <TextBlock Text="{Binding Label}" TextTrimming="CharacterEllipsis" />
+                                    </StackPanel>
+                                  </Button>
+                                </DataTemplate>
+                              </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                            <Button Classes="ghost" Margin="0,4,0,0" HorizontalAlignment="Stretch" HorizontalContentAlignment="Left"
+                                    Command="{Binding Tracks.AddSubtitlesCommand, FallbackValue={x:Null}}" Click="OnTrackChosen">
+                              <StackPanel Orientation="Horizontal" Spacing="8">
+                                <PathIcon Data="{StaticResource IconFolder}" Width="14" Height="14" />
+                                <TextBlock Text="Субтитры из файла…" />
+                              </StackPanel>
+                            </Button>
+                            <Button Classes="ghost" HorizontalAlignment="Stretch" HorizontalContentAlignment="Left"
+                                    Command="{Binding Tracks.AddAudioCommand, FallbackValue={x:Null}}" Click="OnTrackChosen">
+                              <StackPanel Orientation="Horizontal" Spacing="8">
+                                <PathIcon Data="{StaticResource IconFolder}" Width="14" Height="14" />
+                                <TextBlock Text="Звук из файла…" />
+                              </StackPanel>
+                            </Button>
+                          </StackPanel>
+                        </ScrollViewer>
+                      </Flyout>
+                    </Button.Flyout>
+                  </Button>
                   <!-- Volume of this device only: the popup scale opens on hover, the button mutes. -->
-                  <Panel Grid.Column="7" Margin="0,0,8,0" IsVisible="{Binding Volume, Converter={x:Static ObjectConverters.IsNotNull}}">
-                    <Button x:Name="VolumeButton" Classes="ghost square" Command="{Binding Volume.ToggleMuteCommand, FallbackValue={x:Null}}"
+                  <Panel Grid.Column="9" Margin="0,0,8,0" IsVisible="{Binding Volume, Converter={x:Static ObjectConverters.IsNotNull}}">
+                    <Button Focusable="False" x:Name="VolumeButton" Classes="ghost square" Command="{Binding Volume.ToggleMuteCommand, FallbackValue={x:Null}}"
                             AutomationProperties.Name="Звук" ToolTip.Tip="Звук у вас: щелчок выключает или включает, колёсико меняет громкость. На собеседников не влияет."
                             PointerEntered="OnVolumePointerEntered" PointerExited="OnVolumePointerExited" PointerWheelChanged="OnVolumeWheel">
                       <Panel>
@@ -273,7 +410,7 @@
                       </Border>
                     </Popup>
                   </Panel>
-                  <Button Grid.Column="8" Classes="ghost square" Click="OnToggleFullScreen" AutomationProperties.Name="Полный экран" ToolTip.Tip="Полный экран (F11)">
+                  <Button Focusable="False" Grid.Column="10" Classes="ghost square" Click="OnToggleFullScreen" AutomationProperties.Name="Полный экран" ToolTip.Tip="Полный экран (F11)">
                     <PathIcon Data="{StaticResource IconFullScreen}" />
                   </Button>
                 </Grid>
@@ -281,8 +418,43 @@
             </Border>
 
             <!-- Video -->
-            <Panel Background="Black">
+            <Panel x:Name="VideoArea" Background="Black">
               <controls:VideoHost x:Name="Video" IsVisible="{Binding ShowVideo}" />
+              <!--
+                Reactions: a separate click-through window, because nothing can be drawn over the native video.
+                It stays open for the whole session: a closed popup does not follow the list, and a reaction that
+                left it would come back when it opened again.
+              -->
+              <Popup x:Name="ReactionOverlay" PlacementTarget="{Binding #VideoArea}" Placement="AnchorAndGravity"
+                     PlacementAnchor="BottomRight" PlacementGravity="TopLeft" HorizontalOffset="-18" VerticalOffset="-18"
+                     IsLightDismissEnabled="False" IsOpen="{Binding IsInSession}">
+                <Border Width="280" Height="360" Background="Transparent" IsHitTestVisible="False">
+                  <ItemsControl ItemsSource="{Binding Chat.Reactions}">
+                    <ItemsControl.ItemsPanel>
+                      <ItemsPanelTemplate>
+                        <Canvas />
+                      </ItemsPanelTemplate>
+                    </ItemsControl.ItemsPanel>
+                    <ItemsControl.Styles>
+                      <Style Selector="ContentPresenter" x:DataType="vm:FloatingReactionViewModel">
+                        <Setter Property="Canvas.Right" Value="{Binding Offset}" />
+                        <Setter Property="Canvas.Bottom" Value="0" />
+                      </Style>
+                    </ItemsControl.Styles>
+                    <ItemsControl.ItemTemplate>
+                      <DataTemplate x:DataType="vm:FloatingReactionViewModel">
+                        <StackPanel Classes="floatingReaction" Width="72" Height="84" Spacing="1">
+                          <TextBlock Classes="emoji" Text="{Binding Emoji}" FontSize="30" Padding="10,13,10,7" TextAlignment="Center"
+                                     HorizontalAlignment="Center" VerticalAlignment="Center" />
+                          <Border Background="#A0000000" CornerRadius="5" Padding="4,1" HorizontalAlignment="Center">
+                            <TextBlock Text="{Binding Sender}" FontSize="10" Foreground="White" MaxWidth="66" TextTrimming="CharacterEllipsis" />
+                          </Border>
+                        </StackPanel>
+                      </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                  </ItemsControl>
+                </Border>
+              </Popup>
               <StackPanel IsVisible="{Binding !ShowVideo}" HorizontalAlignment="Center" VerticalAlignment="Center" Spacing="14" MaxWidth="560" Margin="24">
                 <StackPanel IsVisible="{Binding IsAwaitingApproval}" Spacing="12">
                   <TextBlock Classes="title" HorizontalAlignment="Center" Text="Ждём одобрения ведущего" />
@@ -350,17 +522,24 @@
                     </Flyout>
                   </Button.Flyout>
                 </Button>
-                <!-- The event feed folds away by a click on its header or on the list itself. -->
-                <Button Classes="ghost" Padding="6,4" HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch"
-                        Command="{Binding ToggleEventsCommand}" AutomationProperties.Name="Лента событий"
-                        ToolTip.Tip="Скрыть или показать ленту событий">
-                  <Grid ColumnDefinitions="*,Auto">
-                    <TextBlock Classes="label" Text="ЛЕНТА СОБЫТИЙ" />
-                    <TextBlock Grid.Column="1" Classes="label"
-                               Text="{Binding EventsExpanded, Converter={x:Static controls:BoolTextConverter.Instance}, ConverterParameter='СКРЫТЬ ▾|ПОКАЗАТЬ ▸'}" />
-                  </Grid>
-                </Button>
-                <ScrollViewer x:Name="EventFeed" Height="170" IsVisible="{Binding EventsExpanded}" Background="Transparent"
+                <!-- Chat and event feed share one area; a click on the open tab (or on the feed) hides it. -->
+                <Grid ColumnDefinitions="Auto,Auto,*,Auto">
+                  <Button Classes="ghost tab" Classes.selected="{Binding IsChatTab}" Padding="8,4"
+                          Command="{Binding ShowTabCommand}" CommandParameter="{x:Static vm:SideTab.Chat}"
+                          AutomationProperties.Name="Чат" ToolTip.Tip="Чат участников сеанса">
+                    <TextBlock Classes="label" Classes.unread="{Binding Chat.HasUnread}" Text="{Binding Chat.Header}" />
+                  </Button>
+                  <Button Grid.Column="1" Classes="ghost tab" Classes.selected="{Binding IsEventsTab}" Padding="8,4" Margin="4,0,0,0"
+                          Command="{Binding ShowTabCommand}" CommandParameter="{x:Static vm:SideTab.Events}"
+                          AutomationProperties.Name="Лента событий" ToolTip.Tip="Что происходит в сеансе">
+                    <TextBlock Classes="label" Text="СОБЫТИЯ" />
+                  </Button>
+                  <Button Grid.Column="3" Classes="ghost" Padding="8,4" Command="{Binding ToggleEventsCommand}"
+                          AutomationProperties.Name="Свернуть панель" ToolTip.Tip="Скрыть или показать чат и события">
+                    <TextBlock Classes="label" Text="{Binding SidePanelArrow}" />
+                  </Button>
+                </Grid>
+                <ScrollViewer x:Name="EventFeed" Height="210" IsVisible="{Binding ShowEvents}" Background="Transparent"
                               Cursor="Hand" ToolTip.Tip="Щелчок скрывает ленту">
                   <ItemsControl ItemsSource="{Binding Events}" FontSize="12" Margin="6,0">
                     <ItemsControl.ItemsPanel>
@@ -375,9 +554,50 @@
                     </ItemsControl.ItemTemplate>
                   </ItemsControl>
                 </ScrollViewer>
+                <!-- The chat is seen only by the participants of the session and stored nowhere. -->
+                <StackPanel Spacing="6" IsVisible="{Binding ShowChat}">
+                  <ScrollViewer x:Name="ChatScroll" Height="166">
+                    <Panel Margin="6,0">
+                      <TextBlock Classes="muted" FontSize="12" TextWrapping="Wrap" IsVisible="{Binding !Chat.HasLines}"
+                                 Text="Сообщения видят только участники этого сеанса. Они идут по защищённому каналу и нигде не сохраняются." />
+                      <ItemsControl ItemsSource="{Binding Chat.Lines}">
+                        <ItemsControl.ItemsPanel>
+                          <ItemsPanelTemplate>
+                            <StackPanel Spacing="8" />
+                          </ItemsPanelTemplate>
+                        </ItemsControl.ItemsPanel>
+                        <ItemsControl.ItemTemplate>
+                          <DataTemplate x:DataType="vm:ChatLineViewModel">
+                            <StackPanel Spacing="1">
+                              <StackPanel Orientation="Horizontal" Spacing="6" IsVisible="{Binding !IsSystem}">
+                                <TextBlock FontSize="12" FontWeight="SemiBold" Text="{Binding SenderText}"
+                                           Classes.self="{Binding IsLocal}" TextTrimming="CharacterEllipsis" MaxWidth="200" />
+                                <TextBlock Classes="mono muted" FontSize="10" VerticalAlignment="Bottom" Text="{Binding TimeText}" />
+                              </StackPanel>
+                              <SelectableTextBlock FontSize="12" TextWrapping="Wrap" Text="{Binding Text}" Classes.muted="{Binding IsSystem}" />
+                            </StackPanel>
+                          </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                      </ItemsControl>
+                    </Panel>
+                  </ScrollViewer>
+                  <Grid ColumnDefinitions="*,Auto">
+                    <TextBox x:Name="ChatInput" Text="{Binding Chat.Draft}" PlaceholderText="Сообщение… (Enter)" MaxLength="500"
+                             AcceptsReturn="False" TextWrapping="Wrap" MaxHeight="80" AutomationProperties.Name="Сообщение в чат">
+                      <TextBox.KeyBindings>
+                        <KeyBinding Gesture="Enter" Command="{Binding Chat.SendCommand}" />
+                      </TextBox.KeyBindings>
+                    </TextBox>
+                    <Button Grid.Column="1" Classes="ghost square" Margin="6,0,0,0" VerticalAlignment="Bottom"
+                            Command="{Binding Chat.SendCommand}" AutomationProperties.Name="Отправить" ToolTip.Tip="Отправить (Enter)">
+                      <PathIcon Data="{StaticResource IconSend}" Width="14" Height="14" />
+                    </Button>
+                  </Grid>
+                </StackPanel>
               </StackPanel>
               <ScrollViewer>
-                <ItemsControl ItemsSource="{Binding Participants}" Margin="12,0">
+                <ItemsControl ItemsSource="{Binding Participants}"
+ Margin="12,0">
                   <ItemsControl.ItemsPanel>
                     <ItemsPanelTemplate>
                       <StackPanel Spacing="10" />
@@ -389,12 +609,32 @@
                       <Border Classes="tile">
                         <Border.ContextMenu>
                           <ContextMenu>
-                            <MenuItem Header="Выключить микрофон" Command="{Binding SwitchOffMicrophoneCommand}">
+                            <!-- The voice volume changes only on this device. -->
+                            <MenuItem StaysOpenOnClick="True" Classes="voiceVolume" AutomationProperties.Name="Громкость голоса у вас">
+                              <MenuItem.Icon>
+                                <PathIcon Data="{StaticResource IconSpeakerLoud}" Width="14" Height="14" />
+                              </MenuItem.Icon>
+                              <MenuItem.Header>
+                                <StackPanel Spacing="2" Width="200">
+                                  <Grid ColumnDefinitions="*,Auto">
+                                    <TextBlock Text="Громкость голоса у вас" />
+                                    <TextBlock Grid.Column="1" Classes="mono muted" FontSize="11" VerticalAlignment="Center" Text="{Binding VoiceVolumeText}" />
+                                  </Grid>
+                                  <Slider x:Name="VoiceVolumeSlider" Minimum="0" Maximum="200" SmallChange="5" LargeChange="25"
+                                          TickFrequency="100" IsSnapToTickEnabled="False"
+                                          Value="{Binding VoiceVolume}" AutomationProperties.Name="Громкость голоса" />
+                                </StackPanel>
+                              </MenuItem.Header>
+                            </MenuItem>
+                            <MenuItem Header="{Binding VoiceMuteText}" Command="{Binding ToggleVoiceMuteCommand}" />
+                            <MenuItem Header="Обычная громкость (100 %)" Command="{Binding ResetVoiceVolumeCommand}" />
+                            <Separator IsVisible="{Binding CanModerate}" />
+                            <MenuItem Header="Выключить микрофон" Command="{Binding SwitchOffMicrophoneCommand}" IsVisible="{Binding CanModerate}">
                               <MenuItem.Icon>
                                 <PathIcon Data="{StaticResource IconMicrophone}" Width="14" Height="14" />
                               </MenuItem.Icon>
                             </MenuItem>
-                            <MenuItem Header="Выключить камеру" Command="{Binding SwitchOffCameraCommand}">
+                            <MenuItem Header="Выключить камеру" Command="{Binding SwitchOffCameraCommand}" IsVisible="{Binding CanModerate}">
                               <MenuItem.Icon>
                                 <PathIcon Data="{StaticResource IconCamera}" Width="14" Height="14" />
                               </MenuItem.Icon>
@@ -414,6 +654,11 @@
                                          HorizontalAlignment="Center" VerticalAlignment="Center" />
                             </Border>
                             <StackPanel Orientation="Horizontal" Spacing="4" Margin="8" HorizontalAlignment="Right" VerticalAlignment="Top">
+                              <Border Background="#99000000" CornerRadius="5" Padding="5,1" IsVisible="{Binding WeakConnection}"
+                                      ToolTip.Tip="Связь с участником слабая: ваша камера идёт ему в экономном качестве (320×180). Вернётся к обычному, когда связь наладится."
+                                      AutomationProperties.Name="Слабая связь">
+                                <TextBlock Text="эконом" Classes="mono" FontSize="10" Foreground="{StaticResource GoletherWarn}" VerticalAlignment="Center" />
+                              </Border>
                               <Border Background="#99000000" CornerRadius="5" Padding="5,3" IsVisible="{Binding MicrophoneOff}"
                                       ToolTip.Tip="Микрофон выключен" AutomationProperties.Name="Микрофон выключен">
                                 <PathIcon Data="{StaticResource IconMicrophone}" Width="12" Height="12" Foreground="{StaticResource GoletherBad}" />
@@ -470,5 +715,25 @@
         </Border>
       </Panel>
     </DockPanel>
+    <!-- A newer version is offered, never installed by itself. -->
+    <Border VerticalAlignment="Top" HorizontalAlignment="Center" MaxWidth="760" Margin="16,64" Padding="12,8" CornerRadius="8" ZIndex="10"
+            IsVisible="{Binding HasUpdate}" Background="{StaticResource GoletherPanel2}"
+            BorderBrush="{StaticResource GoletherAccent}" BorderThickness="1">
+      <DockPanel>
+        <Button DockPanel.Dock="Right" Focusable="False" Classes="ghost square" Margin="8,0,0,0" Command="{Binding DismissUpdateCommand}"
+                AutomationProperties.Name="Скрыть предложение обновиться" ToolTip.Tip="Скрыть до следующей проверки">
+          <TextBlock Text="✕" />
+        </Button>
+        <Button DockPanel.Dock="Right" Focusable="False" Classes="accent" Command="{Binding DownloadUpdateCommand}"
+                IsEnabled="{Binding !IsDownloadingUpdate}" Content="Скачать" ToolTip.Tip="Файл проверяется по контрольной сумме" />
+        <ProgressBar DockPanel.Dock="Right" Width="120" Margin="12,0" VerticalAlignment="Center" Minimum="0" Maximum="100"
+                     Value="{Binding UpdateProgress}" IsVisible="{Binding IsDownloadingUpdate}" />
+        <StackPanel VerticalAlignment="Center">
+          <TextBlock FontWeight="SemiBold" Foreground="{StaticResource GoletherAccent}" Text="{Binding UpdateText}" />
+          <TextBlock Classes="muted" FontSize="12" TextTrimming="CharacterEllipsis" Text="{Binding UpdateNotes}"
+                     ToolTip.Tip="{Binding UpdateNotes}" />
+        </StackPanel>
+      </DockPanel>
+    </Border>
   </Panel>
 </Window>

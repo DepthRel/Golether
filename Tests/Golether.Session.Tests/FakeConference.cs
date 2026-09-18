@@ -103,6 +103,14 @@ internal sealed class FakeConference : IConferenceMedia
     public void SetRelay(string? turnServer) => Relay = turnServer;
 
     /// <inheritdoc />
+    public void SetVoiceVolume(PeerId peer, double volume) => VoiceVolumes[peer] = volume;
+
+    /// <summary>
+    /// Gets the voice volumes set by the session.
+    /// </summary>
+    public ConcurrentDictionary<PeerId, double> VoiceVolumes { get; } = new();
+
+    /// <inheritdoc />
     public event PeerDataHandler? DataReceived;
 
     /// <summary>
@@ -139,6 +147,13 @@ internal sealed class FakeConference : IConferenceMedia
 
     /// <inheritdoc />
     public event EventHandler<SpeakingChange>? SpeakingChanged
+    {
+        add { }
+        remove { }
+    }
+
+    /// <inheritdoc />
+    public event EventHandler<VideoQualityChange>? VideoQualityChanged
     {
         add { }
         remove { }

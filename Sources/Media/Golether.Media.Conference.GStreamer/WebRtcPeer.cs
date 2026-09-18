@@ -114,11 +114,11 @@ internal sealed partial class WebRtcPeer : IDisposable
         "rtpopuspay pt=97 ! application/x-rtp,media=audio,encoding-name=OPUS,payload=97 ! webrtc.";
 
     /// <summary>
-    /// The receiving chain of video.
+    /// The receiving chain of video: frames keep their size (640×360 or the economy 320×180), larger ones are scaled down.
     /// </summary>
     private const string VideoReceiver =
         "queue ! rtpvp8depay ! vp8dec ! videoconvert ! videoscale ! " +
-        "video/x-raw,format=BGRA,width=640,height=360,pixel-aspect-ratio=1/1 ! " +
+        "video/x-raw,format=BGRA,width=[16,1280],height=[16,720],pixel-aspect-ratio=1/1 ! " +
         "appsink name=rvideo emit-signals=true max-buffers=1 drop=true sync=false";
 
     /// <summary>

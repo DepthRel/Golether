@@ -110,6 +110,65 @@ public sealed class ConferenceTests
     }
 
     /// <summary>
+    /// A participant switched to the economy stream receives 320×180 frames and returns to 640×360; the connection
+    /// statistics can be read.
+    /// </summary>
+    [Fact]
+    public async Task EconomyStream_SwitchesResolution()
+    {
+        var (a, b, skip) = Pair.Value;
+        Assert.SkipWhen(skip is not null, skip ?? string.Empty);
+        var token = TestContext.Current.CancellationToken;
+        var gina = PeerId.Parse(new string('9', 64));
+        var hank = PeerId.Parse(new string('8', 64));
+        var sizes = new ConcurrentQueue<(int Width, int Height)>();
+        b!.VideoFrameReceived += (_, f) =>
+        {
+            if (f.PeerId == gina)
+            {
+                sizes.Enqueue((f.Frame.Width, f.Frame.Height));
+            }
+        };
+        a!.SignalReady += (_, s) => { if (s.PeerId == hank) { _ = b.HandleSignalAsync(s with { PeerId = gina }, token); } };
+        b.SignalReady += (_, s) => { if (s.PeerId == gina) { _ = a.HandleSignalAsync(s with { PeerId = hank }, token); } };
+        await a.StartCaptureAsync(null, null, token);
+        await b.StartCaptureAsync(null, null, token);
+        await a.ConnectAsync(hank, isOfferer: true, token);
+
+        await WaitForSize(640, 360);
+        a.ForceVideoQuality(hank, VideoQuality.Low);
+        await WaitForSize(320, 180);
+        a.ForceVideoQuality(hank, VideoQuality.High);
+        await WaitForSize(640, 360);
+
+        // Receiver reports arrive every few seconds; the round trip on loopback is short and nothing is lost.
+        (double? Loss, double? RoundTrip) stats = (null, null);
+        for (var i = 0; i < 40 && stats.RoundTrip is null; i++)
+        {
+            await Task.Delay(250, token);
+            stats = a.ReadNetworkStats(hank);
+        }
+
+        Assert.NotNull(stats.RoundTrip);
+        Assert.InRange(stats.RoundTrip.Value, 0, 0.2);
+        Assert.InRange(stats.Loss ?? 0, 0, 0.01);
+        a.UpdateVideoQuality();
+        Assert.Equal((null, null), a.ReadNetworkStats(PeerId.Parse(new string('6', 64))));
+        await a.DisconnectAsync(hank);
+
+        async Task WaitForSize(int width, int height)
+        {
+            sizes.Clear();
+            for (var i = 0; i < 150 && !sizes.Contains((width, height)); i++)
+            {
+                await Task.Delay(100, token);
+            }
+
+            Assert.Contains((width, height), sizes);
+        }
+    }
+
+    /// <summary>
     /// A DTLS certificate that does not match the fingerprint in the signaled SDP (a man in the middle on the media
     /// path) gets no media.
     /// </summary>

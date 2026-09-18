@@ -105,8 +105,12 @@ public sealed class EngineTests
 
         var hold = authority.EvaluateBuffering([lagging], TimeSpan.Zero);
         var stillWaiting = authority.EvaluateBuffering([lagging with { CacheAhead = TimeSpan.FromSeconds(2) }], TimeSpan.Zero);
-        var resume = authority.EvaluateBuffering([lagging with { IsBuffering = false, CacheAhead = TimeSpan.FromSeconds(6) }], TimeSpan.Zero);
+        var elsewhere = authority.EvaluateBuffering([lagging with { IsBuffering = false, CacheAhead = TimeSpan.FromSeconds(6), Position = TimeSpan.FromSeconds(50) }], TimeSpan.Zero);
+        Assert.Equal([Guest], authority.WaitingFor());
+        var resume = authority.EvaluateBuffering([lagging with { IsBuffering = false, CacheAhead = TimeSpan.FromSeconds(6), Position = hold!.Position }], TimeSpan.Zero);
 
+        Assert.Null(elsewhere);
+        Assert.Empty(authority.WaitingFor());
         Assert.NotNull(hold);
         Assert.Equal(PlaybackCause.WaitingForParticipants, hold.Cause);
         Assert.Equal(PlayState.Paused, hold.State);
@@ -115,6 +119,90 @@ public sealed class EngineTests
         Assert.Equal(PlaybackCause.ParticipantsReady, resume.Cause);
         Assert.Equal(PlayState.Playing, resume.State);
         Assert.Equal(hold.Position, resume.Position);
+    }
+
+    /// <summary>
+    /// "Play" waits until every participant has the file open and data buffered at the start position.
+    /// </summary>
+    [Fact]
+    public void Authority_PlayWaitsUntilEverybodyIsReady()
+    {
+        var authority = new PlaybackAuthority(Host, _clock) { Duration = TimeSpan.FromHours(2) };
+        var loading = new ParticipantStatus { PeerId = Guest, IsBuffering = true };
+        authority.EvaluateBuffering([loading], TimeSpan.Zero);
+
+        var hold = authority.Apply(Host, new PlaybackRequest(PlaybackRequestKind.Play, null), TimeSpan.Zero)!;
+        Assert.Equal(PlayState.Paused, hold.State);
+        Assert.Equal(PlaybackCause.WaitingForParticipants, hold.Cause);
+        Assert.Equal(Host, hold.Origin);
+        Assert.Null(authority.Apply(Guest, new PlaybackRequest(PlaybackRequestKind.Play, null), TimeSpan.Zero));
+        Assert.Equal([Guest], authority.WaitingFor());
+
+        _clock.Advance(TimeSpan.FromSeconds(3));
+        Assert.Null(authority.EvaluateBuffering([loading with { Position = TimeSpan.Zero, CacheAhead = TimeSpan.FromSeconds(2) }], TimeSpan.Zero));
+        var start = authority.EvaluateBuffering(
+            [loading with { IsBuffering = false, Position = TimeSpan.Zero, CacheAhead = TimeSpan.FromSeconds(8) }],
+            TimeSpan.FromMilliseconds(500))!;
+
+        Assert.Equal(PlayState.Playing, start.State);
+        Assert.Equal(PlaybackCause.ParticipantsReady, start.Cause);
+        Assert.Equal(_clock.NowMicroseconds + 2_000_000, start.ReferenceTime);
+
+        // Everybody ready: play starts at once.
+        authority.Apply(Host, new PlaybackRequest(PlaybackRequestKind.Pause, TimeSpan.FromMinutes(5)), TimeSpan.Zero);
+        var ready = new ParticipantStatus { PeerId = Guest, Position = TimeSpan.FromMinutes(5), CacheAhead = TimeSpan.FromSeconds(30) };
+        authority.EvaluateBuffering([ready], TimeSpan.Zero);
+        Assert.Equal(PlaybackCause.Play, authority.Apply(Guest, new PlaybackRequest(PlaybackRequestKind.Play, null), TimeSpan.Zero)!.Cause);
+    }
+
+    /// <summary>
+    /// The host may start without waiting, and waiting ends by itself after the limit.
+    /// </summary>
+    [Fact]
+    public void Authority_WaitingEndsOnRequestOrTimeout()
+    {
+        var authority = new PlaybackAuthority(Host, _clock, new PlaybackAuthorityOptions { MaxReadyWait = TimeSpan.FromSeconds(30) });
+        var absent = new ParticipantStatus { PeerId = Guest };
+        authority.EvaluateBuffering([absent], TimeSpan.Zero);
+
+        authority.Apply(Host, new PlaybackRequest(PlaybackRequestKind.Play, null), TimeSpan.Zero);
+        var now = authority.Apply(Host, new PlaybackRequest(PlaybackRequestKind.PlayNow, null), TimeSpan.Zero)!;
+        Assert.Equal(PlayState.Playing, now.State);
+        Assert.Equal(PlaybackCause.StartedWithoutWaiting, now.Cause);
+        Assert.Empty(authority.WaitingFor());
+
+        authority.Apply(Host, new PlaybackRequest(PlaybackRequestKind.Pause, TimeSpan.FromMinutes(1)), TimeSpan.Zero);
+        authority.Apply(Host, new PlaybackRequest(PlaybackRequestKind.Play, null), TimeSpan.Zero);
+        _clock.Advance(TimeSpan.FromSeconds(29));
+        Assert.Null(authority.EvaluateBuffering([absent], TimeSpan.Zero));
+        _clock.Advance(TimeSpan.FromSeconds(1));
+        var timedOut = authority.EvaluateBuffering([absent], TimeSpan.Zero)!;
+        Assert.Equal(PlaybackCause.StartedWithoutWaiting, timedOut.Cause);
+        Assert.Equal(TimeSpan.FromMinutes(1), timedOut.Position);
+
+        // Pausing cancels waiting.
+        authority.Apply(Host, new PlaybackRequest(PlaybackRequestKind.Pause, TimeSpan.FromMinutes(2)), TimeSpan.Zero);
+        authority.Apply(Host, new PlaybackRequest(PlaybackRequestKind.Play, null), TimeSpan.Zero);
+        authority.Apply(Guest, new PlaybackRequest(PlaybackRequestKind.Pause, TimeSpan.FromMinutes(2)), TimeSpan.Zero);
+        Assert.Empty(authority.WaitingFor());
+        _clock.Advance(TimeSpan.FromMinutes(5));
+        Assert.Null(authority.EvaluateBuffering([absent], TimeSpan.Zero));
+    }
+
+    /// <summary>
+    /// Near the end of the film less buffered data is enough.
+    /// </summary>
+    [Fact]
+    public void Readiness_AcceptsTheRestOfTheFilm()
+    {
+        var options = new PlaybackAuthorityOptions();
+        var duration = TimeSpan.FromMinutes(100);
+        var status = new ParticipantStatus { PeerId = Guest, Position = duration - TimeSpan.FromSeconds(3), CacheAhead = TimeSpan.FromSeconds(2) };
+
+        Assert.True(options.IsReady(status, duration));
+        Assert.False(options.IsReady(status, null));
+        Assert.False(options.IsReady(status with { Position = null }, duration));
+        Assert.False(options.IsReady(status with { IsBuffering = true }, duration));
     }
 
     /// <summary>
@@ -130,6 +218,77 @@ public sealed class EngineTests
         var hold = authority.EvaluateBuffering([new ParticipantStatus { PeerId = Guest, IsBuffering = true, Drift = TimeSpan.FromSeconds(-10) }], TimeSpan.Zero);
 
         Assert.Null(hold);
+    }
+
+    /// <summary>
+    /// Playing past the duration ends the session on the last position; "play" at the end starts over.
+    /// </summary>
+    [Fact]
+    public void Authority_EndsAtDuration()
+    {
+        var authority = new PlaybackAuthority(Host, _clock) { Duration = TimeSpan.FromSeconds(10) };
+        Assert.Null(authority.EvaluateEnd());
+        authority.Apply(Guest, new PlaybackRequest(PlaybackRequestKind.Play, TimeSpan.FromSeconds(8)), TimeSpan.Zero);
+
+        _clock.Advance(TimeSpan.FromSeconds(3));
+        Assert.Null(authority.EvaluateEnd());
+        _clock.Advance(TimeSpan.FromSeconds(1));
+        var ended = authority.EvaluateEnd();
+
+        Assert.NotNull(ended);
+        Assert.Equal((PlayState.Paused, TimeSpan.FromSeconds(10), PlaybackCause.Ended, Host), (ended.State, ended.Position, ended.Cause, ended.Origin));
+        _clock.Advance(TimeSpan.FromMinutes(5));
+        Assert.Null(authority.EvaluateEnd());
+        Assert.Equal(TimeSpan.FromSeconds(10), authority.Current.ExpectedPositionAt(_clock.NowMicroseconds));
+
+        var again = authority.Apply(Guest, new PlaybackRequest(PlaybackRequestKind.Play, null), TimeSpan.Zero);
+        Assert.Equal((PlayState.Playing, TimeSpan.Zero), (again!.State, again.Position));
+    }
+
+    /// <summary>
+    /// When the player stops at the end before the session state says so, the follower neither restarts nor
+    /// seeks it, and the drift stays zero instead of growing.
+    /// </summary>
+    [Fact]
+    public async Task Follower_StaysQuietAtEnd()
+    {
+        var player = new FakePlayer(_clock) { Duration = TimeSpan.FromSeconds(10) };
+        var follower = new PlaybackFollower(player, _clock, new DriftCorrector());
+        var token = TestContext.Current.CancellationToken;
+        await follower.ApplyAsync(new PlaybackState
+        {
+            State = PlayState.Playing,
+            Position = TimeSpan.FromSeconds(5),
+            ReferenceTime = _clock.NowMicroseconds,
+            Version = 1,
+            Origin = Host,
+        }, token);
+        await follower.TickAsync(token);
+        _clock.Advance(TimeSpan.FromSeconds(6));
+        await follower.TickAsync(token);
+        var commands = player.Commands.Count;
+
+        for (var i = 0; i < 10; i++)
+        {
+            _clock.Advance(TimeSpan.FromSeconds(3));
+            var status = await follower.TickAsync(token);
+            Assert.Equal(TimeSpan.Zero, status.Drift);
+            Assert.Equal(TimeSpan.FromSeconds(10), status.Expected);
+        }
+
+        Assert.Equal(commands, player.Commands.Count);
+
+        // A restart from the beginning is followed again.
+        await follower.ApplyAsync(new PlaybackState
+        {
+            State = PlayState.Playing,
+            Position = TimeSpan.Zero,
+            ReferenceTime = _clock.NowMicroseconds,
+            Version = 2,
+            Origin = Host,
+        }, token);
+        Assert.Contains("seek 0", player.Commands);
+        Assert.Equal(TimeSpan.Zero, player.Position);
     }
 
     /// <summary>

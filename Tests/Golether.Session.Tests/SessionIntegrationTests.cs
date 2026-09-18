@@ -184,6 +184,84 @@ public sealed class SessionIntegrationTests : IAsyncLifetime
     }
 
     /// <summary>
+    /// A participant comes back to the session with the ticket instead of a new invitation; the host is asked again,
+    /// and a forged ticket is refused.
+    /// </summary>
+    /// <returns>A task that completes when the test is done.</returns>
+    [Fact]
+    public async Task Participant_ComesBackWithTicket()
+    {
+        var token = TestContext.Current.CancellationToken;
+        await using var first = CreateGuest();
+        await first.JoinAsync(_host.CreateInvite([new PeerEndpoint("127.0.0.1", _host.Port)]), token);
+        var ticket = first.ReconnectInvite;
+        Assert.NotNull(ticket);
+        Assert.NotEqual(string.Empty, ticket.Token);
+        await first.DisposeAsync();
+        await WaitUntilAsync(() => _host.GetSnapshot().Participants.Count == 1, token);
+
+        // The same device is let in again without an invitation, and the host is asked once more.
+        await using var again = CreateGuest();
+        await again.RejoinAsync(ticket, token);
+        await WaitUntilAsync(() => _host.GetSnapshot().Participants.Count == 2, token);
+        await _prompt.Received(2).AskAsync(Arg.Any<AdmissionRequest>(), Arg.Any<CancellationToken>());
+        Assert.Equal(ticket.Token, again.ReconnectInvite?.Token);
+
+        // A ticket that was not issued is worthless.
+        await using var stranger = CreateGuest();
+        await Assert.ThrowsAsync<SessionJoinException>(() => stranger.RejoinAsync(ticket with { Token = new string('f', 48) }, token));
+    }
+
+    /// <summary>
+    /// Chat lines and reactions reach everybody with the authenticated sender; a forged sender is replaced, bad
+    /// messages are dropped, and a flood is limited.
+    /// </summary>
+    /// <returns>A task that completes when the test is done.</returns>
+    [Fact]
+    public async Task Chat_IsRelayedWithAuthenticatedSender()
+    {
+        var token = TestContext.Current.CancellationToken;
+        await using var guest = CreateGuest();
+        var hostLines = new ConcurrentQueue<ChatEntry>();
+        var guestLines = new ConcurrentQueue<ChatEntry>();
+        _host.ChatReceived += (_, e) => hostLines.Enqueue(e);
+        guest.ChatReceived += (_, e) => guestLines.Enqueue(e);
+        await guest.JoinAsync(_host.CreateInvite([new PeerEndpoint("127.0.0.1", _host.Port)]), token);
+
+        await guest.SendChatAsync(ChatKind.Text, "  Привет!‮  ", token);
+        await _host.SendChatAsync(ChatKind.Reaction, "🔥");
+        await WaitUntilAsync(() => hostLines.Count == 2 && guestLines.Count == 2, token);
+
+        var fromGuest = hostLines.Single(e => e.Kind == ChatKind.Text);
+        Assert.Equal(("Привет!", _guestIdentity.PeerId, false), (fromGuest.Text, fromGuest.Sender, fromGuest.IsLocal));
+        Assert.True(guestLines.Single(e => e.Kind == ChatKind.Text).IsLocal);
+        var reaction = guestLines.Single(e => e.Kind == ChatKind.Reaction);
+        Assert.Equal(("🔥", _hostIdentity.PeerId, "Вы", false), (reaction.Text, reaction.Sender, reaction.SenderName, reaction.IsLocal));
+        Assert.True(hostLines.Single(e => e.Kind == ChatKind.Reaction).IsLocal);
+
+        // A participant cannot speak for the host or send unknown reactions.
+        var channel = (SessionMessageChannel)typeof(ParticipantSession)
+            .GetField("_channel", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!
+            .GetValue(guest)!;
+        await channel.SendAsync(new ChatMessage("AB12", ChatKind.Text, "я ведущий", _hostIdentity.PeerId), token);
+        await channel.SendAsync(new ChatMessage("AB13", ChatKind.Reaction, "💩", null), token);
+        await channel.SendAsync(new ChatMessage("not hex!", ChatKind.Text, "плохой id", null), token);
+        await WaitUntilAsync(() => hostLines.Count == 3, token);
+        Assert.Equal(_guestIdentity.PeerId, hostLines.Last().Sender);
+
+        // A flood: five lines per five seconds pass (two were sent already).
+        for (var i = 0; i < 8; i++)
+        {
+            await guest.SendChatAsync(ChatKind.Text, $"спам {i}", token);
+        }
+
+        await WaitUntilAsync(() => guestLines.Count(e => e.Kind == ChatKind.Text) >= 5, token);
+        await Task.Delay(300, token);
+        Assert.Equal(3, hostLines.Count(e => e.Text.StartsWith("спам", StringComparison.Ordinal)));
+        Assert.DoesNotContain(hostLines, e => e.Text is "плохой id" || e.Kind == ChatKind.Reaction && e.Text == "💩");
+    }
+
+    /// <summary>
     /// A second participant gets the file from the first one over the data channel; the host only answers hashes.
     /// </summary>
     /// <returns>A task that completes when the test is done.</returns>

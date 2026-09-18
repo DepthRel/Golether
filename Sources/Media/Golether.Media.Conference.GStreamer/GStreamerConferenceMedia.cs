@@ -47,6 +47,17 @@ public sealed record GStreamerConferenceOptions
     /// Gets the video bitrate in bits per second (default 600 kbit/s).
     /// </summary>
     public int VideoBitrate { get; init; } = 600_000;
+
+    /// <summary>
+    /// Gets the bitrate of the economy camera stream for weak connections (default 150 kbit/s).
+    /// </summary>
+    public int LowVideoBitrate { get; init; } = 150_000;
+
+    /// <summary>
+    /// Gets how often the connection statistics choose the camera stream of each participant (default 2 s);
+    /// <see cref="TimeSpan.Zero"/> keeps the full quality for everybody.
+    /// </summary>
+    public TimeSpan QualityInterval { get; init; } = TimeSpan.FromSeconds(2);
 }
 
 /// <summary>
@@ -54,7 +65,8 @@ public sealed record GStreamerConferenceOptions
 /// </summary>
 /// <remarks>
 /// <list type="bullet">
-/// <item>Video capture: camera → 640×360@15 → preview (BGRA) and one VP8 encoder shared by all peers.</item>
+/// <item>Video capture: camera → 640×360@15 → preview (BGRA) and one VP8 encoder shared by all peers; a second,
+/// economy encoder (320×180@10) runs only while a participant with a weak connection needs it.</item>
 /// <item>Audio capture: microphone → echo cancellation and noise suppression (<c>webrtcdsp</c>) → one Opus encoder.</item>
 /// <item>One pipeline with <c>webrtcbin</c> per remote participant (at most four).</item>
 /// <item>Playback: the voices of all peers are mixed and pass <c>webrtcechoprobe</c>, the reference of the echo
@@ -82,6 +94,11 @@ public sealed class GStreamerConferenceMedia : IConferenceMedia, IPeerHost
     /// The peers.
     /// </summary>
     private readonly ConcurrentDictionary<PeerId, WebRtcPeer> _peers = new();
+
+    /// <summary>
+    /// The voice volumes of participants that differ from 1.
+    /// </summary>
+    private readonly ConcurrentDictionary<PeerId, double> _voiceVolumes = new();
 
     /// <summary>
     /// Guards pipeline creation and slot assignment.
@@ -154,6 +171,16 @@ public sealed class GStreamerConferenceMedia : IConferenceMedia, IPeerHost
     private readonly Timer _voiceTimer;
 
     /// <summary>
+    /// Chooses the camera stream of each participant.
+    /// </summary>
+    private readonly Timer? _qualityTimer;
+
+    /// <summary>
+    /// Whether a quality update runs.
+    /// </summary>
+    private int _qualityBusy;
+
+    /// <summary>
     /// Initializes a new instance of the <see cref="GStreamerConferenceMedia"/> class.
     /// </summary>
     /// <param name="options">The options.</param>
@@ -164,6 +191,10 @@ public sealed class GStreamerConferenceMedia : IConferenceMedia, IPeerHost
         _logger = logger ?? NullLogger<GStreamerConferenceMedia>.Instance;
         _self = GCHandle.Alloc(this);
         _voiceTimer = new Timer(_ => ExpireVoices(), null, TimeSpan.FromMilliseconds(150), TimeSpan.FromMilliseconds(150));
+        if (options.QualityInterval > TimeSpan.Zero)
+        {
+            _qualityTimer = new Timer(_ => UpdateVideoQuality(), null, options.QualityInterval, options.QualityInterval);
+        }
         IsAvailable = GstRuntime.TryInitialize(options.BundleRoot, options.RegistryFile, out var error);
         UnavailableReason = error;
         if (IsAvailable)
@@ -182,6 +213,9 @@ public sealed class GStreamerConferenceMedia : IConferenceMedia, IPeerHost
     public event EventHandler? MuteChanged;
 
     /// <inheritdoc />
+    public event EventHandler<VideoQualityChange>? VideoQualityChanged;
+
+    /// <inheritdoc />
     public event EventHandler<SpeakingChange>? SpeakingChanged;
 
     /// <inheritdoc />
@@ -196,6 +230,20 @@ public sealed class GStreamerConferenceMedia : IConferenceMedia, IPeerHost
 
     /// <inheritdoc />
     void IPeerHost.DeliverData(PeerId peer, ReadOnlySpan<byte> message) => DataReceived?.Invoke(this, peer, message);
+
+    /// <inheritdoc />
+    public void SetVoiceVolume(PeerId peer, double volume)
+    {
+        var clamped = PcmGain.Clamp(volume);
+        if (clamped == 1)
+        {
+            _voiceVolumes.TryRemove(peer, out _);
+        }
+        else
+        {
+            _voiceVolumes[peer] = clamped;
+        }
+    }
 
     /// <inheritdoc />
     public void SetRelay(string? turnServer)
@@ -358,6 +406,8 @@ public sealed class GStreamerConferenceMedia : IConferenceMedia, IPeerHost
         {
             Connect(pipeline.Element("preview"), Callbacks.Preview);
             Connect(pipeline.Element("venc"), Callbacks.EncodedVideo);
+            Connect(pipeline.Element("venclow"), Callbacks.EncodedVideoLow);
+            SetEconomyEncoder(pipeline, _peers.Values.Any(p => p.VideoQuality == VideoQuality.Low));
         });
     }
 
@@ -451,6 +501,10 @@ public sealed class GStreamerConferenceMedia : IConferenceMedia, IPeerHost
     {
         await StopAsync().ConfigureAwait(false);
         await _voiceTimer.DisposeAsync().ConfigureAwait(false);
+        if (_qualityTimer is not null)
+        {
+            await _qualityTimer.DisposeAsync().ConfigureAwait(false);
+        }
         if (_self.IsAllocated)
         {
             _self.Free();
@@ -471,7 +525,24 @@ public sealed class GStreamerConferenceMedia : IConferenceMedia, IPeerHost
         var playback = _playback;
         if (playback is not null)
         {
-            Samples.Push(playback.Element($"slot{peer.AudioSlot}"), pcm);
+            if (_voiceVolumes.TryGetValue(peer.Peer, out var volume))
+            {
+                var scaled = System.Buffers.ArrayPool<byte>.Shared.Rent(pcm.Length);
+                try
+                {
+                    pcm.CopyTo(scaled);
+                    PcmGain.Apply(scaled.AsSpan(0, pcm.Length), volume);
+                    Samples.Push(playback.Element($"slot{peer.AudioSlot}"), scaled.AsSpan(0, pcm.Length));
+                }
+                finally
+                {
+                    System.Buffers.ArrayPool<byte>.Shared.Return(scaled);
+                }
+            }
+            else
+            {
+                Samples.Push(playback.Element($"slot{peer.AudioSlot}"), pcm);
+            }
         }
 
         DetectVoice(peer.Peer, pcm);
@@ -576,13 +647,131 @@ public sealed class GStreamerConferenceMedia : IConferenceMedia, IPeerHost
 
                 foreach (var peer in media._peers.Values)
                 {
-                    peer.PushVideo(frame, caps);
+                    peer.PushVideo(frame, caps, VideoQuality.High);
                 }
             });
         }
 
         return Samples.FlowOk;
     }
+
+    /// <summary>
+    /// Fans the economy video stream out to the peers with weak connections.
+    /// </summary>
+    /// <param name="sink">The appsink.</param>
+    /// <param name="data">The media handle.</param>
+    /// <returns><see cref="Samples.FlowOk"/>.</returns>
+    [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
+    private static int OnEncodedVideoLow(nint sink, nint data)
+    {
+        if (From(data) is { } media)
+        {
+            Samples.Pull(sink, (frame, caps) =>
+            {
+                if (media._cameraOff)
+                {
+                    return;
+                }
+
+                foreach (var peer in media._peers.Values)
+                {
+                    peer.PushVideo(frame, caps, VideoQuality.Low);
+                }
+            });
+        }
+
+        return Samples.FlowOk;
+    }
+
+    /// <summary>
+    /// Chooses the camera stream of every participant from the connection statistics and runs the economy encoder
+    /// only while somebody needs it.
+    /// </summary>
+    internal void UpdateVideoQuality()
+    {
+        if (Interlocked.Exchange(ref _qualityBusy, 1) != 0)
+        {
+            return;
+        }
+
+        try
+        {
+            var changes = new List<VideoQualityChange>();
+            foreach (var peer in _peers.Values)
+            {
+                try
+                {
+                    if (peer.UpdateVideoQuality())
+                    {
+                        changes.Add(new VideoQualityChange(peer.Peer, peer.VideoQuality));
+                    }
+                }
+                catch (Exception ex) when (ex is GstException or ObjectDisposedException or InvalidOperationException)
+                {
+                    _logger.LogDebug("Quality of {Peer} not updated: {Error}", peer.Peer.ToShortString(), ex.Message);
+                }
+            }
+
+            if (changes.Count == 0)
+            {
+                return;
+            }
+
+            lock (_gate)
+            {
+                if (_videoCapture is { } capture)
+                {
+                    SetEconomyEncoder(capture, _peers.Values.Any(p => p.VideoQuality == VideoQuality.Low));
+                }
+            }
+
+            foreach (var change in changes)
+            {
+                VideoQualityChanged?.Invoke(this, change);
+            }
+        }
+        finally
+        {
+            Interlocked.Exchange(ref _qualityBusy, 0);
+        }
+    }
+
+    /// <summary>
+    /// Reads the connection statistics of a participant (tests).
+    /// </summary>
+    /// <param name="peer">The participant.</param>
+    /// <returns>The loss and round trip, when reported.</returns>
+    internal (double? Loss, double? RoundTrip) ReadNetworkStats(PeerId peer)
+        => _peers.TryGetValue(peer, out var connection) ? connection.ReadNetworkStats() : (null, null);
+
+    /// <summary>
+    /// Sends a participant the given camera stream regardless of the statistics (tests).
+    /// </summary>
+    /// <param name="peer">The participant.</param>
+    /// <param name="quality">The stream.</param>
+    internal void ForceVideoQuality(PeerId peer, VideoQuality quality)
+    {
+        if (_peers.TryGetValue(peer, out var connection))
+        {
+            connection.SetVideoQuality(quality);
+        }
+
+        lock (_gate)
+        {
+            if (_videoCapture is { } capture)
+            {
+                SetEconomyEncoder(capture, _peers.Values.Any(p => p.VideoQuality == VideoQuality.Low));
+            }
+        }
+    }
+
+    /// <summary>
+    /// Opens or closes the input of the economy encoder.
+    /// </summary>
+    /// <param name="capture">The camera pipeline.</param>
+    /// <param name="needed">Whether a participant gets the economy stream.</param>
+    private static void SetEconomyEncoder(GstPipeline capture, bool needed)
+        => Gst.UtilSetObjectArg(capture.Element("lowgate"), "drop", needed ? "false" : "true");
 
     /// <summary>
     /// Fans the encoded audio out to all peers.
@@ -649,6 +838,11 @@ public sealed class GStreamerConferenceMedia : IConferenceMedia, IPeerHost
         /// Gets the encoded video callback.
         /// </summary>
         public static nint EncodedVideo => (nint)(delegate* unmanaged[Cdecl]<nint, nint, int>)&OnEncodedVideo;
+
+        /// <summary>
+        /// Gets the economy video callback.
+        /// </summary>
+        public static nint EncodedVideoLow => (nint)(delegate* unmanaged[Cdecl]<nint, nint, int>)&OnEncodedVideoLow;
 
         /// <summary>
         /// Gets the encoded audio callback.
@@ -723,7 +917,11 @@ public sealed class GStreamerConferenceMedia : IConferenceMedia, IPeerHost
                "appsink name=preview emit-signals=true max-buffers=1 drop=true sync=false " +
                "split. ! queue leaky=downstream max-size-buffers=5 ! videoconvert ! video/x-raw,format=I420 ! " +
                $"vp8enc deadline=1 cpu-used=8 target-bitrate={_options.VideoBitrate} keyframe-max-dist=30 lag-in-frames=0 " +
-               "error-resilient=partitions threads=2 ! appsink name=venc emit-signals=true sync=false max-buffers=10 drop=true";
+               "error-resilient=partitions threads=2 ! appsink name=venc emit-signals=true sync=false max-buffers=10 drop=true " +
+               "split. ! queue leaky=downstream max-size-buffers=5 ! valve name=lowgate drop=true drop-mode=forward-sticky-events ! videoscale ! videorate ! " +
+               "video/x-raw,width=320,height=180,framerate=10/1,pixel-aspect-ratio=1/1 ! videoconvert ! video/x-raw,format=I420 ! " +
+               $"vp8enc deadline=1 cpu-used=16 target-bitrate={_options.LowVideoBitrate} keyframe-max-dist=10 lag-in-frames=0 " +
+               "error-resilient=partitions threads=1 ! appsink name=venclow emit-signals=true sync=false async=false max-buffers=10 drop=true";
     }
 
     /// <summary>

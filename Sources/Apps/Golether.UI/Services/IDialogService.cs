@@ -39,10 +39,30 @@ public interface IDialogService
     Task ShowErrorAsync(string title, string message);
 
     /// <summary>
+    /// Shows a message.
+    /// </summary>
+    /// <param name="title">The title.</param>
+    /// <param name="message">The text.</param>
+    /// <returns>A task that completes when the dialog is closed.</returns>
+    Task ShowMessageAsync(string title, string message);
+
+    /// <summary>
     /// Lets the user pick a video file.
     /// </summary>
     /// <returns>The local path, or <see langword="null"/> when cancelled.</returns>
     Task<string?> PickMediaFileAsync();
+
+    /// <summary>
+    /// Asks for a subtitle file.
+    /// </summary>
+    /// <returns>The path, or <see langword="null"/> when cancelled.</returns>
+    Task<string?> PickSubtitleFileAsync();
+
+    /// <summary>
+    /// Asks for a sound file (an external dubbing).
+    /// </summary>
+    /// <returns>The path, or <see langword="null"/> when cancelled.</returns>
+    Task<string?> PickAudioFileAsync();
 
     /// <summary>
     /// Lets the user choose where to save a tunnel configuration.

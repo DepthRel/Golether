@@ -20,9 +20,11 @@ public sealed partial class ParticipantItemViewModel : ObservableObject
     /// </summary>
     /// <param name="peerId">The participant.</param>
     /// <param name="switchOff">Switches devices of the participant off (microphone, camera); used by the host.</param>
-    public ParticipantItemViewModel(PeerId peerId, Func<PeerId, bool, bool, Task>? switchOff = null)
+    /// <param name="voiceVolumeChanged">Applies and stores the local volume of the participant's voice (percent).</param>
+    public ParticipantItemViewModel(PeerId peerId, Func<PeerId, bool, bool, Task>? switchOff = null, Action<PeerId, double>? voiceVolumeChanged = null)
     {
         _switchOff = switchOff;
+        _voiceVolumeChanged = voiceVolumeChanged;
         PeerId = peerId;
         AvatarColor = AvatarColors[Convert.ToInt32(peerId.Value[..2], 16) % AvatarColors.Length];
     }
@@ -31,6 +33,21 @@ public sealed partial class ParticipantItemViewModel : ObservableObject
     /// Switches devices of the participant off, or <see langword="null"/>.
     /// </summary>
     private readonly Func<PeerId, bool, bool, Task>? _switchOff;
+
+    /// <summary>
+    /// Applies the voice volume, or <see langword="null"/>.
+    /// </summary>
+    private readonly Action<PeerId, double>? _voiceVolumeChanged;
+
+    /// <summary>
+    /// The audible volume restored by "unmute".
+    /// </summary>
+    private double _lastAudibleVolume = 100;
+
+    /// <summary>
+    /// Whether a stored volume is being applied (no notification back).
+    /// </summary>
+    private bool _restoringVolume;
 
     /// <summary>
     /// Gets the participant.
@@ -45,10 +62,93 @@ public sealed partial class ParticipantItemViewModel : ObservableObject
     public partial bool CanModerate { get; set; }
 
     /// <summary>
+    /// Gets or sets how loud the participant's voice is played on this device, 0–200 %. Only this device hears the
+    /// change.
+    /// </summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(VoiceVolumeText), nameof(IsVoiceMuted), nameof(VoiceMuteText))]
+    public partial double VoiceVolume { get; set; } = 100;
+
+    /// <summary>
+    /// Gets the voice volume text.
+    /// </summary>
+    public string VoiceVolumeText => IsVoiceMuted ? "заглушён у вас" : $"{Math.Round(VoiceVolume):0} %";
+
+    /// <summary>
+    /// Gets a value indicating whether the voice is silent on this device.
+    /// </summary>
+    public bool IsVoiceMuted => VoiceVolume <= 0;
+
+    /// <summary>
+    /// Gets the text of the mute command.
+    /// </summary>
+    public string VoiceMuteText => IsVoiceMuted ? "Вернуть звук" : "Заглушить у себя";
+
+    /// <summary>
+    /// Shows a stored volume; the caller applies it to the audio.
+    /// </summary>
+    /// <param name="percent">The volume in percent.</param>
+    public void RestoreVoiceVolume(double percent)
+    {
+        _restoringVolume = true;
+        try
+        {
+            VoiceVolume = percent;
+        }
+        finally
+        {
+            _restoringVolume = false;
+        }
+    }
+
+    /// <summary>
+    /// Applies a new voice volume.
+    /// </summary>
+    /// <param name="value">The volume in percent.</param>
+    partial void OnVoiceVolumeChanged(double value)
+    {
+        var clamped = Math.Clamp(Math.Round(value), 0, 200);
+        if (clamped != value)
+        {
+            VoiceVolume = clamped;
+            return;
+        }
+
+        if (value > 0)
+        {
+            _lastAudibleVolume = value;
+        }
+
+        if (!_restoringVolume)
+        {
+            _voiceVolumeChanged?.Invoke(PeerId, value);
+        }
+    }
+
+    /// <summary>
+    /// Silences the voice on this device, or restores the last audible volume.
+    /// </summary>
+    [RelayCommand]
+    private void ToggleVoiceMute() => VoiceVolume = IsVoiceMuted ? _lastAudibleVolume : 0;
+
+    /// <summary>
+    /// Restores the normal volume.
+    /// </summary>
+    [RelayCommand]
+    private void ResetVoiceVolume() => VoiceVolume = 100;
+
+    /// <summary>
     /// Gets or sets a value indicating whether the participant is speaking now.
     /// </summary>
     [ObservableProperty]
     public partial bool IsSpeaking { get; set; }
+
+    /// <summary>
+    /// Gets or sets a value indicating whether the connection to the participant is weak, so they get the economy
+    /// camera stream from this device.
+    /// </summary>
+    [ObservableProperty]
+    public partial bool WeakConnection { get; set; }
 
     /// <summary>
     /// Gets or sets a value indicating whether the microphone of the participant is off.

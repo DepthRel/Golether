@@ -5,6 +5,7 @@ using Golether.Core.Playback;
 using Golether.Core.Session;
 using Golether.Security.Verification;
 using Golether.Sync.Engine;
+using Golether.Sync.Protocol;
 
 namespace Golether.Session;
 
@@ -186,6 +187,18 @@ public sealed record SessionSnapshot
 public sealed record SessionEvent(DateTimeOffset Time, PeerId? Actor, string Text);
 
 /// <summary>
+/// A chat line or reaction as shown to the user.
+/// </summary>
+/// <param name="Id">The message identifier.</param>
+/// <param name="Sender">The authenticated sender.</param>
+/// <param name="SenderName">The display name of the sender.</param>
+/// <param name="Kind">The kind.</param>
+/// <param name="Text">The clean text or reaction.</param>
+/// <param name="Time">The local receive time.</param>
+/// <param name="IsLocal">Whether this device sent it.</param>
+public sealed record ChatEntry(string Id, PeerId Sender, string SenderName, ChatKind Kind, string Text, DateTimeOffset Time, bool IsLocal);
+
+/// <summary>
 /// Formats event feed texts.
 /// </summary>
 public static class SessionTexts
@@ -213,8 +226,10 @@ public static class SessionTexts
             PlaybackCause.Play => $"{name} запускает воспроизведение с {position}",
             PlaybackCause.Pause => $"{name} ставит на паузу на {position}",
             PlaybackCause.Seek => $"{name} перематывает на {position}",
-            PlaybackCause.WaitingForParticipants => $"Пауза на {position}: ждём участников с медленной связью",
+            PlaybackCause.WaitingForParticipants => $"Пауза на {position}: ждём, пока все участники будут готовы",
+            PlaybackCause.StartedWithoutWaiting => "Старт без ожидания: отставшие догонят",
             PlaybackCause.ParticipantsReady => "Все участники готовы, продолжаем",
+            PlaybackCause.Ended => "Фильм закончился: «Смотреть сначала» запустит его с начала у всех",
             _ => "Файл готов к просмотру",
         };
     }

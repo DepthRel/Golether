@@ -93,6 +93,26 @@ public sealed class MpvPlayer : IPlaybackController, ILocalPlayerControls
         /// <c>seeking</c>.
         /// </summary>
         Seeking = 7,
+
+        /// <summary>
+        /// <c>track-list</c> (no data, only the change).
+        /// </summary>
+        TrackList = 8,
+
+        /// <summary>
+        /// <c>aid</c> (no data).
+        /// </summary>
+        AudioTrack = 9,
+
+        /// <summary>
+        /// <c>sid</c> (no data).
+        /// </summary>
+        SubtitleTrack = 10,
+
+        /// <summary>
+        /// <c>demuxer-cache-state</c> (no data; read as JSON on change).
+        /// </summary>
+        CacheState = 11,
     }
 
     /// <summary>
@@ -156,6 +176,11 @@ public sealed class MpvPlayer : IPlaybackController, ILocalPlayerControls
     private double _speed = 1.0;
 
     /// <summary>
+    /// The cached parts of the media.
+    /// </summary>
+    private IReadOnlyList<MediaTimeRange> _buffered = [];
+
+    /// <summary>
     /// Whether the player was disposed.
     /// </summary>
     private int _disposed;
@@ -185,6 +210,9 @@ public sealed class MpvPlayer : IPlaybackController, ILocalPlayerControls
     public event EventHandler<VideoPointerAction>? VideoPointer;
 
     /// <inheritdoc />
+    public event EventHandler? TracksChanged;
+
+    /// <inheritdoc />
     public void SetVolume(double percent)
     {
         ThrowIfDisposed();
@@ -208,6 +236,142 @@ public sealed class MpvPlayer : IPlaybackController, ILocalPlayerControls
         ThrowIfDisposed();
         SetFlag("mute", muted);
     }
+
+    /// <inheritdoc />
+    public IReadOnlyList<MediaTrack> GetTracks()
+    {
+        ThrowIfDisposed();
+        return ReadTracks(name => LibMpv.GetString(_handle, name));
+    }
+
+    /// <inheritdoc />
+    public void SelectTrack(MediaTrackKind kind, long? id)
+    {
+        ThrowIfDisposed();
+        var property = kind == MediaTrackKind.Audio ? "aid" : "sid";
+        var value = id?.ToString(CultureInfo.InvariantCulture) ?? "no";
+        var result = LibMpv.SetPropertyString(_handle, property, value);
+        if (result < 0)
+        {
+            _logger.LogWarning("Selecting {Property}={Value} failed: {Error}", property, value, LibMpv.Describe(result));
+        }
+    }
+
+    /// <inheritdoc />
+    public void AddSubtitleFile(string path)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(path);
+        ThrowIfDisposed();
+        if (!File.Exists(path))
+        {
+            throw new FileNotFoundException("The subtitle file does not exist.", path);
+        }
+
+        LibMpv.Check(LibMpv.Command(_handle, "sub-add", Path.GetFullPath(path), "select"), "adding subtitles");
+    }
+
+    /// <inheritdoc />
+    public void AddAudioFile(string path)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(path);
+        ThrowIfDisposed();
+        if (!File.Exists(path))
+        {
+            throw new FileNotFoundException("The sound file does not exist.", path);
+        }
+
+        LibMpv.Check(LibMpv.Command(_handle, "audio-add", Path.GetFullPath(path), "select"), "adding a sound track");
+    }
+
+    /// <summary>
+    /// Reads the sound and subtitle tracks from mpv's <c>track-list</c> sub-properties.
+    /// </summary>
+    /// <param name="read">Reads a property as text, <see langword="null"/> when it is unavailable.</param>
+    /// <returns>The tracks.</returns>
+    internal static IReadOnlyList<MediaTrack> ReadTracks(Func<string, string?> read)
+    {
+        if (!int.TryParse(read("track-list/count"), NumberStyles.Integer, CultureInfo.InvariantCulture, out var count) || count <= 0)
+        {
+            return [];
+        }
+
+        var tracks = new List<MediaTrack>();
+        for (var i = 0; i < Math.Min(count, 256); i++)
+        {
+            var prefix = $"track-list/{i}/";
+            var kind = read(prefix + "type") switch
+            {
+                "audio" => MediaTrackKind.Audio,
+                "sub" => MediaTrackKind.Subtitle,
+                _ => (MediaTrackKind?)null,
+            };
+            if (kind is null || !long.TryParse(read(prefix + "id"), NumberStyles.Integer, CultureInfo.InvariantCulture, out var id))
+            {
+                continue;
+            }
+
+            int? channels = int.TryParse(read(prefix + "demux-channel-count"), NumberStyles.Integer, CultureInfo.InvariantCulture, out var value) ? value : null;
+            tracks.Add(new MediaTrack(
+                id,
+                kind.Value,
+                Blank(read(prefix + "title")),
+                Blank(read(prefix + "lang")),
+                Blank(read(prefix + "codec")),
+                channels,
+                read(prefix + "default") == "yes",
+                read(prefix + "external") == "yes",
+                read(prefix + "selected") == "yes"));
+        }
+
+        return tracks;
+    }
+
+    /// <summary>
+    /// Reads the seekable ranges from the JSON form of <c>demuxer-cache-state</c>.
+    /// </summary>
+    /// <param name="json">The property value, or <see langword="null"/>.</param>
+    /// <returns>The ranges, empty when unknown.</returns>
+    internal static IReadOnlyList<MediaTimeRange> ParseCacheRanges(string? json)
+    {
+        if (string.IsNullOrEmpty(json))
+        {
+            return [];
+        }
+
+        try
+        {
+            using var document = System.Text.Json.JsonDocument.Parse(json);
+            if (!document.RootElement.TryGetProperty("seekable-ranges", out var list) || list.ValueKind != System.Text.Json.JsonValueKind.Array)
+            {
+                return [];
+            }
+
+            var ranges = new List<MediaTimeRange>();
+            foreach (var item in list.EnumerateArray().Take(64))
+            {
+                if (item.ValueKind == System.Text.Json.JsonValueKind.Object
+                    && item.TryGetProperty("start", out var start) && start.ValueKind == System.Text.Json.JsonValueKind.Number && start.TryGetDouble(out var from)
+                    && item.TryGetProperty("end", out var end) && end.ValueKind == System.Text.Json.JsonValueKind.Number && end.TryGetDouble(out var to)
+                    && double.IsFinite(from) && double.IsFinite(to) && to > from && from >= 0 && to < TimeSpan.MaxValue.TotalSeconds)
+                {
+                    ranges.Add(new MediaTimeRange(TimeSpan.FromSeconds(from), TimeSpan.FromSeconds(to)));
+                }
+            }
+
+            return ranges;
+        }
+        catch (System.Text.Json.JsonException)
+        {
+            return [];
+        }
+    }
+
+    /// <summary>
+    /// Turns empty text into <see langword="null"/>.
+    /// </summary>
+    /// <param name="value">The text.</param>
+    /// <returns>The text or <see langword="null"/>.</returns>
+    private static string? Blank(string? value) => string.IsNullOrWhiteSpace(value) ? null : value;
 
     /// <summary>
     /// Creates a player if libmpv is available.
@@ -264,7 +428,7 @@ public sealed class MpvPlayer : IPlaybackController, ILocalPlayerControls
                 _paused,
                 _pausedForCache || _seeking,
                 TimeSpan.FromSeconds(_cacheAhead),
-                _speed);
+                _speed) { Buffered = _buffered };
         }
     }
 
@@ -409,6 +573,10 @@ public sealed class MpvPlayer : IPlaybackController, ILocalPlayerControls
         LibMpv.Check(LibMpv.ObserveProperty(handle, (ulong)Observed.CacheDuration, "demuxer-cache-duration", MpvFormat.Double), "observing demuxer-cache-duration");
         LibMpv.Check(LibMpv.ObserveProperty(handle, (ulong)Observed.Speed, "speed", MpvFormat.Double), "observing speed");
         LibMpv.Check(LibMpv.ObserveProperty(handle, (ulong)Observed.Seeking, "seeking", MpvFormat.Flag), "observing seeking");
+        LibMpv.Check(LibMpv.ObserveProperty(handle, (ulong)Observed.TrackList, "track-list", MpvFormat.None), "observing track-list");
+        LibMpv.Check(LibMpv.ObserveProperty(handle, (ulong)Observed.AudioTrack, "aid", MpvFormat.None), "observing aid");
+        LibMpv.Check(LibMpv.ObserveProperty(handle, (ulong)Observed.SubtitleTrack, "sid", MpvFormat.None), "observing sid");
+        LibMpv.Check(LibMpv.ObserveProperty(handle, (ulong)Observed.CacheState, "demuxer-cache-state", MpvFormat.None), "observing demuxer-cache-state");
     }
 
     /// <summary>
@@ -509,6 +677,7 @@ public sealed class MpvPlayer : IPlaybackController, ILocalPlayerControls
             {
                 _position = null;
                 _duration = null;
+                _buffered = [];
             }
         }
 
@@ -522,6 +691,23 @@ public sealed class MpvPlayer : IPlaybackController, ILocalPlayerControls
     /// <param name="property">The event data.</param>
     private unsafe void OnPropertyChange(Observed id, MpvEventProperty* property)
     {
+        if (id == Observed.CacheState)
+        {
+            var ranges = ParseCacheRanges(LibMpv.GetString(_handle, "demuxer-cache-state"));
+            lock (_gate)
+            {
+                _buffered = ranges;
+            }
+
+            return;
+        }
+
+        if (id is Observed.TrackList or Observed.AudioTrack or Observed.SubtitleTrack)
+        {
+            TracksChanged?.Invoke(this, EventArgs.Empty);
+            return;
+        }
+
         var hasValue = property->Format != MpvFormat.None && property->Data != 0;
         var number = hasValue && property->Format == MpvFormat.Double ? *(double*)property->Data : (double?)null;
         var flag = hasValue && property->Format == MpvFormat.Flag && *(int*)property->Data != 0;

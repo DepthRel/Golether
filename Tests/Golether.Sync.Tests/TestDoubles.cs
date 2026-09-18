@@ -83,7 +83,24 @@ internal sealed class FakePlayer : IPlaybackController
     /// <summary>
     /// Gets the current position.
     /// </summary>
-    public TimeSpan Position => Paused ? _position : _position + Microseconds.ToTimeSpan((long)((_clock.NowMicroseconds - _anchor) * Rate));
+    public TimeSpan Position
+    {
+        get
+        {
+            var position = Paused ? _position : _position + Microseconds.ToTimeSpan((long)((_clock.NowMicroseconds - _anchor) * Rate));
+            return position > Duration ? Duration : position;
+        }
+    }
+
+    /// <summary>
+    /// Gets or sets the media duration.
+    /// </summary>
+    public TimeSpan Duration { get; set; } = TimeSpan.FromHours(2);
+
+    /// <summary>
+    /// Gets a value indicating whether playback stopped at the end (mpv with <c>keep-open</c> pauses there).
+    /// </summary>
+    public bool AtEnd => !Paused && Position >= Duration;
 
     /// <summary>
     /// Moves the position without recording a command (simulates drift).
@@ -97,7 +114,7 @@ internal sealed class FakePlayer : IPlaybackController
 
     /// <inheritdoc />
     public PlayerSnapshot GetSnapshot()
-        => Loaded ? new PlayerSnapshot(true, Position, TimeSpan.FromHours(2), Paused, Buffering, TimeSpan.FromSeconds(10), Rate) : PlayerSnapshot.Empty;
+        => Loaded ? new PlayerSnapshot(true, Position, Duration, Paused || AtEnd, Buffering, TimeSpan.FromSeconds(10), Rate) : PlayerSnapshot.Empty;
 
     /// <inheritdoc />
     public Task LoadAsync(Uri source, TimeSpan startPosition, bool paused, CancellationToken cancellationToken = default)

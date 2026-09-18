@@ -37,7 +37,8 @@ public sealed class AppServices : IAsyncDisposable
     /// <param name="paths">The data paths.</param>
     /// <param name="provider">The service provider.</param>
     /// <param name="identity">The device identity.</param>
-    private AppServices(AppDataPaths paths, ServiceProvider provider, DeviceIdentity identity)
+    /// <param name="fileLog">The log file writer.</param>
+    private AppServices(AppDataPaths paths, ServiceProvider provider, DeviceIdentity identity, FileLogProvider fileLog)
     {
         Paths = paths;
         _provider = provider;
@@ -49,6 +50,8 @@ public sealed class AppServices : IAsyncDisposable
         Components = new ComponentService(
             new ComponentLocator(Path.Combine(AppContext.BaseDirectory, "native"), ComponentsRoot),
             new ComponentInstaller(ComponentsRoot, Http, new ProcessToolRunner(), TimeProvider.System, LoggerFactory.CreateLogger<ComponentInstaller>()));
+        Diagnostics = new DiagnosticsWriter(paths.LogsDirectory, Components, identity.PeerId.ToShortString(), () => fileLog.CurrentFile);
+        Updates = new UpdateService(Http, logger: LoggerFactory.CreateLogger<UpdateService>());
         Player = new PlayerHost(LoggerFactory, paths.MpvDirectory);
         Conference = new ConferenceHost(LoggerFactory, paths.GStreamerRegistryFile);
         Conference.TryActivate(Components.GetStatus(ComponentId.Conference));
@@ -82,6 +85,16 @@ public sealed class AppServices : IAsyncDisposable
     /// Gets the data paths.
     /// </summary>
     public AppDataPaths Paths { get; }
+
+    /// <summary>
+    /// Gets the writer of diagnostic reports.
+    /// </summary>
+    public IDiagnosticsWriter Diagnostics { get; private set; } = null!;
+
+    /// <summary>
+    /// Gets the update checker.
+    /// </summary>
+    public IUpdateService Updates { get; private set; } = null!;
 
     /// <summary>
     /// Gets the HTTP client for component downloads.
@@ -145,12 +158,15 @@ public sealed class AppServices : IAsyncDisposable
         AdoptLegacyData(paths);
         SqliteDatabaseMigrator.MigrateUp(paths.ConnectionString);
 
+        var fileLog = new FileLogProvider(paths.LogsDirectory);
         var services = new ServiceCollection()
             .AddLogging(logging =>
             {
                 logging.SetMinimumLevel(LogLevel.Information);
+                logging.AddFilter("Microsoft.EntityFrameworkCore", LogLevel.Warning);
                 logging.AddDebug();
                 logging.AddSimpleConsole(options => options.SingleLine = true);
+                logging.AddProvider(fileLog);
             })
             .AddSingleton(TimeProvider.System)
             .AddSingleton(SecretProtectors.CreateDefault())
@@ -162,7 +178,7 @@ public sealed class AppServices : IAsyncDisposable
             services.GetRequiredService<ISecretProtector>(),
             TimeProvider.System,
             services.GetRequiredService<ILogger<FileDeviceIdentityStore>>());
-        return new AppServices(paths, services, store.LoadOrCreate());
+        return new AppServices(paths, services, store.LoadOrCreate(), fileLog);
     }
 
     /// <summary>
@@ -187,7 +203,10 @@ public sealed class AppServices : IAsyncDisposable
             Identity.PeerId.ToShortString(),
             Conference,
             Components,
-            Player);
+            Player,
+            Diagnostics,
+            Updates,
+            Path.Combine(Paths.Root, "updates"));
     }
 
     /// <summary>

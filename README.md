@@ -36,6 +36,7 @@ dotnet run --project Sources/Apps/Golether.UI
 
 ```powershell
 ./Scripts/publish-win.ps1            # artifacts/publish/Golether-<версия>-win-x64.zip
+./Scripts/build-installer.ps1        # тот же архив плюс установщик для Windows (нужен Inno Setup 6+)
 ```
 
 ```bash

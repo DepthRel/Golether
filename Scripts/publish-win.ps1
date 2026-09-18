@@ -5,8 +5,8 @@
 .DESCRIPTION
     Layout of the archive:
       Golether/
-        Golether.cmd          launcher that works from any location
-        app/                  the application (Golether.exe) with native libraries in app/native
+        Golether.exe          the launcher with the Golether icon (the .NET host pointing at app\Golether.dll)
+        app/                  the application with native libraries in app/native
         tools/dbmigrator/     the console database migrator
         golether.install      marks the installation root: all data (keys, database, components) is kept in Golether/data
         README.txt            first start notes
@@ -60,13 +60,20 @@ if ($LASTEXITCODE -ne 0 -or -not $version) {
 
 $stage = Join-Path $Output "$Runtime\Golether"
 if (Test-Path $stage) {
-    Remove-Item -Recurse -Force $stage
+    $stageFull = (Resolve-Path $stage).Path.TrimEnd('\') + '\'
+    $running = @(Get-Process -ErrorAction SilentlyContinue | Where-Object { $_.Path -and $_.Path.StartsWith($stageFull, [StringComparison]::OrdinalIgnoreCase) })
+    if ($running.Count -gt 0) {
+        throw "Golether is running from $stage (process $($running[0].Id)). Close it and publish again, or use -Output."
+    }
+
+    # The data folder holds the keys and the database of a tried package: it is kept, everything else is rebuilt.
+    Get-ChildItem -Force $stage | Where-Object { $_.Name -ne 'data' } | Remove-Item -Recurse -Force
 }
 
-function Publish-Project([string] $project, [string] $target) {
+function Publish-Project([string] $project, [string] $target, [string[]] $extra = @()) {
     Write-Host "==> $(Split-Path -Leaf $project) ($Runtime, $Configuration) -> $target"
     & dotnet publish $project -c $Configuration -r $Runtime --self-contained true -o $target -nologo `
-        -p:DebugType=none -p:PublishReadyToRun=false
+        -p:DebugType=none -p:PublishReadyToRun=false @extra
     if ($LASTEXITCODE -ne 0) {
         throw "Publishing '$project' failed with exit code $LASTEXITCODE."
     }
@@ -83,10 +90,12 @@ if (-not $SkipComponents) {
     }
 }
 
-Publish-Project $ui (Join-Path $stage 'app')
+Publish-Project $ui (Join-Path $stage 'app') @("-p:GoletherRootLauncherPath=$(Join-Path $stage 'Golether.exe')")
 Publish-Project $migrator (Join-Path $stage 'tools\dbmigrator')
 
-Set-Content -Path (Join-Path $stage 'Golether.cmd') -Encoding ascii -Value @('@echo off', 'start "" "%~dp0app\Golether.exe" %*')
+if (-not (Test-Path (Join-Path $stage 'Golether.exe'))) {
+    throw 'The root launcher Golether.exe was not created.'
+}
 Set-Content -Path (Join-Path $stage 'golether.install') -Encoding ascii `
     -Value 'Golether installation root: all data (keys, database, tunnels, components) is stored in the data folder here.'
 
@@ -94,7 +103,7 @@ $hasMpv = Test-Path (Join-Path $stage 'app\native\libmpv-2.dll')
 $readme = @(
     "Golether $version ($Runtime)",
     '',
-    'Запуск: Golether.cmd или app\Golether.exe.',
+    'Запуск: Golether.exe в этой папке (на него можно сделать ярлык или закрепить на панели задач).',
     'Все данные (ключи, база, туннели, компоненты) хранятся в папке data рядом с приложением. Переносите и удаляйте папку Golether целиком.',
     $(if ($hasMpv) { 'libmpv включена в пакет.' } else { 'libmpv не включена: положите libmpv-2.dll в app\native, иначе видео не будет показано (синхронизация работает).' }),
     'Туннели AmneziaWG требуют установленного AmneziaWG для Windows; при подъёме туннеля Windows спросит разрешение администратора.',

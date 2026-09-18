@@ -37,4 +37,34 @@ public interface ILocalPlayerControls
     /// </summary>
     /// <param name="muted">Whether the sound is off.</param>
     void SetMuted(bool muted);
+
+    /// <summary>
+    /// Raised when the tracks of the loaded file or the selected tracks change. May be raised on any thread.
+    /// </summary>
+    event EventHandler? TracksChanged;
+
+    /// <summary>
+    /// Returns the sound and subtitle tracks of the loaded file.
+    /// </summary>
+    /// <returns>The tracks, empty when nothing is loaded.</returns>
+    IReadOnlyList<MediaTrack> GetTracks();
+
+    /// <summary>
+    /// Selects a track on this device only.
+    /// </summary>
+    /// <param name="kind">The kind.</param>
+    /// <param name="id">The track, or <see langword="null"/> to switch the kind off (subtitles).</param>
+    void SelectTrack(MediaTrackKind kind, long? id);
+
+    /// <summary>
+    /// Loads subtitles from a file on this device and shows them.
+    /// </summary>
+    /// <param name="path">The subtitle file (.srt, .ass, .vtt …).</param>
+    void AddSubtitleFile(string path);
+
+    /// <summary>
+    /// Loads a sound track from a file on this device and plays it (an external dubbing).
+    /// </summary>
+    /// <param name="path">The sound file.</param>
+    void AddAudioFile(string path);
 }

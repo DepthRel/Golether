@@ -320,6 +320,48 @@ internal static unsafe partial class LibMpv
     public static partial int SetPropertyString(nint handle, string name, string value);
 
     /// <summary>
+    /// <c>mpv_get_property_string</c>.
+    /// </summary>
+    /// <param name="handle">The handle.</param>
+    /// <param name="name">The property name.</param>
+    /// <returns>A UTF-8 string to release with <see cref="Free"/>, or zero when the property is unavailable.</returns>
+    [LibraryImport(LibraryName, EntryPoint = "mpv_get_property_string", StringMarshalling = StringMarshalling.Utf8)]
+    [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
+    public static partial nint GetPropertyString(nint handle, string name);
+
+    /// <summary>
+    /// <c>mpv_free</c>.
+    /// </summary>
+    /// <param name="data">Memory returned by libmpv.</param>
+    [LibraryImport(LibraryName, EntryPoint = "mpv_free")]
+    [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
+    public static partial void Free(nint data);
+
+    /// <summary>
+    /// Reads a property as text.
+    /// </summary>
+    /// <param name="handle">The handle.</param>
+    /// <param name="name">The property name.</param>
+    /// <returns>The value, or <see langword="null"/> when it is unavailable.</returns>
+    public static string? GetString(nint handle, string name)
+    {
+        var value = GetPropertyString(handle, name);
+        if (value == 0)
+        {
+            return null;
+        }
+
+        try
+        {
+            return Marshal.PtrToStringUTF8(value);
+        }
+        finally
+        {
+            Free(value);
+        }
+    }
+
+    /// <summary>
     /// <c>mpv_set_property</c> with <see cref="MpvFormat.Double"/>.
     /// </summary>
     /// <param name="handle">The handle.</param>

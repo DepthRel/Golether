@@ -161,6 +161,145 @@ public sealed class ViewModelTests
     }
 
     /// <summary>
+    /// The host is offered to continue a film stopped earlier; the offer seeks everybody and disappears.
+    /// </summary>
+    /// <returns>A task that completes when the test is done.</returns>
+    [Fact]
+    public async Task StoppedFilm_OffersToContinue()
+    {
+        _settings.GetAsync(ResumeTracker.SettingPrefix + new string('c', 64), Arg.Any<CancellationToken>()).Returns("4000");
+        var start = Snapshot(PlayState.Paused, TimeSpan.Zero) with
+        {
+            Local = new FollowerStatus(new PlayerSnapshot(true, TimeSpan.Zero, TimeSpan.FromHours(2), true, false, TimeSpan.Zero, 1.0), TimeSpan.Zero, TimeSpan.Zero, null),
+        };
+        _session.GetSnapshot().Returns(start);
+        var viewModel = CreateViewModel();
+
+        viewModel.Refresh();
+
+        Assert.True(viewModel.HasResumeOffer);
+        Assert.Equal("В прошлый раз вы остановились на 1:06:40", viewModel.ResumeText);
+        await viewModel.ResumeCommand.ExecuteAsync(null);
+        await _session.Received(1).RequestAsync(new PlaybackRequest(PlaybackRequestKind.Seek, TimeSpan.FromSeconds(4000)), Arg.Any<CancellationToken>());
+        Assert.False(viewModel.HasResumeOffer);
+
+        // A participant is not offered: the host leads the film.
+        var guest = CreateViewModel();
+        _session.GetSnapshot().Returns(start with { IsHost = false });
+        guest.Refresh();
+        Assert.False(guest.HasResumeOffer);
+
+        // The position of the current film is remembered.
+        _session.GetSnapshot().Returns(Snapshot(PlayState.Paused, TimeSpan.Zero));
+        viewModel.Refresh();
+        await _settings.Received().SetAsync(ResumeTracker.SettingPrefix + new string('c', 64), "3600", Arg.Any<CancellationToken>());
+    }
+
+    /// <summary>
+    /// While playback waits, the participants that are not ready are named; the host can start without them and
+    /// the play button cancels the start.
+    /// </summary>
+    /// <returns>A task that completes when the test is done.</returns>
+    [Fact]
+    public async Task Waiting_NamesParticipantsAndOffersToStart()
+    {
+        var waiting = Snapshot(PlayState.Paused, TimeSpan.Zero) with
+        {
+            Playback = PlaybackState.Initial(Host, 0) with { State = PlayState.Paused, Position = TimeSpan.FromHours(1), Cause = PlaybackCause.WaitingForParticipants },
+        };
+        var loading = new ParticipantView(new ParticipantInfo(PeerId.Parse(new string('d', 64)), "Олег", false), null, false);
+        _session.GetSnapshot().Returns(waiting with { Participants = [.. waiting.Participants, loading] });
+        var viewModel = CreateViewModel();
+
+        viewModel.Refresh();
+
+        Assert.True(viewModel.IsWaiting);
+        Assert.True(viewModel.CanStartNow);
+        Assert.True(viewModel.ShowPauseIcon);
+        Assert.False(viewModel.ShowPlayIcon);
+        Assert.Equal("Отменить старт", viewModel.PlayButtonText);
+        Assert.Equal("Ждём: Олег…", viewModel.CountdownText);
+
+        await viewModel.StartNowCommand.ExecuteAsync(null);
+        await _session.Received(1).RequestAsync(new PlaybackRequest(PlaybackRequestKind.PlayNow, null), Arg.Any<CancellationToken>());
+        await viewModel.TogglePlayCommand.ExecuteAsync(null);
+        await _session.Received(1).RequestAsync(new PlaybackRequest(PlaybackRequestKind.Pause, TimeSpan.FromHours(1)), Arg.Any<CancellationToken>());
+
+        // Marina (cache 12 s at the position) is ready; a lagging Marina is named too.
+        var slow = waiting with
+        {
+            Participants =
+            [
+                Local(),
+                new ParticipantView(new ParticipantInfo(Guest, "Марина", false), new ParticipantStatus { PeerId = Guest, Position = TimeSpan.FromHours(1), IsBuffering = true }, false),
+                loading,
+                new ParticipantView(new ParticipantInfo(PeerId.Parse(new string('e', 64)), "Ира", false), new ParticipantStatus { PeerId = Guest, Position = TimeSpan.FromMinutes(3), CacheAhead = TimeSpan.FromMinutes(1) }, false),
+            ],
+        };
+        Assert.Equal("Ждём: Марина, Олег и ещё 1…", MainWindowViewModel.DescribeWaiting(slow, TimeSpan.FromHours(2)));
+        Assert.Equal("Ждём готовности участников…", MainWindowViewModel.DescribeWaiting(waiting, TimeSpan.FromHours(2)));
+
+        // A participant does not get the host's button.
+        _session.GetSnapshot().Returns(waiting with { IsHost = false });
+        viewModel.Refresh();
+        Assert.False(viewModel.CanStartNow);
+    }
+
+    /// <summary>
+    /// Chat and events share the side panel: a tab opens, a second click hides the panel, the choice is remembered
+    /// and the chat counts lines only while it cannot be seen.
+    /// </summary>
+    /// <returns>A task that completes when the test is done.</returns>
+    [Fact]
+    public async Task SidePanel_SwitchesTabsAndHides()
+    {
+        _settings.GetAsync(MainWindowViewModel.SideTabSetting, Arg.Any<CancellationToken>()).Returns("events");
+        var viewModel = CreateViewModel();
+        await viewModel.LoadAsync();
+        Assert.True(viewModel.ShowEvents);
+        Assert.False(viewModel.ShowChat);
+        Assert.False(viewModel.Chat.IsExpanded);
+
+        viewModel.ShowTabCommand.Execute(SideTab.Chat);
+        Assert.True(viewModel.ShowChat);
+        Assert.True(viewModel.Chat.IsExpanded);
+        await _settings.Received().SetAsync(MainWindowViewModel.SideTabSetting, "chat", Arg.Any<CancellationToken>());
+
+        viewModel.ShowTabCommand.Execute(SideTab.Chat);
+        Assert.False(viewModel.EventsExpanded);
+        Assert.False(viewModel.Chat.IsExpanded);
+        Assert.Equal("▸", viewModel.SidePanelArrow);
+        await _settings.Received().SetAsync(MainWindowViewModel.EventsExpandedSetting, "false", Arg.Any<CancellationToken>());
+
+        viewModel.ToggleEventsCommand.Execute(null);
+        Assert.True(viewModel.ShowChat);
+        viewModel.ShowTabCommand.Execute(SideTab.Events);
+        Assert.True(viewModel.ShowEvents);
+        Assert.True(viewModel.IsEventsTab);
+    }
+
+    /// <summary>
+    /// While the session reconnects, the session view stays and the state is shown.
+    /// </summary>
+    [Fact]
+    public void Reconnect_KeepsTheSessionView()
+    {
+        _session.GetSnapshot().Returns(Snapshot(PlayState.Paused, TimeSpan.Zero) with { State = SessionState.Ended });
+        var viewModel = CreateViewModel();
+
+        viewModel.Refresh();
+        Assert.False(viewModel.IsInSession);
+        Assert.False(viewModel.IsReconnecting);
+
+        _session.ReconnectMessage.Returns("Переподключение к ведущему… (попытка 1 из 8)");
+        viewModel.Refresh();
+
+        Assert.True(viewModel.IsReconnecting);
+        Assert.True(viewModel.IsInSession);
+        Assert.Equal("Переподключение к ведущему… (попытка 1 из 8)", viewModel.ReconnectText);
+    }
+
+    /// <summary>
     /// A failed join shows the reason and stores the normalized name.
     /// </summary>
     [Fact]

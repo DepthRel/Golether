@@ -615,6 +615,45 @@ internal static unsafe partial class Gst
     [LibraryImport(Core, EntryPoint = "gst_structure_get_type")]
     public static partial nuint StructureGetType();
 
+    /// <summary><c>gst_structure_foreach</c>.</summary>
+    /// <param name="structure">The structure.</param>
+    /// <param name="callback"><c>gboolean callback(GQuark field, const GValue *value, gpointer data)</c>.</param>
+    /// <param name="data">The user data.</param>
+    /// <returns>Non-zero when the callback never stopped the iteration.</returns>
+    [LibraryImport(Core, EntryPoint = "gst_structure_foreach")]
+    public static partial int StructureForeach(nint structure, delegate* unmanaged[Cdecl]<uint, GValue*, nint, int> callback, nint data);
+
+    /// <summary><c>gst_value_get_structure</c>.</summary>
+    /// <param name="value">A value holding a structure.</param>
+    /// <returns>The structure (not owned).</returns>
+    [LibraryImport(Core, EntryPoint = "gst_value_get_structure")]
+    public static partial nint ValueGetStructure(GValue* value);
+
+    /// <summary><c>gst_structure_get_name</c>.</summary>
+    /// <param name="structure">The structure.</param>
+    /// <returns>The name (not owned).</returns>
+    [LibraryImport(Core, EntryPoint = "gst_structure_get_name")]
+    public static partial nint StructureGetName(nint structure);
+
+    /// <summary><c>gst_structure_to_string</c>.</summary>
+    /// <param name="structure">The structure.</param>
+    /// <returns>A new string (release with <c>g_free</c>).</returns>
+    [LibraryImport(Core, EntryPoint = "gst_structure_to_string")]
+    public static partial nint StructureToString(nint structure);
+
+    /// <summary><c>gst_structure_get_double</c>.</summary>
+    /// <param name="structure">The structure.</param>
+    /// <param name="field">The field.</param>
+    /// <param name="value">Receives the value.</param>
+    /// <returns>Non-zero when found.</returns>
+    [LibraryImport(Core, EntryPoint = "gst_structure_get_double", StringMarshalling = StringMarshalling.Utf8)]
+    public static partial int StructureGetDouble(nint structure, string field, out double value);
+
+    /// <summary><c>gst_pad_get_type</c>.</summary>
+    /// <returns>The pad type.</returns>
+    [LibraryImport(Core, EntryPoint = "gst_pad_get_type")]
+    public static partial nuint PadGetType();
+
     /// <summary><c>gst_util_set_object_arg</c>: sets a property from its string form.</summary>
     /// <param name="instance">The object.</param>
     /// <param name="name">The property.</param>
@@ -654,6 +693,11 @@ internal static unsafe partial class Gst
     /// <returns>The result: 2 means replied.</returns>
     [LibraryImport(Core, EntryPoint = "gst_promise_wait")]
     public static partial int PromiseWait(nint promise);
+
+    /// <summary><c>gst_promise_interrupt</c>: ends a pending wait.</summary>
+    /// <param name="promise">The promise.</param>
+    [LibraryImport(Core, EntryPoint = "gst_promise_interrupt")]
+    public static partial void PromiseInterrupt(nint promise);
 
     /// <summary><c>gst_promise_get_reply</c>.</summary>
     /// <param name="promise">The promise.</param>

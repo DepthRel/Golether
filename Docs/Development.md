@@ -26,18 +26,18 @@ dotnet test --project Tests/Golether.Sync.Tests/Golether.Sync.Tests.csproj  # о
 | Проект | Что проверяет |
 |---|---|
 | Golether.Components.Tests | каталог, подсказки для Linux/macOS, импорты PE, установщик (сумма, размер, кэш), переиспользование GStreamer |
-| Golether.Media.Conference.GStreamer.Tests | два узла WebRTC через loopback на тестовых источниках, проверка сигналов; пропускаются без GStreamer |
+| Golether.Media.Conference.GStreamer.Tests | два узла WebRTC через loopback на тестовых источниках, проверка сигналов, статистика соединения и переключение на экономный поток камеры; пропускаются без GStreamer |
 | Golether.Core.Tests | PeerId, PlaybackState, DriftCorrector, адреса, пути данных |
 | Golether.Security.Tests | подписи, хранилище ключа, приглашения, код сверки, допуск |
 | Golether.Transports.Tests | кадры, mTLS через loopback, закрепление ключа, NAT-PMP и UPnP с поддельным роутером |
 | Golether.Sync.Tests | часы при RTT 1240 мс, сообщения, authority, follower |
 | Golether.Media.Streaming.Tests | передача кусков, кэш, поток для плеера, хэши без данных, обмен кусками между участниками и проверка по хэшам |
-| Golether.Media.Player.Tests | плеер-симулятор, реестр `golether://`, привязки мыши и громкость настоящего libmpv (пропускаются без него) |
+| Golether.Media.Player.Tests | плеер-симулятор, реестр `golether://`, привязки мыши, громкость, звуковые дорожки и субтитры, загруженные участки настоящего libmpv (пропускаются без него) |
 | Golether.Tunnels.AmneziaWG.Tests | ключи, параметры, `.conf`, пакеты, контроллер |
 | Golether.Core.Data.Tests | миграции, хранилища EF Core, мигратор |
 | Golether.Session.Tests | ведущий и участник целиком: допуск, файл, совместный старт, пауза |
-| Golether.UI.Tests | процесс туннелей на двух базах, модели представлений, громкость, выключение устройств участника |
-| Golether.UI.Headless.Tests | главное окно в Avalonia Headless: контекстное меню участника, лента событий, всплывающая громкость, щелчки по видео |
+| Golether.UI.Tests | процесс туннелей на двух базах, модели представлений, громкость (своя и каждого участника), выключение устройств, чат и реакции, дорожки и субтитры, продолжение с места остановки, отчёт для диагностики, обновления |
+| Golether.UI.Headless.Tests | главное окно в Avalonia Headless: меню плитки участника, вкладки чата и событий, всплывающая громкость, щелчки по видео, плавная шкала с индикатором загруженного, реакции поверх видео |
 
 ## Запуск из VS Code
 
@@ -87,9 +87,13 @@ dotnet run --project Sources/Database/Golether.Dbs.SQLite.DbMigrator -- --databa
 | `Scripts/publish-linux.sh [linux-x64] [Release] [out]` | `.tar.gz` и `.zip` (если есть `zip`), `install-desktop-entry.sh` |
 | `Scripts/publish-macos.sh [osx-arm64] ...` | `Golether.app` (Info.plist, иконка, ad-hoc подпись) в архиве |
 | `Scripts/generate-icon.ps1` | `golether.ico`, PNG 256/512 из геометрии `golether.svg` |
+| `Scripts/build-installer.ps1 [-SkipPublish]` (архив собирается тем же запуском) | `artifacts/publish/Golether-<версия>-setup.exe` (нужен Inno Setup 6 или новее; проверено на 7.1) и готовая запись для файла обновлений |
 
 Сборка самодостаточная (self-contained), .NET на целевой машине не нужен. Содержимое `Native/<RID>/` попадает в
-`app/native`. Linux- и macOS-пакеты лучше собирать на целевой ОС: только там в архиве сохранятся права на исполнение.
+`app/native`. В корне Windows-пакета лежит `Golether.exe` с иконкой приложения: это тот же хост .NET (цель
+`GoletherRootLauncher` в `Golether.UI.csproj`, задача SDK `CreateAppHost`), только с относительным путём
+`app\Golether.dll`. Поэтому пакет запускается двойным щелчком из любого места, а на `Golether.exe` можно сделать ярлык
+или закрепить его на панели задач. Linux- и macOS-пакеты лучше собирать на целевой ОС: только там в архиве сохранятся права на исполнение.
 
 ## Отладка сети
 

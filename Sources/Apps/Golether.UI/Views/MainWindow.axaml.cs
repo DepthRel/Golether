@@ -29,6 +29,11 @@ public sealed partial class MainWindow : Window
     private Controls.CameraRenderer? _cameras;
 
     /// <summary>
+    /// Moves the timeline smoothly.
+    /// </summary>
+    private readonly Controls.TimelineAnimator _timeline;
+
+    /// <summary>
     /// How long a click on the video waits for a second click before it toggles playback.
     /// </summary>
     private static readonly TimeSpan DoubleClickWindow = TimeSpan.FromMilliseconds(320);
@@ -64,9 +69,11 @@ public sealed partial class MainWindow : Window
     public MainWindow()
     {
         InitializeComponent();
+        _timeline = new Controls.TimelineAnimator(Timeline);
         Timeline.AddHandler(PointerPressedEvent, OnTimelinePressed, RoutingStrategies.Tunnel, handledEventsToo: true);
         Timeline.AddHandler(PointerReleasedEvent, OnTimelineReleased, RoutingStrategies.Tunnel | RoutingStrategies.Bubble, handledEventsToo: true);
         AddHandler(KeyDownEvent, OnWindowKeyDown, RoutingStrategies.Tunnel);
+        AddHandler(KeyUpEvent, OnWindowKeyUp, RoutingStrategies.Tunnel);
         AddHandler(ContextRequestedEvent, OnContextRequested, RoutingStrategies.Tunnel);
         _refreshTimer.Tick += (_, _) => ViewModel?.Refresh();
         _clickTimer.Tick += (_, _) =>
@@ -100,6 +107,25 @@ public sealed partial class MainWindow : Window
     {
         DataContext = viewModel;
         _cameras = new Controls.CameraRenderer(conference, viewModel);
+        _timeline.Attach(viewModel);
+        viewModel.Chat.LineAdded += (_, _) => Dispatcher.UIThread.Post(() => ChatScroll.ScrollToEnd(), DispatcherPriority.Background);
+        ReactionOverlay.Opened += (_, _) =>
+        {
+            if (TopLevel.GetTopLevel(ReactionOverlay.Child) is not { } overlay)
+            {
+                return;
+            }
+
+            // Only the reactions themselves are visible: the window behind them is see-through.
+            overlay.TransparencyLevelHint = [Avalonia.Controls.WindowTransparencyLevel.Transparent];
+            overlay.Background = Avalonia.Media.Brushes.Transparent;
+
+            // The overlay window must not catch the clicks meant for the video.
+            if (overlay.TryGetPlatformHandle()?.Handle is { } handle)
+            {
+                Controls.ClickThroughWindow.Apply(handle);
+            }
+        };
         _player = player;
         Video.Player = player;
         player.BackendChanged += (_, _) => Dispatcher.UIThread.Post(UpdatePlayerState);
@@ -157,6 +183,31 @@ public sealed partial class MainWindow : Window
     private void OnToggleFullScreen(object? sender, RoutedEventArgs e) => ToggleFullScreen();
 
     /// <summary>
+    /// Closes the track menu after a choice.
+    /// </summary>
+    /// <param name="sender">The menu entry.</param>
+    /// <param name="e">The event data.</param>
+    private void OnTrackChosen(object? sender, RoutedEventArgs e) => CloseAfterClick(TracksButton);
+
+    /// <summary>
+    /// Closes the reaction menu after a choice.
+    /// </summary>
+    /// <param name="sender">The reaction.</param>
+    /// <param name="e">The event data.</param>
+    private void OnReactionChosen(object? sender, RoutedEventArgs e) => CloseAfterClick(ReactionsButton);
+
+    /// <summary>
+    /// Closes the menu of a button, but only after the click has been handled.
+    /// </summary>
+    /// <remarks>
+    /// Closing it inside the click handler detaches the pressed entry from the tree, its bindings go away with it,
+    /// and the command of the entry never runs.
+    /// </remarks>
+    /// <param name="owner">The button that owns the menu.</param>
+    private static void CloseAfterClick(Button owner)
+        => Dispatcher.UIThread.Post(() => owner.Flyout?.Hide(), DispatcherPriority.Input);
+
+    /// <summary>
     /// Switches between full screen and the previous state.
     /// </summary>
     private void ToggleFullScreen()
@@ -198,6 +249,7 @@ public sealed partial class MainWindow : Window
         }
 
         viewModel.IsScrubbing = false;
+        _timeline.JumpTo(Timeline.Value);
         viewModel.SeekToCommand.Execute(Timeline.Value);
     }
 
@@ -263,7 +315,8 @@ public sealed partial class MainWindow : Window
     }
 
     /// <summary>
-    /// Shows the participant menu only to the host and not for the host's own tile.
+    /// Shows the participant menu for other participants only (voice volume for everybody, device switches for the
+    /// host); the own tile has no menu.
     /// </summary>
     /// <remarks>
     /// Runs in the tunnel phase, before the tile opens its menu.
@@ -272,7 +325,20 @@ public sealed partial class MainWindow : Window
     /// <param name="e">The event data.</param>
     private void OnContextRequested(object? sender, ContextRequestedEventArgs e)
     {
-        if (e.Source is Avalonia.StyledElement { DataContext: ParticipantItemViewModel { CanModerate: false } })
+        if (e.Source is Avalonia.StyledElement { DataContext: ParticipantItemViewModel { IsLocal: true } })
+        {
+            e.Handled = true;
+        }
+    }
+
+    /// <summary>
+    /// Keeps the release of Space from pressing a focused button: Space belongs to play and pause.
+    /// </summary>
+    /// <param name="sender">The window.</param>
+    /// <param name="e">The event data.</param>
+    private void OnWindowKeyUp(object? sender, KeyEventArgs e)
+    {
+        if (e.Key == Key.Space && ViewModel is { IsInSession: true } && e.Source is not TextBox)
         {
             e.Handled = true;
         }

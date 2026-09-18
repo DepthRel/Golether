@@ -25,7 +25,8 @@ public sealed class GstException : Exception
 /// <param name="Pointer">The boxed pointer (boxed types).</param>
 /// <param name="Number">The number (<see cref="Gst.TypeUInt"/>).</param>
 /// <param name="Text">The text (<see cref="Gst.TypeString"/>).</param>
-internal readonly record struct SignalArg(nuint Type, nint Pointer, uint Number, string? Text)
+/// <param name="IsObject">Whether <paramref name="Pointer"/> is a GObject (may be zero).</param>
+internal readonly record struct SignalArg(nuint Type, nint Pointer, uint Number, string? Text, bool IsObject = false)
 {
     /// <summary>
     /// Creates a boxed argument.
@@ -55,6 +56,14 @@ internal readonly record struct SignalArg(nuint Type, nint Pointer, uint Number,
     /// <param name="text">The text.</param>
     /// <returns>The argument.</returns>
     public static SignalArg String(string text) => new(Gst.TypeString, 0, 0, text);
+
+    /// <summary>
+    /// Creates an object argument.
+    /// </summary>
+    /// <param name="type">The object type.</param>
+    /// <param name="pointer">The object, or zero for none.</param>
+    /// <returns>The argument.</returns>
+    public static SignalArg Object(nuint type, nint pointer) => new(type, pointer, 0, null, true);
 }
 
 /// <summary>
@@ -206,6 +215,10 @@ internal static unsafe class Signals
             else if (args[i].Type == Gst.TypeInt)
             {
                 Gst.ValueSetInt(value, unchecked((int)args[i].Number));
+            }
+            else if (args[i].IsObject)
+            {
+                Gst.ValueSetObject(value, args[i].Pointer);
             }
             else if (args[i].Type == Gst.TypeString)
             {

@@ -17,6 +17,11 @@
     <AvaloniaResource Include="Assets\**" />
   </ItemGroup>
 
+  <ItemGroup>
+    <InternalsVisibleTo Include="Golether.UI.Tests" />
+    <InternalsVisibleTo Include="Golether.UI.Headless.Tests" />
+  </ItemGroup>
+
   <!--
     Native runtimes (libmpv, later GStreamer) placed by the developer or the publish scripts in
     <repository>/Native/<runtime identifier>/ are copied to the "native" folder next to the application.
@@ -54,5 +59,20 @@
     <ProjectReference Include="../../Transports/Golether.Transports.Tls/Golether.Transports.Tls.csproj" />
     <ProjectReference Include="../../Tunnels/Golether.Tunnels.AmneziaWG/Golether.Tunnels.AmneziaWG.csproj" />
   </ItemGroup>
+
+  <!--
+    The launcher of a package root: the same application host (with the Golether icon) pointing at app\Golether.dll,
+    so the package root holds one Golether.exe instead of a .cmd file. Publish with -p:GoletherRootLauncherPath=...
+  -->
+  <Target Name="GoletherRootLauncher" AfterTargets="Publish" DependsOnTargets="_GetAppHostPaths"
+          Condition="'$(GoletherRootLauncherPath)' != '' and '$(AppHostSourcePath)' != ''">
+    <CreateAppHost AppHostSourcePath="$(AppHostSourcePath)"
+                   AppHostDestinationPath="$(GoletherRootLauncherPath)"
+                   AppBinaryName="app\$(AssemblyName)$(TargetExt)"
+                   IntermediateAssembly="@(IntermediateAssembly->'%(FullPath)')"
+                   WindowsGraphicalUserInterface="true"
+                   Retries="$(CopyRetryCount)"
+                   RetryDelayMilliseconds="$(CopyRetryDelayMilliseconds)" />
+  </Target>
 
 </Project>

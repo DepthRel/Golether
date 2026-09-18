@@ -33,6 +33,16 @@ public interface ISessionService
     event EventHandler<SessionEvent>? EventRaised;
 
     /// <summary>
+    /// Raised for chat lines and reactions. Raised on a background thread.
+    /// </summary>
+    event EventHandler<ChatEntry>? ChatReceived;
+
+    /// <summary>
+    /// Gets the state of an automatic reconnection, or an empty string while the connection is fine.
+    /// </summary>
+    string ReconnectMessage { get; }
+
+    /// <summary>
     /// Gets a value indicating whether a session is running.
     /// </summary>
     bool IsActive { get; }
@@ -116,6 +126,15 @@ public interface ISessionService
     Task SwitchOffParticipantDevicesAsync(PeerId peerId, bool microphone, bool camera);
 
     /// <summary>
+    /// Sends a chat line or a reaction to everybody in the session.
+    /// </summary>
+    /// <param name="kind">The kind.</param>
+    /// <param name="text">The text or reaction.</param>
+    /// <param name="cancellationToken">The cancellation token.</param>
+    /// <returns>A task that completes when the message was sent.</returns>
+    Task SendChatAsync(ChatKind kind, string text, CancellationToken cancellationToken);
+
+    /// <summary>
     /// Leaves or ends the session.
     /// </summary>
     /// <returns>A task that completes when the session is closed.</returns>
@@ -188,6 +207,24 @@ public sealed class SessionService : ISessionService, IAsyncDisposable
     private readonly SessionOptions _options = new();
 
     /// <summary>
+    /// The number of reconnection attempts after the connection to the host broke.
+    /// </summary>
+    private const int ReconnectAttempts = 8;
+
+    /// <summary>
+    /// The waits before the attempts; the last one repeats.
+    /// </summary>
+    private static readonly TimeSpan[] ReconnectDelays =
+    [
+        TimeSpan.FromSeconds(2),
+        TimeSpan.FromSeconds(3),
+        TimeSpan.FromSeconds(5),
+        TimeSpan.FromSeconds(10),
+        TimeSpan.FromSeconds(20),
+        TimeSpan.FromSeconds(30),
+    ];
+
+    /// <summary>
     /// The hosted session.
     /// </summary>
     private HostSession? _host;
@@ -196,6 +233,21 @@ public sealed class SessionService : ISessionService, IAsyncDisposable
     /// The joined session.
     /// </summary>
     private ParticipantSession? _participant;
+
+    /// <summary>
+    /// The name this device joined with, used when coming back.
+    /// </summary>
+    private string _joinName = string.Empty;
+
+    /// <summary>
+    /// The invitation with the ticket that brings this device back, or <see langword="null"/>.
+    /// </summary>
+    private Invite? _reconnectInvite;
+
+    /// <summary>
+    /// Stops the reconnection attempts.
+    /// </summary>
+    private CancellationTokenSource? _reconnecting;
 
     /// <summary>
     /// Initializes a new instance of the <see cref="SessionService"/> class.
@@ -235,10 +287,16 @@ public sealed class SessionService : ISessionService, IAsyncDisposable
     public event EventHandler<SessionEvent>? EventRaised;
 
     /// <inheritdoc />
+    public event EventHandler<ChatEntry>? ChatReceived;
+
+    /// <inheritdoc />
     public bool IsActive => _host is not null || _participant is not null;
 
     /// <inheritdoc />
     public bool IsHost => _host is not null;
+
+    /// <inheritdoc />
+    public string ReconnectMessage { get; private set; } = string.Empty;
 
     /// <inheritdoc />
     public bool OpenRouterPort { get; set; } = true;
@@ -305,22 +363,14 @@ public sealed class SessionService : ISessionService, IAsyncDisposable
     {
         EnsureIdle();
         var invite = Invite.ParseLink(inviteLink);
-        var participant = new ParticipantSession(
-            _identity,
-            new TlsPeerConnector(_identity, new TlsTransportOptions()),
-            _player,
-            new MpvMediaUriRegistry(),
-            StopwatchMonotonicClock.Instance,
-            _timeProvider,
-            displayName,
-            _options,
-            _loggerFactory,
-            _conference);
-        Attach(participant);
+        var participant = CreateParticipant(displayName);
         _participant = participant;
         try
         {
             await participant.JoinAsync(invite, cancellationToken).ConfigureAwait(false);
+            _joinName = displayName;
+            _reconnectInvite = participant.ReconnectInvite;
+            ReconnectMessage = string.Empty;
             await _contacts.TouchAsync(invite.HostPeerId, invite.HostName, null, cancellationToken).ConfigureAwait(false);
         }
         catch
@@ -344,8 +394,14 @@ public sealed class SessionService : ISessionService, IAsyncDisposable
 
     /// <inheritdoc />
     public Task SwitchOffParticipantDevicesAsync(PeerId peerId, bool microphone, bool camera)
-        => (_host ?? throw new InvalidOperationException("ÐÑÐºÐ»ÑÑÐ°ÑÑ ÑÑÑÑÐ¾Ð¹ÑÑÐ²Ð° ÑÑÐ°ÑÑÐ½Ð¸ÐºÐ¾Ð² Ð¼Ð¾Ð¶ÐµÑ ÑÐ¾Ð»ÑÐºÐ¾ Ð²ÐµÐ´ÑÑÐ¸Ð¹."))
+        => (_host ?? throw new InvalidOperationException("Отключать устройства участников может только ведущий."))
             .SwitchOffParticipantDevicesAsync(peerId, microphone, camera);
+
+    /// <inheritdoc />
+    public Task SendChatAsync(ChatKind kind, string text, CancellationToken cancellationToken)
+        => _host is not null ? _host.SendChatAsync(kind, text)
+            : _participant is not null ? _participant.SendChatAsync(kind, text, cancellationToken)
+            : Task.CompletedTask;
 
     /// <inheritdoc />
     public SessionSnapshot? GetSnapshot() => _host?.GetSnapshot() ?? _participant?.GetSnapshot();
@@ -353,6 +409,14 @@ public sealed class SessionService : ISessionService, IAsyncDisposable
     /// <inheritdoc />
     public async Task LeaveAsync()
     {
+        var reconnecting = Interlocked.Exchange(ref _reconnecting, null);
+        if (reconnecting is not null)
+        {
+            await reconnecting.CancelAsync().ConfigureAwait(false);
+        }
+
+        _reconnectInvite = null;
+        ReconnectMessage = string.Empty;
         var host = Interlocked.Exchange(ref _host, null);
         var participant = Interlocked.Exchange(ref _participant, null);
         foreach (var lease in new[] { Interlocked.Exchange(ref _portLease, null), Interlocked.Exchange(ref _relayLease, null) })
@@ -485,6 +549,117 @@ public sealed class SessionService : ISessionService, IAsyncDisposable
     }
 
     /// <summary>
+    /// Starts reconnecting after the connection to the host broke: the ticket from the session is used, so no new
+    /// invitation is needed, and the host is asked again on every attempt.
+    /// </summary>
+    /// <param name="session">The session that ended.</param>
+    private void StartReconnecting(ParticipantSession session)
+    {
+        if (!ReferenceEquals(_participant, session) || _reconnectInvite is null || _reconnecting is not null)
+        {
+            return;
+        }
+
+        var cancellation = new CancellationTokenSource();
+        _reconnecting = cancellation;
+        _ = ReconnectLoopAsync(session, cancellation);
+    }
+
+    /// <summary>
+    /// Tries to come back to the session, waiting longer after every failed attempt.
+    /// </summary>
+    /// <param name="ended">The session that ended.</param>
+    /// <param name="cancellation">Stops the attempts.</param>
+    /// <returns>A task that completes when the session is back or the attempts stop.</returns>
+    private async Task ReconnectLoopAsync(ParticipantSession ended, CancellationTokenSource cancellation)
+    {
+        var token = cancellation.Token;
+        try
+        {
+            for (var attempt = 1; attempt <= ReconnectAttempts && !token.IsCancellationRequested; attempt++)
+            {
+                var delay = ReconnectDelays[Math.Min(attempt - 1, ReconnectDelays.Length - 1)];
+                Report($"Связь с ведущим потеряна. Повторная попытка {attempt} из {ReconnectAttempts} через {delay.TotalSeconds:0} с…");
+                await Task.Delay(delay, _timeProvider, token).ConfigureAwait(false);
+                if (!ReferenceEquals(_participant, ended) || _reconnectInvite is not { } ticket)
+                {
+                    return;
+                }
+
+                Report($"Переподключение к ведущему… (попытка {attempt} из {ReconnectAttempts})");
+                var session = CreateParticipant(_joinName);
+                try
+                {
+                    await session.RejoinAsync(ticket, token).ConfigureAwait(false);
+                }
+                catch (Exception ex) when (ex is SessionJoinException or IOException or InvalidOperationException)
+                {
+                    await session.DisposeAsync().ConfigureAwait(false);
+                    _loggerFactory.CreateLogger<SessionService>().LogInformation("Reconnect attempt {Attempt} failed: {Error}", attempt, ex.Message);
+                    continue;
+                }
+
+                _participant = session;
+                _reconnectInvite = session.ReconnectInvite ?? ticket;
+                await ended.DisposeAsync().ConfigureAwait(false);
+                Report("Связь с ведущим восстановлена.");
+                ReconnectMessage = string.Empty;
+                Changed?.Invoke(this, EventArgs.Empty);
+                return;
+            }
+
+            Report("Не удалось переподключиться к ведущему. Попросите новое приглашение.");
+        }
+        catch (OperationCanceledException)
+        {
+        }
+        finally
+        {
+            if (ReferenceEquals(_reconnecting, cancellation))
+            {
+                _reconnecting = null;
+            }
+
+            ReconnectMessage = string.Empty;
+            cancellation.Dispose();
+            Changed?.Invoke(this, EventArgs.Empty);
+        }
+    }
+
+    /// <summary>
+    /// Shows the state of the reconnection in the interface and in the event feed.
+    /// </summary>
+    /// <param name="text">The text.</param>
+    private void Report(string text)
+    {
+        ReconnectMessage = text;
+        EventRaised?.Invoke(this, new SessionEvent(_timeProvider.GetLocalNow(), null, text));
+        Changed?.Invoke(this, EventArgs.Empty);
+    }
+
+    /// <summary>
+    /// Creates a participant session for this device.
+    /// </summary>
+    /// <param name="displayName">The name shown to others.</param>
+    /// <returns>The session.</returns>
+    private ParticipantSession CreateParticipant(string displayName)
+    {
+        var participant = new ParticipantSession(
+            _identity,
+            new TlsPeerConnector(_identity, new TlsTransportOptions()),
+            _player,
+            new MpvMediaUriRegistry(),
+            StopwatchMonotonicClock.Instance,
+            _timeProvider,
+            displayName,
+            _options,
+            _loggerFactory,
+            _conference);
+        Attach(participant);
+        return participant;
+    }
+
+    /// <summary>
     /// Throws when a session is running.
     /// </summary>
     private void EnsureIdle()
@@ -503,6 +678,7 @@ public sealed class SessionService : ISessionService, IAsyncDisposable
     {
         session.Changed += (_, _) => Changed?.Invoke(this, EventArgs.Empty);
         session.EventRaised += (_, e) => EventRaised?.Invoke(this, e);
+        session.ChatReceived += (_, e) => ChatReceived?.Invoke(this, e);
     }
 
     /// <summary>
@@ -511,7 +687,16 @@ public sealed class SessionService : ISessionService, IAsyncDisposable
     /// <param name="session">The session.</param>
     private void Attach(ParticipantSession session)
     {
-        session.Changed += (_, _) => Changed?.Invoke(this, EventArgs.Empty);
+        session.Changed += (_, _) =>
+        {
+            if (session.GetSnapshot().State == SessionState.Ended)
+            {
+                StartReconnecting(session);
+            }
+
+            Changed?.Invoke(this, EventArgs.Empty);
+        };
         session.EventRaised += (_, e) => EventRaised?.Invoke(this, e);
+        session.ChatReceived += (_, e) => ChatReceived?.Invoke(this, e);
     }
 }

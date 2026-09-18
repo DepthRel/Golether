@@ -51,6 +51,35 @@ public sealed record PlaybackAuthorityOptions
     /// Gets the amount of data every participant needs before playback resumes (default 5 s).
     /// </summary>
     public TimeSpan ResumeCacheAhead { get; init; } = TimeSpan.FromSeconds(5);
+
+    /// <summary>
+    /// Gets how long playback waits for participants that are not ready before it starts anyway (default 45 s).
+    /// </summary>
+    public TimeSpan MaxReadyWait { get; init; } = TimeSpan.FromSeconds(45);
+
+    /// <summary>
+    /// Checks whether a participant can play from its position: the file is open, the player does not wait for data,
+    /// and enough data is buffered (or the rest of the film, near the end).
+    /// </summary>
+    /// <param name="status">The status.</param>
+    /// <param name="duration">The media duration, when known.</param>
+    /// <returns><see langword="true"/> when the participant is ready.</returns>
+    public bool IsReady(ParticipantStatus status, TimeSpan? duration)
+    {
+        ArgumentNullException.ThrowIfNull(status);
+        if (status.IsBuffering || status.Position is not { } position)
+        {
+            return false;
+        }
+
+        var required = ResumeCacheAhead;
+        if (duration is { } total && total - position - TimeSpan.FromSeconds(1) < required)
+        {
+            required = total - position - TimeSpan.FromSeconds(1);
+        }
+
+        return status.CacheAhead >= required;
+    }
 }
 
 /// <summary>
@@ -62,6 +91,11 @@ public sealed record PlaybackAuthorityOptions
 /// </remarks>
 public sealed class PlaybackAuthority
 {
+    /// <summary>
+    /// How close to the duration a position counts as the end.
+    /// </summary>
+    private static readonly TimeSpan EndTolerance = TimeSpan.FromMilliseconds(500);
+
     /// <summary>
     /// The host identifier used for automatic changes.
     /// </summary>
@@ -91,6 +125,11 @@ public sealed class PlaybackAuthority
     /// Whether the current pause was made automatically while waiting for participants.
     /// </summary>
     private bool _holding;
+
+    /// <summary>
+    /// The latest statuses of the participants (without the host).
+    /// </summary>
+    private ParticipantStatus[] _statuses = [];
 
     /// <summary>
     /// Initializes a new instance of the <see cref="PlaybackAuthority"/> class.
@@ -170,17 +209,41 @@ public sealed class PlaybackAuthority
             switch (request.Kind)
             {
                 case PlaybackRequestKind.Play:
+                case PlaybackRequestKind.PlayNow:
                     if (_current.State == PlayState.Playing && request.Position is null)
                     {
                         return null;
                     }
 
+                    var from = Clamp(request.Position ?? (IsAtEnd(expected) ? TimeSpan.Zero : expected));
+                    if (request.Kind == PlaybackRequestKind.Play
+                        && BufferingPolicy == BufferingPolicy.WaitForAll
+                        && _statuses.Any(s => !_options.IsReady(s, Duration)))
+                    {
+                        if (_holding && request.Position is null)
+                        {
+                            return null;
+                        }
+
+                        // Everybody gets the position first; playback starts when all are ready.
+                        _holding = true;
+                        return Commit(
+                            _current with
+                            {
+                                State = PlayState.Paused,
+                                Position = from,
+                                ReferenceTime = now,
+                                Cause = PlaybackCause.WaitingForParticipants,
+                            },
+                            origin);
+                    }
+
                     next = _current with
                     {
                         State = PlayState.Playing,
-                        Position = Clamp(request.Position ?? expected),
+                        Position = from,
                         ReferenceTime = startAt,
-                        Cause = PlaybackCause.Play,
+                        Cause = _holding && request.Kind == PlaybackRequestKind.PlayNow ? PlaybackCause.StartedWithoutWaiting : PlaybackCause.Play,
                     };
                     break;
 
@@ -215,6 +278,28 @@ public sealed class PlaybackAuthority
     }
 
     /// <summary>
+    /// Stops the session at the end of the media: playing past the duration becomes a pause on the last position.
+    /// </summary>
+    /// <returns>The new state, or <see langword="null"/> while the media has not ended.</returns>
+    public PlaybackState? EvaluateEnd()
+    {
+        lock (_gate)
+        {
+            var now = _clock.NowMicroseconds;
+            if (_current.State != PlayState.Playing || Duration is not { } duration || duration <= TimeSpan.Zero
+                || _current.IsScheduledAfter(now) || _current.ExpectedPositionAt(now) < duration)
+            {
+                return null;
+            }
+
+            _holding = false;
+            return Commit(
+                _current with { State = PlayState.Paused, Position = duration, ReferenceTime = now, Cause = PlaybackCause.Ended },
+                _host);
+        }
+    }
+
+    /// <summary>
     /// Applies the buffering policy to the latest participant statuses.
     /// </summary>
     /// <param name="statuses">The statuses of all participants except the host.</param>
@@ -226,6 +311,7 @@ public sealed class PlaybackAuthority
         lock (_gate)
         {
             var now = _clock.NowMicroseconds;
+            _statuses = [.. statuses];
             if (_holding)
             {
                 if (_current.State != PlayState.Paused)
@@ -234,7 +320,8 @@ public sealed class PlaybackAuthority
                     return null;
                 }
 
-                if (statuses.Any(s => s.IsBuffering || s.CacheAhead < _options.ResumeCacheAhead))
+                var timedOut = Microseconds.ToTimeSpan(now - _current.ReferenceTime) >= _options.MaxReadyWait;
+                if (!timedOut && NotReady(_statuses).Any())
                 {
                     return null;
                 }
@@ -245,7 +332,7 @@ public sealed class PlaybackAuthority
                     {
                         State = PlayState.Playing,
                         ReferenceTime = now + Microseconds.From(StartDelay(maxRoundTrip)),
-                        Cause = PlaybackCause.ParticipantsReady,
+                        Cause = timedOut ? PlaybackCause.StartedWithoutWaiting : PlaybackCause.ParticipantsReady,
                     },
                     _host);
             }
@@ -272,6 +359,32 @@ public sealed class PlaybackAuthority
     }
 
     /// <summary>
+    /// Returns the participants playback waits for.
+    /// </summary>
+    /// <returns>The identifiers; empty when playback does not wait.</returns>
+    public IReadOnlyList<PeerId> WaitingFor()
+    {
+        lock (_gate)
+        {
+            return _holding ? NotReady(_statuses).Select(s => s.PeerId).ToArray() : [];
+        }
+    }
+
+    /// <summary>
+    /// Returns the participants that are not ready at the position of the hold (their status may still describe the
+    /// position before it).
+    /// </summary>
+    /// <param name="statuses">The statuses.</param>
+    /// <returns>The statuses of those not ready.</returns>
+    private IEnumerable<ParticipantStatus> NotReady(IEnumerable<ParticipantStatus> statuses)
+    {
+        var target = _current.Position;
+        return statuses.Where(s => !_options.IsReady(s, Duration)
+            || s.Position is not { } position
+            || (position - target).Duration() > _options.WaitThreshold);
+    }
+
+    /// <summary>
     /// Computes the delay of a scheduled start.
     /// </summary>
     /// <param name="maxRoundTrip">The largest round trip.</param>
@@ -281,6 +394,14 @@ public sealed class PlaybackAuthority
         var delay = (maxRoundTrip > TimeSpan.Zero ? maxRoundTrip : TimeSpan.Zero) + _options.StartLead;
         return delay > _options.MaxStartDelay ? _options.MaxStartDelay : delay;
     }
+
+    /// <summary>
+    /// Checks whether a position is at the end of the media, where "play" starts over.
+    /// </summary>
+    /// <param name="position">The position.</param>
+    /// <returns><see langword="true"/> at the end.</returns>
+    private bool IsAtEnd(TimeSpan position)
+        => Duration is { } duration && duration > TimeSpan.Zero && position >= duration - EndTolerance;
 
     /// <summary>
     /// Clamps a position to the media.

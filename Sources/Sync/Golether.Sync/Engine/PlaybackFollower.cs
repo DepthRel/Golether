@@ -35,6 +35,11 @@ public sealed class PlaybackFollower
     private static readonly TimeSpan SeekSettleTime = TimeSpan.FromSeconds(1.5);
 
     /// <summary>
+    /// How close to the duration a position counts as the end.
+    /// </summary>
+    private static readonly TimeSpan EndTolerance = TimeSpan.FromMilliseconds(500);
+
+    /// <summary>
     /// The player.
     /// </summary>
     private readonly IPlaybackController _player;
@@ -161,8 +166,13 @@ public sealed class PlaybackFollower
         }
 
         var now = _clock.NowMicroseconds;
-        var expected = state.ExpectedPositionAt(now);
+        var expected = state.ExpectedPositionAt(now, snapshot.Duration);
         var drift = snapshot.Position is { } position ? position - expected : TimeSpan.Zero;
+        if (IsAtEnd(expected, snapshot) && snapshot.Position is { } last && IsAtEnd(last, snapshot))
+        {
+            // Both the session and the player are at the end: nothing to start, seek or correct.
+            return new FollowerStatus(snapshot, expected, TimeSpan.Zero, null);
+        }
 
         if (state.IsScheduledAfter(now))
         {
@@ -220,7 +230,7 @@ public sealed class PlaybackFollower
 
         var now = _clock.NowMicroseconds;
         var scheduled = state.IsScheduledAfter(now);
-        var target = state.ExpectedPositionAt(now);
+        var target = state.ExpectedPositionAt(now, snapshot.Duration);
         var drift = snapshot.Position is { } position ? (position - target).Duration() : TimeSpan.MaxValue;
 
         await _player.SetRateAsync(state.Rate, cancellationToken).ConfigureAwait(false);
@@ -244,6 +254,15 @@ public sealed class PlaybackFollower
 
         _appliedToPlayer = true;
     }
+
+    /// <summary>
+    /// Checks whether a position is at the end of the loaded media.
+    /// </summary>
+    /// <param name="position">The position.</param>
+    /// <param name="snapshot">The player state.</param>
+    /// <returns><see langword="true"/> at the end.</returns>
+    private static bool IsAtEnd(TimeSpan position, PlayerSnapshot snapshot)
+        => snapshot.Duration is { } duration && duration > TimeSpan.Zero && position >= duration - EndTolerance;
 
     /// <summary>
     /// Seeks and remembers the time of the seek.
