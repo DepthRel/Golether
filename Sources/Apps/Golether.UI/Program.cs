@@ -1,4 +1,5 @@
 using Avalonia;
+using Golether.Transports.PortMapping;
 using Golether.Tunnels.AmneziaWG.Control;
 
 namespace Golether.UI;
@@ -20,6 +21,12 @@ public static class Program
         if (TunnelHelper.IsHelperInvocation(args))
         {
             return TunnelHelper.Run(args, new ProcessRunner(), new AwgCliOptions { ConfigDirectory = "." }.WindowsExecutable);
+        }
+
+        // The elevated firewall helper adds or removes the inbound rule of this copy and exits.
+        if (WindowsFirewall.IsHelperInvocation(args))
+        {
+            return WindowsFirewall.Run(args);
         }
 
         return BuildAvaloniaApp().StartWithClassicDesktopLifetime(args);

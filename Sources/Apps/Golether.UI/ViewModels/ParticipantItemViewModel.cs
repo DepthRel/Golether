@@ -11,11 +11,6 @@ namespace Golether.UI.ViewModels;
 public sealed partial class ParticipantItemViewModel : ObservableObject
 {
     /// <summary>
-    /// Avatar colors, picked by the identifier.
-    /// </summary>
-    private static readonly string[] AvatarColors = ["#8FB8F0", "#E59BC4", "#B6D77A", "#F0A860", "#9DD6CF", "#C9A6F2"];
-
-    /// <summary>
     /// Initializes a new instance of the <see cref="ParticipantItemViewModel"/> class.
     /// </summary>
     /// <param name="peerId">The participant.</param>
@@ -26,7 +21,7 @@ public sealed partial class ParticipantItemViewModel : ObservableObject
         _switchOff = switchOff;
         _voiceVolumeChanged = voiceVolumeChanged;
         PeerId = peerId;
-        AvatarColor = AvatarColors[Convert.ToInt32(peerId.Value[..2], 16) % AvatarColors.Length];
+        AvatarColor = ParticipantColors.For(peerId);
     }
 
     /// <summary>

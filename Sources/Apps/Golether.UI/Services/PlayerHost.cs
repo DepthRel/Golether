@@ -204,6 +204,9 @@ public sealed class PlayerHost : IPlaybackController, ILocalPlayerControls
     }
 
     /// <inheritdoc />
+    public double GetVideoAspect() => _mpv?.GetVideoAspect() ?? 0;
+
+    /// <inheritdoc />
     public PlayerSnapshot GetSnapshot() => Current.GetSnapshot();
 
     /// <inheritdoc />

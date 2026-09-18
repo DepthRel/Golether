@@ -245,6 +245,16 @@ public sealed class MpvPlayer : IPlaybackController, ILocalPlayerControls
     }
 
     /// <inheritdoc />
+    public double GetVideoAspect()
+    {
+        ThrowIfDisposed();
+        return double.TryParse(LibMpv.GetString(_handle, "video-params/aspect"), NumberStyles.Float, CultureInfo.InvariantCulture, out var aspect)
+            && double.IsFinite(aspect) && aspect > 0
+                ? aspect
+                : 0;
+    }
+
+    /// <inheritdoc />
     public void SelectTrack(MediaTrackKind kind, long? id)
     {
         ThrowIfDisposed();

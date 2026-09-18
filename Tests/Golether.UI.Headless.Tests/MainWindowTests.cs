@@ -562,6 +562,132 @@ public sealed class MainWindowTests
     });
 
     /// <summary>
+    /// The pen button presses in and out; while it is pressed a drag over the video draws a stroke and sends it, and
+    /// a stroke of another participant appears over the picture in their own colour.
+    /// </summary>
+    /// <returns>A task that completes when the test is done.</returns>
+    [Fact]
+    public Task Pen_DrawsOverTheVideo() => RunAsync(async fixture =>
+    {
+        var pen = fixture.Window.FindControl<ToggleButton>("PenButton")!;
+        Assert.True(pen.IsEffectivelyVisible);
+        Assert.False(fixture.ViewModel.Drawing.IsPenActive);
+
+        // Отжатая кнопка выглядит ровно как соседние: прозрачный фон, та же рамка.
+        var reactions = fixture.Window.FindControl<Button>("ReactionsButton")!;
+        Assert.Equal(fixture.Fill(reactions), fixture.Fill(pen));
+
+        fixture.Shot("pen-off");
+        fixture.Click(pen, MouseButton.Left);
+        await fixture.Settle();
+        Assert.True(fixture.ViewModel.Drawing.IsPenActive);
+        Assert.True(pen.IsChecked);
+
+        var overlay = fixture.Window.FindControl<Popup>("ReactionOverlay")!;
+        var canvas = overlay.Child!.GetVisualDescendants().OfType<StrokeCanvas>().Single();
+        var root = TopLevel.GetTopLevel(canvas)!;
+        Assert.True(canvas.Bounds is { Width: > 100, Height: > 100 }, "Слой рисования накрывает всю область видео.");
+
+        var start = canvas.TranslatePoint(new Point(40, 40), root)!.Value;
+        var middle = canvas.TranslatePoint(new Point(120, 90), root)!.Value;
+        var finish = canvas.TranslatePoint(new Point(200, 140), root)!.Value;
+        root.MouseMove(start);
+        root.MouseDown(start, MouseButton.Left);
+        root.MouseMove(middle);
+        await fixture.SettleFor(DrawingViewModel.SendInterval + TimeSpan.FromMilliseconds(80));
+        root.MouseMove(finish);
+        root.MouseUp(finish, MouseButton.Left);
+        await fixture.Settle();
+
+        await fixture.Sessions.Received(1).SendDrawAsync(Arg.Any<string>(), StrokePhase.Start, Arg.Any<IReadOnlyList<StrokePoint>>(), Arg.Any<CancellationToken>());
+        await fixture.Sessions.Received(1).SendDrawAsync(Arg.Any<string>(), StrokePhase.End, Arg.Any<IReadOnlyList<StrokePoint>>(), Arg.Any<CancellationToken>());
+
+        // The host relays the strokes back, including this device's own: that is what puts them on the picture.
+        var mine = (string)fixture.Sessions.ReceivedCalls()
+            .First(c => c.GetMethodInfo().Name == nameof(ISessionService.SendDrawAsync))
+            .GetArguments()[0]!;
+        fixture.Sessions.DrawReceived += Raise.Event<EventHandler<StrokeUpdate>>(
+            fixture.Sessions,
+            new StrokeUpdate(Host, mine, StrokePhase.Start, [new StrokePoint(0.2f, 0.2f), new StrokePoint(0.6f, 0.7f)], true));
+        fixture.Sessions.DrawReceived += Raise.Event<EventHandler<StrokeUpdate>>(
+            fixture.Sessions,
+            new StrokeUpdate(Guest, "AB12", StrokePhase.Start, [new StrokePoint(0.1f, 0.8f), new StrokePoint(0.9f, 0.3f)], false));
+        await fixture.Settle();
+
+        Assert.Equal(2, fixture.ViewModel.Drawing.Strokes.Count);
+        Assert.Equal(ParticipantColors.For(Guest), fixture.ViewModel.Drawing.Strokes[1].Color);
+        Assert.NotEqual(fixture.ViewModel.Drawing.Strokes[0].Color, fixture.ViewModel.Drawing.Strokes[1].Color);
+
+        var folder = Environment.GetEnvironmentVariable("GOLETHER_TEST_SCREENSHOTS");
+        if (!string.IsNullOrEmpty(folder))
+        {
+            Directory.CreateDirectory(folder);
+            using var file = File.Create(Path.Combine(folder, "pen.png"));
+            fixture.Window.CaptureRenderedFrame()!.Save(file, Avalonia.Media.Imaging.PngBitmapEncoderOptions.Default);
+            if (root.CaptureRenderedFrame() is { } strokes)
+            {
+                using var strokeFile = File.Create(Path.Combine(folder, "strokes.png"));
+                strokes.Save(strokeFile, Avalonia.Media.Imaging.PngBitmapEncoderOptions.Default);
+            }
+        }
+
+        // The button releases and the pen stops drawing.
+        fixture.Click(pen, MouseButton.Left);
+        await fixture.Settle();
+        Assert.False(fixture.ViewModel.Drawing.IsPenActive);
+        fixture.Sessions.ClearReceivedCalls();
+        root.MouseDown(start, MouseButton.Left);
+        root.MouseMove(middle);
+        root.MouseUp(middle, MouseButton.Left);
+        await fixture.Settle();
+        await fixture.Sessions.DidNotReceiveWithAnyArgs().SendDrawAsync(default!, default, default!, TestContext.Current.CancellationToken);
+
+        // The end of the session wipes the picture.
+        fixture.ViewModel.Drawing.Reset();
+        await fixture.Settle();
+        Assert.Empty(fixture.ViewModel.Drawing.Strokes);
+    });
+
+    /// <summary>
+    /// When the firewall would drop the participants, the window says so and offers to fix it; once the rule is
+    /// there the warning goes away.
+    /// </summary>
+    /// <returns>A task that completes when the test is done.</returns>
+    [Fact]
+    public Task Firewall_WarnsAndOffersToAllow() => RunAsync(async fixture =>
+    {
+        var banner = fixture.Window.GetVisualDescendants().OfType<TextBlock>()
+            .Single(t => t.Text == "Брандмауэр не пропускает участников");
+        Assert.False(banner.IsEffectivelyVisible);
+
+        fixture.Sessions.FirewallBlocked.Returns(true);
+        fixture.ViewModel.Refresh();
+        await fixture.Settle();
+        Assert.True(banner.IsEffectivelyVisible);
+
+        // Разрешение снимает предупреждение.
+        fixture.Sessions.AllowFirewallAsync(Arg.Any<CancellationToken>()).Returns(_ =>
+        {
+            fixture.Sessions.FirewallBlocked.Returns(false);
+            return Task.FromResult(true);
+        });
+        var allow = fixture.Window.GetVisualDescendants().OfType<Button>().Single(b => b.Content as string == "Разрешить");
+        Assert.True(allow.IsEffectivelyVisible);
+        Assert.True(allow.IsEnabled);
+        // Слой ручки не должен перехватывать щелчки, пока ручка отжата: иначе кнопка недостижима.
+        var hit = fixture.Window.InputHitTest(fixture.PointOf(allow));
+        Assert.True(
+            hit is Visual visual && (visual == allow || visual.GetVisualAncestors().Contains(allow)),
+            $"Щелчок по кнопке перехватывает {hit?.GetType().Name ?? "ничто"}.");
+        fixture.Click(allow, MouseButton.Left);
+        await fixture.Settle();
+
+        await fixture.Sessions.Received(1).AllowFirewallAsync(Arg.Any<CancellationToken>());
+        Assert.False(fixture.ViewModel.FirewallBlocked);
+        Assert.False(banner.IsEffectivelyVisible);
+    });
+
+    /// <summary>
     /// A weak connection to a participant marks their tile until it recovers.
     /// </summary>
     /// <returns>A task that completes when the test is done.</returns>
@@ -884,6 +1010,32 @@ public sealed class MainWindowTests
         /// </summary>
         /// <param name="control">The control.</param>
         public void Move(Visual control) => Window.MouseMove(PointOf(control));
+
+        /// <summary>
+        /// Returns the brush a button is filled with, as the style left it.
+        /// </summary>
+        /// <param name="control">The button.</param>
+        /// <returns>The brush as text, or an empty string.</returns>
+        public string Fill(Visual control)
+            => control.GetVisualDescendants().OfType<Avalonia.Controls.Presenters.ContentPresenter>()
+                .FirstOrDefault(p => p.Name == "PART_ContentPresenter")?.Background?.ToString() ?? string.Empty;
+
+        /// <summary>
+        /// Saves a picture of the window when <c>GOLETHER_TEST_SCREENSHOTS</c> points at a folder.
+        /// </summary>
+        /// <param name="name">The file name without the extension.</param>
+        public void Shot(string name)
+        {
+            var folder = Environment.GetEnvironmentVariable("GOLETHER_TEST_SCREENSHOTS");
+            if (string.IsNullOrEmpty(folder))
+            {
+                return;
+            }
+
+            Directory.CreateDirectory(folder);
+            using var file = File.Create(Path.Combine(folder, $"{name}.png"));
+            Window.CaptureRenderedFrame()!.Save(file, Avalonia.Media.Imaging.PngBitmapEncoderOptions.Default);
+        }
 
         /// <summary>
         /// Simulates a mouse action reported by the video player.

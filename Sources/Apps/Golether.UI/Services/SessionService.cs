@@ -38,6 +38,11 @@ public interface ISessionService
     event EventHandler<ChatEntry>? ChatReceived;
 
     /// <summary>
+    /// Raised for the strokes drawn over the video. Raised on a background thread.
+    /// </summary>
+    event EventHandler<StrokeUpdate>? DrawReceived;
+
+    /// <summary>
     /// Gets the state of an automatic reconnection, or an empty string while the connection is fine.
     /// </summary>
     string ReconnectMessage { get; }
@@ -56,6 +61,19 @@ public interface ISessionService
     /// Gets or sets a value indicating whether a hosted session asks the router to open its port.
     /// </summary>
     bool OpenRouterPort { get; set; }
+
+    /// <summary>
+    /// Gets a value indicating whether the Windows firewall has no rule for this copy of the application, so
+    /// participants cannot get in at all.
+    /// </summary>
+    bool FirewallBlocked { get; }
+
+    /// <summary>
+    /// Asks the firewall to let participants in. Shows the administrator prompt once; no service stays behind.
+    /// </summary>
+    /// <param name="cancellationToken">The cancellation token.</param>
+    /// <returns><see langword="true"/> when incoming connections are allowed now.</returns>
+    Task<bool> AllowFirewallAsync(CancellationToken cancellationToken);
 
     /// <summary>
     /// Starts hosting a session.
@@ -133,6 +151,16 @@ public interface ISessionService
     /// <param name="cancellationToken">The cancellation token.</param>
     /// <returns>A task that completes when the message was sent.</returns>
     Task SendChatAsync(ChatKind kind, string text, CancellationToken cancellationToken);
+
+    /// <summary>
+    /// Sends a piece of a stroke drawn over the video to everybody in the session.
+    /// </summary>
+    /// <param name="strokeId">The stroke.</param>
+    /// <param name="phase">Which part of the stroke this is.</param>
+    /// <param name="points">The new points.</param>
+    /// <param name="cancellationToken">The cancellation token.</param>
+    /// <returns>A task that completes when the piece was sent.</returns>
+    Task SendDrawAsync(string strokeId, StrokePhase phase, IReadOnlyList<StrokePoint> points, CancellationToken cancellationToken);
 
     /// <summary>
     /// Leaves or ends the session.
@@ -290,6 +318,9 @@ public sealed class SessionService : ISessionService, IAsyncDisposable
     public event EventHandler<ChatEntry>? ChatReceived;
 
     /// <inheritdoc />
+    public event EventHandler<StrokeUpdate>? DrawReceived;
+
+    /// <inheritdoc />
     public bool IsActive => _host is not null || _participant is not null;
 
     /// <inheritdoc />
@@ -340,6 +371,7 @@ public sealed class SessionService : ISessionService, IAsyncDisposable
             _ = OpenPortAsync(host, host.Port, _relay?.Port);
         }
 
+        ReportFirewall();
         return Task.CompletedTask;
     }
 
@@ -401,6 +433,12 @@ public sealed class SessionService : ISessionService, IAsyncDisposable
     public Task SendChatAsync(ChatKind kind, string text, CancellationToken cancellationToken)
         => _host is not null ? _host.SendChatAsync(kind, text)
             : _participant is not null ? _participant.SendChatAsync(kind, text, cancellationToken)
+            : Task.CompletedTask;
+
+    /// <inheritdoc />
+    public Task SendDrawAsync(string strokeId, StrokePhase phase, IReadOnlyList<StrokePoint> points, CancellationToken cancellationToken)
+        => _host is not null ? _host.SendDrawAsync(strokeId, phase, points)
+            : _participant is not null ? _participant.SendDrawAsync(strokeId, phase, points, cancellationToken)
             : Task.CompletedTask;
 
     /// <inheritdoc />
@@ -492,13 +530,87 @@ public sealed class SessionService : ISessionService, IAsyncDisposable
         var mapping = lease?.Mapping;
         var text = mapping switch
         {
-            null => $"Роутер не открыл порт {port} автоматически. Участникам из других сетей нужен проброс порта вручную или туннель AWG.",
+            null when HasTunnelAddress() => $"Роутер не открыл порт {port} автоматически, но найдена сеть туннеля: её адрес идёт в приглашении первым, и участники из этой сети подключатся.",
+            null => $"Роутер не открыл порт {port} автоматически. В своей сети показ работает; для участников из других сетей нужен проброс порта вручную или общий туннель.",
             { IsPubliclyReachable: true } => $"Порт открыт на роутере ({mapping.Method}): {mapping.ExternalAddress}:{mapping.ExternalPort}. Адрес добавляется в приглашения.",
             _ => $"Роутер открыл порт ({mapping.Method}), но его внешний адрес {mapping.ExternalAddress?.ToString() ?? "неизвестен"} не публичный (NAT провайдера). Для других сетей нужен туннель AWG.",
         };
         if (_host == host)
         {
             EventRaised?.Invoke(this, new SessionEvent(_timeProvider.GetLocalNow(), null, text));
+        }
+    }
+
+    /// <summary>
+    /// Tells the user when the Windows firewall would drop the participants. A fresh tunnel adapter counts as a
+    /// public network, and without a rule for the program nobody gets in, however well the two computers see each
+    /// other.
+    /// </summary>
+    private void ReportFirewall()
+    {
+        if (WindowsFirewall.Check() != FirewallState.Missing)
+        {
+            return;
+        }
+
+        FirewallBlocked = true;
+        EventRaised?.Invoke(this, new SessionEvent(
+            _timeProvider.GetLocalNow(),
+            null,
+            "Брандмауэр Windows не пропускает входящие подключения к Golether. Пока правила нет, участники не подключатся — ни из другой сети, ни через туннель."));
+    }
+
+    /// <inheritdoc />
+    public bool FirewallBlocked { get; private set; }
+
+    /// <inheritdoc />
+    public async Task<bool> AllowFirewallAsync(CancellationToken cancellationToken)
+    {
+        if (WindowsFirewall.CurrentProgram() is not { } program)
+        {
+            return false;
+        }
+
+        try
+        {
+            var result = await new Golether.Tunnels.AmneziaWG.Control.ElevatedProcessRunner()
+                .RunAsync(program, WindowsFirewall.BuildArguments(WindowsFirewall.AllowVerb), TimeSpan.FromMinutes(2), cancellationToken)
+                .ConfigureAwait(false);
+            if (result.ExitCode != WindowsFirewall.Success)
+            {
+                return false;
+            }
+        }
+        catch (Exception ex) when (ex is not OutOfMemoryException)
+        {
+            _loggerFactory.CreateLogger<SessionService>().LogDebug(ex, "The firewall rule was not added");
+            return false;
+        }
+
+        FirewallBlocked = WindowsFirewall.Check() == FirewallState.Missing;
+        if (!FirewallBlocked)
+        {
+            EventRaised?.Invoke(this, new SessionEvent(_timeProvider.GetLocalNow(), null, "Брандмауэр теперь пропускает подключения к Golether."));
+        }
+
+        Changed?.Invoke(this, EventArgs.Empty);
+        return !FirewallBlocked;
+    }
+
+    /// <summary>
+    /// Checks whether this device is on a tunnel network (AmneziaWG, WireGuard). Such an address reaches the other
+    /// computers of that network whatever the router does, so the failed port mapping is not the end of the story.
+    /// </summary>
+    /// <returns><see langword="true"/> when a tunnel address was found.</returns>
+    private static bool HasTunnelAddress()
+    {
+        try
+        {
+            return EndpointDiscovery.DiscoverTunnelAddresses().Count > 0;
+        }
+        catch (System.Net.NetworkInformation.NetworkInformationException)
+        {
+            return false;
         }
     }
 
@@ -679,6 +791,7 @@ public sealed class SessionService : ISessionService, IAsyncDisposable
         session.Changed += (_, _) => Changed?.Invoke(this, EventArgs.Empty);
         session.EventRaised += (_, e) => EventRaised?.Invoke(this, e);
         session.ChatReceived += (_, e) => ChatReceived?.Invoke(this, e);
+        session.DrawReceived += (_, e) => DrawReceived?.Invoke(this, e);
     }
 
     /// <summary>
@@ -698,5 +811,6 @@ public sealed class SessionService : ISessionService, IAsyncDisposable
         };
         session.EventRaised += (_, e) => EventRaised?.Invoke(this, e);
         session.ChatReceived += (_, e) => ChatReceived?.Invoke(this, e);
+        session.DrawReceived += (_, e) => DrawReceived?.Invoke(this, e);
     }
 }

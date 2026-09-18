@@ -278,6 +278,12 @@ public sealed class ParticipantSession : IAsyncDisposable
     public event EventHandler<ChatEntry>? ChatReceived;
 
     /// <summary>
+    /// Raised for the strokes drawn over the video, including this device's own (the host relays them back). Raised
+    /// on a background thread.
+    /// </summary>
+    public event EventHandler<StrokeUpdate>? DrawReceived;
+
+    /// <summary>
     /// Gets the participant name.
     /// </summary>
     public string DisplayName { get; }
@@ -461,6 +467,23 @@ public sealed class ParticipantSession : IAsyncDisposable
     }
 
     /// <summary>
+    /// Sends a piece of a stroke drawn over the video; it is shown when the host relays it back.
+    /// </summary>
+    /// <param name="strokeId">The stroke.</param>
+    /// <param name="phase">Which part of the stroke this is.</param>
+    /// <param name="points">The new points.</param>
+    /// <param name="cancellationToken">The cancellation token.</param>
+    /// <returns>A task that completes when the piece was sent.</returns>
+    public async Task SendDrawAsync(string strokeId, StrokePhase phase, IReadOnlyList<StrokePoint> points, CancellationToken cancellationToken)
+    {
+        var channel = _channel ?? throw new InvalidOperationException("The session is not joined.");
+        if (DrawMessage.Create(strokeId, phase, points) is { } message)
+        {
+            await channel.SendAsync(message, cancellationToken).ConfigureAwait(false);
+        }
+    }
+
+    /// <summary>
     /// Returns the current view of the session.
     /// </summary>
     /// <returns>The snapshot.</returns>
@@ -608,6 +631,9 @@ public sealed class ParticipantSession : IAsyncDisposable
                         break;
                     case ChatMessage chat when chat.Sender is { } sender && chat.Sanitize() is { } clean:
                         OnChat(clean, sender);
+                        break;
+                    case DrawMessage stroke when stroke.Sender is { } author && stroke.Sanitize() is { } cleanStroke:
+                        DrawReceived?.Invoke(this, new StrokeUpdate(author, cleanStroke.StrokeId, cleanStroke.Phase, cleanStroke.Points, author == _identity.PeerId));
                         break;
                     case ByeMessage bye:
                         reason = bye.Reason ?? "Ведущий завершил сеанс.";

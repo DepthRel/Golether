@@ -26,6 +26,7 @@ namespace Golether.Sync.Protocol;
 [JsonDerivedType(typeof(ConferenceSignalMessage), "rtc")]
 [JsonDerivedType(typeof(ModerationMessage), "moderate")]
 [JsonDerivedType(typeof(ChatMessage), "chat")]
+[JsonDerivedType(typeof(DrawMessage), "draw")]
 public abstract record SessionMessage
 {
     /// <summary>

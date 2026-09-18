@@ -26,6 +26,7 @@
     <!-- Рамка с двумя строками текста: не путается с кнопкой остановки. -->
     <StreamGeometry x:Key="IconSubtitles">M2,4 H22 V6.2 H2 Z M2,17.8 H22 V20 H2 Z M2,4 H4.2 V20 H2 Z M19.8,4 H22 V20 H19.8 Z M5.5,9 H13 V11 H5.5 Z M15,9 H18.5 V11 H15 Z M5.5,13 H10 V15 H5.5 Z M12,13 H18.5 V15 H12 Z</StreamGeometry>
     <StreamGeometry x:Key="IconReaction">F1 M12,2 A10,10 0 1 1 11.99,2 Z M12,3.8 A8.2,8.2 0 1 0 12.01,3.8 Z M8.5,7.4 A1.5,1.5 0 1 1 8.49,7.4 Z M15.5,7.4 A1.5,1.5 0 1 1 15.49,7.4 Z M7.2,12.8 H8.9 A3.2,3.2 0 0 0 15.1,12.8 H16.8 A4.9,4.9 0 0 1 7.2,12.8 Z</StreamGeometry>
+    <StreamGeometry x:Key="IconPen">M3,21 L4.6,16.4 L7.6,19.4 Z M5.6,15.4 L15.6,5.4 L18.6,8.4 L8.6,18.4 Z M16.6,4.4 L18.1,2.9 C18.7,2.3 19.5,2.3 20.1,2.9 L21.1,3.9 C21.7,4.5 21.7,5.3 21.1,5.9 L19.6,7.4 Z</StreamGeometry>
     <StreamGeometry x:Key="IconSend">M2,21 L23,12 L2,3 V10 L17,12 L2,14 Z</StreamGeometry>
     <StreamGeometry x:Key="IconFolder">M2,5 H10 L12,7 H22 V20 H2 Z</StreamGeometry>
     <!-- Speaker icons share the 24x24 frame (corner dots), so they are scaled alike. -->
@@ -258,7 +259,7 @@
                           Minimum="0" Maximum="{Binding DurationSeconds}"
                           IsEnabled="{Binding HasMedia}" />
                 </Panel>
-                <Grid ColumnDefinitions="Auto,Auto,Auto,Auto,Auto,*,Auto,Auto,Auto,Auto,Auto">
+                <Grid ColumnDefinitions="Auto,Auto,Auto,Auto,Auto,*,Auto,Auto,Auto,Auto,Auto,Auto">
                   <Button Focusable="False" Classes="ghost square" Command="{Binding SeekBackCommand}" AutomationProperties.Name="Назад на 10 секунд" ToolTip.Tip="Назад на 10 с (←)">
                     <PathIcon Data="{StaticResource IconBack}" />
                   </Button>
@@ -295,8 +296,15 @@
                       </Panel>
                     </StackPanel>
                   </Button>
+                  <!-- The pen: while the button is pressed the cursor draws over the video and everybody sees it. -->
+                  <ToggleButton Focusable="False" x:Name="PenButton" Grid.Column="7" Classes="ghost square" Margin="0,0,4,0"
+                                IsVisible="{Binding IsInSession}" IsEnabled="{Binding Drawing.CanDraw}"
+                                IsChecked="{Binding Drawing.IsPenActive, Mode=TwoWay}"
+                                AutomationProperties.Name="Ручка" ToolTip.Tip="Рисовать поверх видео: линию видят все участники">
+                    <PathIcon Data="{StaticResource IconPen}" />
+                  </ToggleButton>
                   <!-- Reactions float over everybody's video for a few seconds. -->
-                  <Button Focusable="False" x:Name="ReactionsButton" Grid.Column="7" Classes="ghost square" Margin="0,0,4,0"
+                  <Button Focusable="False" x:Name="ReactionsButton" Grid.Column="8" Classes="ghost square" Margin="0,0,4,0"
                           IsVisible="{Binding IsInSession}" AutomationProperties.Name="Реакции" ToolTip.Tip="Реакция для всех">
                     <PathIcon Data="{StaticResource IconReaction}" />
                     <Button.Flyout>
@@ -323,7 +331,7 @@
                     </Button.Flyout>
                   </Button>
                   <!-- Sound and subtitle tracks of this device only: every participant picks their own. -->
-                  <Button Focusable="False" x:Name="TracksButton" Grid.Column="8" Classes="ghost square" Margin="0,0,4,0"
+                  <Button Focusable="False" x:Name="TracksButton" Grid.Column="9" Classes="ghost square" Margin="0,0,4,0"
                           IsVisible="{Binding Tracks.HasTracks, FallbackValue=False}"
                           AutomationProperties.Name="Звук и субтитры" ToolTip.Tip="{Binding Tracks.Summary, FallbackValue={x:Null}}">
                     <Panel>
@@ -385,7 +393,7 @@
                     </Button.Flyout>
                   </Button>
                   <!-- Volume of this device only: the popup scale opens on hover, the button mutes. -->
-                  <Panel Grid.Column="9" Margin="0,0,8,0" IsVisible="{Binding Volume, Converter={x:Static ObjectConverters.IsNotNull}}">
+                  <Panel Grid.Column="10" Margin="0,0,8,0" IsVisible="{Binding Volume, Converter={x:Static ObjectConverters.IsNotNull}}">
                     <Button Focusable="False" x:Name="VolumeButton" Classes="ghost square" Command="{Binding Volume.ToggleMuteCommand, FallbackValue={x:Null}}"
                             AutomationProperties.Name="Звук" ToolTip.Tip="Звук у вас: щелчок выключает или включает, колёсико меняет громкость. На собеседников не влияет."
                             PointerEntered="OnVolumePointerEntered" PointerExited="OnVolumePointerExited" PointerWheelChanged="OnVolumeWheel">
@@ -410,7 +418,7 @@
                       </Border>
                     </Popup>
                   </Panel>
-                  <Button Focusable="False" Grid.Column="10" Classes="ghost square" Click="OnToggleFullScreen" AutomationProperties.Name="Полный экран" ToolTip.Tip="Полный экран (F11)">
+                  <Button Focusable="False" Grid.Column="11" Classes="ghost square" Click="OnToggleFullScreen" AutomationProperties.Name="Полный экран" ToolTip.Tip="Полный экран (F11)">
                     <PathIcon Data="{StaticResource IconFullScreen}" />
                   </Button>
                 </Grid>
@@ -421,14 +429,19 @@
             <Panel x:Name="VideoArea" Background="Black">
               <controls:VideoHost x:Name="Video" IsVisible="{Binding ShowVideo}" />
               <!--
-                Reactions: a separate click-through window, because nothing can be drawn over the native video.
-                It stays open for the whole session: a closed popup does not follow the list, and a reaction that
-                left it would come back when it opened again.
+                Reactions and strokes: a separate window above the video, because nothing can be drawn over the
+                native video window. It covers the whole picture and lets the mouse through, except while the pen is
+                picked up. It stays open for the whole session: a closed popup does not follow the lists, and a
+                reaction that left it would come back when it opened again.
               -->
               <Popup x:Name="ReactionOverlay" PlacementTarget="{Binding #VideoArea}" Placement="AnchorAndGravity"
-                     PlacementAnchor="BottomRight" PlacementGravity="TopLeft" HorizontalOffset="-18" VerticalOffset="-18"
+                     PlacementAnchor="TopLeft" PlacementGravity="BottomRight"
                      IsLightDismissEnabled="False" IsOpen="{Binding IsInSession}">
-                <Border Width="280" Height="360" Background="Transparent" IsHitTestVisible="False">
+                <!-- Без заливки: слой не должен отвечать на щелчки, их ловит только холст включённой ручки. -->
+                <Panel Width="{Binding #VideoArea.Bounds.Width}" Height="{Binding #VideoArea.Bounds.Height}">
+                  <controls:StrokeCanvas x:Name="StrokeLayer" Source="{Binding Drawing}" Aspect="{Binding VideoAspect}" />
+                  <Border Width="280" Height="360" Background="Transparent" IsHitTestVisible="False"
+                          HorizontalAlignment="Right" VerticalAlignment="Bottom" Margin="0,0,18,18">
                   <ItemsControl ItemsSource="{Binding Chat.Reactions}">
                     <ItemsControl.ItemsPanel>
                       <ItemsPanelTemplate>
@@ -453,7 +466,8 @@
                       </DataTemplate>
                     </ItemsControl.ItemTemplate>
                   </ItemsControl>
-                </Border>
+                  </Border>
+                </Panel>
               </Popup>
               <StackPanel IsVisible="{Binding !ShowVideo}" HorizontalAlignment="Center" VerticalAlignment="Center" Spacing="14" MaxWidth="560" Margin="24">
                 <StackPanel IsVisible="{Binding IsAwaitingApproval}" Spacing="12">
@@ -732,6 +746,21 @@
           <TextBlock FontWeight="SemiBold" Foreground="{StaticResource GoletherAccent}" Text="{Binding UpdateText}" />
           <TextBlock Classes="muted" FontSize="12" TextTrimming="CharacterEllipsis" Text="{Binding UpdateNotes}"
                      ToolTip.Tip="{Binding UpdateNotes}" />
+        </StackPanel>
+      </DockPanel>
+    </Border>
+    <!-- Без правила брандмауэра участники не подключатся вовсе, поэтому это видно сразу, а не только в событиях. -->
+    <Border VerticalAlignment="Top" HorizontalAlignment="Center" MaxWidth="760" Margin="16,64" Padding="12,8" CornerRadius="8" ZIndex="11"
+            IsVisible="{Binding FirewallBlocked}" Background="{StaticResource GoletherPanel2}"
+            BorderBrush="{StaticResource GoletherBad}" BorderThickness="1">
+      <DockPanel>
+        <Button DockPanel.Dock="Right" Focusable="False" Classes="accent" Command="{Binding AllowFirewallCommand}"
+                IsEnabled="{Binding !IsAllowingFirewall}" Content="Разрешить"
+                ToolTip.Tip="Добавит одно правило для Golether; понадобится подтверждение администратора" />
+        <StackPanel VerticalAlignment="Center" Margin="0,0,12,0">
+          <TextBlock FontWeight="SemiBold" Foreground="{StaticResource GoletherBad}" Text="Брандмауэр не пропускает участников" />
+          <TextBlock Classes="muted" FontSize="12" TextWrapping="Wrap"
+                     Text="Windows считает новую сеть общедоступной и отбрасывает входящие подключения. Без правила не подключится никто — ни из другой сети, ни через туннель." />
         </StackPanel>
       </DockPanel>
     </Border>

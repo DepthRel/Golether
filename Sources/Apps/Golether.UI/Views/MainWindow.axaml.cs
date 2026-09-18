@@ -29,6 +29,12 @@ public sealed partial class MainWindow : Window
     private Controls.CameraRenderer? _cameras;
 
     /// <summary>
+    /// The native window of the overlay above the video, or <c>0</c> while it is closed. The pen takes the mouse on
+    /// it while it draws.
+    /// </summary>
+    private nint _overlayHandle;
+
+    /// <summary>
     /// Moves the timeline smoothly.
     /// </summary>
     private readonly Controls.TimelineAnimator _timeline;
@@ -120,10 +126,20 @@ public sealed partial class MainWindow : Window
             overlay.TransparencyLevelHint = [Avalonia.Controls.WindowTransparencyLevel.Transparent];
             overlay.Background = Avalonia.Media.Brushes.Transparent;
 
-            // The overlay window must not catch the clicks meant for the video.
+            // The overlay window must not catch the clicks meant for the video, except while the pen draws on it.
             if (overlay.TryGetPlatformHandle()?.Handle is { } handle)
             {
                 Controls.ClickThroughWindow.Apply(handle);
+                _overlayHandle = handle;
+                Controls.ClickThroughWindow.SetClickThrough(handle, !viewModel.Drawing.IsPenActive);
+            }
+        };
+        ReactionOverlay.Closed += (_, _) => _overlayHandle = 0;
+        viewModel.Drawing.PropertyChanged += (_, e) =>
+        {
+            if (e.PropertyName is nameof(Golether.UI.ViewModels.DrawingViewModel.IsPenActive) && _overlayHandle != 0)
+            {
+                Controls.ClickThroughWindow.SetClickThrough(_overlayHandle, !viewModel.Drawing.IsPenActive);
             }
         };
         _player = player;

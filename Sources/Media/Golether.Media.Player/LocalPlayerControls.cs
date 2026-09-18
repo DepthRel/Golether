@@ -67,4 +67,11 @@ public interface ILocalPlayerControls
     /// </summary>
     /// <param name="path">The sound file.</param>
     void AddAudioFile(string path);
+
+    /// <summary>
+    /// Returns the width-to-height ratio of the picture as it is shown. The strokes drawn over the video are placed
+    /// by it, so everybody sees them over the same part of the picture whatever the size of their window.
+    /// </summary>
+    /// <returns>The ratio, or <c>0</c> when it is not known yet.</returns>
+    double GetVideoAspect();
 }

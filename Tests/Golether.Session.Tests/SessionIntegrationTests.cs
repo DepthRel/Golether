@@ -262,6 +262,50 @@ public sealed class SessionIntegrationTests : IAsyncLifetime
     }
 
     /// <summary>
+    /// The strokes of the pen reach everybody with the authenticated sender; a forged sender is replaced and broken
+    /// points are dropped.
+    /// </summary>
+    /// <returns>A task that completes when the test is done.</returns>
+    [Fact]
+    public async Task Strokes_AreRelayedWithAuthenticatedSender()
+    {
+        var token = TestContext.Current.CancellationToken;
+        await using var guest = CreateGuest();
+        var hostStrokes = new ConcurrentQueue<StrokeUpdate>();
+        var guestStrokes = new ConcurrentQueue<StrokeUpdate>();
+        _host.DrawReceived += (_, e) => hostStrokes.Enqueue(e);
+        guest.DrawReceived += (_, e) => guestStrokes.Enqueue(e);
+        await guest.JoinAsync(_host.CreateInvite([new PeerEndpoint("127.0.0.1", _host.Port)]), token);
+
+        var strokeId = DrawMessage.CreateStrokeId();
+        await guest.SendDrawAsync(strokeId, StrokePhase.Start, [new StrokePoint(-1f, 0.5f)], token);
+        await guest.SendDrawAsync(strokeId, StrokePhase.End, [], token);
+        await WaitUntilAsync(() => hostStrokes.Count == 2 && guestStrokes.Count == 2, token);
+
+        var start = hostStrokes.First();
+        Assert.Equal((strokeId, StrokePhase.Start, _guestIdentity.PeerId, false), (start.StrokeId, start.Phase, start.Sender, start.IsLocal));
+        Assert.Equal(new StrokePoint(0, 0.5f), Assert.Single(start.Points));
+        Assert.True(guestStrokes.First().IsLocal);
+        Assert.Equal(StrokePhase.End, hostStrokes.Last().Phase);
+
+        // The host draws too, and its stroke reaches the participant.
+        await _host.SendDrawAsync("AB12", StrokePhase.Start, [new StrokePoint(0.25f, 0.25f)]);
+        await WaitUntilAsync(() => guestStrokes.Count == 3, token);
+        Assert.Equal((_hostIdentity.PeerId, false), (guestStrokes.Last().Sender, guestStrokes.Last().IsLocal));
+
+        // A participant cannot draw in the name of the host, and a broken message is dropped.
+        var channel = (SessionMessageChannel)typeof(ParticipantSession)
+            .GetField("_channel", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!
+            .GetValue(guest)!;
+        await channel.SendAsync(new DrawMessage("CD34", StrokePhase.Start, [new StrokePoint(0.5f, 0.5f)], _hostIdentity.PeerId), token);
+        await channel.SendAsync(new DrawMessage("not hex!", StrokePhase.Start, [new StrokePoint(0.5f, 0.5f)], null), token);
+        await WaitUntilAsync(() => hostStrokes.Count == 4, token);
+        await Task.Delay(300, token);
+        Assert.Equal(4, hostStrokes.Count);
+        Assert.Equal((_guestIdentity.PeerId, "CD34"), (hostStrokes.Last().Sender, hostStrokes.Last().StrokeId));
+    }
+
+    /// <summary>
     /// A second participant gets the file from the first one over the data channel; the host only answers hashes.
     /// </summary>
     /// <returns>A task that completes when the test is done.</returns>

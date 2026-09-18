@@ -33,9 +33,7 @@ public static class EndpointDiscovery
                 continue;
             }
 
-            var isTunnel = nic.Name.Contains("golether", StringComparison.OrdinalIgnoreCase)
-                           || nic.Description.Contains("AmneziaWG", StringComparison.OrdinalIgnoreCase)
-                           || nic.Description.Contains("WireGuard", StringComparison.OrdinalIgnoreCase);
+            var isTunnel = IsTunnel(nic);
             foreach (var unicast in nic.GetIPProperties().UnicastAddresses)
             {
                 var address = unicast.Address;
@@ -53,6 +51,30 @@ public static class EndpointDiscovery
         result.AddRange(candidates.OrderBy(c => c.Rank).Select(c => new PeerEndpoint(StripScope(c.Address), port)));
         return result.Distinct().Take(12).ToArray();
     }
+
+    /// <summary>
+    /// Lists the addresses this device has on tunnel networks (AmneziaWG, WireGuard, a tunnel of Golether itself).
+    /// A participant on the same tunnel reaches these addresses whatever the router does with the port.
+    /// </summary>
+    /// <returns>The addresses, empty when no tunnel is up.</returns>
+    public static IReadOnlyList<string> DiscoverTunnelAddresses()
+        => [.. NetworkInterface.GetAllNetworkInterfaces()
+            .Where(nic => nic.OperationalStatus == OperationalStatus.Up && IsTunnel(nic))
+            .SelectMany(nic => nic.GetIPProperties().UnicastAddresses)
+            .Select(unicast => unicast.Address)
+            .Where(address => !IPAddress.IsLoopback(address) && !address.IsIPv6LinkLocal)
+            .Select(address => StripScope(address.ToString()))
+            .Distinct()];
+
+    /// <summary>
+    /// Checks whether an interface is a tunnel.
+    /// </summary>
+    /// <param name="nic">The interface.</param>
+    /// <returns><see langword="true"/> for a tunnel interface.</returns>
+    private static bool IsTunnel(NetworkInterface nic)
+        => nic.Name.Contains("golether", StringComparison.OrdinalIgnoreCase)
+           || nic.Description.Contains("AmneziaWG", StringComparison.OrdinalIgnoreCase)
+           || nic.Description.Contains("WireGuard", StringComparison.OrdinalIgnoreCase);
 
     /// <summary>
     /// Removes the IPv6 scope suffix.

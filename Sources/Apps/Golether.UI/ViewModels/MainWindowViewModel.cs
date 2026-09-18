@@ -103,6 +103,11 @@ public sealed partial class MainWindowViewModel : ObservableObject
     private readonly IUiDispatcher _dispatcher;
 
     /// <summary>
+    /// The settings of the player on this device, or <see langword="null"/>.
+    /// </summary>
+    private readonly ILocalPlayerControls? _playerControls;
+
+    /// <summary>
     /// Creates the tunnel dialog view model.
     /// </summary>
     private readonly Func<string, TunnelDialogViewModel> _tunnelDialogFactory;
@@ -207,6 +212,7 @@ public sealed partial class MainWindowViewModel : ObservableObject
         _dispatcher = dispatcher ?? throw new ArgumentNullException(nameof(dispatcher));
         _tunnelDialogFactory = tunnelDialogFactory ?? throw new ArgumentNullException(nameof(tunnelDialogFactory));
         _conference = conference ?? throw new ArgumentNullException(nameof(conference));
+        _playerControls = playerControls;
         Volume = playerControls is null ? null : new VolumeViewModel(playerControls, _settings);
         Tracks = playerControls is null ? null : new TracksViewModel(playerControls, _settings, _dialogs, _dispatcher);
         _resume = new ResumeTracker(_settings);
@@ -214,6 +220,7 @@ public sealed partial class MainWindowViewModel : ObservableObject
         _updates = updates;
         _updateFolder = updateFolder ?? Path.Combine(Path.GetTempPath(), "golether-updates");
         Chat = new ChatViewModel(_session, _dispatcher);
+        Drawing = new DrawingViewModel(_session, _dispatcher);
         conference.MuteChanged += (_, _) => _dispatcher.Post(() =>
         {
             // The host may switch devices off; the toggles show what is really in effect.
@@ -305,6 +312,59 @@ public sealed partial class MainWindowViewModel : ObservableObject
     /// Gets the session chat and reactions.
     /// </summary>
     public ChatViewModel Chat { get; }
+
+    /// <summary>
+    /// Gets the pen: the strokes drawn over the video.
+    /// </summary>
+    public DrawingViewModel Drawing { get; }
+
+    /// <summary>
+    /// Gets or sets the width-to-height ratio of the picture, or <c>0</c> while it is not known. The strokes are
+    /// placed inside the picture and not inside the window, so everybody draws over the same frame.
+    /// </summary>
+    [ObservableProperty]
+    public partial double VideoAspect { get; set; }
+
+    /// <summary>
+    /// Gets or sets a value indicating whether the firewall drops the participants before they reach the session.
+    /// </summary>
+    [ObservableProperty]
+    public partial bool FirewallBlocked { get; set; }
+
+    /// <summary>
+    /// Gets or sets a value indicating whether the administrator prompt for the firewall rule is open.
+    /// </summary>
+    [ObservableProperty]
+    public partial bool IsAllowingFirewall { get; set; }
+
+    /// <summary>
+    /// Asks the firewall to let participants in.
+    /// </summary>
+    /// <returns>A task that completes when the rule was added or refused.</returns>
+    [RelayCommand]
+    private async Task AllowFirewallAsync()
+    {
+        if (IsAllowingFirewall)
+        {
+            return;
+        }
+
+        IsAllowingFirewall = true;
+        try
+        {
+            if (!await _session.AllowFirewallAsync(CancellationToken.None))
+            {
+                await _dialogs.ShowMessageAsync(
+                    "Правило не добавлено",
+                    "Без него участники не подключатся. Добавить можно и вручную: «Брандмауэр Защитника Windows» → «Разрешить взаимодействие с приложением» → Golether, галочки для частной и общедоступной сети.");
+            }
+        }
+        finally
+        {
+            IsAllowingFirewall = false;
+            FirewallBlocked = _session.FirewallBlocked;
+        }
+    }
 
     /// <summary>
     /// Gets or sets a value indicating whether the side panel (chat or event feed) is shown.
@@ -858,6 +918,13 @@ public sealed partial class MainWindowViewModel : ObservableObject
                 Chat.Reset();
             }
 
+            FirewallBlocked = false;
+            Drawing.CanDraw = false;
+            if (Drawing.Strokes.Count > 0)
+            {
+                Drawing.Reset();
+            }
+
             return;
         }
 
@@ -897,6 +964,10 @@ public sealed partial class MainWindowViewModel : ObservableObject
             BufferedRanges = buffered;
         }
         Chat.Tick();
+        FirewallBlocked = _session.FirewallBlocked;
+        Drawing.CanDraw = snapshot.State == SessionState.Active;
+        Drawing.Tick();
+        VideoAspect = _playerControls?.GetVideoAspect() ?? 0;
 
         UpdateParticipants(snapshot, duration);
         UpdateSyncChip(snapshot);

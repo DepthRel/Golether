@@ -26,36 +26,63 @@ public sealed class App : Application
     {
         if (ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop)
         {
-            try
-            {
-                _services = AppServices.Create();
-            }
-            catch (Exception ex)
-            {
-                desktop.MainWindow = new MessageDialog("Golether не запустился", ex.Message);
-                base.OnFrameworkInitializationCompleted();
-                return;
-            }
-
-            var window = new MainWindow();
-            _services.SetDialogs(new AvaloniaDialogService(window));
-            var viewModel = _services.CreateMainViewModel();
-            window.Initialize(viewModel, _services.Player, _services.Conference);
-            var fileToShow = desktop.Args?.FirstOrDefault(a => !a.StartsWith('-') && File.Exists(a));
-            window.Opened += async (_, _) =>
-            {
-                await viewModel.LoadAsync();
-                if (fileToShow is not null)
-                {
-                    // "Open with Golether": host a session and show the file right away.
-                    await viewModel.HostFileAsync(Path.GetFullPath(fileToShow));
-                }
-            };
-            desktop.MainWindow = window;
-            desktop.ShutdownMode = ShutdownMode.OnMainWindowClose;
-            desktop.Exit += (_, _) => _services.DisposeAsync().AsTask().GetAwaiter().GetResult();
+            // Nothing is the main window yet: the splash must be able to close without ending the application.
+            desktop.ShutdownMode = ShutdownMode.OnExplicitShutdown;
+            var splash = new SplashWindow();
+            splash.Show();
+            _ = StartAsync(desktop, splash);
         }
 
         base.OnFrameworkInitializationCompleted();
+    }
+
+    /// <summary>
+    /// Prepares the application behind the splash and opens the main window when everything is ready. The database,
+    /// the migrations and the device key take a few seconds on the first launch, so they run off the UI thread and
+    /// the splash keeps drawing itself.
+    /// </summary>
+    /// <param name="desktop">The application lifetime.</param>
+    /// <param name="splash">The splash window.</param>
+    /// <returns>A task that completes when the main window is shown.</returns>
+    private async Task StartAsync(IClassicDesktopStyleApplicationLifetime desktop, SplashWindow splash)
+    {
+        AppServices services;
+        try
+        {
+            splash.ShowStep("Готовим данные и ключи…");
+            services = await Task.Run(AppServices.Create);
+        }
+        catch (Exception ex)
+        {
+            var failure = new MessageDialog("Golether не запустился", ex.Message);
+            desktop.MainWindow = failure;
+            desktop.ShutdownMode = ShutdownMode.OnMainWindowClose;
+            failure.Show();
+            splash.Close();
+            return;
+        }
+
+        _services = services;
+        splash.ShowStep("Открываем окно…");
+        var window = new MainWindow();
+        services.SetDialogs(new AvaloniaDialogService(window));
+        var viewModel = services.CreateMainViewModel();
+        window.Initialize(viewModel, services.Player, services.Conference);
+        var fileToShow = desktop.Args?.FirstOrDefault(a => !a.StartsWith('-') && File.Exists(a));
+        window.Opened += async (_, _) =>
+        {
+            // The window is drawn by now: the splash goes away without a gap.
+            splash.Close();
+            await viewModel.LoadAsync();
+            if (fileToShow is not null)
+            {
+                // "Open with Golether": host a session and show the file right away.
+                await viewModel.HostFileAsync(Path.GetFullPath(fileToShow));
+            }
+        };
+        desktop.MainWindow = window;
+        desktop.ShutdownMode = ShutdownMode.OnMainWindowClose;
+        desktop.Exit += (_, _) => services.DisposeAsync().AsTask().GetAwaiter().GetResult();
+        window.Show();
     }
 }

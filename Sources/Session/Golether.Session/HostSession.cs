@@ -207,6 +207,11 @@ public sealed class HostSession : IAsyncDisposable
     public event EventHandler<ChatEntry>? ChatReceived;
 
     /// <summary>
+    /// Raised for the strokes drawn over the video, including this device's own. Raised on a background thread.
+    /// </summary>
+    public event EventHandler<StrokeUpdate>? DrawReceived;
+
+    /// <summary>
     /// Gets the session name.
     /// </summary>
     public string SessionName { get; }
@@ -356,6 +361,25 @@ public sealed class HostSession : IAsyncDisposable
 
         var signed = message with { Sender = _identity.PeerId };
         RaiseChat(signed);
+        await BroadcastAsync(signed).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Sends a piece of a stroke drawn over the video to everybody.
+    /// </summary>
+    /// <param name="strokeId">The stroke.</param>
+    /// <param name="phase">Which part of the stroke this is.</param>
+    /// <param name="points">The new points.</param>
+    /// <returns>A task that completes when the piece was sent.</returns>
+    public async Task SendDrawAsync(string strokeId, StrokePhase phase, IReadOnlyList<StrokePoint> points)
+    {
+        if (DrawMessage.Create(strokeId, phase, points) is not { } message)
+        {
+            return;
+        }
+
+        var signed = message with { Sender = _identity.PeerId };
+        RaiseDraw(signed);
         await BroadcastAsync(signed).ConfigureAwait(false);
     }
 
@@ -710,6 +734,17 @@ public sealed class HostSession : IAsyncDisposable
 
                 break;
 
+            case DrawMessage stroke:
+                if (stroke.Sanitize() is { } cleanStroke
+                    && connection.DrawLimiter.TryAcquire(_timeProvider.GetTimestamp(), _timeProvider))
+                {
+                    var relayed = cleanStroke with { Sender = connection.Info.PeerId };
+                    RaiseDraw(relayed);
+                    await BroadcastAsync(relayed).ConfigureAwait(false);
+                }
+
+                break;
+
             case StatusReportMessage report:
                 connection.Status = report.Status with { PeerId = connection.Info.PeerId };
                 break;
@@ -919,6 +954,16 @@ public sealed class HostSession : IAsyncDisposable
     }
 
     /// <summary>
+    /// Shows a stroke on this device.
+    /// </summary>
+    /// <param name="message">The message with its sender.</param>
+    private void RaiseDraw(DrawMessage message)
+    {
+        var sender = message.Sender!.Value;
+        DrawReceived?.Invoke(this, new StrokeUpdate(sender, message.StrokeId, message.Phase, message.Points, sender == _identity.PeerId));
+    }
+
+    /// <summary>
     /// An admitted participant.
     /// </summary>
     private sealed class Connection
@@ -965,6 +1010,11 @@ public sealed class HostSession : IAsyncDisposable
         /// Gets the chat limit of the participant.
         /// </summary>
         public ChatRateLimiter ChatLimiter { get; } = new();
+
+        /// <summary>
+        /// The limit of stroke messages of the participant: a stroke sends a few times per second.
+        /// </summary>
+        public SlidingRateLimiter DrawLimiter { get; } = new(TimeSpan.FromSeconds(1), 40);
 
         /// <summary>
         /// Gets a token that is cancelled when the admission ends.

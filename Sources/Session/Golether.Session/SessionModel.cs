@@ -199,6 +199,16 @@ public sealed record SessionEvent(DateTimeOffset Time, PeerId? Actor, string Tex
 public sealed record ChatEntry(string Id, PeerId Sender, string SenderName, ChatKind Kind, string Text, DateTimeOffset Time, bool IsLocal);
 
 /// <summary>
+/// A piece of a stroke drawn over the video by a participant.
+/// </summary>
+/// <param name="Sender">The authenticated author.</param>
+/// <param name="StrokeId">The stroke.</param>
+/// <param name="Phase">Which part of the stroke this is.</param>
+/// <param name="Points">The new points, as shares of the picture.</param>
+/// <param name="IsLocal">Whether this device drew it.</param>
+public sealed record StrokeUpdate(PeerId Sender, string StrokeId, StrokePhase Phase, IReadOnlyList<StrokePoint> Points, bool IsLocal);
+
+/// <summary>
 /// Formats event feed texts.
 /// </summary>
 public static class SessionTexts

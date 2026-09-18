@@ -1,0 +1,21 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        x:Class="Golether.UI.Views.SplashWindow"
+        Title="Golether"
+        Width="360" Height="240"
+        CanResize="False" ShowInTaskbar="False" WindowDecorations="None"
+        Background="Transparent" TransparencyLevelHint="Transparent"
+        WindowStartupLocation="CenterScreen">
+  <!-- Shown while the application prepares itself: the database, the device key and the native components. -->
+  <Border Background="{StaticResource GoletherPanel}" BorderBrush="{StaticResource GoletherLine}" BorderThickness="1" CornerRadius="14">
+    <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center" Spacing="16" Margin="28">
+      <Image Source="/Assets/golether-256.png" Width="84" Height="84" HorizontalAlignment="Center" />
+      <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" Spacing="0">
+        <TextBlock Classes="logo" FontSize="22" Text="gole" />
+        <TextBlock Classes="logo" FontSize="22" Text="ther" Foreground="{StaticResource GoletherAccent}" />
+      </StackPanel>
+      <ProgressBar IsIndeterminate="True" Width="200" Height="3" />
+      <TextBlock x:Name="Status" Classes="muted" FontSize="12" HorizontalAlignment="Center" Text="Готовим приложение…" />
+    </StackPanel>
+  </Border>
+</Window>

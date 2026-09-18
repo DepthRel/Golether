@@ -256,6 +256,48 @@
     <Setter Property="HorizontalContentAlignment" Value="Center" />
     <Setter Property="VerticalContentAlignment" Value="Center" />
   </Style>
+  <!--
+    Кнопки-переключатели (ручка): селекторы Button.ghost к ToggleButton не относятся, поэтому отжатое состояние
+    описано отдельно — оно должно выглядеть ровно как соседние кнопки, а нажатое ясно отличаться.
+  -->
+  <Style Selector="ToggleButton.ghost">
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="BorderBrush" Value="{StaticResource GoletherLine}" />
+    <Setter Property="BorderThickness" Value="1" />
+  </Style>
+  <Style Selector="ToggleButton.ghost /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="BorderBrush" Value="{StaticResource GoletherLine}" />
+    <Setter Property="Foreground" Value="{DynamicResource ButtonForeground}" />
+  </Style>
+  <Style Selector="ToggleButton.ghost:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="{DynamicResource ButtonBackgroundPointerOver}" />
+    <Setter Property="BorderBrush" Value="{StaticResource GoletherLine}" />
+    <Setter Property="Foreground" Value="{DynamicResource ButtonForegroundPointerOver}" />
+  </Style>
+  <Style Selector="ToggleButton.ghost:pressed /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="{DynamicResource ButtonBackgroundPressed}" />
+    <Setter Property="BorderBrush" Value="{StaticResource GoletherLine}" />
+    <Setter Property="Foreground" Value="{DynamicResource ButtonForegroundPressed}" />
+  </Style>
+  <Style Selector="ToggleButton.ghost:checked /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="{StaticResource GoletherAccent}" />
+    <Setter Property="BorderBrush" Value="{StaticResource GoletherAccent}" />
+    <Setter Property="Foreground" Value="{StaticResource GoletherAccentInk}" />
+  </Style>
+  <Style Selector="ToggleButton.ghost:checked:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="#D98E45" />
+    <Setter Property="BorderBrush" Value="#D98E45" />
+    <Setter Property="Foreground" Value="{StaticResource GoletherAccentInk}" />
+  </Style>
+  <Style Selector="ToggleButton.square">
+    <Setter Property="Width" Value="36" />
+    <Setter Property="Height" Value="36" />
+    <Setter Property="Padding" Value="0" />
+    <Setter Property="HorizontalContentAlignment" Value="Center" />
+    <Setter Property="VerticalContentAlignment" Value="Center" />
+  </Style>
+
   <Style Selector="PathIcon">
     <Setter Property="Width" Value="16" />
     <Setter Property="Height" Value="16" />

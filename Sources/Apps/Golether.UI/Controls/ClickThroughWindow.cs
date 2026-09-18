@@ -49,6 +49,11 @@ public static partial class ClickThroughWindow
     private static readonly ConcurrentDictionary<nint, nint> Previous = new();
 
     /// <summary>
+    /// The windows that take the mouse for the moment: the overlay does while the pen is picked up.
+    /// </summary>
+    private static readonly ConcurrentDictionary<nint, bool> Holding = new();
+
+    /// <summary>
     /// Makes a window created on the UI thread transparent for the mouse. Does nothing on other systems or when the
     /// window is already handled.
     /// </summary>
@@ -78,16 +83,46 @@ public static partial class ClickThroughWindow
     }
 
     /// <summary>
+    /// Lets a window take the mouse for a while, or gives it back to the window below. Used by the pen: while it is
+    /// picked up the overlay above the video collects the strokes itself.
+    /// </summary>
+    /// <param name="window">The native window handle.</param>
+    /// <param name="clickThrough"><see langword="true"/> to let the mouse pass through again.</param>
+    public static void SetClickThrough(nint window, bool clickThrough)
+    {
+        if (window == 0)
+        {
+            return;
+        }
+
+        if (clickThrough)
+        {
+            Holding.TryRemove(window, out _);
+        }
+        else
+        {
+            Holding[window] = true;
+        }
+    }
+
+    /// <summary>
     /// Answers the result of a message for a click-through window, or <see langword="null"/> to pass it on.
     /// </summary>
     /// <param name="message">The message.</param>
+    /// <param name="clickThrough">Whether the mouse passes through the window at the moment.</param>
     /// <returns>The result or <see langword="null"/>.</returns>
-    public static nint? Intercept(uint message) => message switch
-    {
-        HitTest => Transparent,
-        MouseActivate => NoActivate,
-        _ => null,
-    };
+    public static nint? Intercept(uint message, bool clickThrough = true) => clickThrough
+        ? message switch
+        {
+            HitTest => Transparent,
+            MouseActivate => NoActivate,
+            _ => null,
+        }
+        : message switch
+        {
+            MouseActivate => NoActivate,
+            _ => null,
+        };
 
     /// <summary><c>SetWindowLongPtrW</c>.</summary>
     /// <param name="window">The window.</param>
@@ -123,7 +158,7 @@ public static partial class ClickThroughWindow
             return 0;
         }
 
-        if (Intercept(message) is { } result)
+        if (Intercept(message, !Holding.ContainsKey(window)) is { } result)
         {
             return result;
         }
@@ -132,6 +167,7 @@ public static partial class ClickThroughWindow
         if (message == NonClientDestroy)
         {
             Previous.TryRemove(window, out _);
+            Holding.TryRemove(window, out _);
         }
 
         return value;
