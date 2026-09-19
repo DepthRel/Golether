@@ -1220,6 +1220,18 @@ public sealed partial class MainWindowViewModel : ObservableObject
                 notes.Add("Переподключение: " + ReconnectText);
             }
 
+            // Счётчики кадров показывают, где рвётся связь: соединение не поднялось, поднялось но пустое, или
+            // камера ничего не отдаёт.
+            var links = _conference.GetPeerDiagnostics();
+            notes.Add(links.Count == 0 ? "Соединений с участниками нет" : $"Соединений с участниками: {links.Count}");
+            foreach (var link in links)
+            {
+                notes.Add(
+                    $"  {link.Peer.ToShortString()}: {(link.Verified ? "проверено" : "НЕ проверено")}, " +
+                    $"канал данных {(link.DataReady ? "открыт" : "закрыт")}, поток {link.Quality}, " +
+                    $"видео {link.VideoSent}↑/{link.VideoReceived}↓, голос {link.AudioSent}↑/{link.AudioReceived}↓");
+            }
+
             var path = await diagnostics.SaveAsync(_session.GetSnapshot(), notes);
             await _dialogs.ShowMessageAsync(
                 "Отчёт готов",

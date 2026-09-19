@@ -1,10 +1,14 @@
+using System.Net;
+using System.Net.Sockets;
 using Golether.Core.Data;
 using Golether.Core.Data.Migrations.SQLite.Runner;
 using Golether.Core.Data.Stores;
 using Golether.Security.Identity;
 using Golether.Security.Secrets;
 using Golether.Tunnels.AmneziaWG.Configuration;
+using Golether.Transports.Relay;
 using Golether.Tunnels.AmneziaWG.Control;
+using Golether.Tunnels.AmneziaWG.Packages;
 using Golether.UI.Services;
 using Microsoft.Data.Sqlite;
 using Microsoft.Extensions.DependencyInjection;
@@ -112,17 +116,206 @@ public sealed class TunnelWorkflowTests : IDisposable
     }
 
     /// <summary>
+    /// The address the routers of the world see goes into the offer by itself, so a participant from another network
+    /// has something to aim at without anybody forwarding a port by hand.
+    /// </summary>
+    /// <returns>A task that completes when the test is done.</returns>
+    [Fact]
+    public async Task Offer_CarriesThePublicAddress()
+    {
+        var token = TestContext.Current.CancellationToken;
+        var seen = new IPEndPoint(IPAddress.Parse("203.0.113.9"), 9000);
+        await using var first = new StunResponder(seen);
+        await using var second = new StunResponder(seen);
+        var host = CreateWorkflow("public-host", _hostIdentity, _hostController, [first.Address, second.Address]);
+
+        var offer = await host.CreateOfferAsync("Вы", [], token);
+
+        var body = TunnelPackageCodec.Decode<TunnelOfferBody>(TunnelPackageCodec.OfferKind, offer, b => b.HostCertificate).Body;
+        Assert.True(
+            body.HostEndpoints.Any(e => e.StartsWith("203.0.113.9:", StringComparison.Ordinal)),
+            $"Внешнего адреса нет среди: {string.Join(", ", body.HostEndpoints)}");
+    }
+
+    /// <summary>
+    /// A router that hands out a different port per destination makes the address useless, so it is left out of the
+    /// package instead of sending the other side to a port nobody listens on.
+    /// </summary>
+    /// <returns>A task that completes when the test is done.</returns>
+    [Fact]
+    public async Task Offer_LeavesOutAnUnpredictableAddress()
+    {
+        var token = TestContext.Current.CancellationToken;
+        await using var first = new StunResponder(new IPEndPoint(IPAddress.Parse("203.0.113.9"), 9000));
+        await using var second = new StunResponder(new IPEndPoint(IPAddress.Parse("203.0.113.9"), 9001));
+        var host = CreateWorkflow("symmetric-host", _hostIdentity, _hostController, [first.Address, second.Address]);
+
+        var offer = await host.CreateOfferAsync("Вы", [], token);
+
+        var body = TunnelPackageCodec.Decode<TunnelOfferBody>(TunnelPackageCodec.OfferKind, offer, b => b.HostCertificate).Body;
+        Assert.DoesNotContain(body.HostEndpoints, e => e.StartsWith("203.0.113.9:", StringComparison.Ordinal));
+    }
+
+    /// <summary>
+    /// A tunnel Golether raised lives as long as Golether does: it is noted in a file, brought down at the end, and
+    /// a run that ended badly leaves the note behind so the next run takes care of it.
+    /// </summary>
+    /// <returns>A task that completes when the test is done.</returns>
+    [Fact]
+    public async Task RaisedTunnels_AreBroughtDownAtTheEnd()
+    {
+        var token = TestContext.Current.CancellationToken;
+        var state = Path.Combine(_directory.FullName, "raised.txt");
+        var host = CreateWorkflow("lifetime", _hostIdentity, _hostController, raisedStatePath: state);
+        var configuration = await host.BuildHostConfigurationAsync(token);
+        Assert.Empty(host.GetRaised());
+
+        await host.ApplyAsync(TunnelWorkflow.HostInterfaceName, configuration, token);
+        Assert.Equal([TunnelWorkflow.HostInterfaceName], host.GetRaised());
+
+        // A new run of the application sees the tunnel of the previous one and brings it down.
+        var afterRestart = CreateWorkflow("lifetime", _hostIdentity, _hostController, raisedStatePath: state);
+        Assert.Equal([TunnelWorkflow.HostInterfaceName], afterRestart.GetRaised());
+
+        Assert.Empty(await afterRestart.DropRaisedAsync(token));
+        await _hostController.Received(1).DownAsync(TunnelWorkflow.HostInterfaceName, token);
+        Assert.Empty(afterRestart.GetRaised());
+
+        // Nothing is up any more: closing again asks the tools for nothing.
+        _hostController.ClearReceivedCalls();
+        Assert.Empty(await afterRestart.DropRaisedAsync(token));
+        await _hostController.DidNotReceiveWithAnyArgs().DownAsync(default!, TestContext.Current.CancellationToken);
+    }
+
+    /// <summary>
+    /// When the user refuses the administrator prompt the tunnel stays up and keeps its note, so the next attempt
+    /// can offer again instead of forgetting about it.
+    /// </summary>
+    /// <returns>A task that completes when the test is done.</returns>
+    [Fact]
+    public async Task RefusedDrop_KeepsTheTunnelNoted()
+    {
+        var token = TestContext.Current.CancellationToken;
+        var state = Path.Combine(_directory.FullName, "refused.txt");
+        var controller = Substitute.For<ITunnelController>();
+        controller.DownAsync(Arg.Any<string>(), Arg.Any<CancellationToken>())
+            .Returns(Task.FromException(new TunnelControlException("Пользователь отклонил запрос.")));
+        var host = CreateWorkflow("refused", _hostIdentity, controller, raisedStatePath: state);
+        await host.ApplyAsync(TunnelWorkflow.HostInterfaceName, await host.BuildHostConfigurationAsync(token), token);
+
+        var remaining = await host.DropRaisedAsync(token);
+
+        Assert.Equal([TunnelWorkflow.HostInterfaceName], remaining);
+        Assert.Equal([TunnelWorkflow.HostInterfaceName], host.GetRaised());
+    }
+
+    /// <summary>
     /// Creates a workflow over its own migrated database.
     /// </summary>
     /// <param name="name">The database name.</param>
     /// <param name="identity">The device.</param>
     /// <param name="controller">The tunnel controller.</param>
+    /// <param name="stunServers">The STUN servers; none by default, so the tests touch no outside server.</param>
+    /// <param name="raisedStatePath">The file remembering raised tunnels, or null to keep them in memory.</param>
     /// <returns>The workflow.</returns>
-    private TunnelWorkflow CreateWorkflow(string name, DeviceIdentity identity, ITunnelController controller)
+    private TunnelWorkflow CreateWorkflow(string name, DeviceIdentity identity, ITunnelController controller, IReadOnlyList<string>? stunServers = null, string? raisedStatePath = null)
     {
         var connection = $"Data Source={Path.Combine(_directory.FullName, name + ".db")};Pooling=False";
         SqliteDatabaseMigrator.MigrateUp(connection);
         var services = new ServiceCollection().AddSingleton(TimeProvider.System).AddGoletherData(connection).BuildServiceProvider();
-        return new TunnelWorkflow(identity, services.GetRequiredService<ITunnelStore>(), new FilePermissionSecretProtector(), controller, TimeProvider.System);
+        return new TunnelWorkflow(
+            identity,
+            services.GetRequiredService<ITunnelStore>(),
+            new FilePermissionSecretProtector(),
+            controller,
+            TimeProvider.System,
+            stunServers ?? [],
+            raisedStatePath);
+    }
+
+    /// <summary>
+    /// A STUN server that answers every binding request with one fixed address.
+    /// </summary>
+    private sealed class StunResponder : IAsyncDisposable
+    {
+        /// <summary>
+        /// The socket.
+        /// </summary>
+        private readonly Socket _socket = NatTraversal.Open(0);
+
+        /// <summary>
+        /// Stops the loop.
+        /// </summary>
+        private readonly CancellationTokenSource _stop = new();
+
+        /// <summary>
+        /// The loop.
+        /// </summary>
+        private readonly Task _loop;
+
+        /// <summary>
+        /// Initializes a new instance of the <see cref="StunResponder"/> class.
+        /// </summary>
+        /// <param name="reply">The address to report.</param>
+        public StunResponder(IPEndPoint reply)
+        {
+            Address = "127.0.0.1:" + ((IPEndPoint)_socket.LocalEndPoint!).Port;
+            _loop = RunAsync(reply, _stop.Token);
+        }
+
+        /// <summary>
+        /// Gets the address of the server as <c>host:port</c>.
+        /// </summary>
+        public string Address { get; }
+
+        /// <inheritdoc />
+        public async ValueTask DisposeAsync()
+        {
+            await _stop.CancelAsync();
+            try
+            {
+                await _loop;
+            }
+            catch (OperationCanceledException)
+            {
+                // Expected.
+            }
+
+            _socket.Dispose();
+            _stop.Dispose();
+        }
+
+        /// <summary>
+        /// Answers binding requests until stopped.
+        /// </summary>
+        /// <param name="reply">The address to report.</param>
+        /// <param name="cancellationToken">The cancellation token.</param>
+        /// <returns>A task that completes when the server stops.</returns>
+        private async Task RunAsync(IPEndPoint reply, CancellationToken cancellationToken)
+        {
+            var buffer = new byte[StunMessage.MaxSize];
+            while (!cancellationToken.IsCancellationRequested)
+            {
+                SocketReceiveFromResult received;
+                try
+                {
+                    received = await _socket.ReceiveFromAsync(buffer, SocketFlags.None, new IPEndPoint(IPAddress.Any, 0), cancellationToken);
+                }
+                catch (Exception ex) when (ex is SocketException or ObjectDisposedException)
+                {
+                    return;
+                }
+
+                if (received.ReceivedBytes < Stun.HeaderSize)
+                {
+                    continue;
+                }
+
+                var request = StunMessage.Parse(buffer.AsSpan(0, received.ReceivedBytes));
+                var response = new StunMessage(Stun.Binding, Stun.ClassSuccess, request.TransactionId);
+                response.AddXorAddress(Stun.AttrXorMappedAddress, reply);
+                await _socket.SendToAsync(response.Encode(), SocketFlags.None, received.RemoteEndPoint, cancellationToken);
+            }
+        }
     }
 }

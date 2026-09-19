@@ -78,7 +78,7 @@ public sealed class DiagnosticsWriter : IDiagnosticsWriter
     {
         var now = _timeProvider.GetLocalNow();
         var version = Assembly.GetEntryAssembly()?.GetName().Version?.ToString() ?? "неизвестна";
-        var statuses = new[] { ComponentId.Video, ComponentId.Conference }.Select(_components.GetStatus).ToArray();
+        var statuses = new[] { ComponentId.Video, ComponentId.Conference, ComponentId.Tunnel }.Select(_components.GetStatus).ToArray();
         var text = DiagnosticReport.Build(
             version,
             _fingerprint,

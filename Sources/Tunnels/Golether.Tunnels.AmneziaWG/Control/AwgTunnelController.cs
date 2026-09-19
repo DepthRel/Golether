@@ -71,6 +71,19 @@ public sealed record AwgCliOptions
         Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles), "AmneziaWG", "amneziawg.exe");
 
     /// <summary>
+    /// Gets a lookup of the AmneziaWG the application carries itself, asked before every call. The component can be
+    /// installed while the application is running, so the path must not be decided once at startup.
+    /// </summary>
+    public Func<string?>? FindCarriedExecutable { get; init; }
+
+    /// <summary>
+    /// Returns the AmneziaWG to call: the copy the application carries when it is there, otherwise the one installed
+    /// in the system.
+    /// </summary>
+    /// <returns>The path.</returns>
+    public string ResolveWindowsExecutable() => FindCarriedExecutable?.Invoke() ?? WindowsExecutable;
+
+    /// <summary>
     /// Gets the <c>awg-quick</c> executable on Linux and macOS.
     /// </summary>
     public string QuickExecutable { get; init; } = "awg-quick";
@@ -155,6 +168,20 @@ public sealed class AwgCliTunnelController : ITunnelController
     }
 
     /// <summary>
+    /// Refuses to do anything when the tunnel engine is not there. Without this the failure surfaces as a raw
+    /// "cannot start process" from somewhere deep inside, which says nothing about what to do.
+    /// </summary>
+    /// <exception cref="TunnelControlException">The engine is missing.</exception>
+    private void EnsureEngine()
+    {
+        if (_windows && !File.Exists(_options.ResolveWindowsExecutable()))
+        {
+            throw new TunnelControlException(
+                "Компонент туннеля не установлен. Откройте «Туннели AWG» и нажмите «Установить» — Golether скачает движок сам.");
+        }
+    }
+
+    /// <summary>
     /// Returns the configuration file path of an interface (the file name defines the interface name).
     /// </summary>
     /// <param name="interfaceName">The interface name.</param>
@@ -170,9 +197,9 @@ public sealed class AwgCliTunnelController : ITunnelController
     {
         if (_windows)
         {
-            return File.Exists(_options.WindowsExecutable)
+            return File.Exists(_options.ResolveWindowsExecutable())
                 ? null
-                : $"AmneziaWG для Windows не найден ({_options.WindowsExecutable}). Установите его с https://github.com/amnezia-vpn/amneziawg-windows-client.";
+                : "Компонент туннеля не установлен. Golether может скачать его сам — кнопка ниже.";
         }
 
         try
@@ -190,6 +217,7 @@ public sealed class AwgCliTunnelController : ITunnelController
     public async Task UpAsync(string interfaceName, AwgConfiguration configuration, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(configuration);
+        EnsureEngine();
         var path = GetConfigPath(interfaceName);
         Directory.CreateDirectory(Path.GetDirectoryName(path)!);
         SecretProtectors.WriteOwnerOnlyFile(path, System.Text.Encoding.UTF8.GetBytes(configuration.Render()));
@@ -201,8 +229,8 @@ public sealed class AwgCliTunnelController : ITunnelController
         else if (_windows)
         {
             // Replace an existing service so a changed configuration takes effect.
-            await RunAsync(_options.WindowsExecutable, ["/uninstalltunnelservice", interfaceName], ignoreFailure: true, cancellationToken).ConfigureAwait(false);
-            await RunAsync(_options.WindowsExecutable, ["/installtunnelservice", path], ignoreFailure: false, cancellationToken).ConfigureAwait(false);
+            await RunAsync(_options.ResolveWindowsExecutable(), ["/uninstalltunnelservice", interfaceName], ignoreFailure: true, cancellationToken).ConfigureAwait(false);
+            await RunAsync(_options.ResolveWindowsExecutable(), ["/installtunnelservice", path], ignoreFailure: false, cancellationToken).ConfigureAwait(false);
         }
         else
         {
@@ -216,6 +244,7 @@ public sealed class AwgCliTunnelController : ITunnelController
     /// <inheritdoc />
     public async Task DownAsync(string interfaceName, CancellationToken cancellationToken)
     {
+        EnsureEngine();
         var path = GetConfigPath(interfaceName);
         if (_windows && _options.HelperExecutable is not null)
         {
@@ -223,7 +252,7 @@ public sealed class AwgCliTunnelController : ITunnelController
         }
         else if (_windows)
         {
-            await RunAsync(_options.WindowsExecutable, ["/uninstalltunnelservice", interfaceName], ignoreFailure: false, cancellationToken).ConfigureAwait(false);
+            await RunAsync(_options.ResolveWindowsExecutable(), ["/uninstalltunnelservice", interfaceName], ignoreFailure: false, cancellationToken).ConfigureAwait(false);
         }
         else
         {

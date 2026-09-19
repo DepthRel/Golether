@@ -298,6 +298,30 @@
     <Setter Property="VerticalContentAlignment" Value="Center" />
   </Style>
 
+  <!--
+    Площадка громкости в меню участника: сам пункт ничего не делает, поэтому он не подсвечивается и не выглядит
+    кнопкой. Нажимаются только динамик и шкала внутри него.
+  -->
+  <Style Selector="MenuItem.voiceVolume">
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="Padding" Value="10,6" />
+  </Style>
+  <Style Selector="MenuItem.voiceVolume /template/ Border#PART_LayoutRoot">
+    <Setter Property="Background" Value="Transparent" />
+  </Style>
+  <Style Selector="MenuItem.voiceVolume:pointerover /template/ Border#PART_LayoutRoot">
+    <Setter Property="Background" Value="Transparent" />
+  </Style>
+  <Style Selector="MenuItem.voiceVolume:selected /template/ Border#PART_LayoutRoot">
+    <Setter Property="Background" Value="Transparent" />
+  </Style>
+  <Style Selector="MenuItem.voiceVolume:pressed /template/ Border#PART_LayoutRoot">
+    <Setter Property="Background" Value="Transparent" />
+  </Style>
+  <Style Selector="Button.mute">
+    <Setter Property="CornerRadius" Value="6" />
+  </Style>
+
   <Style Selector="PathIcon">
     <Setter Property="Width" Value="16" />
     <Setter Property="Height" Value="16" />

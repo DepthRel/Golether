@@ -227,6 +227,40 @@ internal sealed partial class WebRtcPeer : IDisposable
     public bool IsVerified => _verified;
 
     /// <summary>
+    /// Camera frames handed to this connection.
+    /// </summary>
+    private long _videoSent;
+
+    /// <summary>
+    /// Voice frames handed to this connection.
+    /// </summary>
+    private long _audioSent;
+
+    /// <summary>
+    /// Camera frames that arrived from the participant.
+    /// </summary>
+    private long _videoReceived;
+
+    /// <summary>
+    /// Voice frames that arrived from the participant.
+    /// </summary>
+    private long _audioReceived;
+
+    /// <summary>
+    /// Returns what this connection has really carried, for the diagnostic report.
+    /// </summary>
+    /// <returns>The state and the counters.</returns>
+    public ConferencePeerDiagnostics Describe() => new(
+        Peer,
+        _verified,
+        IsDataReady,
+        VideoQuality,
+        Interlocked.Read(ref _videoSent),
+        Interlocked.Read(ref _videoReceived),
+        Interlocked.Read(ref _audioSent),
+        Interlocked.Read(ref _audioReceived));
+
+    /// <summary>
     /// Gets a value indicating whether data can be exchanged: the channel is open and the peer is verified.
     /// </summary>
     public bool IsDataReady => _verified && _channelOpen;
@@ -572,6 +606,7 @@ internal sealed partial class WebRtcPeer : IDisposable
                 var (width, height) = Samples.VideoSize(caps);
                 if (peer._verified && width > 0 && height > 0 && pixels.Length >= width * height * 4)
                 {
+                    Interlocked.Increment(ref peer._videoReceived);
                     peer._host.DeliverVideo(peer.Peer, width, height, pixels);
                 }
             });
@@ -595,6 +630,7 @@ internal sealed partial class WebRtcPeer : IDisposable
             {
                 if (peer._verified)
                 {
+                    Interlocked.Increment(ref peer._audioReceived);
                     peer._host.DeliverAudio(peer, pcm);
                 }
             });
@@ -847,6 +883,16 @@ internal sealed partial class WebRtcPeer : IDisposable
         }
 
         Samples.Push(element, data);
+
+        // Counted for the diagnostic report: a frame pushed here still goes nowhere while the valve is shut.
+        if (source == "vsrc")
+        {
+            Interlocked.Increment(ref _videoSent);
+        }
+        else
+        {
+            Interlocked.Increment(ref _audioSent);
+        }
     }
 
     /// <summary>

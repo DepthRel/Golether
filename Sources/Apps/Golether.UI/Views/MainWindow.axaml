@@ -624,23 +624,35 @@
                         <Border.ContextMenu>
                           <ContextMenu>
                             <!-- The voice volume changes only on this device. -->
-                            <MenuItem StaysOpenOnClick="True" Classes="voiceVolume" AutomationProperties.Name="Громкость голоса у вас">
-                              <MenuItem.Icon>
-                                <PathIcon Data="{StaticResource IconSpeakerLoud}" Width="14" Height="14" />
-                              </MenuItem.Icon>
+                            <!--
+                              Не пункт-кнопка, а площадка: подпись остаётся подписью, а нажимаются только динамик
+                              и шкала. Класс voiceVolume убирает подсветку внешнего пункта.
+                            -->
+                            <MenuItem StaysOpenOnClick="True" Classes="voiceVolume" Focusable="False">
                               <MenuItem.Header>
-                                <StackPanel Spacing="2" Width="200">
+                                <StackPanel Spacing="4" Width="212">
                                   <Grid ColumnDefinitions="*,Auto">
-                                    <TextBlock Text="Громкость голоса у вас" />
-                                    <TextBlock Grid.Column="1" Classes="mono muted" FontSize="11" VerticalAlignment="Center" Text="{Binding VoiceVolumeText}" />
+                                    <TextBlock Text="Громкость голоса у вас" VerticalAlignment="Center" />
+                                    <TextBlock Grid.Column="1" Classes="mono muted" FontSize="11" VerticalAlignment="Center"
+                                               Margin="8,0,0,0" Text="{Binding VoiceVolumeText}" />
                                   </Grid>
-                                  <Slider x:Name="VoiceVolumeSlider" Minimum="0" Maximum="200" SmallChange="5" LargeChange="25"
-                                          TickFrequency="100" IsSnapToTickEnabled="False"
-                                          Value="{Binding VoiceVolume}" AutomationProperties.Name="Громкость голоса" />
+                                  <Grid ColumnDefinitions="Auto,*">
+                                    <Button Classes="ghost square mute" Focusable="False" Width="28" Height="28" VerticalAlignment="Center"
+                                            Command="{Binding ToggleVoiceMuteCommand}" AutomationProperties.Name="{Binding VoiceMuteText}"
+                                            ToolTip.Tip="{Binding VoiceMuteText}">
+                                      <Panel>
+                                        <PathIcon Data="{StaticResource IconSpeakerMuted}" Width="14" Height="14" IsVisible="{Binding IsVoiceMuted}" />
+                                        <PathIcon Data="{StaticResource IconSpeakerLoud}" Width="14" Height="14" IsVisible="{Binding !IsVoiceMuted}" />
+                                      </Panel>
+                                    </Button>
+                                    <Slider Grid.Column="1" x:Name="VoiceVolumeSlider" Margin="8,0,0,0" VerticalAlignment="Center"
+                                            Minimum="0" Maximum="100" SmallChange="5" LargeChange="25"
+                                            TickFrequency="50" IsSnapToTickEnabled="False"
+                                            Value="{Binding VoiceVolume}" AutomationProperties.Name="Громкость голоса" />
+                                  </Grid>
                                 </StackPanel>
                               </MenuItem.Header>
                             </MenuItem>
-                            <MenuItem Header="{Binding VoiceMuteText}" Command="{Binding ToggleVoiceMuteCommand}" />
                             <MenuItem Header="Обычная громкость (100 %)" Command="{Binding ResetVoiceVolumeCommand}" />
                             <Separator IsVisible="{Binding CanModerate}" />
                             <MenuItem Header="Выключить микрофон" Command="{Binding SwitchOffMicrophoneCommand}" IsVisible="{Binding CanModerate}">

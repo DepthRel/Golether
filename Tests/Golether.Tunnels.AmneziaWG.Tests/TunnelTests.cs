@@ -226,14 +226,61 @@ public sealed class TunnelTests
         {
             var runner = Substitute.For<IProcessRunner>();
             runner.RunAsync(default!, default!, default, Arg.Any<CancellationToken>()).ReturnsForAnyArgs(new ProcessResult(1, string.Empty, "Access denied"));
-            var options = new AwgCliOptions { ConfigDirectory = directory.FullName, WindowsExecutable = @"C:\AmneziaWG\amneziawg.exe" };
+            var engine = Path.Combine(directory.FullName, "amneziawg.exe");
+            File.WriteAllText(engine, "engine");
+            var options = new AwgCliOptions { ConfigDirectory = directory.FullName, WindowsExecutable = engine };
             var controller = new AwgCliTunnelController(runner, options, isWindows: true);
 
             var error = await Assert.ThrowsAsync<TunnelControlException>(() =>
                 controller.UpAsync("golether0", HostTunnelInterface.Create().BuildConfiguration([]), TestContext.Current.CancellationToken));
 
             Assert.Contains("Access denied", error.Message, StringComparison.Ordinal);
-            await runner.Received(1).RunAsync(options.WindowsExecutable, Arg.Is<IReadOnlyList<string>>(a => a[0] == "/installtunnelservice"), Arg.Any<TimeSpan>(), Arg.Any<CancellationToken>());
+            await runner.Received(1).RunAsync(engine, Arg.Is<IReadOnlyList<string>>(a => a[0] == "/installtunnelservice"), Arg.Any<TimeSpan>(), Arg.Any<CancellationToken>());
+        }
+        finally
+        {
+            directory.Delete(recursive: true);
+        }
+    }
+
+    /// <summary>
+    /// Without the tunnel engine nothing is started at all: the user is told the component is missing and where to
+    /// get it, instead of a failure from somewhere deep inside about a program that could not be started. The engine
+    /// is looked up on every call, so installing it while the application runs is enough.
+    /// </summary>
+    /// <returns>A task that completes when the test is done.</returns>
+    [Fact]
+    public async Task Controller_WithoutTheEngine_SaysSoInsteadOfFailingToStartIt()
+    {
+        var directory = Directory.CreateTempSubdirectory("golether-awg-");
+        try
+        {
+            var token = TestContext.Current.CancellationToken;
+            var runner = Substitute.For<IProcessRunner>();
+            var carried = Path.Combine(directory.FullName, "carried", "amneziawg.exe");
+            var options = new AwgCliOptions
+            {
+                ConfigDirectory = directory.FullName,
+                WindowsExecutable = Path.Combine(directory.FullName, "nowhere", "amneziawg.exe"),
+                FindCarriedExecutable = () => File.Exists(carried) ? carried : null,
+            };
+            var controller = new AwgCliTunnelController(runner, options, isWindows: true);
+            var configuration = HostTunnelInterface.Create().BuildConfiguration([]);
+
+            Assert.Contains("не установлен", await controller.CheckAvailabilityAsync(token) ?? string.Empty, StringComparison.Ordinal);
+            var error = await Assert.ThrowsAsync<TunnelControlException>(() => controller.UpAsync("golether0", configuration, token));
+            Assert.Contains("Компонент туннеля не установлен", error.Message, StringComparison.Ordinal);
+            await Assert.ThrowsAsync<TunnelControlException>(() => controller.DownAsync("golether0", token));
+            await runner.DidNotReceiveWithAnyArgs().RunAsync(default!, default!, default, token);
+
+            // The component appears while the application runs: the next call finds it without a restart.
+            Directory.CreateDirectory(Path.GetDirectoryName(carried)!);
+            await File.WriteAllTextAsync(carried, "engine", token);
+            Assert.Null(await controller.CheckAvailabilityAsync(token));
+
+            runner.RunAsync(default!, default!, default, Arg.Any<CancellationToken>()).ReturnsForAnyArgs(new ProcessResult(0, string.Empty, string.Empty));
+            await controller.UpAsync("golether0", configuration, token);
+            await runner.Received(1).RunAsync(carried, Arg.Is<IReadOnlyList<string>>(a => a[0] == "/installtunnelservice"), Arg.Any<TimeSpan>(), Arg.Any<CancellationToken>());
         }
         finally
         {

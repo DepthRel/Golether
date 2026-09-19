@@ -16,6 +16,11 @@ public enum ComponentId
     /// GStreamer: cameras, voice and echo cancellation.
     /// </summary>
     Conference = 1,
+
+    /// <summary>
+    /// AmneziaWG: the tunnel Golether raises by itself, so a session network needs nothing installed beforehand.
+    /// </summary>
+    Tunnel = 2,
 }
 
 /// <summary>
@@ -32,6 +37,12 @@ public enum PackageFormat
     /// An Inno Setup installer (GStreamer for Windows), run silently for the current user and reduced to the runtime.
     /// </summary>
     InnoSetup = 1,
+
+    /// <summary>
+    /// A Windows Installer package (AmneziaWG for Windows). Only its files are taken out, with
+    /// <c>msiexec /a</c>: nothing is installed into the system and no administrator rights are needed.
+    /// </summary>
+    WindowsInstaller = 2,
 }
 
 /// <summary>
@@ -89,6 +100,12 @@ public static class ComponentCatalog
         new(ComponentId.Conference, "1.28.7", "win-arm64",
             new Uri("https://gstreamer.freedesktop.org/data/pkg/windows/1.28.7/msvc/gstreamer-1.0-msvc-arm64-1.28.7.exe"),
             "eb8bd2547d52a96c570f82b0c581fa5a8992f672aba7fb9668370536f203d1f8", 314_397_421, PackageFormat.InnoSetup),
+        new(ComponentId.Tunnel, "3.1.0", "win-x64",
+            new Uri("https://github.com/amnezia-vpn/amneziawg-windows-client/releases/download/3.1.0/amneziawg-amd64-3.1.0.msi"),
+            "a1b48ea8699cd347832a3691d832004574ef8ad65bcf887611ac8acb99b7de8b", 3_641_344, PackageFormat.WindowsInstaller),
+        new(ComponentId.Tunnel, "3.1.0", "win-arm64",
+            new Uri("https://github.com/amnezia-vpn/amneziawg-windows-client/releases/download/3.1.0/amneziawg-arm64-3.1.0.msi"),
+            "3aec023884944890fac151f9cd4be3e92d39f9987c49da248837529c006ea2aa", 3_330_048, PackageFormat.WindowsInstaller),
     ];
 
     /// <summary>
@@ -130,6 +147,7 @@ public static class ComponentCatalog
     public static ComponentDescription Describe(ComponentId id) => id switch
     {
         ComponentId.Video => new("Компонент видео (libmpv)", "показывает фильм в исходном качестве", "GPL-2.0-or-later", "mpv.io"),
+        ComponentId.Tunnel => new("Компонент туннеля (AmneziaWG)", "поднимает сеть сеанса, когда участники в разных сетях", "MIT", "github.com/amnezia-vpn"),
         _ => new("Компонент камер и голоса (GStreamer)", "передаёт изображение с камер и звук микрофонов", "LGPL-2.1-or-later", "gstreamer.freedesktop.org"),
     };
 }

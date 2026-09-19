@@ -57,12 +57,17 @@ public sealed partial class ParticipantItemViewModel : ObservableObject
     public partial bool CanModerate { get; set; }
 
     /// <summary>
-    /// Gets or sets how loud the participant's voice is played on this device, 0–200 %. Only this device hears the
+    /// The loudest a voice is played: the original level. Above it the voice only starts to clip.
+    /// </summary>
+    public const double MaxVoiceVolume = 100;
+
+    /// <summary>
+    /// Gets or sets how loud the participant's voice is played on this device, 0–100 %. Only this device hears the
     /// change.
     /// </summary>
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(VoiceVolumeText), nameof(IsVoiceMuted), nameof(VoiceMuteText))]
-    public partial double VoiceVolume { get; set; } = 100;
+    public partial double VoiceVolume { get; set; } = MaxVoiceVolume;
 
     /// <summary>
     /// Gets the voice volume text.
@@ -102,7 +107,8 @@ public sealed partial class ParticipantItemViewModel : ObservableObject
     /// <param name="value">The volume in percent.</param>
     partial void OnVoiceVolumeChanged(double value)
     {
-        var clamped = Math.Clamp(Math.Round(value), 0, 200);
+        // Louder than the original would only clip the voice, so 100 % is the top.
+        var clamped = Math.Clamp(Math.Round(value), 0, MaxVoiceVolume);
         if (clamped != value)
         {
             VoiceVolume = clamped;
@@ -130,7 +136,7 @@ public sealed partial class ParticipantItemViewModel : ObservableObject
     /// Restores the normal volume.
     /// </summary>
     [RelayCommand]
-    private void ResetVoiceVolume() => VoiceVolume = 100;
+    private void ResetVoiceVolume() => VoiceVolume = MaxVoiceVolume;
 
     /// <summary>
     /// Gets or sets a value indicating whether the participant is speaking now.

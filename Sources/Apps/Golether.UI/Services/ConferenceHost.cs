@@ -153,6 +153,9 @@ public sealed class ConferenceHost : IConferenceMedia, Golether.UI.ViewModels.IC
     public IReadOnlyList<CaptureDevice> GetDevices() => _current.GetDevices();
 
     /// <inheritdoc />
+    public IReadOnlyList<ConferencePeerDiagnostics> GetPeerDiagnostics() => _current.GetPeerDiagnostics();
+
+    /// <inheritdoc />
     public Task StartCaptureAsync(CaptureDevice? camera, CaptureDevice? microphone, CancellationToken cancellationToken)
     {
         _captureActive = true;

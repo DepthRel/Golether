@@ -267,6 +267,10 @@ public sealed class ComponentInstaller
             {
                 await ExtractLibMpvAsync(file!, staging, cancellationToken).ConfigureAwait(false);
             }
+            else if (package.Format == PackageFormat.WindowsInstaller)
+            {
+                await ExtractAmneziaWgAsync(file!, staging, cancellationToken).ConfigureAwait(false);
+            }
             else
             {
                 await InstallGStreamerAsync(file!, staging, progress, cancellationToken).ConfigureAwait(false);
@@ -433,6 +437,46 @@ public sealed class ComponentInstaller
         {
             throw new InvalidOperationException($"tar.exe не смог распаковать архив (код {code}).");
         }
+    }
+
+    /// <summary>
+    /// Takes the files of AmneziaWG out of its installer with <c>msiexec /a</c> (an administrative install). Nothing
+    /// is registered in the system, no administrator rights are needed, and an AmneziaWG the user installed
+    /// themselves is not touched: this copy lives in the data folder of Golether and is used only by it.
+    /// </summary>
+    /// <param name="installer">The <c>.msi</c> file.</param>
+    /// <param name="staging">The staging directory.</param>
+    /// <param name="cancellationToken">The cancellation token.</param>
+    /// <returns>A task that completes when the files are in place.</returns>
+    private async Task ExtractAmneziaWgAsync(string installer, string staging, CancellationToken cancellationToken)
+    {
+        var msiexec = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.System), "msiexec.exe");
+        if (!File.Exists(msiexec))
+        {
+            throw new InvalidOperationException("В системе нет msiexec.exe.");
+        }
+
+        var unpacked = Path.Combine(staging, ".msi");
+        Directory.CreateDirectory(unpacked);
+        var code = await _tools.RunAsync(msiexec, ["/a", installer, "/qn", "TARGETDIR=" + unpacked], cancellationToken).ConfigureAwait(false);
+        if (code != 0)
+        {
+            throw new InvalidOperationException($"msiexec не смог распаковать пакет (код {code}).");
+        }
+
+        // The package puts the files into an AmneziaWG folder and leaves a copy of the .msi beside it; only the
+        // three files are kept.
+        var target = Path.Combine(staging, AmneziaWgBundle.DirectoryName);
+        Directory.CreateDirectory(target);
+        foreach (var name in AmneziaWgBundle.Files)
+        {
+            var source = Directory.EnumerateFiles(unpacked, name, SearchOption.AllDirectories).FirstOrDefault()
+                ?? throw new InvalidOperationException($"В пакете AmneziaWG нет файла {name}.");
+            File.Copy(source, Path.Combine(target, name), overwrite: true);
+        }
+
+        Directory.Delete(unpacked, recursive: true);
+        _logger.LogInformation("AmneziaWG unpacked to {Target}", target);
     }
 
     /// <summary>

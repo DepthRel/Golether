@@ -45,12 +45,17 @@ public sealed partial class TunnelDialogViewModel : ObservableObject
     /// <param name="workflow">The tunnel workflow.</param>
     /// <param name="dialogs">The dialogs.</param>
     /// <param name="userName">The user name.</param>
-    public TunnelDialogViewModel(TunnelWorkflow workflow, IDialogService dialogs, string userName)
+    /// <param name="component">The tunnel component, so it can be installed from this dialog; null on other systems.</param>
+    public TunnelDialogViewModel(TunnelWorkflow workflow, IDialogService dialogs, string userName, ComponentItemViewModel? component = null)
     {
         _workflow = workflow ?? throw new ArgumentNullException(nameof(workflow));
         _dialogs = dialogs ?? throw new ArgumentNullException(nameof(dialogs));
         _userName = userName;
-        ListenPort = RandomNumberGenerator.GetInt32(40000, 60000);
+        Component = component;
+        ListenPort = HostTunnelInterface.PickListenPort();
+
+        // A tunnel of an earlier run may still be up: then the button to bring it down is there from the start.
+        HasRaisedTunnels = _workflow.GetRaised().Count > 0;
     }
 
     /// <summary>
@@ -132,6 +137,12 @@ public sealed partial class TunnelDialogViewModel : ObservableObject
     public partial string Message { get; set; } = string.Empty;
 
     /// <summary>
+    /// Gets or sets a value indicating whether Golether has a tunnel up, so it can be offered to bring it down.
+    /// </summary>
+    [ObservableProperty]
+    public partial bool HasRaisedTunnels { get; set; }
+
+    /// <summary>
     /// Gets or sets a value indicating whether an operation runs.
     /// </summary>
     [ObservableProperty]
@@ -143,9 +154,35 @@ public sealed partial class TunnelDialogViewModel : ObservableObject
     /// <returns>A task that completes when the check finished.</returns>
     public async Task InitializeAsync()
     {
+        if (Component is { } component)
+        {
+            component.PropertyChanged += async (_, _) => await RefreshAvailabilityAsync();
+        }
+
+        await RefreshAvailabilityAsync();
+    }
+
+    /// <summary>
+    /// Gets the tunnel component, so it can be installed right here when it is missing.
+    /// </summary>
+    public ComponentItemViewModel? Component { get; }
+
+    /// <summary>
+    /// Gets or sets a value indicating whether the component has to be installed before anything can be done.
+    /// </summary>
+    [ObservableProperty]
+    public partial bool NeedsComponent { get; set; }
+
+    /// <summary>
+    /// Re-reads whether the tunnel engine is there. Called again after the component was installed.
+    /// </summary>
+    /// <returns>A task that completes when the state is known.</returns>
+    private async Task RefreshAvailabilityAsync()
+    {
         var problem = await _workflow.CheckAvailabilityAsync(CancellationToken.None);
         IsAvailable = problem is null;
-        AvailabilityText = problem ?? "AmneziaWG установлен. При подъёме туннеля система один раз спросит разрешение администратора.";
+        NeedsComponent = problem is not null && Component is { IsAvailable: false };
+        AvailabilityText = problem ?? "Движок туннеля на месте. При подъёме туннеля система один раз спросит разрешение администратора.";
     }
 
     /// <summary>
@@ -288,7 +325,22 @@ public sealed partial class TunnelDialogViewModel : ObservableObject
         }
 
         await _workflow.ApplyAsync(value.Name, value.Configuration, CancellationToken.None);
-        Message = $"Туннель {value.Name} поднят.";
+        HasRaisedTunnels = true;
+        Message = $"Туннель {value.Name} поднят. Он опустится сам, когда вы закроете Golether.";
+    });
+
+    /// <summary>
+    /// Brings down the tunnels this application raised, without waiting for it to close.
+    /// </summary>
+    /// <returns>A task that completes when the tunnels are down.</returns>
+    [RelayCommand]
+    private Task DropAsync() => RunAsync(async () =>
+    {
+        var remaining = await _workflow.DropRaisedAsync(CancellationToken.None);
+        HasRaisedTunnels = remaining.Count > 0;
+        Message = remaining.Count == 0
+            ? "Туннели Golether опущены."
+            : $"Остались подняты: {string.Join(", ", remaining)}. Для этого нужны права администратора.";
     });
 
     /// <summary>

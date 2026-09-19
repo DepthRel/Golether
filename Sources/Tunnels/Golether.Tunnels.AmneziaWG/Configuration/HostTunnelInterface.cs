@@ -1,4 +1,5 @@
 using System.Net;
+using System.Net.Sockets;
 using System.Security.Cryptography;
 using Golether.Tunnels.AmneziaWG.Keys;
 
@@ -74,11 +75,51 @@ public sealed record HostTunnelInterface
         {
             InterfaceName = interfaceName,
             Keys = AwgKeys.Generate(),
-            ListenPort = RandomNumberGenerator.GetInt32(40000, 60000),
+            ListenPort = PickListenPort(),
             SubnetBase = $"10.{second}.{third}.0",
             Junk = JunkParameters.Generate(),
             Obfuscation = SharedObfuscation.Generate(),
         };
+    }
+
+    /// <summary>
+    /// Picks a UDP port that is free right now. The range overlaps the ports Windows hands out to any program that
+    /// asks for one, so a port taken at this moment would make the tunnel fail to start and its public address
+    /// impossible to look up.
+    /// </summary>
+    /// <returns>The port.</returns>
+    public static int PickListenPort()
+    {
+        for (var attempt = 0; attempt < 32; attempt++)
+        {
+            var port = RandomNumberGenerator.GetInt32(40000, 60000);
+            if (IsFree(port))
+            {
+                return port;
+            }
+        }
+
+        // Every candidate was busy: take one anyway rather than fail here.
+        return RandomNumberGenerator.GetInt32(40000, 60000);
+    }
+
+    /// <summary>
+    /// Checks whether a UDP port can be taken.
+    /// </summary>
+    /// <param name="port">The port.</param>
+    /// <returns><see langword="true"/> when the port is free.</returns>
+    private static bool IsFree(int port)
+    {
+        try
+        {
+            using var socket = new Socket(AddressFamily.InterNetwork, SocketType.Dgram, ProtocolType.Udp);
+            socket.Bind(new IPEndPoint(IPAddress.Any, port));
+            return true;
+        }
+        catch (SocketException)
+        {
+            return false;
+        }
     }
 
     /// <summary>

@@ -20,6 +20,10 @@ dotnet test --project Tests/Golether.Sync.Tests/Golether.Sync.Tests.csproj  # о
 
 Переменная `GOLETHER_TEST_GST_LOG` (путь к файлу) включает подробный журнал GStreamer в тестах конференции.
 
+Переменная `GOLETHER_TEST_AWG_PACKAGES` (папка с файлами `amneziawg-<arch>-<версия>.msi` из релизов Amnezia)
+включает проверку распаковки движка туннеля на настоящем пакете. Без неё этот тест пропускается, чтобы обычный
+прогон не требовал загрузки. Скачать пакет можно по адресу из `ComponentCatalog`, имя файла берётся оттуда же.
+
 Тесты — xUnit v3 на Microsoft.Testing.Platform (включено в `global.json`). Общие пакеты тестов подключаются в
 `Directory.Build.props` для всех проектов `*.Tests`.
 

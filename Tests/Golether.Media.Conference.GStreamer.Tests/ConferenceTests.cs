@@ -75,6 +75,15 @@ public sealed class ConferenceTests
         Assert.Equal(1, a.PeerCount);
         Assert.Equal(1, b.PeerCount);
 
+        // The report must be able to say what a connection really carries: both directions, on both sides.
+        var linkAtA = Assert.Single(a.GetPeerDiagnostics());
+        Assert.Equal((Bob, true, VideoQuality.High), (linkAtA.Peer, linkAtA.Verified, linkAtA.Quality));
+        Assert.True(linkAtA.VideoSent > 0, "Алиса отдаёт кадры камеры.");
+        Assert.True(linkAtA.VideoReceived > 0, "Алиса принимает кадры камеры.");
+        Assert.True(linkAtA.AudioSent > 0, "Алиса отдаёт голос.");
+        var linkAtB = Assert.Single(b.GetPeerDiagnostics());
+        Assert.True(linkAtB.VideoSent > 0 && linkAtB.VideoReceived > 0, "Боб отдаёт и принимает кадры камеры.");
+
         // The steady test tone counts as speech: Alice sees herself and Bob speaking.
         for (var i = 0; i < 50 && !(speakingAtA.Contains(new SpeakingChange(Bob, true)) && speakingAtA.Contains(new SpeakingChange(default, true))); i++)
         {

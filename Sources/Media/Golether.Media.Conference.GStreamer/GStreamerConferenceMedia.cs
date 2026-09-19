@@ -274,6 +274,10 @@ public sealed class GStreamerConferenceMedia : IConferenceMedia, IPeerHost
     public int PeerCount => _peers.Count;
 
     /// <inheritdoc />
+    public IReadOnlyList<ConferencePeerDiagnostics> GetPeerDiagnostics()
+        => [.. _peers.Values.Select(peer => peer.Describe())];
+
+    /// <inheritdoc />
     public unsafe IReadOnlyList<CaptureDevice> GetDevices()
     {
         if (!IsAvailable)

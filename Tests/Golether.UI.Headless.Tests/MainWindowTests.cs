@@ -84,23 +84,37 @@ public sealed class MainWindowTests
         await fixture.Settle();
         var items = menu.Items.OfType<MenuItem>().ToArray();
         var texts = items.Select(i => i.Header as string).ToArray();
-        Assert.Equal([null, "Заглушить у себя", "Обычная громкость (100 %)", "Выключить микрофон", "Выключить камеру"], texts);
+        Assert.Equal([null, "Обычная громкость (100 %)", "Выключить микрофон", "Выключить камеру"], texts);
         Assert.All(items, i => Assert.True(i.IsVisible));
         Assert.DoesNotContain(texts, t => t?.Contains("Включить", StringComparison.Ordinal) == true);
 
-        items[3].Command!.Execute(null);
+        items[2].Command!.Execute(null);
         await fixture.Settle();
         await fixture.Sessions.Received(1).SwitchOffParticipantDevicesAsync(Guest, true, false);
 
-        // The voice volume changes only here and is remembered for this participant.
+        // The voice volume changes only here and is remembered for this participant. Louder than the original only
+        // clips the voice, so the slider stops at 100 %.
         var slider = menu.GetLogicalDescendants().OfType<Slider>().Single();
-        Assert.Equal((0d, 200d, 70d), (slider.Minimum, slider.Maximum, slider.Value));
+        Assert.Equal((0d, 100d, 70d), (slider.Minimum, slider.Maximum, slider.Value));
+
+        var folder = Environment.GetEnvironmentVariable("GOLETHER_TEST_SCREENSHOTS");
+        if (!string.IsNullOrEmpty(folder) && TopLevel.GetTopLevel(slider) is { } menuRoot && menuRoot.CaptureRenderedFrame() is { } frame)
+        {
+            Directory.CreateDirectory(folder);
+            using var file = File.Create(Path.Combine(folder, "participant-menu.png"));
+            frame.Save(file, Avalonia.Media.Imaging.PngBitmapEncoderOptions.Default);
+        }
+
         slider.Value = 50;
         await fixture.Settle();
         fixture.Conference.Received().SetVoiceVolume(Guest, 0.5);
-        items[1].Command!.Execute(null);
+
+        // Muting is the speaker next to the slider, not a menu entry of its own.
+        var mute = menu.GetLogicalDescendants().OfType<Button>().Single(b => b.Classes.Contains("mute"));
+        mute.Command!.Execute(null);
+        await fixture.Settle();
         fixture.Conference.Received().SetVoiceVolume(Guest, 0);
-        Assert.Equal("Вернуть звук", items[1].Header);
+        Assert.Equal("Вернуть звук", ToolTip.GetTip(mute));
         await Task.Delay(MainWindowViewModel.VoiceVolumeSaveDelay + TimeSpan.FromMilliseconds(300));
         await fixture.Settings.Received(1).SetAsync(MainWindowViewModel.VoiceVolumeSettingPrefix + Guest.Value, "0", Arg.Any<CancellationToken>());
         menu.Close();
@@ -109,7 +123,7 @@ public sealed class MainWindowTests
         fixture.GuestMicrophoneOff = true;
         fixture.ViewModel.Refresh();
         await fixture.Settle();
-        Assert.False(items[3].Command!.CanExecute(null));
+        Assert.False(items[2].Command!.CanExecute(null));
 
         // A participant (not the host) gets only the volume.
         fixture.IsHost = false;
@@ -118,7 +132,7 @@ public sealed class MainWindowTests
         fixture.Click(guestTile, MouseButton.Right);
         await fixture.Settle();
         Assert.True(menu.IsOpen);
-        Assert.Equal([true, true, true, false, false], items.Select(i => i.IsVisible));
+        Assert.Equal([true, true, false, false], items.Select(i => i.IsVisible));
         menu.Close();
     });
 

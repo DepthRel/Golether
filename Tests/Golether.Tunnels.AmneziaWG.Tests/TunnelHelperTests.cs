@@ -11,11 +11,6 @@ namespace Golether.Tunnels.AmneziaWG.Tests;
 public sealed class TunnelHelperTests : IDisposable
 {
     /// <summary>
-    /// The AmneziaWG executable used in the tests.
-    /// </summary>
-    private const string AmneziaWg = @"C:\AmneziaWG\amneziawg.exe";
-
-    /// <summary>
     /// The helper executable used in the tests.
     /// </summary>
     private const string Helper = @"C:\Golether\app\Golether.exe";
@@ -24,6 +19,21 @@ public sealed class TunnelHelperTests : IDisposable
     /// The tunnels directory.
     /// </summary>
     private readonly DirectoryInfo _directory = Directory.CreateTempSubdirectory("golether-helper-");
+
+    /// <summary>
+    /// The AmneziaWG executable used in the tests. It has to exist on disk: without the engine the controller
+    /// refuses to start anything, helper or not.
+    /// </summary>
+    private readonly string _amneziaWg;
+
+    /// <summary>
+    /// Initializes a new instance of the <see cref="TunnelHelperTests"/> class.
+    /// </summary>
+    public TunnelHelperTests()
+    {
+        _amneziaWg = Path.Combine(_directory.FullName, "amneziawg.exe");
+        File.WriteAllText(_amneziaWg, "engine");
+    }
 
     /// <inheritdoc />
     public void Dispose() => _directory.Delete(recursive: true);
@@ -55,7 +65,7 @@ public sealed class TunnelHelperTests : IDisposable
         foreach (var args in rejected)
         {
             Assert.False(TunnelHelper.TryParse(args, out _, out _, out _), string.Join(' ', args));
-            Assert.Equal(TunnelHelper.InvalidArguments, TunnelHelper.Run(args, Substitute.For<IProcessRunner>(), AmneziaWg));
+            Assert.Equal(TunnelHelper.InvalidArguments, TunnelHelper.Run(args, Substitute.For<IProcessRunner>(), _amneziaWg));
         }
     }
 
@@ -68,16 +78,16 @@ public sealed class TunnelHelperTests : IDisposable
         var config = WriteConfig("golether0");
         var result = Path.Combine(_directory.FullName, "r.result");
         var runner = Substitute.For<IProcessRunner>();
-        runner.RunAsync(AmneziaWg, Arg.Is<IReadOnlyList<string>>(a => a[0] == "/uninstalltunnelservice"), Arg.Any<TimeSpan>(), Arg.Any<CancellationToken>())
+        runner.RunAsync(_amneziaWg, Arg.Is<IReadOnlyList<string>>(a => a[0] == "/uninstalltunnelservice"), Arg.Any<TimeSpan>(), Arg.Any<CancellationToken>())
             .Returns(new ProcessResult(1, string.Empty, "not installed"));
-        runner.RunAsync(AmneziaWg, Arg.Is<IReadOnlyList<string>>(a => a[0] == "/installtunnelservice"), Arg.Any<TimeSpan>(), Arg.Any<CancellationToken>())
+        runner.RunAsync(_amneziaWg, Arg.Is<IReadOnlyList<string>>(a => a[0] == "/installtunnelservice"), Arg.Any<TimeSpan>(), Arg.Any<CancellationToken>())
             .Returns(new ProcessResult(0, string.Empty, string.Empty), new ProcessResult(5, string.Empty, "Access is denied"));
 
-        Assert.Equal(TunnelHelper.Success, TunnelHelper.Run(TunnelHelper.BuildArguments("up", config, result), runner, AmneziaWg));
+        Assert.Equal(TunnelHelper.Success, TunnelHelper.Run(TunnelHelper.BuildArguments("up", config, result), runner, _amneziaWg));
         Assert.False(File.Exists(result));
-        runner.Received(1).RunAsync(AmneziaWg, Arg.Is<IReadOnlyList<string>>(a => a.SequenceEqual(new[] { "/installtunnelservice", config })), Arg.Any<TimeSpan>(), Arg.Any<CancellationToken>());
+        runner.Received(1).RunAsync(_amneziaWg, Arg.Is<IReadOnlyList<string>>(a => a.SequenceEqual(new[] { "/installtunnelservice", config })), Arg.Any<TimeSpan>(), Arg.Any<CancellationToken>());
 
-        Assert.Equal(TunnelHelper.Failure, TunnelHelper.Run(TunnelHelper.BuildArguments("up", config, result), runner, AmneziaWg));
+        Assert.Equal(TunnelHelper.Failure, TunnelHelper.Run(TunnelHelper.BuildArguments("up", config, result), runner, _amneziaWg));
         Assert.Contains("Access is denied", File.ReadAllText(result), StringComparison.Ordinal);
     }
 
@@ -98,7 +108,7 @@ public sealed class TunnelHelperTests : IDisposable
                 helperArgs = call.ArgAt<IReadOnlyList<string>>(1);
                 return new ProcessResult(0, string.Empty, string.Empty);
             });
-        var options = new AwgCliOptions { ConfigDirectory = _directory.FullName, WindowsExecutable = AmneziaWg, HelperExecutable = Helper };
+        var options = new AwgCliOptions { ConfigDirectory = _directory.FullName, WindowsExecutable = _amneziaWg, HelperExecutable = Helper };
         var controller = new AwgCliTunnelController(direct, options, isWindows: true, elevatedRunner: elevated);
 
         await controller.UpAsync("golether0", HostTunnelInterface.Create().BuildConfiguration([]), token);

@@ -132,18 +132,21 @@ public sealed class VolumeAndModerationTests
         });
         Assert.Equal("100 %", tile.VoiceVolumeText);
 
-        tile.VoiceVolume = 137.4;
-        Assert.Equal(137, tile.VoiceVolume);
+        tile.VoiceVolume = 62.4;
+        Assert.Equal(62, tile.VoiceVolume);
+
+        // Louder than the original would only clip the voice, so the slider stops at 100 %.
         tile.VoiceVolume = 500;
-        Assert.Equal(200, tile.VoiceVolume);
+        Assert.Equal(ParticipantItemViewModel.MaxVoiceVolume, tile.VoiceVolume);
 
         tile.ToggleVoiceMuteCommand.Execute(null);
         Assert.True(tile.IsVoiceMuted);
         Assert.Equal(("заглушён у вас", "Вернуть звук"), (tile.VoiceVolumeText, tile.VoiceMuteText));
         tile.ToggleVoiceMuteCommand.Execute(null);
-        Assert.Equal(200, tile.VoiceVolume);
+        Assert.Equal(100, tile.VoiceVolume);
+        tile.VoiceVolume = 30;
         tile.ResetVoiceVolumeCommand.Execute(null);
-        Assert.Equal([137d, 200d, 0d, 200d, 100d], changes);
+        Assert.Equal([62d, 100d, 0d, 100d, 30d, 100d], changes);
 
         changes.Clear();
         tile.RestoreVoiceVolume(40);

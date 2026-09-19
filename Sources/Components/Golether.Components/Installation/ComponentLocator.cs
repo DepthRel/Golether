@@ -116,7 +116,12 @@ public sealed class ComponentLocator
     public ComponentStatus GetStatus(ComponentId id)
     {
         var package = ComponentCatalog.Find(id);
-        var (source, path) = id == ComponentId.Video ? FindVideo() : FindConference();
+        var (source, path) = id switch
+        {
+            ComponentId.Video => FindVideo(),
+            ComponentId.Tunnel => FindTunnel(),
+            _ => FindConference(),
+        };
         var advice = source == ComponentSource.Missing && package is null
             ? InstallAdvice.For(id, OperatingSystem.IsMacOS() ? OsFamily.MacOS : OperatingSystem.IsWindows() ? OsFamily.Windows : OsFamily.Linux, _readOsRelease())
             : null;
@@ -184,6 +189,34 @@ public sealed class ComponentLocator
         if (!OperatingSystem.IsWindows() && _canLoadSystemLibrary(ConferenceLibraryName))
         {
             return (ComponentSource.System, ConferenceLibraryName);
+        }
+
+        return (ComponentSource.Missing, null);
+    }
+
+    /// <summary>
+    /// Finds the AmneziaWG the application carries itself. An AmneziaWG the user installed is deliberately not
+    /// looked for: Golether uses its own copy, so a tunnel of the system client is never disturbed.
+    /// </summary>
+    /// <returns>The source and the program.</returns>
+    private (ComponentSource Source, string? Path) FindTunnel()
+    {
+        if (!OperatingSystem.IsWindows())
+        {
+            // Linux and macOS use awg-quick of the distribution.
+            return (ComponentSource.Missing, null);
+        }
+
+        var bundled = Path.Combine(_bundledDirectory, AmneziaWgBundle.DirectoryName);
+        if (AmneziaWgBundle.IsComplete(bundled))
+        {
+            return (ComponentSource.Bundled, Path.Combine(bundled, AmneziaWgBundle.Executable));
+        }
+
+        if (FindInstalled(ComponentId.Tunnel) is { } installed
+            && AmneziaWgBundle.IsComplete(Path.Combine(installed, AmneziaWgBundle.DirectoryName)))
+        {
+            return (ComponentSource.Installed, AmneziaWgBundle.FindExecutable(installed));
         }
 
         return (ComponentSource.Missing, null);

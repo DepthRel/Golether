@@ -69,7 +69,8 @@ public sealed class AppServices : IAsyncDisposable
             provider.GetRequiredService<ITunnelStore>(),
             protector,
             new AwgCliTunnelController(new ProcessRunner(), CreateTunnelOptions(paths), LoggerFactory.CreateLogger<AwgCliTunnelController>()),
-            TimeProvider.System);
+            TimeProvider.System,
+            raisedStatePath: Path.Combine(paths.TunnelsDirectory, "raised.txt"));
         Sessions = new SessionService(
             identity,
             Player,
@@ -199,7 +200,7 @@ public sealed class AppServices : IAsyncDisposable
             dialogs,
             _provider.GetRequiredService<ISettingsStore>(),
             Dispatcher,
-            userName => new TunnelDialogViewModel(Tunnels, dialogs, userName),
+            userName => new TunnelDialogViewModel(Tunnels, dialogs, userName, new ComponentItemViewModel(ComponentId.Tunnel, Components, dialogs)),
             Identity.PeerId.ToShortString(),
             Conference,
             Components,
@@ -215,6 +216,18 @@ public sealed class AppServices : IAsyncDisposable
     /// <returns>A task that completes when everything is released.</returns>
     public async ValueTask DisposeAsync()
     {
+        // The tunnel of Golether lives as long as Golether does. Bringing it down asks for administrator rights, so
+        // it is given a limited time and a refusal does not hold the application back.
+        try
+        {
+            using var timeout = new CancellationTokenSource(TimeSpan.FromMinutes(2));
+            await Tunnels.DropRaisedAsync(timeout.Token).ConfigureAwait(false);
+        }
+        catch (Exception ex) when (ex is not OutOfMemoryException)
+        {
+            LoggerFactory.CreateLogger<AppServices>().LogDebug(ex, "The tunnels were not brought down");
+        }
+
         await Sessions.DisposeAsync().ConfigureAwait(false);
         await Player.DisposeAsync().ConfigureAwait(false);
         await Conference.DisposeAsync().ConfigureAwait(false);
@@ -231,13 +244,36 @@ public sealed class AppServices : IAsyncDisposable
     private static AwgCliOptions CreateTunnelOptions(AppDataPaths paths)
     {
         var privileged = Environment.IsPrivilegedProcess;
-        return new AwgCliOptions
+        var options = new AwgCliOptions
         {
             ConfigDirectory = paths.TunnelsDirectory,
             HelperExecutable = OperatingSystem.IsWindows() && !privileged ? Environment.ProcessPath : null,
             ElevationCommand = OperatingSystem.IsLinux() && !privileged ? "pkexec" : null,
             UseAppleScriptElevation = OperatingSystem.IsMacOS() && !privileged,
         };
+        // Looked up on every call: the component can be installed while the application is running.
+        return options with { FindCarriedExecutable = () => FindAmneziaWg(paths) };
+    }
+
+    /// <summary>
+    /// Returns the AmneziaWG the application carries itself, or <see langword="null"/> to fall back to the one
+    /// installed in the system. Used by the application and by its elevated tunnel helper, so both call the same
+    /// program.
+    /// </summary>
+    /// <param name="paths">The data paths.</param>
+    /// <returns>The path of <c>amneziawg.exe</c>, or <see langword="null"/>.</returns>
+    public static string? FindAmneziaWg(AppDataPaths paths)
+    {
+        ArgumentNullException.ThrowIfNull(paths);
+        try
+        {
+            return new ComponentLocator(Path.Combine(AppContext.BaseDirectory, "native"), paths.ComponentsDirectory)
+                .GetStatus(ComponentId.Tunnel).Path;
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            return null;
+        }
     }
 
     /// <summary>
