@@ -1,3 +1,5 @@
+using Golether.Core.Data.Enums;
+
 namespace Golether.Core.Data.Entities;
 
 /// <summary>

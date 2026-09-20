@@ -1,5 +1,5 @@
-using Golether.Components.Catalog;
 using Golether.Components.Installation;
+using Golether.Core.Data.Enums;
 using Golether.Core.Identity;
 using Golether.Core.Media;
 using Golether.Core.Playback;

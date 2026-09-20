@@ -1,6 +1,7 @@
 using System.Collections.Concurrent;
 using Golether.Components.Catalog;
 using Golether.Components.GStreamer;
+using Golether.Core.Data.Enums;
 using Golether.Core.Identity;
 using Golether.Core.Media;
 using Golether.Media.Streaming.Caching;

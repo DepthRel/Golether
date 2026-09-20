@@ -1,3 +1,4 @@
+using Golether.Core.Data.Enums;
 using Golether.Transports.PortMapping;
 
 namespace Golether.Transports.Tests;

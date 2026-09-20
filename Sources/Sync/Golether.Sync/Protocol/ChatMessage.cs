@@ -1,5 +1,6 @@
 using System.Globalization;
 using System.Text;
+using Golether.Core.Data.Enums;
 using Golether.Core.Identity;
 
 namespace Golether.Sync.Protocol;

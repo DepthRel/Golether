@@ -1,4 +1,4 @@
-namespace Golether.Components.Catalog;
+namespace Golether.Core.Data.Enums;
 
 /// <summary>
 /// A native component of the application.

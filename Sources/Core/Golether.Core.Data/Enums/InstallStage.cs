@@ -1,4 +1,4 @@
-namespace Golether.Components.Installation;
+namespace Golether.Core.Data.Enums;
 
 /// <summary>
 /// A step of an installation.

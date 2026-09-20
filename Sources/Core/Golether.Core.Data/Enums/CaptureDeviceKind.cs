@@ -1,4 +1,4 @@
-namespace Golether.Media.Conference;
+namespace Golether.Core.Data.Enums;
 
 /// <summary>
 /// The kind of a capture device.

@@ -1,15 +1,15 @@
-using Golether.Components.Catalog;
 using Golether.Components.Installation;
 using Golether.Core.Configuration;
-using Golether.Core.Data;
+using Golether.Core.Data.Enums;
 using Golether.Core.Data.Migrations.SQLite.Runner;
 using Golether.Core.Data.Stores;
+using Golether.Core.Data;
 using Golether.Security.Identity;
 using Golether.Security.Secrets;
 using Golether.Transports.PortMapping;
 using Golether.Tunnels.AmneziaWG.Control;
-using Golether.UI.ViewModels;
 using Golether.UI.ViewModels.Dialogs;
+using Golether.UI.ViewModels;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 

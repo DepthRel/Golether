@@ -1,4 +1,4 @@
-namespace Golether.Media.Conference;
+namespace Golether.Core.Data.Enums;
 
 /// <summary>
 /// The quality of the camera stream sent to one participant.

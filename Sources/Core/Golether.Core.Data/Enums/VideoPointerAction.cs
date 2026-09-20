@@ -1,4 +1,4 @@
-namespace Golether.Media.Player;
+namespace Golether.Core.Data.Enums;
 
 /// <summary>
 /// A mouse action on the video picture.

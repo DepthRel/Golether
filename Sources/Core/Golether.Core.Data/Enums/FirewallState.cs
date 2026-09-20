@@ -1,4 +1,4 @@
-namespace Golether.Transports.PortMapping;
+namespace Golether.Core.Data.Enums;
 
 /// <summary>
 /// The state of the inbound rule of the application in the Windows firewall.

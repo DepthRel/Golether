@@ -1,4 +1,4 @@
-namespace Golether.Media.Player;
+namespace Golether.Core.Data.Enums;
 
 /// <summary>
 /// The kind of a selectable track.

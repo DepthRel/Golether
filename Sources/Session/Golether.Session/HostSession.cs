@@ -17,8 +17,8 @@ using Golether.Security.Verification;
 using Golether.Sync.Engine;
 using Golether.Sync.Protocol;
 using Golether.Transports;
-using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
+using Microsoft.Extensions.Logging;
 
 namespace Golether.Session;
 

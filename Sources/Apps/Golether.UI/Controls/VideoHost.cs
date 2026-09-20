@@ -3,7 +3,7 @@ using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using Avalonia.Controls;
 using Avalonia.Platform;
-using Golether.Media.Player;
+using Golether.Core.Data.Enums;
 using Golether.UI.Services;
 
 namespace Golether.UI.Controls;

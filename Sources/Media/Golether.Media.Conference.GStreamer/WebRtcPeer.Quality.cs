@@ -1,5 +1,6 @@
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
+using Golether.Core.Data.Enums;
 using Golether.Media.Conference.GStreamer.Native;
 using Microsoft.Extensions.Logging;
 
@@ -31,7 +32,7 @@ internal sealed partial class WebRtcPeer
     private readonly VideoQualityPolicy _qualityPolicy = new();
 
     /// <summary>
-    /// The stream the peer gets (<see cref="Conference.VideoQuality"/>).
+    /// The stream the peer gets (<see cref="VideoQuality"/>).
     /// </summary>
     private volatile int _videoQuality;
 

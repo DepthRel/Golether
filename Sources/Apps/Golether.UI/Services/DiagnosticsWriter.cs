@@ -1,6 +1,6 @@
 using System.Globalization;
 using System.Reflection;
-using Golether.Components.Catalog;
+using Golether.Core.Data.Enums;
 using Golether.Session;
 
 namespace Golether.UI.Services;

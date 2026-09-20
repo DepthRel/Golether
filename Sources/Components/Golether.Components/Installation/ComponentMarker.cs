@@ -1,4 +1,4 @@
-using Golether.Components.Catalog;
+using Golether.Core.Data.Enums;
 
 namespace Golether.Components.Installation;
 

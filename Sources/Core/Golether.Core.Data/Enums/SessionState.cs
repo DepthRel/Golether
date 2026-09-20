@@ -1,4 +1,4 @@
-namespace Golether.Session;
+namespace Golether.Core.Data.Enums;
 
 /// <summary>
 /// The connection state of the local side.

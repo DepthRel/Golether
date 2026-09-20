@@ -1,8 +1,9 @@
+using Golether.Core.Data.Enums;
 using Golether.Core.Playback;
 using Golether.Core.Time;
 using Golether.Sync.Protocol;
-using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
+using Microsoft.Extensions.Logging;
 
 namespace Golether.Sync.Engine;
 

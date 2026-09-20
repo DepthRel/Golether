@@ -1,6 +1,6 @@
+using Golether.Core.Data.Enums;
 using Golether.Core.Identity;
 using Golether.Media.Conference;
-using Golether.Media.Player;
 using Golether.UI.Controls;
 
 namespace Golether.UI.Tests;

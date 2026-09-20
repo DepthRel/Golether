@@ -1,4 +1,5 @@
 using System.Text;
+using Golether.Core.Data.Enums;
 using Golether.Sync.Protocol;
 
 namespace Golether.Sync.Tests;

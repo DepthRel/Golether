@@ -1,10 +1,10 @@
+using Golether.Core.Data.Enums;
 using Golether.Core.Identity;
 using Golether.Session;
-using Golether.Sync.Protocol;
 using Golether.UI.Services;
 using Golether.UI.ViewModels;
-using NSubstitute;
 using NSubstitute.ExceptionExtensions;
+using NSubstitute;
 
 namespace Golether.UI.Tests;
 

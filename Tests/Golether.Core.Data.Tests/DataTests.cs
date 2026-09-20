@@ -1,4 +1,5 @@
 using Golether.Core.Data.Entities;
+using Golether.Core.Data.Enums;
 using Golether.Core.Data.Migrations.SQLite.Runner;
 using Golether.Core.Data.Stores;
 using Golether.Core.Identity;

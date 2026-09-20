@@ -1,4 +1,4 @@
-namespace Golether.Components.Installation;
+namespace Golether.Core.Data.Enums;
 
 /// <summary>
 /// Where a component was found.

@@ -1,3 +1,4 @@
+using Golether.Core.Data.Enums;
 using Golether.Core.Data.Stores;
 using Golether.Core.Identity;
 using Golether.Core.Networking;

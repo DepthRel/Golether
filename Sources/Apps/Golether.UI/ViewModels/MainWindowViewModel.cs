@@ -2,7 +2,7 @@ using System.Collections.ObjectModel;
 using System.Globalization;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
-using Golether.Components.Catalog;
+using Golether.Core.Data.Enums;
 using Golether.Core.Data.Stores;
 using Golether.Core.Identity;
 using Golether.Core.Playback;

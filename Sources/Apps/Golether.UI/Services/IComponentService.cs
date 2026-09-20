@@ -1,5 +1,5 @@
-using Golether.Components.Catalog;
 using Golether.Components.Installation;
+using Golether.Core.Data.Enums;
 
 namespace Golether.UI.Services;
 

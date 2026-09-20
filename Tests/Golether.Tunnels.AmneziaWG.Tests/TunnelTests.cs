@@ -159,7 +159,7 @@ public sealed class TunnelTests
     }
 
     /// <summary>
-    /// Modified, expired, own and mismatched packages are rejected.
+    /// Modified, expired, own, mismatched and addressless packages are rejected.
     /// </summary>
     [Fact]
     public void Negotiation_RejectsInvalidPackages()
@@ -170,7 +170,15 @@ public sealed class TunnelTests
         var hostSide = new TunnelNegotiator(hostIdentity, time);
         var guestSide = new TunnelNegotiator(guestIdentity, time);
         var hostInterface = HostTunnelInterface.Create();
-        var offer = hostSide.CreateOffer(hostInterface, "Вы", [], [], TimeSpan.FromHours(1));
+
+        // An offer carries the addresses of the host; without one the participant would get a configuration it can
+        // never connect with, so such an offer is refused instead of quietly producing a dead tunnel.
+        var addressless = hostSide.CreateOffer(hostInterface, "Вы", [], [], TimeSpan.FromHours(1));
+        var missing = Assert.Throws<FormatException>(() => guestSide.AcceptOffer(addressless.PackageText, "g", [], 40000));
+        Assert.Contains("нет адреса", missing.Message, StringComparison.Ordinal);
+
+        var endpoints = new[] { new PeerEndpoint("203.0.113.10", hostInterface.ListenPort) };
+        var offer = hostSide.CreateOffer(hostInterface, "Вы", endpoints, [], TimeSpan.FromHours(1));
 
         var dot = offer.PackageText.LastIndexOf('.');
         var tampered = offer.PackageText[..(dot - 3)] + (offer.PackageText[dot - 3] == 'A' ? 'B' : 'A') + offer.PackageText[(dot - 2)..];
@@ -180,7 +188,7 @@ public sealed class TunnelTests
         Assert.Throws<FormatException>(() => guestSide.AcceptOffer(offer.PackageText.Replace(":offer:", ":answer:", StringComparison.Ordinal), "g", [], 40000));
 
         var acceptance = guestSide.AcceptOffer(offer.PackageText.Insert(40, "\n  "), "g", [], 40000);
-        var otherOffer = hostSide.CreateOffer(hostInterface, "Вы", [], []);
+        var otherOffer = hostSide.CreateOffer(hostInterface, "Вы", endpoints, []);
         Assert.Throws<FormatException>(() => hostSide.CompleteOffer(otherOffer.Secrets, acceptance.AnswerText));
 
         time.Advance(TimeSpan.FromHours(2));

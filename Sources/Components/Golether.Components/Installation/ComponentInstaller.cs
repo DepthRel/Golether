@@ -3,8 +3,8 @@ using System.Text.Json;
 using Golether.Components.Catalog;
 using Golether.Components.GStreamer;
 using Golether.Core.Data.Enums;
-using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
+using Microsoft.Extensions.Logging;
 
 namespace Golether.Components.Installation;
 

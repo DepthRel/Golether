@@ -3,6 +3,7 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Golether.Components.Catalog;
 using Golether.Components.Installation;
+using Golether.Core.Data.Enums;
 using Golether.UI.Services;
 
 namespace Golether.UI.ViewModels;

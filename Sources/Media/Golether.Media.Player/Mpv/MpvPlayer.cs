@@ -1,8 +1,9 @@
 using System.Globalization;
 using System.Runtime.InteropServices;
+using Golether.Core.Data.Enums;
 using Golether.Core.Playback;
-using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
+using Microsoft.Extensions.Logging;
 
 namespace Golether.Media.Player.Mpv;
 

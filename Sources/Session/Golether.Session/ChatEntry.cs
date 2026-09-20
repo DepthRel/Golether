@@ -1,5 +1,5 @@
+using Golether.Core.Data.Enums;
 using Golether.Core.Identity;
-using Golether.Sync.Protocol;
 
 namespace Golether.Session;
 

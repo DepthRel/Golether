@@ -1,4 +1,4 @@
-namespace Golether.Core.Data.Entities;
+namespace Golether.Core.Data.Enums;
 
 /// <summary>
 /// The state of a tunnel record.

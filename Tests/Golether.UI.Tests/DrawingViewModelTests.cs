@@ -1,3 +1,4 @@
+using Golether.Core.Data.Enums;
 using Golether.Core.Identity;
 using Golether.Session;
 using Golether.Sync.Protocol;

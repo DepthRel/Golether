@@ -1,4 +1,4 @@
-namespace Golether.Sync.Protocol;
+namespace Golether.Core.Data.Enums;
 
 /// <summary>
 /// The part of a stroke a message carries.

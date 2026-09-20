@@ -1,8 +1,9 @@
+using Golether.Core.Data.Enums;
 using Golether.Core.Playback;
 using Golether.Core.Time;
-using Golether.Media.Player;
 using Golether.Media.Player.Mpv;
 using Golether.Media.Player.Simulation;
+using Golether.Media.Player;
 using Microsoft.Extensions.Logging;
 
 namespace Golether.UI.Services;

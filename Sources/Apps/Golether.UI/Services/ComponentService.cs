@@ -1,5 +1,6 @@
 using Golether.Components.Catalog;
 using Golether.Components.Installation;
+using Golether.Core.Data.Enums;
 using Golether.Media.Player.Mpv;
 
 namespace Golether.UI.Services;

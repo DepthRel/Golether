@@ -1,5 +1,6 @@
 using Golether.Components.Catalog;
 using Golether.Components.Installation;
+using Golether.Core.Data.Enums;
 using Golether.Core.Data.Stores;
 using Golether.Core.Identity;
 using Golether.Core.Media;
@@ -12,10 +13,10 @@ using Golether.Session;
 using Golether.Sync.Engine;
 using Golether.Sync.Protocol;
 using Golether.UI.Services;
-using Golether.UI.ViewModels;
 using Golether.UI.ViewModels.Dialogs;
-using NSubstitute;
+using Golether.UI.ViewModels;
 using NSubstitute.ExceptionExtensions;
+using NSubstitute;
 
 namespace Golether.UI.Tests;
 

@@ -1,14 +1,14 @@
 using System.Reflection;
-using Avalonia;
-using Avalonia.Controls;
 using Avalonia.Controls.Primitives;
+using Avalonia.Controls;
 using Avalonia.Headless;
 using Avalonia.Input;
 using Avalonia.LogicalTree;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
-using Golether.Components.Catalog;
+using Avalonia;
 using Golether.Components.Installation;
+using Golether.Core.Data.Enums;
 using Golether.Core.Data.Stores;
 using Golether.Core.Identity;
 using Golether.Core.Media;

@@ -1,4 +1,5 @@
 using System.Collections.Concurrent;
+using Golether.Core.Data.Enums;
 using Golether.Media.Player.Mpv;
 
 namespace Golether.Media.Player.Tests;

@@ -2,7 +2,7 @@ using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.Threading;
-using Golether.Media.Player;
+using Golether.Core.Data.Enums;
 using Golether.UI.Services;
 using Golether.UI.ViewModels;
 
@@ -156,7 +156,7 @@ public sealed partial class MainWindow : Window
         }
         viewModel.ComponentInstalled += (_, id) =>
         {
-            if (id == Golether.Components.Catalog.ComponentId.Video)
+            if (id == Golether.Core.Data.Enums.ComponentId.Video)
             {
                 player.Retry();
                 UpdatePlayerState();
