@@ -7,48 +7,6 @@ using Golether.Media.Conference;
 namespace Golether.UI.ViewModels;
 
 /// <summary>
-/// Lists the capture devices and applies the chosen camera and microphone.
-/// </summary>
-public interface ICaptureDeviceSelector
-{
-    /// <summary>
-    /// Gets a value indicating whether cameras and voices work.
-    /// </summary>
-    bool IsAvailable { get; }
-
-    /// <summary>
-    /// Lists the cameras and microphones.
-    /// </summary>
-    /// <returns>The devices.</returns>
-    IReadOnlyList<CaptureDevice> GetDevices();
-
-    /// <summary>
-    /// Chooses the capture devices.
-    /// </summary>
-    /// <param name="camera">The camera, or <see langword="null"/> for the system default.</param>
-    /// <param name="microphone">The microphone, or <see langword="null"/> for the system default.</param>
-    /// <param name="cancellationToken">The cancellation token.</param>
-    /// <returns>A task that completes when capture uses the devices.</returns>
-    Task SelectDevicesAsync(CaptureDevice? camera, CaptureDevice? microphone, CancellationToken cancellationToken);
-}
-
-/// <summary>
-/// An entry of a device list.
-/// </summary>
-/// <param name="Name">The display name.</param>
-/// <param name="Device">The device, or <see langword="null"/> for the system default.</param>
-public sealed record DeviceOption(string Name, CaptureDevice? Device)
-{
-    /// <summary>
-    /// The entry of the system default device.
-    /// </summary>
-    public static readonly DeviceOption SystemDefault = new("Как в системе", null);
-
-    /// <inheritdoc />
-    public override string ToString() => Name;
-}
-
-/// <summary>
 /// The camera and microphone choice of the side panel.
 /// </summary>
 public sealed partial class DevicesViewModel : ObservableObject

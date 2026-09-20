@@ -4,38 +4,6 @@ using System.Text;
 namespace Golether.Tunnels.AmneziaWG.Control;
 
 /// <summary>
-/// The result of an external process.
-/// </summary>
-/// <param name="ExitCode">The exit code.</param>
-/// <param name="StandardOutput">The captured standard output.</param>
-/// <param name="StandardError">The captured standard error.</param>
-public sealed record ProcessResult(int ExitCode, string StandardOutput, string StandardError)
-{
-    /// <summary>
-    /// Gets a value indicating whether the process succeeded.
-    /// </summary>
-    public bool Succeeded => ExitCode == 0;
-}
-
-/// <summary>
-/// Runs external programs without a shell.
-/// </summary>
-public interface IProcessRunner
-{
-    /// <summary>
-    /// Runs a program and waits for it.
-    /// </summary>
-    /// <param name="fileName">The program.</param>
-    /// <param name="arguments">The arguments, passed one by one without shell interpretation.</param>
-    /// <param name="timeout">The maximum run time.</param>
-    /// <param name="cancellationToken">The cancellation token.</param>
-    /// <returns>The result.</returns>
-    /// <exception cref="TimeoutException">The program did not finish in time and was killed.</exception>
-    /// <exception cref="System.ComponentModel.Win32Exception">The program cannot be started.</exception>
-    Task<ProcessResult> RunAsync(string fileName, IReadOnlyList<string> arguments, TimeSpan timeout, CancellationToken cancellationToken);
-}
-
-/// <summary>
 /// <see cref="IProcessRunner"/> based on <see cref="Process"/>.
 /// </summary>
 public sealed class ProcessRunner : IProcessRunner

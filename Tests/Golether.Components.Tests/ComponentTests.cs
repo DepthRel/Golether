@@ -4,6 +4,7 @@ using Golether.Components.Catalog;
 using Golether.Components.GStreamer;
 using Golether.Components.Installation;
 using Golether.Components.Pe;
+using Golether.Core.Data.Enums;
 using Microsoft.Extensions.Time.Testing;
 
 namespace Golether.Components.Tests;

@@ -1,4 +1,5 @@
 using System.Buffers.Binary;
+using Golether.Core.Data.Enums;
 using Golether.Core.Networking;
 using Golether.Security.Identity;
 using Golether.Transports.Tls;

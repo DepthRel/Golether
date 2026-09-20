@@ -17,22 +17,6 @@ using Golether.UI.ViewModels.Dialogs;
 namespace Golether.UI.ViewModels;
 
 /// <summary>
-/// The tabs of the side panel.
-/// </summary>
-public enum SideTab
-{
-    /// <summary>
-    /// The chat.
-    /// </summary>
-    Chat = 0,
-
-    /// <summary>
-    /// The event feed.
-    /// </summary>
-    Events = 1,
-}
-
-/// <summary>
 /// The main window: the start screen and the running session.
 /// </summary>
 public sealed partial class MainWindowViewModel : ObservableObject

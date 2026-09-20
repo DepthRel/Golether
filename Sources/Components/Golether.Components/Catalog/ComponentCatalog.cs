@@ -1,76 +1,7 @@
 using System.Runtime.InteropServices;
+using Golether.Core.Data.Enums;
 
 namespace Golether.Components.Catalog;
-
-/// <summary>
-/// A native component of the application.
-/// </summary>
-public enum ComponentId
-{
-    /// <summary>
-    /// libmpv: decoding and showing the video.
-    /// </summary>
-    Video = 0,
-
-    /// <summary>
-    /// GStreamer: cameras, voice and echo cancellation.
-    /// </summary>
-    Conference = 1,
-
-    /// <summary>
-    /// AmneziaWG: the tunnel Golether raises by itself, so a session network needs nothing installed beforehand.
-    /// </summary>
-    Tunnel = 2,
-}
-
-/// <summary>
-/// The format of a downloadable package.
-/// </summary>
-public enum PackageFormat
-{
-    /// <summary>
-    /// A 7-Zip archive (libmpv builds for Windows), extracted with the tar tool of Windows.
-    /// </summary>
-    SevenZip = 0,
-
-    /// <summary>
-    /// An Inno Setup installer (GStreamer for Windows), run silently for the current user and reduced to the runtime.
-    /// </summary>
-    InnoSetup = 1,
-
-    /// <summary>
-    /// A Windows Installer package (AmneziaWG for Windows). Only its files are taken out, with
-    /// <c>msiexec /a</c>: nothing is installed into the system and no administrator rights are needed.
-    /// </summary>
-    WindowsInstaller = 2,
-}
-
-/// <summary>
-/// A pinned download of a component for one platform.
-/// </summary>
-/// <param name="Id">The component.</param>
-/// <param name="Version">The upstream version.</param>
-/// <param name="RuntimeIdentifier">The .NET runtime identifier, for example <c>win-x64</c>.</param>
-/// <param name="Url">The download address (HTTPS).</param>
-/// <param name="Sha256">The expected lowercase hexadecimal SHA-256 of the file.</param>
-/// <param name="Size">The expected size in bytes.</param>
-/// <param name="Format">The package format.</param>
-public sealed record ComponentPackage(ComponentId Id, string Version, string RuntimeIdentifier, Uri Url, string Sha256, long Size, PackageFormat Format)
-{
-    /// <summary>
-    /// Gets the file name of the download.
-    /// </summary>
-    public string FileName => Path.GetFileName(Url.AbsolutePath);
-}
-
-/// <summary>
-/// User-facing description of a component.
-/// </summary>
-/// <param name="Title">The short name.</param>
-/// <param name="Purpose">What the component is needed for.</param>
-/// <param name="License">The license of the upstream project.</param>
-/// <param name="Source">The upstream project.</param>
-public sealed record ComponentDescription(string Title, string Purpose, string License, string Source);
 
 /// <summary>
 /// The packages Golether can install by itself. Every entry is pinned by size and SHA-256, so a changed or

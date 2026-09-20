@@ -3,22 +3,6 @@ using System.Globalization;
 namespace Golether.Media.Player;
 
 /// <summary>
-/// The kind of a selectable track.
-/// </summary>
-public enum MediaTrackKind
-{
-    /// <summary>
-    /// A sound track.
-    /// </summary>
-    Audio = 0,
-
-    /// <summary>
-    /// A subtitle track.
-    /// </summary>
-    Subtitle = 1,
-}
-
-/// <summary>
 /// A sound or subtitle track of the loaded file. The choice of tracks is local to each participant.
 /// </summary>
 /// <param name="Id">The track identifier within its kind.</param>

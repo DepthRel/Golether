@@ -1,34 +1,13 @@
 using System.Globalization;
-using System.Security.Cryptography;
-using System.Text.RegularExpressions;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
+using System.Security.Cryptography;
+using System.Text.RegularExpressions;
 using Golether.Core.Identity;
 using Golether.Media.Conference.GStreamer.Native;
 using Microsoft.Extensions.Logging;
 
 namespace Golether.Media.Conference.GStreamer;
-
-/// <summary>
-/// The signaling kinds exchanged between peers.
-/// </summary>
-internal static class SignalKinds
-{
-    /// <summary>
-    /// An SDP offer.
-    /// </summary>
-    public const string Offer = "offer";
-
-    /// <summary>
-    /// An SDP answer.
-    /// </summary>
-    public const string Answer = "answer";
-
-    /// <summary>
-    /// An ICE candidate: <c>&lt;m-line index&gt;\n&lt;candidate&gt;</c>.
-    /// </summary>
-    public const string Candidate = "candidate";
-}
 
 /// <summary>
 /// The WebRTC connection with one remote participant: its own pipeline with <c>webrtcbin</c>, fed with the
@@ -1045,56 +1024,4 @@ internal sealed partial class WebRtcPeer : IDisposable
 
         _logger.LogInformation("Receiving {Media} from {Peer}", media, Peer.ToShortString());
     }
-}
-
-/// <summary>
-/// The servers a peer uses to find a path.
-/// </summary>
-/// <param name="StunServer">A STUN server or <see langword="null"/>.</param>
-/// <param name="TurnServer">A TURN relay or <see langword="null"/>.</param>
-/// <param name="RelayOnly">Whether only relayed paths are allowed.</param>
-internal sealed record PeerNetwork(string? StunServer, string? TurnServer, bool RelayOnly);
-
-/// <summary>
-/// The owner of peers: sends signaling and receives decoded media.
-/// </summary>
-internal interface IPeerHost
-{
-    /// <summary>
-    /// Sends signaling data to a peer.
-    /// </summary>
-    /// <param name="peer">The peer.</param>
-    /// <param name="kind">The kind.</param>
-    /// <param name="payload">The payload.</param>
-    void SendSignal(PeerId peer, string kind, string payload);
-
-    /// <summary>
-    /// Delivers a decoded BGRA frame.
-    /// </summary>
-    /// <param name="peer">The peer.</param>
-    /// <param name="width">The width.</param>
-    /// <param name="height">The height.</param>
-    /// <param name="pixels">The pixels, valid only during the call.</param>
-    void DeliverVideo(PeerId peer, int width, int height, ReadOnlySpan<byte> pixels);
-
-    /// <summary>
-    /// Delivers decoded PCM (S16LE, 48 kHz, mono).
-    /// </summary>
-    /// <param name="peer">The peer.</param>
-    /// <param name="pcm">The samples, valid only during the call.</param>
-    void DeliverAudio(WebRtcPeer peer, ReadOnlySpan<byte> pcm);
-
-    /// <summary>
-    /// Drops a peer whose DTLS connection failed or could not be verified.
-    /// </summary>
-    /// <param name="peer">The peer.</param>
-    /// <param name="reason">The reason for the log.</param>
-    void RejectPeer(WebRtcPeer peer, string reason);
-
-    /// <summary>
-    /// Delivers a data channel message of a verified peer.
-    /// </summary>
-    /// <param name="peer">The peer.</param>
-    /// <param name="message">The message, valid only during the call.</param>
-    void DeliverData(PeerId peer, ReadOnlySpan<byte> message);
 }

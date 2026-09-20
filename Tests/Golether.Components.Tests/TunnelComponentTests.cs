@@ -2,6 +2,7 @@ using System.Net;
 using System.Security.Cryptography;
 using Golether.Components.Catalog;
 using Golether.Components.Installation;
+using Golether.Core.Data.Enums;
 using Microsoft.Extensions.Time.Testing;
 
 namespace Golether.Components.Tests;

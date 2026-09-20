@@ -2,72 +2,11 @@ using System.Globalization;
 using System.Net.Http.Json;
 using System.Reflection;
 using System.Security.Cryptography;
-using System.Text.Json.Serialization;
 using Golether.Core.Data.Stores;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 
 namespace Golether.UI.Services;
-
-/// <summary>
-/// One release described by the update manifest.
-/// </summary>
-/// <param name="Version">The version, for example <c>0.2.0</c>.</param>
-/// <param name="Notes">What changed, in a few lines.</param>
-/// <param name="Url">The address of the package or installer.</param>
-/// <param name="Sha256">The SHA-256 of the file, in hexadecimal.</param>
-/// <param name="Size">The size in bytes, or 0 when unknown.</param>
-public sealed record UpdateInfo(
-    [property: JsonPropertyName("version")] string Version,
-    [property: JsonPropertyName("notes")] string? Notes,
-    [property: JsonPropertyName("url")] string Url,
-    [property: JsonPropertyName("sha256")] string Sha256,
-    [property: JsonPropertyName("size")] long Size);
-
-/// <summary>
-/// The manifest: the releases for the supported systems.
-/// </summary>
-/// <param name="Windows">The release for Windows.</param>
-/// <param name="Linux">The release for Linux.</param>
-/// <param name="MacOs">The release for macOS.</param>
-public sealed record UpdateManifest(
-    [property: JsonPropertyName("windows")] UpdateInfo? Windows,
-    [property: JsonPropertyName("linux")] UpdateInfo? Linux,
-    [property: JsonPropertyName("macos")] UpdateInfo? MacOs);
-
-/// <summary>
-/// Looks for a newer version of Golether and downloads it.
-/// </summary>
-public interface IUpdateService
-{
-    /// <summary>
-    /// Gets or sets the address of the update manifest; an empty address switches the check off.
-    /// </summary>
-    string ManifestUrl { get; set; }
-
-    /// <summary>
-    /// Gets the version of this application.
-    /// </summary>
-    Version CurrentVersion { get; }
-
-    /// <summary>
-    /// Asks the source whether a newer version exists.
-    /// </summary>
-    /// <param name="cancellationToken">The cancellation token.</param>
-    /// <returns>The newer release, or <see langword="null"/>.</returns>
-    Task<UpdateInfo?> CheckAsync(CancellationToken cancellationToken);
-
-    /// <summary>
-    /// Downloads a release into the folder and checks its SHA-256.
-    /// </summary>
-    /// <param name="update">The release.</param>
-    /// <param name="folder">The folder to download into.</param>
-    /// <param name="progress">Receives the progress, 0–1.</param>
-    /// <param name="cancellationToken">The cancellation token.</param>
-    /// <returns>The path of the downloaded file.</returns>
-    /// <exception cref="InvalidDataException">The file does not match the expected hash.</exception>
-    Task<string> DownloadAsync(UpdateInfo update, string folder, IProgress<double>? progress, CancellationToken cancellationToken);
-}
 
 /// <summary>
 /// Reads the manifest over HTTPS and verifies the downloaded file.

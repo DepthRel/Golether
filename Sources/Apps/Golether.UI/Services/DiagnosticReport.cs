@@ -1,7 +1,6 @@
 using System.Globalization;
 using System.Text;
 using System.Text.RegularExpressions;
-using Golether.Components.Catalog;
 using Golether.Components.Installation;
 using Golether.Session;
 

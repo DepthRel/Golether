@@ -170,7 +170,7 @@ public sealed class DrawingViewModelTests
         var values = Enumerable.Range(0, 21).Select(i => DrawingViewModel.Fade(DrawingViewModel.StrokeHold + (step * i))).ToArray();
         var drops = values.Zip(values.Skip(1), (a, b) => a - b).ToArray();
         Assert.All(drops, d => Assert.True(d >= 0, "Линия только гаснет, не разгорается."));
-        Assert.True(drops[0] < drops[^ (drops.Length / 2)], "Начало затухания мягче середины.");
+        Assert.True(drops[0] < drops[^(drops.Length / 2)], "Начало затухания мягче середины.");
         Assert.True(drops[^1] < drops[drops.Length / 2], "Конец затухания мягче середины.");
     }
 

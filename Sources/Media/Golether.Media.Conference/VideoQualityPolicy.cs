@@ -1,29 +1,4 @@
-using Golether.Core.Identity;
-
 namespace Golether.Media.Conference;
-
-/// <summary>
-/// The camera quality sent to a participant changed.
-/// </summary>
-/// <param name="Peer">The participant.</param>
-/// <param name="Quality">The new quality.</param>
-public sealed record VideoQualityChange(PeerId Peer, VideoQuality Quality);
-
-/// <summary>
-/// The quality of the camera stream sent to one participant.
-/// </summary>
-public enum VideoQuality
-{
-    /// <summary>
-    /// 640×360, 15 frames per second.
-    /// </summary>
-    High = 0,
-
-    /// <summary>
-    /// 320×180, 10 frames per second, about a quarter of the bitrate: for weak connections.
-    /// </summary>
-    Low = 1,
-}
 
 /// <summary>
 /// Chooses the camera quality for one participant from the network statistics of the connection to them.

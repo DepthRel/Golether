@@ -1,5 +1,6 @@
 using System.Collections.Concurrent;
 using System.Security.Cryptography;
+using Golether.Core.Data.Enums;
 using Golether.Core.Networking;
 using Golether.Core.Playback;
 using Golether.Core.Time;
@@ -490,7 +491,7 @@ public sealed class SessionIntegrationTests : IAsyncLifetime
         var connector = new TlsPeerConnector(stranger, Transport);
 
         await using var stream = await connector.ConnectAsync(
-            new PeerEndpoint("127.0.0.1", _host.Port), _hostIdentity.PeerId, Transports.StreamPurpose.MediaData, token);
+            new PeerEndpoint("127.0.0.1", _host.Port), _hostIdentity.PeerId, StreamPurpose.MediaData, token);
 
         Assert.Equal(0, await ReadUntilClosedAsync(stream.Stream, token).WaitAsync(TimeSpan.FromSeconds(10), token));
     }
@@ -508,7 +509,7 @@ public sealed class SessionIntegrationTests : IAsyncLifetime
         await WaitUntilAsync(() => _host.GetSnapshot().Participants.Count == 2, token);
         var connector = new TlsPeerConnector(_guestIdentity, Transport);
         await using var stream = await connector.ConnectAsync(
-            new PeerEndpoint("127.0.0.1", _host.Port), _hostIdentity.PeerId, Transports.StreamPurpose.MediaData, token);
+            new PeerEndpoint("127.0.0.1", _host.Port), _hostIdentity.PeerId, StreamPurpose.MediaData, token);
         var reading = ReadUntilClosedAsync(stream.Stream, token);
         await Task.Delay(300, token);
         Assert.False(reading.IsCompleted, "The admitted participant keeps its stream.");

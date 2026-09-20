@@ -1,67 +1,6 @@
-using Golether.Core.Identity;
-using Golether.Security.Verification;
+using Golether.Core.Data.Enums;
 
 namespace Golether.Security.Admission;
-
-/// <summary>
-/// A request of a peer to join the session.
-/// </summary>
-/// <param name="PeerId">The authenticated device identifier.</param>
-/// <param name="DisplayName">The name the peer introduced itself with.</param>
-/// <param name="VerificationCode">The code both sides compare by voice.</param>
-/// <param name="IsKnownContact">Whether the device is a trusted contact.</param>
-public sealed record AdmissionRequest(PeerId PeerId, string DisplayName, VerificationCode VerificationCode, bool IsKnownContact);
-
-/// <summary>
-/// The outcome of an admission request.
-/// </summary>
-public enum AdmissionDecision
-{
-    /// <summary>
-    /// The peer may join.
-    /// </summary>
-    Approved = 0,
-
-    /// <summary>
-    /// The host rejected the peer.
-    /// </summary>
-    Rejected = 1,
-
-    /// <summary>
-    /// The host did not answer in time.
-    /// </summary>
-    TimedOut = 2,
-}
-
-/// <summary>
-/// Asks the host user whether a peer may join (implemented by the UI).
-/// </summary>
-public interface IAdmissionPrompt
-{
-    /// <summary>
-    /// Shows the request and waits for the answer.
-    /// </summary>
-    /// <param name="request">The request.</param>
-    /// <param name="cancellationToken">Cancelled on timeout or when the peer disconnects.</param>
-    /// <returns><see langword="true"/> to admit the peer.</returns>
-    Task<bool> AskAsync(AdmissionRequest request, CancellationToken cancellationToken);
-}
-
-/// <summary>
-/// Admission policy of the host.
-/// </summary>
-public sealed record AdmissionOptions
-{
-    /// <summary>
-    /// Gets a value indicating whether trusted contacts join without a prompt (default <see langword="false"/>).
-    /// </summary>
-    public bool AutoApproveKnownContacts { get; init; }
-
-    /// <summary>
-    /// Gets the time the host has to answer (default 2 minutes).
-    /// </summary>
-    public TimeSpan PromptTimeout { get; init; } = TimeSpan.FromMinutes(2);
-}
 
 /// <summary>
 /// Decides whether a peer that presented a valid invitation may join.

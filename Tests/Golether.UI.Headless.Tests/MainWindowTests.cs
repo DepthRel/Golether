@@ -18,7 +18,6 @@ using Golether.Media.Conference;
 using Golether.Media.Player;
 using Golether.Session;
 using Golether.Sync.Protocol;
-using Golether.UI;
 using Golether.UI.Controls;
 using Golether.UI.Services;
 using Golether.UI.ViewModels;

@@ -1,27 +1,7 @@
 using Golether.Components.Catalog;
+using Golether.Core.Data.Enums;
 
 namespace Golether.Components.Installation;
-
-/// <summary>
-/// An operating system family.
-/// </summary>
-public enum OsFamily
-{
-    /// <summary>
-    /// Windows.
-    /// </summary>
-    Windows = 0,
-
-    /// <summary>
-    /// Linux.
-    /// </summary>
-    Linux = 1,
-
-    /// <summary>
-    /// macOS.
-    /// </summary>
-    MacOS = 2,
-}
 
 /// <summary>
 /// How to install a component where Golether cannot do it itself: one command to copy into a terminal.

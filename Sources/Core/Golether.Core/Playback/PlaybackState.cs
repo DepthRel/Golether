@@ -4,69 +4,6 @@ using Golether.Core.Time;
 namespace Golether.Core.Playback;
 
 /// <summary>
-/// Playback mode of the session.
-/// </summary>
-public enum PlayState
-{
-    /// <summary>
-    /// Playback is paused at <see cref="PlaybackState.Position"/>.
-    /// </summary>
-    Paused = 0,
-
-    /// <summary>
-    /// Playback runs (or is scheduled to start) from <see cref="PlaybackState.Position"/> at
-    /// <see cref="PlaybackState.ReferenceTime"/>.
-    /// </summary>
-    Playing = 1,
-}
-
-/// <summary>
-/// The reason of a playback state change, shown in the event feed.
-/// </summary>
-public enum PlaybackCause
-{
-    /// <summary>
-    /// The initial state of a session.
-    /// </summary>
-    Initial = 0,
-
-    /// <summary>
-    /// A participant started playback.
-    /// </summary>
-    Play = 1,
-
-    /// <summary>
-    /// A participant paused playback.
-    /// </summary>
-    Pause = 2,
-
-    /// <summary>
-    /// A participant changed the position.
-    /// </summary>
-    Seek = 3,
-
-    /// <summary>
-    /// The host paused playback until lagging participants have buffered enough data.
-    /// </summary>
-    WaitingForParticipants = 4,
-
-    /// <summary>
-    /// The host resumed playback after all participants had buffered enough data.
-    /// </summary>
-    ParticipantsReady = 5,
-
-    /// <summary>
-    /// The media reached its end; playback stopped on the last position.
-    /// </summary>
-    Ended = 6,
-
-    /// <summary>
-    /// The host started playback without waiting any longer for participants that were not ready.
-    /// </summary>
-    StartedWithoutWaiting = 7,
-}
-
-/// <summary>
 /// The authoritative playback state of a session, expressed in time rather than as commands.
 /// </summary>
 /// <remarks>

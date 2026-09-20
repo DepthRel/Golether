@@ -1,6 +1,7 @@
 using System.Net.Security;
 using System.Net.Sockets;
 using System.Security.Authentication;
+using Golether.Core.Data.Enums;
 using Golether.Core.Identity;
 using Golether.Core.Networking;
 using Golether.Security.Identity;

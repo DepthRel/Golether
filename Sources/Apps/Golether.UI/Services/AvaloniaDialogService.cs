@@ -128,12 +128,3 @@ public sealed class AvaloniaDialogService : IDialogService
     public async Task<string?> PasteTextAsync()
         => _owner.Clipboard is { } clipboard ? await clipboard.TryGetTextAsync() : null;
 }
-
-/// <summary>
-/// <see cref="IUiDispatcher"/> over the Avalonia UI thread.
-/// </summary>
-public sealed class AvaloniaUiDispatcher : IUiDispatcher
-{
-    /// <inheritdoc />
-    public void Post(Action action) => Dispatcher.UIThread.Post(action);
-}

@@ -8,40 +8,13 @@ using Golether.Core.Data.Stores;
 using Golether.Core.Networking;
 using Golether.Security.Identity;
 using Golether.Security.Secrets;
-using Golether.Security.Verification;
 using Golether.Session;
+using Golether.Transports.Relay;
 using Golether.Tunnels.AmneziaWG.Configuration;
 using Golether.Tunnels.AmneziaWG.Control;
-using Golether.Transports.Relay;
 using Golether.Tunnels.AmneziaWG.Packages;
 
 namespace Golether.UI.Services;
-
-/// <summary>
-/// The host side of a completed tunnel negotiation.
-/// </summary>
-/// <param name="ParticipantName">The participant name.</param>
-/// <param name="VerificationCode">The code to compare by voice.</param>
-/// <param name="InterfaceName">The host interface name.</param>
-/// <param name="Configuration">The host configuration with all participants.</param>
-public sealed record HostTunnelResult(string ParticipantName, VerificationCode VerificationCode, string InterfaceName, AwgConfiguration Configuration);
-
-/// <summary>
-/// The participant side of a tunnel negotiation.
-/// </summary>
-/// <param name="AnswerText">The answer package for the host.</param>
-/// <param name="HostName">The host name.</param>
-/// <param name="HostAddress">The host tunnel address (use it in the invitation instead of the public address).</param>
-/// <param name="VerificationCode">The code to compare by voice.</param>
-/// <param name="InterfaceName">The participant interface name.</param>
-/// <param name="Configuration">The participant configuration.</param>
-public sealed record ParticipantTunnelResult(
-    string AnswerText,
-    string HostName,
-    string HostAddress,
-    VerificationCode VerificationCode,
-    string InterfaceName,
-    AwgConfiguration Configuration);
 
 /// <summary>
 /// Persists and applies the AmneziaWG offer/answer flow.

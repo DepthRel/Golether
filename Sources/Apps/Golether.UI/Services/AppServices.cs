@@ -4,7 +4,6 @@ using Golether.Core.Configuration;
 using Golether.Core.Data;
 using Golether.Core.Data.Migrations.SQLite.Runner;
 using Golether.Core.Data.Stores;
-using Golether.Media.Conference;
 using Golether.Security.Identity;
 using Golether.Security.Secrets;
 using Golether.Transports.PortMapping;

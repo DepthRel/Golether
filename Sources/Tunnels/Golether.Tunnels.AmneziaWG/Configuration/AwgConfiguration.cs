@@ -1,94 +1,9 @@
 using System.Globalization;
-using System.Net;
 using System.Text;
 using Golether.Core.Networking;
 using Golether.Tunnels.AmneziaWG.Keys;
 
 namespace Golether.Tunnels.AmneziaWG.Configuration;
-
-/// <summary>
-/// The <c>[Interface]</c> section of an AmneziaWG configuration.
-/// </summary>
-public sealed record AwgInterface
-{
-    /// <summary>
-    /// Gets the base64 private key.
-    /// </summary>
-    public required string PrivateKey { get; init; }
-
-    /// <summary>
-    /// Gets the tunnel address with prefix, for example <c>10.77.41.1/24</c>.
-    /// </summary>
-    public required string Address { get; init; }
-
-    /// <summary>
-    /// Gets the UDP listening port, or <see langword="null"/> for a random port.
-    /// </summary>
-    public int? ListenPort { get; init; }
-
-    /// <summary>
-    /// Gets the MTU, or <see langword="null"/> for the default.
-    /// </summary>
-    public int? Mtu { get; init; }
-
-    /// <summary>
-    /// Gets the junk packet parameters of this side.
-    /// </summary>
-    public required JunkParameters Junk { get; init; }
-
-    /// <summary>
-    /// Gets the shared obfuscation parameters.
-    /// </summary>
-    public required SharedObfuscation Obfuscation { get; init; }
-
-    /// <summary>
-    /// Returns the section without exposing the private key in logs.
-    /// </summary>
-    /// <returns>The address and port.</returns>
-    public override string ToString() => $"AwgInterface {{ Address = {Address}, ListenPort = {ListenPort} }}";
-}
-
-/// <summary>
-/// A <c>[Peer]</c> section of an AmneziaWG configuration.
-/// </summary>
-public sealed record AwgPeer
-{
-    /// <summary>
-    /// Gets the comment written above the section (the participant name).
-    /// </summary>
-    public string? Comment { get; init; }
-
-    /// <summary>
-    /// Gets the base64 public key.
-    /// </summary>
-    public required string PublicKey { get; init; }
-
-    /// <summary>
-    /// Gets the base64 preshared key.
-    /// </summary>
-    public string? PresharedKey { get; init; }
-
-    /// <summary>
-    /// Gets the allowed addresses, for example <c>10.77.41.2/32</c>.
-    /// </summary>
-    public required IReadOnlyList<string> AllowedIps { get; init; }
-
-    /// <summary>
-    /// Gets the endpoint, or <see langword="null"/> when the peer connects to us.
-    /// </summary>
-    public PeerEndpoint? Endpoint { get; init; }
-
-    /// <summary>
-    /// Gets the keepalive interval in seconds, or <see langword="null"/>.
-    /// </summary>
-    public int? PersistentKeepalive { get; init; }
-
-    /// <summary>
-    /// Returns the section without exposing the preshared key in logs.
-    /// </summary>
-    /// <returns>The public key and addresses.</returns>
-    public override string ToString() => $"AwgPeer {{ PublicKey = {PublicKey}, AllowedIps = {string.Join(", ", AllowedIps)} }}";
-}
 
 /// <summary>
 /// A complete AmneziaWG configuration compatible with <c>awg-quick</c>, AmneziaVPN and AmneziaWG for Windows.
@@ -362,42 +277,4 @@ public sealed record AwgConfiguration(AwgInterface Interface, IReadOnlyList<AwgP
         => !values.TryGetValue(key, out var value) ? null
             : uint.TryParse(value, NumberStyles.None, CultureInfo.InvariantCulture, out var number) ? number
             : throw new FormatException($"'{key}' must be a non-negative integer.");
-}
-
-/// <summary>
-/// An IPv4 address with a prefix length.
-/// </summary>
-/// <param name="Address">The address.</param>
-/// <param name="PrefixLength">The prefix length, 0–32.</param>
-public readonly record struct IPv4Cidr(IPAddress Address, int PrefixLength)
-{
-    /// <summary>
-    /// Parses <c>a.b.c.d/n</c>.
-    /// </summary>
-    /// <param name="text">The text.</param>
-    /// <param name="value">The parsed value.</param>
-    /// <returns><see langword="true"/> when valid.</returns>
-    public static bool TryParse(string? text, out IPv4Cidr value)
-    {
-        value = default;
-        var slash = text?.IndexOf('/') ?? -1;
-        if (slash <= 0
-            || !IPAddress.TryParse(text![..slash], out var address)
-            || address.AddressFamily != System.Net.Sockets.AddressFamily.InterNetwork
-            || text[..slash].Count(c => c == '.') != 3
-            || !int.TryParse(text[(slash + 1)..], NumberStyles.None, CultureInfo.InvariantCulture, out var prefix)
-            || prefix > 32)
-        {
-            return false;
-        }
-
-        value = new IPv4Cidr(address, prefix);
-        return true;
-    }
-
-    /// <summary>
-    /// Formats the value as <c>a.b.c.d/n</c>.
-    /// </summary>
-    /// <returns>The text.</returns>
-    public override string ToString() => $"{Address}/{PrefixLength.ToString(CultureInfo.InvariantCulture)}";
 }
