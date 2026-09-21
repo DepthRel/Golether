@@ -1,3 +1,5 @@
+using Golether.Localization;
+
 namespace Golether.Core.Configuration;
 
 /// <summary>
@@ -202,10 +204,7 @@ public sealed class AppDataPaths
         }
         catch (Exception ex) when (ex is UnauthorizedAccessException or IOException)
         {
-            throw new UnauthorizedAccessException(
-                $"Golether хранит все свои данные рядом с собой, в папке «{Root}», но не может туда записывать. " +
-                "Переместите папку Golether туда, где у вас есть права на запись (например, в «Документы» или на рабочий стол), и запустите её снова.",
-                ex);
+            throw new UnauthorizedAccessException(Texts.Format("Error.DataDirectoryNotWritable", Root), ex);
         }
 
         RestrictToOwner(IdentityDirectory);

@@ -1,5 +1,6 @@
 using Golether.Components.Catalog;
 using Golether.Core.Data.Enums;
+using Golether.Localization;
 
 namespace Golether.Components.Installation;
 
@@ -22,13 +23,13 @@ public sealed record InstallAdvice(string Text, string? Command)
         var title = ComponentCatalog.Describe(id).Title;
         if (os == OsFamily.MacOS)
         {
-            return new($"{title} ставится через Homebrew (https://brew.sh). Выполните в Терминале и перезапустите Golether:",
+            return new(Texts.Format("Install.Advice.Homebrew", title),
                 id == ComponentId.Video ? "brew install mpv" : "brew install gstreamer");
         }
 
         if (os == OsFamily.Windows)
         {
-            return new($"{title} для этой архитектуры Windows не устанавливается автоматически.", null);
+            return new(Texts.Format("Install.Advice.WindowsArchitecture", title), null);
         }
 
         var command = DetectDistribution(osRelease) switch
@@ -49,8 +50,8 @@ public sealed record InstallAdvice(string Text, string? Command)
         };
 
         return command is null
-            ? new($"{title} ставится пакетным менеджером вашего дистрибутива (пакет libmpv или gstreamer с плагинами base, good, bad и nice).", null)
-            : new($"{title} ставится из пакетов дистрибутива. Выполните в терминале и перезапустите Golether:", command);
+            ? new(Texts.Format("Install.Advice.PackageManager", title), null)
+            : new(Texts.Format("Install.Advice.DistributionPackages", title), command);
     }
 
     /// <summary>

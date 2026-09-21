@@ -1,4 +1,5 @@
 using System.Security.Cryptography;
+using Golether.Localization;
 
 namespace Golether.Tunnels.AmneziaWG.Configuration;
 
@@ -60,18 +61,18 @@ public sealed record SharedObfuscation(int S1, int S2, uint H1, uint H2, uint H3
     {
         if (S1 is < 0 or > MaxS1 || S2 is < 0 or > MaxS2)
         {
-            throw new FormatException($"S1 must be 0–{MaxS1} and S2 must be 0–{MaxS2}.");
+            throw new FormatException(Texts.Format("Config.Error.PaddingSizes", MaxS1, MaxS2));
         }
 
         if (S1 + 56 == S2)
         {
-            throw new FormatException("S1 + 56 must differ from S2, otherwise handshake messages have equal sizes.");
+            throw new FormatException(Texts.Get("Config.Error.PaddingEqual"));
         }
 
         var headers = new[] { H1, H2, H3, H4 };
         if (headers.Distinct().Count() != 4 || headers.Any(h => h < MinHeader))
         {
-            throw new FormatException("H1–H4 must be distinct and not less than 5.");
+            throw new FormatException(Texts.Get("Config.Error.Headers"));
         }
     }
 }

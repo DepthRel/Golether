@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using Golether.Localization;
 
 namespace Golether.Components.Installation;
 
@@ -16,7 +17,7 @@ public sealed class ProcessToolRunner : IToolRunner
             info.ArgumentList.Add(argument);
         }
 
-        using var process = Process.Start(info) ?? throw new InvalidOperationException($"'{fileName}' did not start.");
+        using var process = Process.Start(info) ?? throw new InvalidOperationException(Texts.Format("Install.Error.ProcessNotStarted", fileName));
         try
         {
             await process.WaitForExitAsync(cancellationToken).ConfigureAwait(false);

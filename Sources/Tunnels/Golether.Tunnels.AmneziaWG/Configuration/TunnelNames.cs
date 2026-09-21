@@ -1,3 +1,5 @@
+using Golether.Localization;
+
 namespace Golether.Tunnels.AmneziaWG.Configuration;
 
 /// <summary>
@@ -24,7 +26,7 @@ public static class TunnelNames
     {
         if (!IsValid(name))
         {
-            throw new ArgumentException("The tunnel name must have 1–15 characters: letters, digits, _ = + . -", nameof(name));
+            throw new ArgumentException(Texts.Get("Config.Error.TunnelName"), nameof(name));
         }
     }
 }

@@ -1,6 +1,7 @@
 using Golether.Components.Installation;
 using Golether.Core.Data.Enums;
 using Golether.Core.Identity;
+using Golether.Localization;
 using Golether.Media.Conference.GStreamer;
 using Golether.Media.Conference;
 using Microsoft.Extensions.Logging;
@@ -28,7 +29,7 @@ public sealed class ConferenceHost : IConferenceMedia, Golether.UI.ViewModels.IC
     /// <summary>
     /// The active backend.
     /// </summary>
-    private IConferenceMedia _current = new UnavailableConferenceMedia("Камеры и голос: установите компонент на стартовом экране.");
+    private IConferenceMedia _current = new UnavailableConferenceMedia(() => Texts.Get("Conference.InstallHint"));
 
     /// <summary>
     /// Whether the microphone is muted; applied to every backend.
@@ -129,7 +130,7 @@ public sealed class ConferenceHost : IConferenceMedia, Golether.UI.ViewModels.IC
             _loggerFactory.CreateLogger<GStreamerConferenceMedia>());
         if (!media.IsAvailable)
         {
-            _current = new UnavailableConferenceMedia(media.UnavailableReason ?? "GStreamer не запустился.");
+            _current = new UnavailableConferenceMedia(media.UnavailableReason ?? Texts.Get("Conference.GStreamerFailed"));
             BackendChanged?.Invoke(this, EventArgs.Empty);
             return false;
         }

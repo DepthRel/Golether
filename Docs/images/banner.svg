@@ -1,0 +1,53 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 380" width="1280" height="380" role="img" aria-label="Golether: Let's go together">
+  <!-- README banner: the splash-screen look of the application (icon + wordmark) on the application's dark theme. -->
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#0A0F11"/>
+      <stop offset="1" stop-color="#162226"/>
+    </linearGradient>
+    <radialGradient id="glow" cx="230" cy="190" r="260" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#F0A860" stop-opacity="0.22"/>
+      <stop offset="1" stop-color="#F0A860" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="amber" x1="112" y1="232" x2="912" y2="812" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#F6BE82"/>
+      <stop offset="1" stop-color="#E08E3C"/>
+    </linearGradient>
+    <linearGradient id="teal" x1="312" y1="356" x2="712" y2="756" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#7FD1C4"/>
+      <stop offset="1" stop-color="#3C9A8D"/>
+    </linearGradient>
+    <clipPath id="screen">
+      <rect x="168" y="288" width="688" height="468" rx="64"/>
+    </clipPath>
+  </defs>
+
+  <rect width="1280" height="380" rx="24" fill="url(#bg)"/>
+  <rect x="0.5" y="0.5" width="1279" height="379" rx="24" fill="none" stroke="#223036"/>
+  <rect width="1280" height="380" rx="24" fill="url(#glow)"/>
+
+  <!-- Icon: the same TV with an avatar as in Assets/golether.svg -->
+  <g transform="translate(70 40) scale(0.3)">
+    <g stroke="#EDA35A" stroke-width="40" stroke-linecap="round" fill="none">
+      <path d="M512 232 L380 96 M512 232 L644 96"/>
+      <path d="M300 800 L270 900 M724 800 L754 900"/>
+    </g>
+    <rect x="112" y="232" width="800" height="580" rx="110" fill="url(#amber)"/>
+    <rect x="168" y="288" width="688" height="468" rx="64" fill="#0C1315"/>
+    <g clip-path="url(#screen)" fill="url(#teal)">
+      <circle cx="512" cy="452" r="96"/>
+      <ellipse cx="512" cy="768" rx="200" ry="180"/>
+    </g>
+  </g>
+
+  <!-- Wordmark and tagline -->
+  <text x="430" y="200" font-family="Inter, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="128" font-weight="800" letter-spacing="1">
+    <tspan fill="#DDE7E5">gole</tspan><tspan fill="#F0A860">ther</tspan>
+  </text>
+  <text x="436" y="262" font-family="Inter, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="38" font-weight="500" fill="#7F9491">
+    <tspan fill="#F0A860" font-weight="700">LET</tspan>'s <tspan fill="#F0A860" font-weight="700">GO</tspan> toget<tspan fill="#F0A860" font-weight="700">HER</tspan>
+  </text>
+  <text x="436" y="312" font-family="Inter, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="22" fill="#7F9491">
+    Watch the same video, in the same second, with your friends' faces on screen.
+  </text>
+</svg>

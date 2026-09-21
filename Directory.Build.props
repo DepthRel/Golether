@@ -17,10 +17,10 @@
 
   <PropertyGroup>
     <Product>Golether</Product>
-    <Authors>Golether contributors</Authors>
+    <Authors>DepthRel</Authors>
     <Copyright>Copyright © Golether contributors. Licensed under GPL-3.0-or-later.</Copyright>
     <PackageLicenseExpression>GPL-3.0-or-later</PackageLicenseExpression>
-    <Version>0.1.0</Version>
+    <Version>0.2.0</Version>
   </PropertyGroup>
 
   <!--
@@ -40,6 +40,16 @@
     <PackageReference Include="NSubstitute" />
     <PackageReference Include="Microsoft.Extensions.TimeProvider.Testing" />
     <Using Include="Xunit" />
+  </ItemGroup>
+
+  <!--
+    The messages of the code follow the language of the running application. Tests run in Russian, the language their
+    expectations were written in (see Tests/Shared/UseRussianTexts.cs); the tests of the localization itself choose
+    their languages explicitly.
+  -->
+  <ItemGroup Condition="$(MSBuildProjectName.EndsWith('.Tests')) and '$(MSBuildProjectName)' != 'Golether.Localization.Tests'">
+    <ProjectReference Include="$(MSBuildThisFileDirectory)Sources/Core/Golether.Localization/Golether.Localization.csproj" />
+    <Compile Include="$(MSBuildThisFileDirectory)Tests/Shared/UseRussianTexts.cs" Link="UseRussianTexts.cs" />
   </ItemGroup>
 
 </Project>

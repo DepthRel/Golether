@@ -2,6 +2,7 @@ using System.Globalization;
 using System.Runtime.InteropServices;
 using Golether.Core.Data.Enums;
 using Golether.Core.Playback;
+using Golether.Localization;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Logging;
 
@@ -378,7 +379,7 @@ public sealed class MpvPlayer : IPlaybackController, ILocalPlayerControls
         var handle = LibMpv.Create();
         if (handle == 0)
         {
-            error = "libmpv: mpv_create вернула ошибку.";
+            error = Texts.Get("Player.Error.CreateFailed");
             return false;
         }
 

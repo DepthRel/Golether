@@ -1,6 +1,7 @@
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Golether.Core.Identity;
+using Golether.Localization;
 using Golether.Session;
 
 namespace Golether.UI.ViewModels;
@@ -72,7 +73,9 @@ public sealed partial class ParticipantItemViewModel : ObservableObject
     /// <summary>
     /// Gets the voice volume text.
     /// </summary>
-    public string VoiceVolumeText => IsVoiceMuted ? "заглушён у вас" : $"{Math.Round(VoiceVolume):0} %";
+    public string VoiceVolumeText => IsVoiceMuted
+        ? Texts.Get("Participant.VoiceMuted")
+        : Texts.Format("Format.Percent", Math.Round(VoiceVolume).ToString("0", System.Globalization.CultureInfo.InvariantCulture));
 
     /// <summary>
     /// Gets a value indicating whether the voice is silent on this device.
@@ -82,7 +85,16 @@ public sealed partial class ParticipantItemViewModel : ObservableObject
     /// <summary>
     /// Gets the text of the mute command.
     /// </summary>
-    public string VoiceMuteText => IsVoiceMuted ? "Вернуть звук" : "Заглушить у себя";
+    public string VoiceMuteText => Texts.Get(IsVoiceMuted ? "Participant.VoiceUnmute" : "Participant.VoiceMute");
+
+    /// <summary>
+    /// Tells the view that the texts of the tile changed with the language.
+    /// </summary>
+    public void RefreshTexts()
+    {
+        OnPropertyChanged(nameof(VoiceVolumeText));
+        OnPropertyChanged(nameof(VoiceMuteText));
+    }
 
     /// <summary>
     /// Shows a stored volume; the caller applies it to the audio.
@@ -297,13 +309,13 @@ public sealed partial class ParticipantItemViewModel : ObservableObject
         Name = view.Info.DisplayName;
         Initial = Name.Length > 0 ? char.ToUpperInvariant(Name[0]).ToString() : "?";
         IsLocal = view.IsLocal;
-        RoleText = (view.Info.IsHost, view.IsLocal) switch
+        RoleText = Texts.Get((view.Info.IsHost, view.IsLocal) switch
         {
-            (true, true) => "ведущий · вы",
-            (true, false) => "ведущий",
-            (false, true) => "вы",
-            _ => view.Status?.UsesLocalCopy == true ? "локальная копия" : "участник",
-        };
+            (true, true) => "Participant.Role.HostYou",
+            (true, false) => "Participant.Role.Host",
+            (false, true) => "Participant.Role.You",
+            _ => view.Status?.UsesLocalCopy == true ? "Participant.Role.LocalCopy" : "Participant.Role.Participant",
+        });
         Fingerprint = view.Info.PeerId.ToShortString();
 
         var status = view.Status;

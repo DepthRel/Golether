@@ -1,6 +1,7 @@
 using System.Globalization;
 using System.Text;
 using Golether.Core.Networking;
+using Golether.Localization;
 using Golether.Tunnels.AmneziaWG.Keys;
 
 namespace Golether.Tunnels.AmneziaWG.Configuration;
@@ -20,22 +21,22 @@ public sealed record AwgConfiguration(AwgInterface Interface, IReadOnlyList<AwgP
     {
         if (!AwgKeys.IsValidKey(Interface.PrivateKey))
         {
-            throw new FormatException("PrivateKey is invalid.");
+            throw new FormatException(Texts.Get("Config.Error.PrivateKeyInvalid"));
         }
 
         if (!IPv4Cidr.TryParse(Interface.Address, out _))
         {
-            throw new FormatException($"Address '{Interface.Address}' is not an IPv4 address with prefix.");
+            throw new FormatException(Texts.Format("Config.Error.Address", Interface.Address));
         }
 
         if (Interface.ListenPort is < 1 or > 65535)
         {
-            throw new FormatException("ListenPort must be 1–65535.");
+            throw new FormatException(Texts.Get("Config.Error.ListenPort"));
         }
 
         if (Interface.Mtu is < 576 or > 9000)
         {
-            throw new FormatException("MTU must be 576–9000.");
+            throw new FormatException(Texts.Get("Config.Error.Mtu"));
         }
 
         Interface.Junk.Validate();
@@ -45,23 +46,23 @@ public sealed record AwgConfiguration(AwgInterface Interface, IReadOnlyList<AwgP
         {
             if (!AwgKeys.IsValidKey(peer.PublicKey) || (peer.PresharedKey is not null && !AwgKeys.IsValidKey(peer.PresharedKey)))
             {
-                throw new FormatException("A peer key is invalid.");
+                throw new FormatException(Texts.Get("Config.Error.PeerKey"));
             }
 
             if (peer.AllowedIps.Count == 0 || peer.AllowedIps.Any(ip => !IPv4Cidr.TryParse(ip, out _)))
             {
-                throw new FormatException("AllowedIPs must contain IPv4 addresses with prefix.");
+                throw new FormatException(Texts.Get("Config.Error.AllowedIps"));
             }
 
             if (peer.PersistentKeepalive is < 0 or > 65535)
             {
-                throw new FormatException("PersistentKeepalive must be 0–65535.");
+                throw new FormatException(Texts.Get("Config.Error.Keepalive"));
             }
         }
 
         if (Peers.Select(p => p.PublicKey).Distinct(StringComparer.Ordinal).Count() != Peers.Count)
         {
-            throw new FormatException("Peers must have distinct public keys.");
+            throw new FormatException(Texts.Get("Config.Error.PeerKeysDistinct"));
         }
     }
 

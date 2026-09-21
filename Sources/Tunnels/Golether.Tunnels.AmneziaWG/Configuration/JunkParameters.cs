@@ -1,4 +1,5 @@
 using System.Security.Cryptography;
+using Golether.Localization;
 
 namespace Golether.Tunnels.AmneziaWG.Configuration;
 
@@ -34,12 +35,12 @@ public sealed record JunkParameters(int Jc, int Jmin, int Jmax)
     {
         if (Jc is < 0 or > 128)
         {
-            throw new FormatException("Jc must be 0–128.");
+            throw new FormatException(Texts.Get("Config.Error.JunkCount"));
         }
 
         if (Jc > 0 && (Jmin < 0 || Jmin >= Jmax || Jmax > MaxJunkSize))
         {
-            throw new FormatException($"Junk sizes must satisfy 0 ≤ Jmin < Jmax ≤ {MaxJunkSize}.");
+            throw new FormatException(Texts.Format("Config.Error.JunkSizes", MaxJunkSize));
         }
     }
 }

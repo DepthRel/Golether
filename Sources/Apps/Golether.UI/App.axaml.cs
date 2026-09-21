@@ -2,6 +2,7 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Markup.Xaml;
+using Golether.Localization;
 using Golether.UI.Services;
 using Golether.UI.Views;
 using Golether.UI.Views.Dialogs;
@@ -28,6 +29,11 @@ public sealed class App : Application
         {
             // Nothing is the main window yet: the splash must be able to close without ending the application.
             desktop.ShutdownMode = ShutdownMode.OnExplicitShutdown;
+
+            // The stored language is not known before the database is ready; until then the splash and a start-up
+            // failure speak the language of the operating system.
+            var localizer = Texts.Localizer;
+            localizer.SetLanguage(localizer.Detect(System.Globalization.CultureInfo.CurrentUICulture).Code);
             var splash = new SplashWindow();
             splash.Show();
             _ = StartAsync(desktop, splash);
@@ -49,12 +55,12 @@ public sealed class App : Application
         AppServices services;
         try
         {
-            splash.ShowStep("Готовим данные и ключи…");
+            splash.ShowStep(Texts.Get("Splash.PreparingData"));
             services = await Task.Run(AppServices.Create);
         }
         catch (Exception ex)
         {
-            var failure = new MessageDialog("Golether не запустился", ex.Message);
+            var failure = new MessageDialog(Texts.Get("Splash.StartFailed"), ex.Message);
             desktop.MainWindow = failure;
             desktop.ShutdownMode = ShutdownMode.OnMainWindowClose;
             failure.Show();
@@ -63,7 +69,7 @@ public sealed class App : Application
         }
 
         _services = services;
-        splash.ShowStep("Открываем окно…");
+        splash.ShowStep(Texts.Get("Splash.OpeningWindow"));
         var window = new MainWindow();
         services.SetDialogs(new AvaloniaDialogService(window));
         var viewModel = services.CreateMainViewModel();

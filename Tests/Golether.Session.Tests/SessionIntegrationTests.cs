@@ -4,6 +4,7 @@ using Golether.Core.Data.Enums;
 using Golether.Core.Networking;
 using Golether.Core.Playback;
 using Golether.Core.Time;
+using Golether.Localization;
 using Golether.Media.Conference;
 using Golether.Media.Player.Simulation;
 using Golether.Media.Streaming.Caching;
@@ -461,6 +462,24 @@ public sealed class SessionIntegrationTests : IAsyncLifetime
         var error = await Assert.ThrowsAsync<SessionJoinException>(() =>
             declined.JoinAsync(_host.CreateInvite([new PeerEndpoint("127.0.0.1", _host.Port)]), token));
         Assert.Contains("отклонил", error.Message, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// The host sends the reason of a rejection, not a text: the host of the test speaks Russian, and the participant
+    /// reads the reason in English, the language of its own interface.
+    /// </summary>
+    [Fact]
+    public async Task Rejection_IsWordedInTheLanguageOfTheParticipant()
+    {
+        var token = TestContext.Current.CancellationToken;
+        _prompt.AskAsync(Arg.Any<AdmissionRequest>(), Arg.Any<CancellationToken>()).Returns(false);
+        var invite = _host.CreateInvite([new PeerEndpoint("127.0.0.1", _host.Port)]);
+
+        using var english = Texts.Scope(new Localizer(LanguageCatalog.LoadEmbedded(), "en"));
+        await using var declined = CreateGuest();
+        var error = await Assert.ThrowsAsync<SessionJoinException>(() => declined.JoinAsync(invite, token));
+
+        Assert.Equal("The host declined the request.", error.Message);
     }
 
     /// <summary>

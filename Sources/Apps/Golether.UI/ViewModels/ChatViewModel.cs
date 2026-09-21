@@ -2,6 +2,7 @@ using System.Collections.ObjectModel;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Golether.Core.Data.Enums;
+using Golether.Localization;
 using Golether.Session;
 using Golether.Sync.Protocol;
 using Golether.UI.Services;
@@ -108,7 +109,12 @@ public sealed partial class ChatViewModel : ObservableObject
     /// <summary>
     /// Gets the header of the chat.
     /// </summary>
-    public string Header => Unread > 0 ? $"ЧАТ · {Unread}" : "ЧАТ";
+    public string Header => Unread > 0 ? Texts.Format("Chat.HeaderUnread", Unread) : Texts.Get("Chat.Header");
+
+    /// <summary>
+    /// Tells the view that the texts of the chat changed with the language.
+    /// </summary>
+    public void RefreshTexts() => OnPropertyChanged(nameof(Header));
 
     /// <summary>
     /// Gets or sets a value indicating whether the chat has lines.
@@ -187,7 +193,7 @@ public sealed partial class ChatViewModel : ObservableObject
         catch (Exception ex) when (ex is IOException or InvalidOperationException or ObjectDisposedException)
         {
             Draft = text;
-            AddSystem("Сообщение не отправлено: нет связи с ведущим.");
+            AddSystem(Texts.Get("Chat.NotSent"));
         }
     }
 

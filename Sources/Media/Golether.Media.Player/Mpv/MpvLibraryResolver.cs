@@ -1,5 +1,6 @@
 using System.Reflection;
 using System.Runtime.InteropServices;
+using Golether.Localization;
 
 namespace Golether.Media.Player.Mpv;
 
@@ -66,7 +67,7 @@ public static class MpvLibraryResolver
 
             if (_handle == 0)
             {
-                error = "Компонент видео (libmpv) не установлен.";
+                error = Texts.Get("Player.Error.LibraryMissing");
                 return false;
             }
 
@@ -79,7 +80,7 @@ public static class MpvLibraryResolver
             var major = LibMpv.ClientApiVersion() >> 16;
             if (major < 2)
             {
-                error = $"Нужна libmpv с client API 2.x, найдена {major}.x.";
+                error = Texts.Format("Player.Error.LibraryVersion", major);
                 return false;
             }
 

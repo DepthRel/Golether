@@ -1,3 +1,4 @@
+using Golether.Localization;
 using Golether.Security.Admission;
 
 namespace Golether.UI.ViewModels.Dialogs;
@@ -14,13 +15,11 @@ public sealed class AdmissionDialogViewModel
     public AdmissionDialogViewModel(AdmissionRequest request)
     {
         ArgumentNullException.ThrowIfNull(request);
-        Title = $"{request.DisplayName} хочет подключиться";
+        Title = Texts.Format("Admission.Title", request.DisplayName);
         Words = request.VerificationCode.Words;
         Number = request.VerificationCode.Number.ToString("00", System.Globalization.CultureInfo.InvariantCulture);
         Fingerprint = request.PeerId.ToShortString();
-        Explanation = request.IsKnownContact
-            ? "Это устройство вам знакомо. Всё равно сверьте код, если сомневаетесь."
-            : "Новое устройство. Прочитайте код вслух: участник должен видеть на своём экране то же самое.";
+        Explanation = Texts.Get(request.IsKnownContact ? "Admission.KnownDevice" : "Admission.NewDevice");
     }
 
     /// <summary>

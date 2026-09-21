@@ -1,6 +1,7 @@
 using Golether.Components.Catalog;
 using Golether.Components.Installation;
 using Golether.Core.Data.Enums;
+using Golether.Localization;
 using Golether.Media.Player.Mpv;
 
 namespace Golether.UI.Services;
@@ -42,7 +43,7 @@ public sealed class ComponentService : IComponentService
     public async Task InstallAsync(ComponentId id, IProgress<InstallProgress> progress, CancellationToken cancellationToken)
     {
         var package = ComponentCatalog.Find(id)
-            ?? throw new ComponentInstallException($"{ComponentCatalog.Describe(id).Title} не устанавливается автоматически на этой системе.");
+            ?? throw new ComponentInstallException(Texts.Format("Install.Error.NotAutomatic", ComponentCatalog.Describe(id).Title));
         await _installer.InstallAsync(package, progress, cancellationToken).ConfigureAwait(false);
         if (id == ComponentId.Video)
         {

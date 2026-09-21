@@ -1,4 +1,5 @@
 using Golether.Core.Identity;
+using Golether.Localization;
 
 namespace Golether.Media.Conference;
 
@@ -12,15 +13,30 @@ public sealed class UnavailableConferenceMedia : IConferenceMedia
     /// </summary>
     /// <param name="reason">The reason shown to the user.</param>
     public UnavailableConferenceMedia(string reason)
+        : this(() => reason)
     {
-        UnavailableReason = string.IsNullOrWhiteSpace(reason) ? "Камеры и голос недоступны." : reason;
     }
+
+    /// <summary>
+    /// Initializes a new instance of the <see cref="UnavailableConferenceMedia"/> class.
+    /// </summary>
+    /// <param name="reason">Words the reason shown to the user each time it is asked, so it follows the language of
+    /// the moment.</param>
+    public UnavailableConferenceMedia(Func<string> reason)
+    {
+        _reason = reason ?? throw new ArgumentNullException(nameof(reason));
+    }
+
+    /// <summary>
+    /// Words the reason.
+    /// </summary>
+    private readonly Func<string> _reason;
 
     /// <inheritdoc />
     public bool IsAvailable => false;
 
     /// <inheritdoc />
-    public string? UnavailableReason { get; }
+    public string? UnavailableReason => _reason() is { } reason && !string.IsNullOrWhiteSpace(reason) ? reason : Texts.Get("Conference.Unavailable");
 
     /// <inheritdoc />
     public event EventHandler<ParticipantVideoFrame>? VideoFrameReceived

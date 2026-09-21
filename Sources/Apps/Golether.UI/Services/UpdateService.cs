@@ -3,6 +3,7 @@ using System.Net.Http.Json;
 using System.Reflection;
 using System.Security.Cryptography;
 using Golether.Core.Data.Stores;
+using Golether.Localization;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 
@@ -117,7 +118,7 @@ public sealed class UpdateService : IUpdateService
         ArgumentNullException.ThrowIfNull(update);
         if (Choose(update, new Version(0, 0)) is null)
         {
-            throw new InvalidDataException("Обновление описано неверно.");
+            throw new InvalidDataException(Texts.Get("Update.Error.BadManifest"));
         }
 
         Directory.CreateDirectory(folder);
@@ -128,7 +129,7 @@ public sealed class UpdateService : IUpdateService
         var total = response.Content.Headers.ContentLength ?? update.Size;
         if (total > MaxPackageBytes)
         {
-            throw new InvalidDataException("Файл обновления слишком большой.");
+            throw new InvalidDataException(Texts.Get("Update.Error.TooLarge"));
         }
 
         await using (var source = await response.Content.ReadAsStreamAsync(cancellationToken).ConfigureAwait(false))
@@ -142,7 +143,7 @@ public sealed class UpdateService : IUpdateService
                 copied += read;
                 if (copied > MaxPackageBytes)
                 {
-                    throw new InvalidDataException("Файл обновления слишком большой.");
+                    throw new InvalidDataException(Texts.Get("Update.Error.TooLarge"));
                 }
 
                 await target.WriteAsync(buffer.AsMemory(0, read), cancellationToken).ConfigureAwait(false);
@@ -154,7 +155,7 @@ public sealed class UpdateService : IUpdateService
         if (!string.Equals(actual, update.Sha256, StringComparison.OrdinalIgnoreCase))
         {
             File.Delete(path);
-            throw new InvalidDataException("Контрольная сумма файла не совпала: файл не тот, что описан источником обновлений.");
+            throw new InvalidDataException(Texts.Get("Update.Error.ChecksumMismatch"));
         }
 
         progress?.Report(1);
@@ -189,5 +190,5 @@ public sealed class UpdateService : IUpdateService
     /// <param name="bytes">The size.</param>
     /// <returns>The text.</returns>
     public static string DescribeSize(long bytes)
-        => bytes <= 0 ? string.Empty : (bytes / (1024.0 * 1024)).ToString("0.#", CultureInfo.InvariantCulture) + " МБ";
+        => bytes <= 0 ? string.Empty : Texts.Format("Format.Megabytes", (bytes / (1024.0 * 1024)).ToString("0.#", CultureInfo.InvariantCulture));
 }

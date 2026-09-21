@@ -1,6 +1,7 @@
 using Golether.Core.Data.Enums;
 using Golether.Core.Playback;
 using Golether.Core.Time;
+using Golether.Localization;
 using Golether.Media.Player.Mpv;
 using Golether.Media.Player.Simulation;
 using Golether.Media.Player;
@@ -66,8 +67,16 @@ public sealed class PlayerHost : IPlaybackController, ILocalPlayerControls
     {
         _loggerFactory = loggerFactory ?? throw new ArgumentNullException(nameof(loggerFactory));
         _configDirectory = configDirectory;
-        UnavailableReason = "Видео появится после открытия окна.";
+        _unavailableReason = () => Texts.Get("Player.Notice.AfterWindowOpens");
+
+        // The notice is worded when it is asked for; the window asks again when the language changes.
+        Texts.Localizer.LanguageChanged += (_, _) => BackendChanged?.Invoke(this, EventArgs.Empty);
     }
+
+    /// <summary>
+    /// Words the reason libmpv is not used, in the language of the moment.
+    /// </summary>
+    private Func<string?> _unavailableReason;
 
     /// <summary>
     /// Raised when the backend changes.
@@ -86,7 +95,7 @@ public sealed class PlayerHost : IPlaybackController, ILocalPlayerControls
     /// <summary>
     /// Gets the reason libmpv is not used, or <see langword="null"/>.
     /// </summary>
-    public string? UnavailableReason { get; private set; }
+    public string? UnavailableReason => _unavailableReason();
 
     /// <summary>
     /// Gets the active backend.
@@ -110,7 +119,7 @@ public sealed class PlayerHost : IPlaybackController, ILocalPlayerControls
         var options = new MpvPlayerOptions { WindowHandle = windowHandle, ConfigDirectory = _configDirectory };
         if (!MpvPlayer.TryCreate(options, _loggerFactory.CreateLogger<MpvPlayer>(), out var player, out var error))
         {
-            UnavailableReason = error + " Синхронизация работает и без изображения.";
+            _unavailableReason = () => Texts.Format("Player.Notice.SyncWithoutPicture", error);
             BackendChanged?.Invoke(this, EventArgs.Empty);
             return false;
         }
@@ -119,7 +128,7 @@ public sealed class PlayerHost : IPlaybackController, ILocalPlayerControls
         player.TracksChanged += (_, _) => TracksChanged?.Invoke(this, EventArgs.Empty);
         ApplyAudio(player);
         _mpv = player;
-        UnavailableReason = null;
+        _unavailableReason = () => null;
         BackendChanged?.Invoke(this, EventArgs.Empty);
         return true;
     }
@@ -140,7 +149,7 @@ public sealed class PlayerHost : IPlaybackController, ILocalPlayerControls
         if (player is not null)
         {
             await player.DisposeAsync().ConfigureAwait(false);
-            UnavailableReason = "Окно видео закрыто.";
+            _unavailableReason = () => Texts.Get("Player.Notice.WindowClosed");
             BackendChanged?.Invoke(this, EventArgs.Empty);
             TracksChanged?.Invoke(this, EventArgs.Empty);
         }
@@ -187,7 +196,7 @@ public sealed class PlayerHost : IPlaybackController, ILocalPlayerControls
     {
         if (_mpv is not { } player)
         {
-            throw new InvalidOperationException("Субтитры можно добавить, когда видео открыто.");
+            throw new InvalidOperationException(Texts.Get("Player.Error.SubtitlesNeedVideo"));
         }
 
         player.AddSubtitleFile(path);
@@ -198,7 +207,7 @@ public sealed class PlayerHost : IPlaybackController, ILocalPlayerControls
     {
         if (_mpv is not { } player)
         {
-            throw new InvalidOperationException("Звуковую дорожку можно добавить, когда видео открыто.");
+            throw new InvalidOperationException(Texts.Get("Player.Error.AudioNeedsVideo"));
         }
 
         player.AddAudioFile(path);

@@ -1,4 +1,5 @@
 <Window xmlns="https://github.com/avaloniaui"
+        xmlns:loc="using:Golether.UI.Localization"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         x:Class="Golether.UI.Views.Dialogs.MessageDialog"
         Width="460" SizeToContent="Height" CanResize="False"
@@ -7,6 +8,6 @@
   <StackPanel Margin="22" Spacing="14">
     <TextBlock x:Name="TitleText" Classes="title" TextWrapping="Wrap" />
     <TextBlock x:Name="MessageText" TextWrapping="Wrap" Classes="muted" />
-    <Button Classes="accent" HorizontalAlignment="Right" Content="Понятно" Click="OnOk" IsDefault="True" />
+    <Button Classes="accent" HorizontalAlignment="Right" Content="{loc:Loc Common.Understood}" Click="OnOk" IsDefault="True" />
   </StackPanel>
 </Window>

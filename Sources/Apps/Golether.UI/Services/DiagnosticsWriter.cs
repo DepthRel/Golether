@@ -1,6 +1,7 @@
 using System.Globalization;
 using System.Reflection;
 using Golether.Core.Data.Enums;
+using Golether.Localization;
 using Golether.Session;
 
 namespace Golether.UI.Services;
@@ -62,7 +63,7 @@ public sealed class DiagnosticsWriter : IDiagnosticsWriter
     public async Task<string> SaveAsync(SessionSnapshot? snapshot, IReadOnlyList<string> notes)
     {
         var now = _timeProvider.GetLocalNow();
-        var version = Assembly.GetEntryAssembly()?.GetName().Version?.ToString() ?? "неизвестна";
+        var version = Assembly.GetEntryAssembly()?.GetName().Version?.ToString() ?? Texts.Get("Report.VersionUnknown");
         var statuses = new[] { ComponentId.Video, ComponentId.Conference, ComponentId.Tunnel }.Select(_components.GetStatus).ToArray();
         var text = DiagnosticReport.Build(
             version,
@@ -73,7 +74,7 @@ public sealed class DiagnosticsWriter : IDiagnosticsWriter
             DiagnosticReport.ReadLogTail(_logFile()),
             now);
         Directory.CreateDirectory(_logsDirectory);
-        var path = Path.Combine(_logsDirectory, $"golether-отчёт-{now.ToString("yyyy-MM-dd-HHmmss", CultureInfo.InvariantCulture)}.txt");
+        var path = Path.Combine(_logsDirectory, Texts.Format("Report.FileName", now.ToString("yyyy-MM-dd-HHmmss", CultureInfo.InvariantCulture)));
         await File.WriteAllTextAsync(path, text, System.Text.Encoding.UTF8).ConfigureAwait(false);
         return path;
     }

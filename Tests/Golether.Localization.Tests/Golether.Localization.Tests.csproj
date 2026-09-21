@@ -1,0 +1,8 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- Tests of the language packs: the localizer, the choice of the language and the completeness of every language. -->
+  <ItemGroup>
+    <ProjectReference Include="../../Sources/Core/Golether.Localization/Golether.Localization.csproj" />
+  </ItemGroup>
+
+</Project>

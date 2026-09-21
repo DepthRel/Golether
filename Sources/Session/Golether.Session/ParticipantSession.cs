@@ -5,6 +5,7 @@ using Golether.Core.Networking;
 using Golether.Core.Playback;
 using Golether.Core.Session;
 using Golether.Core.Time;
+using Golether.Localization;
 using Golether.Media.Conference;
 using Golether.Media.Streaming.Caching;
 using Golether.Media.Streaming.Files;
@@ -327,7 +328,7 @@ public sealed class ParticipantSession : IAsyncDisposable
 
         if (!_returning && invite.ExpiresAt <= _timeProvider.GetUtcNow())
         {
-            throw new SessionJoinException("Срок действия приглашения истёк. Попросите ведущего прислать новое.");
+            throw new SessionJoinException(Texts.Get("Session.Error.InviteExpired"));
         }
 
         _invite = invite;
@@ -347,7 +348,7 @@ public sealed class ParticipantSession : IAsyncDisposable
             }
             catch (Exception ex) when (ex is IOException or InvalidDataException)
             {
-                throw new SessionJoinException("Соединение с ведущим прервалось.", ex);
+                throw new SessionJoinException(Texts.Get("Session.Error.ConnectionInterrupted"), ex);
             }
 
             switch (message)
@@ -357,13 +358,13 @@ public sealed class ParticipantSession : IAsyncDisposable
                     continue;
                 case RejectedMessage rejected:
                     SetState(SessionState.Ended);
-                    throw new SessionJoinException(rejected.Message);
+                    throw new SessionJoinException(SessionTexts.DescribeRejection(rejected.Reason));
                 case WelcomeMessage accepted:
                     welcome = accepted;
                     break;
                 case null:
                     SetState(SessionState.Ended);
-                    throw new SessionJoinException("Ведущий закрыл соединение.");
+                    throw new SessionJoinException(Texts.Get("Session.Error.HostClosed"));
                 default:
                     continue;
             }
@@ -381,7 +382,7 @@ public sealed class ParticipantSession : IAsyncDisposable
         }
 
         SetState(SessionState.Active);
-        Raise(null, $"Вы в сеансе «{welcome.SessionName}»");
+        Raise(null, Texts.Format("Session.Event.YouJoined", welcome.SessionName));
         var token = _stopping.Token;
         _loops.Add(Task.Run(() => ReceiveLoopAsync(token)));
         _loops.Add(Task.Run(() => ClockLoopAsync(token)));
@@ -408,7 +409,7 @@ public sealed class ParticipantSession : IAsyncDisposable
     /// <returns><see langword="false"/> when the file differs from the shared media.</returns>
     public async Task<bool> UseLocalCopyAsync(string path, CancellationToken cancellationToken)
     {
-        var media = _media ?? throw new InvalidOperationException("The host shares no media.");
+        var media = _media ?? throw new InvalidOperationException(Texts.Get("Session.Error.NoMedia"));
         var local = await MediaFiles.DescribeAsync(path, cancellationToken).ConfigureAwait(false);
         if (local.Length != media.Length || !string.Equals(local.QuickId, media.QuickId, StringComparison.Ordinal))
         {
@@ -424,7 +425,7 @@ public sealed class ParticipantSession : IAsyncDisposable
             _sharing = new ChunkSharing(media, conference, MediaFiles.OpenRead(path), _loggerFactory.CreateLogger<PeerChunkExchange>());
         }
 
-        Raise(_identity.PeerId, "Воспроизводится локальная копия файла");
+        Raise(_identity.PeerId, Texts.Get("Session.Event.LocalCopyPlaying"));
         return true;
     }
 
@@ -437,7 +438,7 @@ public sealed class ParticipantSession : IAsyncDisposable
     public async Task RequestAsync(PlaybackRequest request, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(request);
-        var channel = _channel ?? throw new InvalidOperationException("The session is not joined.");
+        var channel = _channel ?? throw new InvalidOperationException(Texts.Get("Session.Error.NotJoined"));
         await _playerGate.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
         {
@@ -460,7 +461,7 @@ public sealed class ParticipantSession : IAsyncDisposable
     /// <returns>A task that completes when the message was sent.</returns>
     public async Task SendChatAsync(ChatKind kind, string text, CancellationToken cancellationToken)
     {
-        var channel = _channel ?? throw new InvalidOperationException("The session is not joined.");
+        var channel = _channel ?? throw new InvalidOperationException(Texts.Get("Session.Error.NotJoined"));
         if (ChatMessage.Create(kind, text) is { } message)
         {
             await channel.SendAsync(message, cancellationToken).ConfigureAwait(false);
@@ -477,7 +478,7 @@ public sealed class ParticipantSession : IAsyncDisposable
     /// <returns>A task that completes when the piece was sent.</returns>
     public async Task SendDrawAsync(string strokeId, StrokePhase phase, IReadOnlyList<StrokePoint> points, CancellationToken cancellationToken)
     {
-        var channel = _channel ?? throw new InvalidOperationException("The session is not joined.");
+        var channel = _channel ?? throw new InvalidOperationException(Texts.Get("Session.Error.NotJoined"));
         if (DrawMessage.Create(strokeId, phase, points) is { } message)
         {
             await channel.SendAsync(message, cancellationToken).ConfigureAwait(false);
@@ -573,7 +574,7 @@ public sealed class ParticipantSession : IAsyncDisposable
             }
             catch (PeerAuthenticationException ex)
             {
-                throw new SessionJoinException(ex.Message + " Соединение прервано: возможна подмена узла.", ex);
+                throw new SessionJoinException(Texts.Format("Session.Error.PossibleSpoofing", ex.Message), ex);
             }
             catch (IOException ex)
             {
@@ -581,7 +582,7 @@ public sealed class ParticipantSession : IAsyncDisposable
             }
         }
 
-        throw new SessionJoinException("Ведущий недоступен ни по одному адресу:\n" + string.Join("\n", errors));
+        throw new SessionJoinException(Texts.Get("Session.Error.HostUnreachable") + "\n" + string.Join("\n", errors));
     }
 
     /// <summary>
@@ -591,7 +592,7 @@ public sealed class ParticipantSession : IAsyncDisposable
     /// <returns>A task that completes when the connection ends.</returns>
     private async Task ReceiveLoopAsync(CancellationToken cancellationToken)
     {
-        var reason = "Соединение с ведущим потеряно.";
+        var reason = Texts.Get("Session.Error.ConnectionLost");
         try
         {
             while (!cancellationToken.IsCancellationRequested)
@@ -621,12 +622,12 @@ public sealed class ParticipantSession : IAsyncDisposable
                     case ModerationMessage moderation:
                         if (_conference?.SwitchOff(moderation.Microphone, moderation.Camera) == true)
                         {
-                            Raise(null, (moderation.Microphone, moderation.Camera) switch
+                            Raise(null, Texts.Get((moderation.Microphone, moderation.Camera) switch
                             {
-                                (true, true) => "Ведущий выключил ваши микрофон и камеру. Включить их снова можете только вы.",
-                                (true, false) => "Ведущий выключил ваш микрофон. Включить его снова можете только вы.",
-                                _ => "Ведущий выключил вашу камеру. Включить её снова можете только вы.",
-                            });
+                                (true, true) => "Session.Event.SwitchedOffBoth",
+                                (true, false) => "Session.Event.SwitchedOffMicrophone",
+                                _ => "Session.Event.SwitchedOffCamera",
+                            }));
                         }
 
                         break;
@@ -637,10 +638,10 @@ public sealed class ParticipantSession : IAsyncDisposable
                         DrawReceived?.Invoke(this, new StrokeUpdate(author, cleanStroke.StrokeId, cleanStroke.Phase, cleanStroke.Points, author == _identity.PeerId));
                         break;
                     case ByeMessage bye:
-                        reason = bye.Reason ?? "Ведущий завершил сеанс.";
+                        reason = bye.Reason ?? Texts.Get("Session.Error.HostEnded");
                         return;
                     case RejectedMessage rejected:
-                        reason = rejected.Message;
+                        reason = SessionTexts.DescribeRejection(rejected.Reason);
                         return;
                 }
             }
@@ -673,7 +674,7 @@ public sealed class ParticipantSession : IAsyncDisposable
         string name;
         lock (_gate)
         {
-            name = _participants.FirstOrDefault(p => p.Info.PeerId == sender)?.Info.DisplayName ?? "Участник";
+            name = _participants.FirstOrDefault(p => p.Info.PeerId == sender)?.Info.DisplayName ?? Texts.Get("Session.DefaultParticipantName");
         }
 
         ChatReceived?.Invoke(
@@ -799,7 +800,7 @@ public sealed class ParticipantSession : IAsyncDisposable
             _latestState = state;
         }
 
-        var name = _participants.FirstOrDefault(p => p.Info.PeerId == state.Origin)?.Info.DisplayName ?? "Участник";
+        var name = _participants.FirstOrDefault(p => p.Info.PeerId == state.Origin)?.Info.DisplayName ?? Texts.Get("Session.DefaultParticipantName");
         Raise(state.Origin, SessionTexts.Describe(state, name));
     }
 
@@ -863,7 +864,7 @@ public sealed class ParticipantSession : IAsyncDisposable
         }
 
         await LoadAsync(uri, cancellationToken).ConfigureAwait(false);
-        Raise(host, $"Ведущий показывает «{media.FileName}»");
+        Raise(host, Texts.Format("Session.Event.HostShows", media.FileName));
     }
 
     /// <summary>

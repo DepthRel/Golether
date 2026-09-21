@@ -1,6 +1,7 @@
 using System.Buffers.Text;
 using System.Text;
 using System.Text.Json;
+using Golether.Localization;
 using Golether.Security.Identity;
 
 namespace Golether.Tunnels.AmneziaWG.Packages;
@@ -73,13 +74,13 @@ public static class TunnelPackageCodec
         var prefix = Prefix(kind);
         if (compact.Length > MaxLength || !compact.StartsWith(prefix, StringComparison.Ordinal))
         {
-            throw new FormatException(kind == OfferKind ? "Это не пакет-предложение Golether." : "Это не пакет-ответ Golether.");
+            throw new FormatException(Texts.Get(kind == OfferKind ? "Tunnel.Error.NotOfferPackage" : "Tunnel.Error.NotAnswerPackage"));
         }
 
         var dot = compact.LastIndexOf('.');
         if (dot <= prefix.Length)
         {
-            throw new FormatException("Пакет повреждён: нет подписи.");
+            throw new FormatException(Texts.Get("Tunnel.Error.PackageNoSignature"));
         }
 
         T? body;
@@ -91,12 +92,12 @@ public static class TunnelPackageCodec
         }
         catch (Exception ex) when (ex is FormatException or JsonException)
         {
-            throw new FormatException("Пакет повреждён.", ex);
+            throw new FormatException(Texts.Get("Tunnel.Error.PackageDamaged"), ex);
         }
 
         if (body is null)
         {
-            throw new FormatException("Пакет пуст.");
+            throw new FormatException(Texts.Get("Tunnel.Error.PackageEmpty"));
         }
 
         byte[] certificateDer;
@@ -106,12 +107,12 @@ public static class TunnelPackageCodec
         }
         catch (FormatException ex)
         {
-            throw new FormatException("Пакет содержит неверный сертификат.", ex);
+            throw new FormatException(Texts.Get("Tunnel.Error.PackageBadCertificate"), ex);
         }
 
         if (!PeerCertificates.TryVerify(certificateDer, Encoding.ASCII.GetBytes(compact[..dot]), signature, out var signer))
         {
-            throw new FormatException("Подпись пакета неверна: пакет изменён или повреждён.");
+            throw new FormatException(Texts.Get("Tunnel.Error.PackageBadSignature"));
         }
 
         return new SignedPackage<T>(body, signer);

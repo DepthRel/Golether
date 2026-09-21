@@ -6,6 +6,7 @@ using Golether.Core.Data.Enums;
 using Golether.Core.Data.Stores;
 using Golether.Core.Identity;
 using Golether.Core.Playback;
+using Golether.Localization;
 using Golether.Media.Conference;
 using Golether.Media.Player;
 using Golether.Session;
@@ -156,6 +157,7 @@ public sealed partial class MainWindowViewModel : ObservableObject
     /// <param name="diagnostics">Saves diagnostic reports, or <see langword="null"/> when they are not offered.</param>
     /// <param name="updates">Looks for new versions, or <see langword="null"/> when updates are not offered.</param>
     /// <param name="updateFolder">The folder for downloaded updates.</param>
+    /// <param name="language">The language selector, or <see langword="null"/> when the language cannot be chosen.</param>
     public MainWindowViewModel(
         ISessionService session,
         IDialogService dialogs,
@@ -168,9 +170,11 @@ public sealed partial class MainWindowViewModel : ObservableObject
         ILocalPlayerControls? playerControls = null,
         IDiagnosticsWriter? diagnostics = null,
         IUpdateService? updates = null,
-        string? updateFolder = null)
+        string? updateFolder = null,
+        LanguageViewModel? language = null)
     {
         ArgumentNullException.ThrowIfNull(components);
+        Language = language;
         VideoComponent = new ComponentItemViewModel(ComponentId.Video, components, dialogs);
         ConferenceComponent = new ComponentItemViewModel(ComponentId.Conference, components, dialogs);
         ComponentItems = [VideoComponent, ConferenceComponent];
@@ -228,6 +232,50 @@ public sealed partial class MainWindowViewModel : ObservableObject
         UpdateConferenceNotice();
         _session.Changed += (_, _) => QueueRefresh();
         _session.EventRaised += (_, e) => _dispatcher.Post(() => AddEvent(e));
+        Texts.Localizer.LanguageChanged += (_, _) => _dispatcher.Post(RefreshTexts);
+    }
+
+    /// <summary>
+    /// Gets the language selector, or <see langword="null"/> when the language cannot be chosen.
+    /// </summary>
+    public LanguageViewModel? Language { get; }
+
+    /// <summary>
+    /// Words again everything the view models composed from texts, after the user chose another language. The texts
+    /// written in the XAML follow the language by themselves.
+    /// </summary>
+    private void RefreshTexts()
+    {
+        foreach (var item in ComponentItems)
+        {
+            item.Refresh();
+        }
+
+        UpdateConferenceNotice();
+
+        // A name the user wrote stays; the name offered by default follows the language.
+        var offered = Texts.Get("Main.DefaultSessionName");
+        if (NewSessionName == _defaultSessionName)
+        {
+            NewSessionName = offered;
+        }
+
+        _defaultSessionName = offered;
+        OnPropertyChanged(nameof(PlayButtonText));
+        OnPropertyChanged(nameof(VideoPlaceholder));
+        OnPropertyChanged(nameof(ResumeText));
+        OnPropertyChanged(nameof(MicrophoneText));
+        OnPropertyChanged(nameof(CameraText));
+        Chat.RefreshTexts();
+        Volume?.RefreshTexts();
+        Tracks?.Refresh();
+        foreach (var participant in Participants)
+        {
+            participant.RefreshTexts();
+        }
+
+        _ = Devices?.RefreshAsync();
+        Refresh();
     }
 
     /// <summary>
@@ -338,9 +386,7 @@ public sealed partial class MainWindowViewModel : ObservableObject
         {
             if (!await _session.AllowFirewallAsync(CancellationToken.None))
             {
-                await _dialogs.ShowMessageAsync(
-                    "Правило не добавлено",
-                    "Без него участники не подключатся. Добавить можно и вручную: «Брандмауэр Защитника Windows» → «Разрешить взаимодействие с приложением» → Golether, галочки для частной и общедоступной сети.");
+                await _dialogs.ShowMessageAsync(Texts.Get("Firewall.NotAdded.Title"), Texts.Get("Firewall.NotAdded.Text"));
             }
         }
         finally
@@ -398,13 +444,25 @@ public sealed partial class MainWindowViewModel : ObservableObject
     /// Gets or sets a value indicating whether the microphone is muted.
     /// </summary>
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(MicrophoneText))]
     public partial bool MicrophoneMuted { get; set; }
 
     /// <summary>
     /// Gets or sets a value indicating whether the camera is off.
     /// </summary>
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(CameraText))]
     public partial bool CameraOff { get; set; }
+
+    /// <summary>
+    /// Gets the caption of the microphone button.
+    /// </summary>
+    public string MicrophoneText => Texts.Get(MicrophoneMuted ? "Main.Microphone.Off" : "Main.Microphone.On");
+
+    /// <summary>
+    /// Gets the caption of the camera button.
+    /// </summary>
+    public string CameraText => Texts.Get(CameraOff ? "Main.Camera.Off" : "Main.Camera.On");
 
     /// <summary>
     /// Shows or hides the side panel and remembers the choice.
@@ -500,7 +558,12 @@ public sealed partial class MainWindowViewModel : ObservableObject
     /// Gets or sets the name of a new session.
     /// </summary>
     [ObservableProperty]
-    public partial string NewSessionName { get; set; } = "Вечер кино";
+    public partial string NewSessionName { get; set; } = Texts.Get("Main.DefaultSessionName");
+
+    /// <summary>
+    /// The name a new session gets when the user has not written one, in the language it was worded in.
+    /// </summary>
+    private string _defaultSessionName = Texts.Get("Main.DefaultSessionName");
 
     /// <summary>
     /// Gets or sets the listening port of a new session.
@@ -547,7 +610,13 @@ public sealed partial class MainWindowViewModel : ObservableObject
     /// Gets or sets a value indicating whether a session runs.
     /// </summary>
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(CanChooseLanguage))]
     public partial bool IsInSession { get; set; }
+
+    /// <summary>
+    /// Gets a value indicating whether the language selector is offered: on the start screen, not over the video.
+    /// </summary>
+    public bool CanChooseLanguage => Language is not null && !IsInSession;
 
     /// <summary>
     /// Gets or sets a value indicating whether this device hosts.
@@ -724,7 +793,7 @@ public sealed partial class MainWindowViewModel : ObservableObject
     /// <summary>
     /// Gets the name of the play button for tooltips and screen readers.
     /// </summary>
-    public string PlayButtonText => IsEnded ? "Смотреть сначала" : IsWaiting ? "Отменить старт" : IsPlaying ? "Пауза" : "Пуск";
+    public string PlayButtonText => Texts.Get(IsEnded ? "Main.Play.Again" : IsWaiting ? "Main.Play.CancelStart" : IsPlaying ? "Main.Play.Pause" : "Main.Play.Play");
 
     /// <summary>
     /// Gets or sets the countdown text of a scheduled start.
@@ -777,9 +846,7 @@ public sealed partial class MainWindowViewModel : ObservableObject
     /// Gets the hint shown instead of the video.
     /// </summary>
     public string VideoPlaceholder
-        => HasMedia ? "Видео на этом компьютере недоступно, синхронизация продолжает работать"
-            : IsHost ? "Выберите файл, который увидят все участники"
-            : "Ведущий ещё не выбрал файл";
+        => Texts.Get(HasMedia ? "Main.Placeholder.NoVideo" : IsHost ? "Main.Placeholder.ChooseFile" : "Main.Placeholder.HostNotChosen");
 
     /// <summary>
     /// Gets a value indicating whether the host can pick the first file from the placeholder.
@@ -838,11 +905,11 @@ public sealed partial class MainWindowViewModel : ObservableObject
     public Task HostFileAsync(string path)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(path);
-        return RunAsync("Подготовка файла…", async token =>
+        return RunAsync(Texts.Get("Main.Busy.PreparingFile"), async token =>
         {
             if (!File.Exists(path))
             {
-                throw new FileNotFoundException($"Файл «{path}» не найден.", path);
+                throw new FileNotFoundException(Texts.Format("Main.Error.FileNotFound", path), path);
             }
 
             if (!_session.IsActive)
@@ -918,8 +985,8 @@ public sealed partial class MainWindowViewModel : ObservableObject
         VerificationText = snapshot.VerificationCode?.ToString() ?? string.Empty;
         HasMedia = snapshot.Media is not null;
         MediaCaption = snapshot.Media is { } media
-            ? $"{media.FileName} · {DisplayFormat.Size(media.Length)}{(snapshot.UsesLocalCopy ? " · локальная копия" : string.Empty)}"
-            : snapshot.IsHost ? "Выберите файл для показа" : "Ведущий ещё не выбрал файл";
+            ? $"{media.FileName} · {DisplayFormat.Size(media.Length)}{(snapshot.UsesLocalCopy ? " · " + Texts.Get("Main.Caption.LocalCopy") : string.Empty)}"
+            : Texts.Get(snapshot.IsHost ? "Main.Caption.ChooseFile" : "Main.Placeholder.HostNotChosen");
 
         var local = snapshot.Local;
         var duration = local?.Snapshot.Duration;
@@ -940,7 +1007,7 @@ public sealed partial class MainWindowViewModel : ObservableObject
         IsWaiting = snapshot.Playback is { State: PlayState.Paused, Cause: PlaybackCause.WaitingForParticipants };
         CountdownText = IsWaiting
             ? DescribeWaiting(snapshot, duration)
-            : local?.StartsIn is { } startsIn ? $"Старт через {Math.Ceiling(startsIn.TotalSeconds):0}…" : string.Empty;
+            : local?.StartsIn is { } startsIn ? Texts.Format("Main.StartsIn", Math.Ceiling(startsIn.TotalSeconds).ToString("0", CultureInfo.InvariantCulture)) : string.Empty;
         UpdateResume(snapshot, position, duration);
         var buffered = ComputeBufferedRanges(snapshot, duration);
         if (!buffered.SequenceEqual(BufferedRanges))
@@ -955,16 +1022,16 @@ public sealed partial class MainWindowViewModel : ObservableObject
 
         UpdateParticipants(snapshot, duration);
         UpdateSyncChip(snapshot);
-        SecurityText = $"Ключи закреплены · {Participants.Count} из {SessionOptions.MaxParticipantsLimit}";
+        SecurityText = Texts.Format("Main.Security", Participants.Count, SessionOptions.MaxParticipantsLimit);
         var own = snapshot.Participants.FirstOrDefault(p => p.IsLocal)?.Status;
         SharingText = own is { BytesFromPeers: > 0 } or { BytesToPeers: > 0 }
-            ? $"Обмен с участниками: получено {DisplayFormat.Size(own.BytesFromPeers)}, отдано {DisplayFormat.Size(own.BytesToPeers)}"
+            ? Texts.Format("Main.Sharing", DisplayFormat.Size(own.BytesFromPeers), DisplayFormat.Size(own.BytesToPeers))
             : string.Empty;
         ClockText = snapshot.IsHost
-            ? "Часы сеанса: этот компьютер"
+            ? Texts.Get("Main.Clock.Host")
             : snapshot.ClockUncertainty is { } uncertainty
-                ? $"Часы: ±{(int)uncertainty.TotalMilliseconds} мс · пинг {DisplayFormat.Ping((int?)snapshot.RoundTrip?.TotalMilliseconds)}"
-                : "Часы: синхронизация…";
+                ? Texts.Format("Main.Clock.Participant", ((int)uncertainty.TotalMilliseconds).ToString(CultureInfo.InvariantCulture), DisplayFormat.Ping((int?)snapshot.RoundTrip?.TotalMilliseconds))
+                : Texts.Get("Main.Clock.Syncing");
     }
 
     /// <summary>
@@ -982,7 +1049,7 @@ public sealed partial class MainWindowViewModel : ObservableObject
     /// <summary>
     /// Gets the text of the continue offer.
     /// </summary>
-    public string ResumeText => ResumeOffer is { } offer ? $"В прошлый раз вы остановились на {DisplayFormat.Position(offer)}" : string.Empty;
+    public string ResumeText => ResumeOffer is { } offer ? Texts.Format("Main.ResumeOffer", DisplayFormat.Position(offer)) : string.Empty;
 
     /// <summary>
     /// Remembers the position of the current film and offers the host to continue a film stopped earlier.
@@ -1133,7 +1200,7 @@ public sealed partial class MainWindowViewModel : ObservableObject
         _update = found;
         UpdateText = found is null
             ? string.Empty
-            : $"Есть версия {found.Version}{(UpdateService.DescribeSize(found.Size) is { Length: > 0 } size ? " · " + size : string.Empty)}";
+            : Texts.Format("Main.Update.Available", found.Version) + (UpdateService.DescribeSize(found.Size) is { Length: > 0 } size ? " · " + size : string.Empty);
         UpdateNotes = found?.Notes ?? string.Empty;
     }
 
@@ -1156,14 +1223,11 @@ public sealed partial class MainWindowViewModel : ObservableObject
             var progress = new Progress<double>(value => _dispatcher.Post(() => UpdateProgress = value * 100));
             var path = await updates.DownloadAsync(update, _updateFolder, progress, CancellationToken.None);
             UpdateText = string.Empty;
-            await _dialogs.ShowMessageAsync(
-                "Обновление загружено",
-                $"Файл проверен по контрольной сумме и лежит здесь:{Environment.NewLine}{path}{Environment.NewLine}{Environment.NewLine}" +
-                "Закройте Golether и запустите его, чтобы обновиться. Ваши данные в папке data не тронутся.");
+            await _dialogs.ShowMessageAsync(Texts.Get("Main.Update.Downloaded.Title"), Texts.Format("Main.Update.Downloaded.Text", path));
         }
         catch (Exception ex) when (ex is HttpRequestException or IOException or InvalidDataException or TaskCanceledException or UnauthorizedAccessException)
         {
-            await _dialogs.ShowErrorAsync("Обновление не загружено", ex.Message);
+            await _dialogs.ShowErrorAsync(Texts.Get("Main.Update.Failed.Title"), ex.Message);
         }
         finally
         {
@@ -1194,37 +1258,43 @@ public sealed partial class MainWindowViewModel : ObservableObject
         {
             var notes = new List<string>
             {
-                $"Плеер: {(PlayerNotice.Length > 0 ? PlayerNotice : "работает")}",
-                $"Камеры и голос: {(ConferenceAvailable ? "работают" : ConferenceNotice)}",
-                $"Микрофон {(MicrophoneMuted ? "выключен" : "включён")}, камера {(CameraOff ? "выключена" : "включена")}",
-                $"Синхронизация: {SyncText}",
+                Texts.Format("Main.Report.Player", PlayerNotice.Length > 0 ? PlayerNotice : Texts.Get("Main.Report.Works")),
+                Texts.Format("Main.Report.Conference", ConferenceAvailable ? Texts.Get("Main.Report.WorkPlural") : ConferenceNotice),
+                Texts.Format(
+                    "Main.Report.Devices",
+                    Texts.Get(MicrophoneMuted ? "Main.Report.MicrophoneOff" : "Main.Report.MicrophoneOn"),
+                    Texts.Get(CameraOff ? "Main.Report.CameraOff" : "Main.Report.CameraOn")),
+                Texts.Format("Main.Report.Sync", SyncText),
             };
             if (ReconnectText.Length > 0)
             {
-                notes.Add("Переподключение: " + ReconnectText);
+                notes.Add(Texts.Format("Main.Report.Reconnect", ReconnectText));
             }
 
-            // Счётчики кадров показывают, где рвётся связь: соединение не поднялось, поднялось но пустое, или
-            // камера ничего не отдаёт.
+            // The frame counters show where the link breaks: the connection did not come up, came up empty, or the
+            // camera gives nothing.
             var links = _conference.GetPeerDiagnostics();
-            notes.Add(links.Count == 0 ? "Соединений с участниками нет" : $"Соединений с участниками: {links.Count}");
+            notes.Add(links.Count == 0 ? Texts.Get("Main.Report.NoLinks") : Texts.Format("Main.Report.Links", links.Count));
             foreach (var link in links)
             {
-                notes.Add(
-                    $"  {link.Peer.ToShortString()}: {(link.Verified ? "проверено" : "НЕ проверено")}, " +
-                    $"канал данных {(link.DataReady ? "открыт" : "закрыт")}, поток {link.Quality}, " +
-                    $"видео {link.VideoSent}↑/{link.VideoReceived}↓, голос {link.AudioSent}↑/{link.AudioReceived}↓");
+                notes.Add(Texts.Format(
+                    "Main.Report.Link",
+                    link.Peer.ToShortString(),
+                    Texts.Get(link.Verified ? "Main.Report.Verified" : "Main.Report.NotVerified"),
+                    Texts.Get(link.DataReady ? "Main.Report.ChannelOpen" : "Main.Report.ChannelClosed"),
+                    link.Quality,
+                    link.VideoSent,
+                    link.VideoReceived,
+                    link.AudioSent,
+                    link.AudioReceived));
             }
 
             var path = await diagnostics.SaveAsync(_session.GetSnapshot(), notes);
-            await _dialogs.ShowMessageAsync(
-                "Отчёт готов",
-                $"Отчёт сохранён в файл:{Environment.NewLine}{path}{Environment.NewLine}{Environment.NewLine}" +
-                "В нём нет ключей и паролей. Его можно отправить тому, кто помогает разобраться.");
+            await _dialogs.ShowMessageAsync(Texts.Get("Main.Report.Ready.Title"), Texts.Format("Main.Report.Ready.Text", path));
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
-            await _dialogs.ShowErrorAsync("Отчёт не сохранён", ex.Message);
+            await _dialogs.ShowErrorAsync(Texts.Get("Main.Report.Failed.Title"), ex.Message);
         }
     }
 
@@ -1233,7 +1303,7 @@ public sealed partial class MainWindowViewModel : ObservableObject
     /// </summary>
     /// <returns>A task that completes when the session runs.</returns>
     [RelayCommand(CanExecute = nameof(CanStart))]
-    private Task StartHostingAsync() => RunAsync("Создание сеанса…", async token =>
+    private Task StartHostingAsync() => RunAsync(Texts.Get("Main.Busy.CreatingSession"), async token =>
     {
         await SaveNameAsync();
         await _session.StartHostingAsync(NewSessionName, DisplayName, (int)(Port ?? TlsTransportOptions.DefaultPort), token);
@@ -1244,7 +1314,7 @@ public sealed partial class MainWindowViewModel : ObservableObject
     /// </summary>
     /// <returns>A task that completes when the host admitted this device.</returns>
     [RelayCommand(CanExecute = nameof(CanStart))]
-    private Task JoinAsync() => RunAsync("Подключение к ведущему…", async token =>
+    private Task JoinAsync() => RunAsync(Texts.Get("Main.Busy.Connecting"), async token =>
     {
         await SaveNameAsync();
         await _session.JoinAsync(InviteLink, DisplayName, token);
@@ -1271,7 +1341,7 @@ public sealed partial class MainWindowViewModel : ObservableObject
             return;
         }
 
-        await RunAsync("Подготовка файла…", async token =>
+        await RunAsync(Texts.Get("Main.Busy.PreparingFile"), async token =>
         {
             if (_session.IsHost)
             {
@@ -1279,7 +1349,7 @@ public sealed partial class MainWindowViewModel : ObservableObject
             }
             else if (!await _session.UseLocalCopyAsync(path, token))
             {
-                await _dialogs.ShowErrorAsync("Другой файл", "Выбранный файл отличается от того, что показывает ведущий.");
+                await _dialogs.ShowErrorAsync(Texts.Get("Main.Error.OtherFile.Title"), Texts.Get("Main.Error.OtherFile.Text"));
             }
         });
     }
@@ -1308,7 +1378,7 @@ public sealed partial class MainWindowViewModel : ObservableObject
     /// </summary>
     /// <param name="snapshot">The session.</param>
     /// <param name="duration">The media duration.</param>
-    /// <returns>The text, for example <c>Ждём: Марина и Олег…</c>.</returns>
+    /// <returns>The text, for example <c>Waiting for: Marina and Oleg…</c>.</returns>
     internal static string DescribeWaiting(SessionSnapshot snapshot, TimeSpan? duration)
     {
         var target = snapshot.Playback?.Position ?? TimeSpan.Zero;
@@ -1321,10 +1391,10 @@ public sealed partial class MainWindowViewModel : ObservableObject
             .ToArray();
         return names.Length switch
         {
-            0 => "Ждём готовности участников…",
-            1 => $"Ждём: {names[0]}…",
-            2 => $"Ждём: {names[0]} и {names[1]}…",
-            _ => $"Ждём: {names[0]}, {names[1]} и ещё {names.Length - 2}…",
+            0 => Texts.Get("Main.Waiting.Everybody"),
+            1 => Texts.Format("Main.Waiting.One", names[0]),
+            2 => Texts.Format("Main.Waiting.Two", names[0], names[1]),
+            _ => Texts.Format("Main.Waiting.Many", names[0], names[1], names.Length - 2),
         };
     }
 
@@ -1410,7 +1480,7 @@ public sealed partial class MainWindowViewModel : ObservableObject
         }
         catch (Exception ex) when (ex is IOException or InvalidOperationException or ObjectDisposedException)
         {
-            await _dialogs.ShowErrorAsync("Команда не отправлена", ex.Message);
+            await _dialogs.ShowErrorAsync(Texts.Get("Main.Error.CommandNotSent"), ex.Message);
         }
     }
 
@@ -1430,7 +1500,7 @@ public sealed partial class MainWindowViewModel : ObservableObject
         }
         catch (Exception ex) when (ex is FormatException or SessionJoinException or InvalidOperationException or IOException or UnauthorizedAccessException)
         {
-            await _dialogs.ShowErrorAsync("Не получилось", ex.Message);
+            await _dialogs.ShowErrorAsync(Texts.Get("Main.Error.Failed"), ex.Message);
         }
         finally
         {
@@ -1584,7 +1654,7 @@ public sealed partial class MainWindowViewModel : ObservableObject
         }
         catch (Exception ex) when (ex is InvalidOperationException or IOException)
         {
-            await _dialogs.ShowErrorAsync("Не удалось выключить устройство", ex.Message);
+            await _dialogs.ShowErrorAsync(Texts.Get("Main.Error.SwitchOffFailed"), ex.Message);
         }
     }
 
@@ -1596,7 +1666,7 @@ public sealed partial class MainWindowViewModel : ObservableObject
     {
         if (IsAwaitingApproval)
         {
-            SyncText = "Ожидание ведущего";
+            SyncText = Texts.Get("Main.Sync.WaitingHost");
             SyncLevel = IndicatorLevel.Warning;
             return;
         }
@@ -1604,17 +1674,17 @@ public sealed partial class MainWindowViewModel : ObservableObject
         var drifts = snapshot.Participants.Select(p => p.Status).OfType<Core.Session.ParticipantStatus>().Where(s => s.Position is not null).ToArray();
         if (drifts.Length == 0 || snapshot.Playback?.State != PlayState.Playing)
         {
-            SyncText = snapshot.Playback?.State == PlayState.Playing ? "Синхронизация…" : IsEnded ? "Фильм закончился" : "На паузе";
+            SyncText = Texts.Get(snapshot.Playback?.State == PlayState.Playing ? "Main.Sync.Syncing" : IsEnded ? "Main.Sync.Ended" : "Main.Sync.Paused");
             SyncLevel = IndicatorLevel.Neutral;
             return;
         }
 
         var worst = drifts.Max(s => s.Drift.Duration());
-        SyncText = $"Синхронно · Δ ≤ {(int)worst.TotalMilliseconds} мс";
+        SyncText = Texts.Format("Main.Sync.InSync", Texts.Format("Format.Milliseconds", (int)worst.TotalMilliseconds));
         SyncLevel = DisplayFormat.DriftLevel(worst);
         if (drifts.Any(s => s.IsBuffering))
         {
-            SyncText = "Кто-то буферизует";
+            SyncText = Texts.Get("Main.Sync.SomeoneBuffering");
             SyncLevel = IndicatorLevel.Warning;
         }
     }

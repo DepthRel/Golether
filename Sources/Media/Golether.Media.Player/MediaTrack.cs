@@ -1,5 +1,6 @@
 using System.Globalization;
 using Golether.Core.Data.Enums;
+using Golether.Localization;
 
 namespace Golether.Media.Player;
 
@@ -50,12 +51,12 @@ public sealed record MediaTrack(
             }
             else
             {
-                parts.Add(language ?? $"Дорожка {Id}");
+                parts.Add(language ?? Texts.Format("Player.Track.Number", Id));
             }
 
             if (Kind == MediaTrackKind.Audio && Channels is > 2)
             {
-                parts.Add(Channels == 6 ? "5.1" : Channels == 8 ? "7.1" : $"{Channels} кан.");
+                parts.Add(Channels == 6 ? "5.1" : Channels == 8 ? "7.1" : Texts.Format("Player.Track.Channels", Channels));
             }
 
             if (!string.IsNullOrWhiteSpace(Codec))
@@ -65,7 +66,7 @@ public sealed record MediaTrack(
 
             if (IsExternal)
             {
-                parts.Add("из файла");
+                parts.Add(Texts.Get("Player.Track.External"));
             }
 
             return string.Join(" · ", parts);

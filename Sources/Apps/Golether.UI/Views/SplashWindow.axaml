@@ -1,4 +1,5 @@
 <Window xmlns="https://github.com/avaloniaui"
+        xmlns:loc="using:Golether.UI.Localization"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         x:Class="Golether.UI.Views.SplashWindow"
         Title="Golether"
@@ -15,7 +16,7 @@
         <TextBlock Classes="logo" FontSize="22" Text="ther" Foreground="{StaticResource GoletherAccent}" />
       </StackPanel>
       <ProgressBar IsIndeterminate="True" Width="200" Height="3" />
-      <TextBlock x:Name="Status" Classes="muted" FontSize="12" HorizontalAlignment="Center" Text="Готовим приложение…" />
+      <TextBlock x:Name="Status" Classes="muted" FontSize="12" HorizontalAlignment="Center" Text="{loc:Loc Splash.Preparing}" />
     </StackPanel>
   </Border>
 </Window>

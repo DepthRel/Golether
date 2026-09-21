@@ -1,3 +1,5 @@
+using Golether.Localization;
+
 namespace Golether.UI.ViewModels;
 
 /// <summary>
@@ -19,5 +21,5 @@ public sealed record ChatLineViewModel(string Id, string Sender, string Text, Da
     /// <summary>
     /// Gets the name shown above the text.
     /// </summary>
-    public string SenderText => IsSystem ? string.Empty : IsLocal ? "Вы" : Sender;
+    public string SenderText => IsSystem ? string.Empty : IsLocal ? Texts.Get("Chat.You") : Sender;
 }

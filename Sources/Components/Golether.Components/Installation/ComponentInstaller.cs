@@ -3,6 +3,7 @@ using System.Text.Json;
 using Golether.Components.Catalog;
 using Golether.Components.GStreamer;
 using Golether.Core.Data.Enums;
+using Golether.Localization;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Logging;
 
@@ -105,7 +106,7 @@ public sealed class ComponentInstaller
         ArgumentNullException.ThrowIfNull(package);
         if (!OperatingSystem.IsWindows())
         {
-            throw new ComponentInstallException("Автоматическая установка компонентов доступна только в Windows.");
+            throw new ComponentInstallException(Texts.Get("Install.Error.WindowsOnly"));
         }
 
         // A complete GStreamer already on the computer is reused: nothing to download, and the installer registration
@@ -117,9 +118,7 @@ public sealed class ComponentInstaller
                 .FirstOrDefault(e => e.IsComplete && (e.Version is null || e.Version >= GStreamerBundle.MinimumVersion));
             if (existing is null && _existingGStreamer.HasInstallerRegistration())
             {
-                throw new ComponentInstallException(
-                    "На компьютере уже установлен GStreamer, но в нём не хватает нужных частей. Установите полный GStreamer 1.24 или новее " +
-                    "с gstreamer.freedesktop.org (вариант «Complete») либо удалите старую версию и повторите.");
+                throw new ComponentInstallException(Texts.Get("Install.Error.GStreamerIncomplete"));
             }
         }
 
@@ -166,7 +165,7 @@ public sealed class ComponentInstaller
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidOperationException or System.ComponentModel.Win32Exception)
         {
-            throw new ComponentInstallException($"Не удалось установить {ComponentCatalog.Describe(package.Id).Title}: {ex.Message}", ex);
+            throw new ComponentInstallException(Texts.Format("Install.Error.InstallFailed", ComponentCatalog.Describe(package.Id).Title, ex.Message), ex);
         }
         finally
         {
@@ -201,7 +200,7 @@ public sealed class ComponentInstaller
 
         if (package.Url.Scheme != Uri.UriSchemeHttps)
         {
-            throw new ComponentInstallException("Компоненты скачиваются только по HTTPS.");
+            throw new ComponentInstallException(Texts.Get("Install.Error.HttpsOnly"));
         }
 
         var partial = file + ".partial";
@@ -221,7 +220,7 @@ public sealed class ComponentInstaller
                     total += read;
                     if (total > package.Size)
                     {
-                        throw new ComponentInstallException("Скачанный файл больше ожидаемого: загрузка остановлена.");
+                        throw new ComponentInstallException(Texts.Get("Install.Error.DownloadTooLarge"));
                     }
 
                     hash.AppendData(buffer, 0, read);
@@ -233,7 +232,7 @@ public sealed class ComponentInstaller
                 var actual = Convert.ToHexStringLower(hash.GetHashAndReset());
                 if (total != package.Size || actual != package.Sha256)
                 {
-                    throw new ComponentInstallException("Скачанный файл повреждён или подменён (контрольная сумма не совпала). Попробуйте ещё раз.");
+                    throw new ComponentInstallException(Texts.Get("Install.Error.ChecksumMismatch"));
                 }
             }
 
@@ -242,11 +241,11 @@ public sealed class ComponentInstaller
         }
         catch (HttpRequestException ex)
         {
-            throw new ComponentInstallException($"Не удалось скачать {package.FileName}: {ex.Message}. Проверьте подключение к интернету.", ex);
+            throw new ComponentInstallException(Texts.Format("Install.Error.DownloadFailed", package.FileName, ex.Message), ex);
         }
         catch (IOException ex)
         {
-            throw new ComponentInstallException($"Не удалось сохранить {package.FileName}: {ex.Message}", ex);
+            throw new ComponentInstallException(Texts.Format("Install.Error.SaveFailed", package.FileName, ex.Message), ex);
         }
         finally
         {
@@ -301,13 +300,13 @@ public sealed class ComponentInstaller
         var tar = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.System), "tar.exe");
         if (!File.Exists(tar))
         {
-            throw new InvalidOperationException("В системе нет tar.exe (Windows 10 1803 или новее).");
+            throw new InvalidOperationException(Texts.Get("Install.Error.TarMissing"));
         }
 
         var code = await _tools.RunAsync(tar, ["-x", "-f", archive, "-C", staging, "libmpv-2.dll"], cancellationToken).ConfigureAwait(false);
         if (code != 0 || !File.Exists(Path.Combine(staging, "libmpv-2.dll")))
         {
-            throw new InvalidOperationException($"tar.exe не смог распаковать архив (код {code}).");
+            throw new InvalidOperationException(Texts.Format("Install.Error.TarFailed", code));
         }
     }
 
@@ -325,7 +324,7 @@ public sealed class ComponentInstaller
         var msiexec = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.System), "msiexec.exe");
         if (!File.Exists(msiexec))
         {
-            throw new InvalidOperationException("В системе нет msiexec.exe.");
+            throw new InvalidOperationException(Texts.Get("Install.Error.MsiexecMissing"));
         }
 
         var unpacked = Path.Combine(staging, ".msi");
@@ -333,7 +332,7 @@ public sealed class ComponentInstaller
         var code = await _tools.RunAsync(msiexec, ["/a", installer, "/qn", "TARGETDIR=" + unpacked], cancellationToken).ConfigureAwait(false);
         if (code != 0)
         {
-            throw new InvalidOperationException($"msiexec не смог распаковать пакет (код {code}).");
+            throw new InvalidOperationException(Texts.Format("Install.Error.MsiexecFailed", code));
         }
 
         // The package puts the files into an AmneziaWG folder and leaves a copy of the .msi beside it; only the
@@ -343,7 +342,7 @@ public sealed class ComponentInstaller
         foreach (var name in AmneziaWgBundle.Files)
         {
             var source = Directory.EnumerateFiles(unpacked, name, SearchOption.AllDirectories).FirstOrDefault()
-                ?? throw new InvalidOperationException($"В пакете AmneziaWG нет файла {name}.");
+                ?? throw new InvalidOperationException(Texts.Format("Install.Error.AmneziaFileMissing", name));
             File.Copy(source, Path.Combine(target, name), overwrite: true);
         }
 
@@ -372,7 +371,7 @@ public sealed class ComponentInstaller
                 cancellationToken).ConfigureAwait(false);
             if (code != 0 || !GStreamerBundle.IsComplete(temporary))
             {
-                throw new InvalidOperationException($"Установщик GStreamer завершился с кодом {code}.");
+                throw new InvalidOperationException(Texts.Format("Install.Error.GStreamerInstallerFailed", code));
             }
 
             progress?.Report(new InstallProgress(InstallStage.Finishing, 0, 0));

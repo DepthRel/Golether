@@ -1,4 +1,5 @@
 using System.ComponentModel;
+using Golether.Localization;
 using Golether.Tunnels.AmneziaWG.Configuration;
 using Golether.Tunnels.AmneziaWG.Control;
 using NSubstitute;
@@ -92,6 +93,32 @@ public sealed class TunnelHelperTests : IDisposable
     }
 
     /// <summary>
+    /// The helper is a process of its own that knows nothing about the language of the application: it leaves the facts
+    /// of a failure, and the application words them in the language of the user.
+    /// </summary>
+    [Fact]
+    public void HelperFailure_IsWordedByTheApplicationInItsLanguage()
+    {
+        var config = WriteConfig("golether0");
+        var result = Path.Combine(_directory.FullName, "f.result");
+        var runner = Substitute.For<IProcessRunner>();
+        runner.RunAsync(_amneziaWg, Arg.Any<IReadOnlyList<string>>(), Arg.Any<TimeSpan>(), Arg.Any<CancellationToken>())
+            .Returns(new ProcessResult(5, string.Empty, "Access is denied"));
+
+        Assert.Equal(TunnelHelper.Failure, TunnelHelper.Run(TunnelHelper.BuildArguments("down", config, result), runner, _amneziaWg));
+        var text = File.ReadAllText(result);
+
+        Assert.DoesNotContain("завершился", text, StringComparison.Ordinal);
+        Assert.Equal("amneziawg.exe завершился с кодом 5: Access is denied", TunnelHelper.DescribeFailure(text));
+        using (Texts.Scope(new Localizer(LanguageCatalog.LoadEmbedded(), "en")))
+        {
+            Assert.Equal("amneziawg.exe finished with code 5: Access is denied", TunnelHelper.DescribeFailure(text));
+        }
+
+        Assert.Equal("Access is denied", TunnelHelper.DescribeFailure("Access is denied"));
+    }
+
+    /// <summary>
     /// Without administrator rights the controller starts the helper through the elevated runner and passes on its
     /// error; a declined prompt gets a clear message.
     /// </summary>
@@ -122,7 +149,7 @@ public sealed class TunnelHelperTests : IDisposable
         elevated.RunAsync(Helper, Arg.Any<IReadOnlyList<string>>(), Arg.Any<TimeSpan>(), Arg.Any<CancellationToken>())
             .Returns(call =>
             {
-                File.WriteAllText(call.ArgAt<IReadOnlyList<string>>(1)[3], "amneziawg.exe завершился с кодом 5");
+                File.WriteAllText(call.ArgAt<IReadOnlyList<string>>(1)[3], TunnelHelper.EncodeToolFailure("amneziawg.exe", 5, "denied"));
                 return new ProcessResult(TunnelHelper.Failure, string.Empty, string.Empty);
             });
         var failure = await Assert.ThrowsAsync<TunnelControlException>(() => controller.DownAsync("golether0", token));

@@ -1,6 +1,7 @@
 using System.Net;
 using System.Net.Sockets;
 using System.Security.Cryptography;
+using Golether.Localization;
 using Golether.Tunnels.AmneziaWG.Keys;
 
 namespace Golether.Tunnels.AmneziaWG.Configuration;
@@ -153,7 +154,7 @@ public sealed record HostTunnelInterface
             }
         }
 
-        throw new InvalidOperationException("The tunnel subnet has no free addresses.");
+        throw new InvalidOperationException(Texts.Get("Tunnel.Error.SubnetFull"));
     }
 
     /// <summary>

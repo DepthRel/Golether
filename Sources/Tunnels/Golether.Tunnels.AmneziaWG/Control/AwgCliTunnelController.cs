@@ -1,4 +1,5 @@
 using System.ComponentModel;
+using Golether.Localization;
 using Golether.Security.Secrets;
 using Golether.Tunnels.AmneziaWG.Configuration;
 using Microsoft.Extensions.Logging;
@@ -70,8 +71,7 @@ public sealed class AwgCliTunnelController : ITunnelController
     {
         if (_windows && !File.Exists(_options.ResolveWindowsExecutable()))
         {
-            throw new TunnelControlException(
-                "Компонент туннеля не установлен. Откройте «Туннели AWG» и нажмите «Установить» — Golether скачает движок сам.");
+            throw new TunnelControlException(Texts.Get("Tunnel.Error.EngineMissing"));
         }
     }
 
@@ -93,7 +93,7 @@ public sealed class AwgCliTunnelController : ITunnelController
         {
             return File.Exists(_options.ResolveWindowsExecutable())
                 ? null
-                : "Компонент туннеля не установлен. Golether может скачать его сам — кнопка ниже.";
+                : Texts.Get("Tunnel.Availability.EngineMissing");
         }
 
         try
@@ -103,7 +103,7 @@ public sealed class AwgCliTunnelController : ITunnelController
         }
         catch (Win32Exception)
         {
-            return $"'{_options.QuickExecutable}' не найден. Установите amneziawg-tools (и модуль ядра amneziawg или amneziawg-go).";
+            return Texts.Format("Tunnel.Availability.ToolsMissing", _options.QuickExecutable);
         }
     }
 
@@ -203,11 +203,11 @@ public sealed class AwgCliTunnelController : ITunnelController
         }
         catch (Win32Exception ex) when (ex.NativeErrorCode == ElevatedProcessRunner.Cancelled)
         {
-            throw new TunnelControlException("Для управления туннелем нужно подтвердить запрос Windows на права администратора.", ex);
+            throw new TunnelControlException(Texts.Get("Tunnel.Error.ElevationDeclined"), ex);
         }
         catch (Exception ex) when (ex is Win32Exception or TimeoutException or InvalidOperationException)
         {
-            throw new TunnelControlException($"Не удалось запустить помощник туннелей: {ex.Message}", ex);
+            throw new TunnelControlException(Texts.Format("Tunnel.Error.HelperNotStarted", ex.Message), ex);
         }
 
         var detail = File.Exists(resultPath) ? await File.ReadAllTextAsync(resultPath, cancellationToken).ConfigureAwait(false) : string.Empty;
@@ -215,8 +215,8 @@ public sealed class AwgCliTunnelController : ITunnelController
         if (!result.Succeeded)
         {
             throw new TunnelControlException(result.ExitCode == TunnelHelper.InvalidArguments
-                ? "Помощник туннелей отклонил параметры."
-                : detail.Length > 0 ? detail : $"Помощник туннелей завершился с кодом {result.ExitCode}.");
+                ? Texts.Get("Tunnel.Error.HelperRejected")
+                : detail.Length > 0 ? TunnelHelper.DescribeFailure(detail) : Texts.Format("Tunnel.Error.HelperExitCode", result.ExitCode));
         }
     }
 
@@ -243,14 +243,14 @@ public sealed class AwgCliTunnelController : ITunnelController
                 return;
             }
 
-            throw new TunnelControlException($"Не удалось запустить {Path.GetFileName(fileName)}: {ex.Message}", ex);
+            throw new TunnelControlException(Texts.Format("Tunnel.Error.ToolNotStarted", Path.GetFileName(fileName), ex.Message), ex);
         }
 
         if (!result.Succeeded && !ignoreFailure)
         {
             var detail = string.IsNullOrWhiteSpace(result.StandardError) ? result.StandardOutput : result.StandardError;
             throw new TunnelControlException(
-                $"{Path.GetFileName(fileName)} завершился с кодом {result.ExitCode}: {detail.Trim()} (нужны права администратора).");
+                Texts.Format("Tunnel.Error.ToolFailedNeedsAdmin", Path.GetFileName(fileName), result.ExitCode, detail.Trim()));
         }
     }
 }

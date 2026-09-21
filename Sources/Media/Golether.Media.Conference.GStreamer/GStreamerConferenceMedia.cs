@@ -3,6 +3,7 @@ using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using Golether.Core.Data.Enums;
 using Golether.Core.Identity;
+using Golether.Localization;
 using Golether.Media.Conference.GStreamer.Native;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Logging;
@@ -299,7 +300,7 @@ public sealed class GStreamerConferenceMedia : IConferenceMedia, IPeerHost
                 RestartAudio();
                 if (_videoCapture is null && _audioCapture is null && !_cameraOff && !_microphoneMuted)
                 {
-                    UnavailableReason = "Камера и микрофон недоступны.";
+                    UnavailableReason = Texts.Get("Conference.DevicesUnavailable");
                 }
             }
         }, cancellationToken);

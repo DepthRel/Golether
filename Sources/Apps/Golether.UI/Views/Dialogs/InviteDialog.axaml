@@ -1,35 +1,36 @@
 <Window xmlns="https://github.com/avaloniaui"
+        xmlns:loc="using:Golether.UI.Localization"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:vm="using:Golether.UI.ViewModels.Dialogs"
         x:Class="Golether.UI.Views.Dialogs.InviteDialog"
         x:DataType="vm:InviteDialogViewModel"
-        Title="Пригласить участника"
+        Title="{loc:Loc Invite.WindowTitle}"
         Width="560" SizeToContent="Height" CanResize="False"
         WindowStartupLocation="CenterOwner" Icon="/Assets/golether.ico">
   <!-- A one-time invitation link; the host still approves every newcomer. -->
   <StackPanel Margin="22" Spacing="12">
-    <TextBlock Classes="title" Text="Пригласить участника" />
+    <TextBlock Classes="title" Text="{loc:Loc Invite.WindowTitle}" />
     <TextBlock Classes="muted" TextWrapping="Wrap"
-               Text="Ссылка одноразовая и содержит отпечаток вашего ключа. Передайте её любым способом: без вашего одобрения участник всё равно не войдёт." />
-    <TextBlock Classes="label" Text="ССЫЛКА" />
+               Text="{loc:Loc Invite.Dialog.Explanation}" />
+    <TextBlock Classes="label" Text="{loc:Loc Invite.Dialog.LinkLabel}" />
     <TextBox Classes="package" IsReadOnly="True" Text="{Binding Link}" />
     <TextBlock Classes="muted" FontSize="12" TextWrapping="Wrap" Text="{Binding ExpiresText}" />
-    <TextBlock Classes="muted" FontSize="12" TextWrapping="Wrap" Text="{Binding AddressesText, StringFormat='Адреса: {0}'}" />
+    <TextBlock Classes="muted" FontSize="12" TextWrapping="Wrap" Text="{loc:Loc Key=Invite.Dialog.Addresses, Arg={Binding AddressesText}}" />
     <Grid ColumnDefinitions="*,12,160">
       <StackPanel Spacing="4">
-        <TextBlock Classes="label" Text="ДОПОЛНИТЕЛЬНЫЙ АДРЕС" />
-        <TextBox Text="{Binding ExtraAddress}" PlaceholderText="внешний IP:порт или адрес в туннеле AWG" />
+        <TextBlock Classes="label" Text="{loc:Loc Invite.Dialog.ExtraAddressLabel}" />
+        <TextBox Text="{Binding ExtraAddress}" PlaceholderText="{loc:Loc Invite.Dialog.ExtraAddressHint}" />
       </StackPanel>
       <StackPanel Grid.Column="2" Spacing="4">
-        <TextBlock Classes="label" Text="СРОК" />
+        <TextBlock Classes="label" Text="{loc:Loc Invite.Dialog.LifetimeLabel}" />
         <ComboBox ItemsSource="{Binding Lifetimes}" SelectedItem="{Binding SelectedLifetime}" HorizontalAlignment="Stretch" />
       </StackPanel>
     </Grid>
     <TextBlock Foreground="{StaticResource GoletherSecure}" TextWrapping="Wrap" Text="{Binding Message}" />
     <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Spacing="8">
-      <Button Classes="ghost" Content="Новая ссылка" Command="{Binding RegenerateCommand}" />
-      <Button Classes="accent" Content="Скопировать" Command="{Binding CopyCommand}" />
-      <Button Classes="ghost" Content="Закрыть" Click="OnClose" IsCancel="True" />
+      <Button Classes="ghost" Content="{loc:Loc Invite.Dialog.NewLink}" Command="{Binding RegenerateCommand}" />
+      <Button Classes="accent" Content="{loc:Loc Common.Copy}" Command="{Binding CopyCommand}" />
+      <Button Classes="ghost" Content="{loc:Loc Common.Close}" Click="OnClose" IsCancel="True" />
     </StackPanel>
   </StackPanel>
 </Window>

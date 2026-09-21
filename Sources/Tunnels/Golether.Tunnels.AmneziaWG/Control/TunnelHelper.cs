@@ -1,6 +1,7 @@
 using System.ComponentModel;
 using System.Diagnostics;
 using System.Text;
+using Golether.Localization;
 using Golether.Tunnels.AmneziaWG.Configuration;
 
 namespace Golether.Tunnels.AmneziaWG.Control;
@@ -182,8 +183,41 @@ public static class TunnelHelper
         if (!result.Succeeded && !ignoreFailure)
         {
             var detail = string.IsNullOrWhiteSpace(result.StandardError) ? result.StandardOutput : result.StandardError;
-            throw new TunnelControlException($"{Path.GetFileName(executable)} завершился с кодом {result.ExitCode}: {detail.Trim()}");
+            throw new TunnelControlException(EncodeToolFailure(Path.GetFileName(executable), result.ExitCode, detail.Trim()));
         }
+    }
+
+    /// <summary>
+    /// The marker that starts a tool failure in the result file. The helper runs in its own process that knows nothing
+    /// about the language the user chose, so it reports the facts and the application words them.
+    /// </summary>
+    private const string ToolFailurePrefix = "tool-failed\t";
+
+    /// <summary>
+    /// Encodes the failure of AmneziaWG for the result file.
+    /// </summary>
+    /// <param name="tool">The program name.</param>
+    /// <param name="exitCode">The exit code.</param>
+    /// <param name="detail">What the program printed.</param>
+    /// <returns>The text for the result file.</returns>
+    public static string EncodeToolFailure(string tool, int exitCode, string detail)
+        => string.Concat(ToolFailurePrefix, tool, "\t", exitCode.ToString(System.Globalization.CultureInfo.InvariantCulture), "\t", detail);
+
+    /// <summary>
+    /// Words the text the helper left in the result file in the language of the application.
+    /// </summary>
+    /// <param name="text">The content of the result file.</param>
+    /// <returns>The message for the user; a text that is not an encoded failure is returned as is.</returns>
+    public static string DescribeFailure(string text)
+    {
+        ArgumentNullException.ThrowIfNull(text);
+        if (text.StartsWith(ToolFailurePrefix, StringComparison.Ordinal)
+            && text[ToolFailurePrefix.Length..].Split('\t', 3) is [var tool, var code, var detail])
+        {
+            return Texts.Format("Tunnel.Error.ToolFailed", tool, code, detail);
+        }
+
+        return text;
     }
 
     /// <summary>

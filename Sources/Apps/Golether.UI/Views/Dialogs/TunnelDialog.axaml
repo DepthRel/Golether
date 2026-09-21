@@ -1,9 +1,10 @@
 <Window xmlns="https://github.com/avaloniaui"
+        xmlns:loc="using:Golether.UI.Localization"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:vm="using:Golether.UI.ViewModels.Dialogs"
         x:Class="Golether.UI.Views.Dialogs.TunnelDialog"
         x:DataType="vm:TunnelDialogViewModel"
-        Title="Туннель AmneziaWG"
+        Title="{loc:Loc TunnelDialog.WindowTitle}"
         Width="720" Height="720" MinWidth="560" MinHeight="520"
         WindowStartupLocation="CenterOwner" Icon="/Assets/golether.ico">
   <!--
@@ -12,9 +13,9 @@
   -->
   <DockPanel Margin="22">
     <StackPanel DockPanel.Dock="Top" Spacing="8" Margin="0,0,0,12">
-      <TextBlock Classes="title" Text="Туннель AmneziaWG между участниками" />
+      <TextBlock Classes="title" Text="{loc:Loc TunnelDialog.Heading}" />
       <TextBlock Classes="muted" TextWrapping="Wrap"
-                 Text="Используйте, если прямое подключение заблокировано. Пакеты передаются вручную: в мессенджере, почтой или файлом. Закрытые ключи не покидают устройство." />
+                 Text="{loc:Loc TunnelDialog.Explanation}" />
       <TextBlock TextWrapping="Wrap" Text="{Binding AvailabilityText}"
                  Classes.muted="{Binding !IsAvailable}" />
       <!-- Движок туннеля ставится отсюда же: иначе окно просит сделать то, чего в нём сделать нельзя. -->
@@ -28,15 +29,15 @@
             <ProgressBar Minimum="0" Maximum="100" Value="{Binding Progress}" />
             <Grid ColumnDefinitions="*,Auto">
               <TextBlock Classes="muted" FontSize="12" Text="{Binding ProgressText}" VerticalAlignment="Center" />
-              <Button Grid.Column="1" Classes="ghost" Content="Отмена" Command="{Binding CancelCommand}" />
+              <Button Grid.Column="1" Classes="ghost" Content="{loc:Loc Common.Cancel}" Command="{Binding CancelCommand}" />
             </Grid>
           </StackPanel>
         </StackPanel>
       </Border>
       </Panel>
       <StackPanel Spacing="4">
-        <TextBlock Classes="label" Text="ВНЕШНИЙ АДРЕС ЭТОГО УСТРОЙСТВА (НЕОБЯЗАТЕЛЬНО)" />
-        <TextBox Text="{Binding PublicAddress}" PlaceholderText="203.0.113.24:51944 — если порт проброшен на роутере" />
+        <TextBlock Classes="label" Text="{loc:Loc TunnelDialog.PublicAddressLabel}" />
+        <TextBox Text="{Binding PublicAddress}" PlaceholderText="{loc:Loc TunnelDialog.PublicAddressHint}" />
       </StackPanel>
     </StackPanel>
 
@@ -45,56 +46,56 @@
       <TextBlock TextWrapping="Wrap" Foreground="{StaticResource GoletherSecure}" Text="{Binding Message}" />
       <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Spacing="8">
         <!-- Туннель и так опустится при выходе из Golether; кнопка нужна, чтобы не ждать выхода. -->
-        <Button Classes="ghost" Content="Опустить туннель" Command="{Binding DropCommand}" IsVisible="{Binding HasRaisedTunnels}"
-                ToolTip.Tip="Снять туннель, поднятый Golether; понадобится подтверждение администратора" />
-        <Button Classes="ghost" Content="Закрыть" Click="OnClose" IsCancel="True" />
+        <Button Classes="ghost" Content="{loc:Loc TunnelDialog.Drop}" Command="{Binding DropCommand}" IsVisible="{Binding HasRaisedTunnels}"
+                ToolTip.Tip="{loc:Loc TunnelDialog.DropTip}" />
+        <Button Classes="ghost" Content="{loc:Loc Common.Close}" Click="OnClose" IsCancel="True" />
       </StackPanel>
     </StackPanel>
 
     <TabControl>
-      <TabItem Header="Я ведущий">
+      <TabItem Header="{loc:Loc TunnelDialog.HostTab}">
         <ScrollViewer>
           <StackPanel Spacing="10" Margin="0,12,8,0">
-            <TextBlock Classes="label" Text="ШАГ 1 · СОЗДАЙТЕ ПРЕДЛОЖЕНИЕ И ОТПРАВЬТЕ ЕГО УЧАСТНИКУ" />
+            <TextBlock Classes="label" Text="{loc:Loc TunnelDialog.HostStep1}" />
             <StackPanel Orientation="Horizontal" Spacing="8">
-              <Button Classes="accent" Content="Создать предложение" Command="{Binding CreateOfferCommand}" />
-              <Button Classes="ghost" Content="Скопировать" Command="{Binding CopyOfferCommand}" />
+              <Button Classes="accent" Content="{loc:Loc TunnelDialog.CreateOffer}" Command="{Binding CreateOfferCommand}" />
+              <Button Classes="ghost" Content="{loc:Loc Common.Copy}" Command="{Binding CopyOfferCommand}" />
             </StackPanel>
             <TextBox Classes="package" IsReadOnly="True" Text="{Binding OfferText}" PlaceholderText="golether-awg:offer:v1:…" />
-            <TextBlock Classes="label" Text="ШАГ 2 · ВСТАВЬТЕ ОТВЕТ УЧАСТНИКА" />
+            <TextBlock Classes="label" Text="{loc:Loc TunnelDialog.HostStep2}" />
             <TextBox Classes="package" Text="{Binding AnswerInput}" PlaceholderText="golether-awg:answer:v1:…" />
             <StackPanel Orientation="Horizontal" Spacing="8">
-              <Button Classes="ghost" Content="Вставить" Command="{Binding PasteAnswerCommand}" />
-              <Button Classes="accent" Content="Принять ответ" Command="{Binding CompleteOfferCommand}" />
+              <Button Classes="ghost" Content="{loc:Loc Common.Paste}" Command="{Binding PasteAnswerCommand}" />
+              <Button Classes="accent" Content="{loc:Loc TunnelDialog.AcceptAnswer}" Command="{Binding CompleteOfferCommand}" />
             </StackPanel>
             <TextBlock TextWrapping="Wrap" Text="{Binding HostResult}" />
             <StackPanel Orientation="Horizontal" Spacing="8" IsVisible="{Binding HasHostConfiguration}">
-              <Button Classes="accent" Content="Поднять туннель" Command="{Binding ApplyHostCommand}" IsEnabled="{Binding IsAvailable}" />
-              <Button Classes="ghost" Content="Экспорт .conf" Command="{Binding ExportHostCommand}" />
+              <Button Classes="accent" Content="{loc:Loc Common.RaiseTunnel}" Command="{Binding ApplyHostCommand}" IsEnabled="{Binding IsAvailable}" />
+              <Button Classes="ghost" Content="{loc:Loc Common.ExportConf}" Command="{Binding ExportHostCommand}" />
             </StackPanel>
           </StackPanel>
         </ScrollViewer>
       </TabItem>
-      <TabItem Header="Я участник">
+      <TabItem Header="{loc:Loc TunnelDialog.ParticipantTab}">
         <ScrollViewer>
           <StackPanel Spacing="10" Margin="0,12,8,0">
-            <TextBlock Classes="label" Text="ШАГ 1 · ВСТАВЬТЕ ПРЕДЛОЖЕНИЕ ВЕДУЩЕГО" />
+            <TextBlock Classes="label" Text="{loc:Loc TunnelDialog.ParticipantStep1}" />
             <TextBox Classes="package" Text="{Binding OfferInput}" PlaceholderText="golether-awg:offer:v1:…" />
             <Grid ColumnDefinitions="Auto,12,160,*">
-              <Button Classes="ghost" Content="Вставить" Command="{Binding PasteOfferCommand}" VerticalAlignment="Bottom" />
+              <Button Classes="ghost" Content="{loc:Loc Common.Paste}" Command="{Binding PasteOfferCommand}" VerticalAlignment="Bottom" />
               <StackPanel Grid.Column="2" Spacing="4">
-                <TextBlock Classes="label" Text="UDP-ПОРТ" />
+                <TextBlock Classes="label" Text="{loc:Loc TunnelDialog.UdpPort}" />
                 <NumericUpDown Value="{Binding ListenPort}" Minimum="1024" Maximum="65535" FormatString="0" />
               </StackPanel>
             </Grid>
-            <Button Classes="accent" Content="Принять предложение" Command="{Binding AcceptOfferCommand}" />
+            <Button Classes="accent" Content="{loc:Loc TunnelDialog.AcceptOffer}" Command="{Binding AcceptOfferCommand}" />
             <TextBlock TextWrapping="Wrap" Text="{Binding ParticipantResult}" />
-            <TextBlock Classes="label" Text="ШАГ 2 · ОТПРАВЬТЕ ОТВЕТ ВЕДУЩЕМУ" />
+            <TextBlock Classes="label" Text="{loc:Loc TunnelDialog.ParticipantStep2}" />
             <TextBox Classes="package" IsReadOnly="True" Text="{Binding AnswerText}" PlaceholderText="golether-awg:answer:v1:…" />
             <StackPanel Orientation="Horizontal" Spacing="8">
-              <Button Classes="ghost" Content="Скопировать ответ" Command="{Binding CopyAnswerCommand}" />
-              <Button Classes="accent" Content="Поднять туннель" Command="{Binding ApplyParticipantCommand}" IsVisible="{Binding HasParticipantConfiguration}" IsEnabled="{Binding IsAvailable}" />
-              <Button Classes="ghost" Content="Экспорт .conf" Command="{Binding ExportParticipantCommand}" IsVisible="{Binding HasParticipantConfiguration}" />
+              <Button Classes="ghost" Content="{loc:Loc TunnelDialog.CopyAnswer}" Command="{Binding CopyAnswerCommand}" />
+              <Button Classes="accent" Content="{loc:Loc Common.RaiseTunnel}" Command="{Binding ApplyParticipantCommand}" IsVisible="{Binding HasParticipantConfiguration}" IsEnabled="{Binding IsAvailable}" />
+              <Button Classes="ghost" Content="{loc:Loc Common.ExportConf}" Command="{Binding ExportParticipantCommand}" IsVisible="{Binding HasParticipantConfiguration}" />
             </StackPanel>
           </StackPanel>
         </ScrollViewer>

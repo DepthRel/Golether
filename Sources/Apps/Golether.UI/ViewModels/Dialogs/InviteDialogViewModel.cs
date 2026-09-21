@@ -2,6 +2,7 @@ using System.Globalization;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Golether.Core.Networking;
+using Golether.Localization;
 using Golether.UI.Services;
 
 namespace Golether.UI.ViewModels.Dialogs;
@@ -38,9 +39,9 @@ public sealed partial class InviteDialogViewModel : ObservableObject
     /// </summary>
     public IReadOnlyList<InviteLifetimeOption> Lifetimes { get; } =
     [
-        new("15 минут", TimeSpan.FromMinutes(15)),
-        new("1 час", TimeSpan.FromHours(1)),
-        new("24 часа", TimeSpan.FromHours(24)),
+        new(Texts.Get("Invite.Lifetime.Minutes15"), TimeSpan.FromMinutes(15)),
+        new(Texts.Get("Invite.Lifetime.Hour1"), TimeSpan.FromHours(1)),
+        new(Texts.Get("Invite.Lifetime.Hours24"), TimeSpan.FromHours(24)),
     ];
 
     /// <summary>
@@ -90,7 +91,7 @@ public sealed partial class InviteDialogViewModel : ObservableObject
         {
             if (!PeerEndpoint.TryParse(ExtraAddress.Trim(), out var endpoint))
             {
-                Message = "Адрес указывается как хост:порт, например 203.0.113.24:47800.";
+                Message = Texts.Get("Invite.Dialog.BadAddress");
                 return;
             }
 
@@ -100,8 +101,8 @@ public sealed partial class InviteDialogViewModel : ObservableObject
         var invite = _session.CreateInvite(extra, SelectedLifetime.Lifetime);
         Link = invite.ToLink();
         AddressesText = string.Join(", ", invite.Endpoints);
-        ExpiresText = "Действует до " + invite.ExpiresAt.ToLocalTime().ToString("dd.MM HH:mm", CultureInfo.InvariantCulture) + ", одно подключение";
-        Message = "Новая ссылка создана. Прежние остаются в силе до истечения срока.";
+        ExpiresText = Texts.Format("Invite.Dialog.ValidUntil", invite.ExpiresAt.ToLocalTime().ToString("dd.MM HH:mm", CultureInfo.InvariantCulture));
+        Message = Texts.Get("Invite.Dialog.Created");
     }
 
     /// <summary>
@@ -112,6 +113,6 @@ public sealed partial class InviteDialogViewModel : ObservableObject
     private async Task CopyAsync()
     {
         await _dialogs.CopyTextAsync(Link);
-        Message = "Ссылка скопирована. Отправьте её участнику любым способом.";
+        Message = Texts.Get("Invite.Dialog.Copied");
     }
 }

@@ -4,10 +4,12 @@ using Golether.Core.Data.Enums;
 using Golether.Core.Data.Migrations.SQLite.Runner;
 using Golether.Core.Data.Stores;
 using Golether.Core.Data;
+using Golether.Localization;
 using Golether.Security.Identity;
 using Golether.Security.Secrets;
 using Golether.Transports.PortMapping;
 using Golether.Tunnels.AmneziaWG.Control;
+using Golether.UI.Localization;
 using Golether.UI.ViewModels.Dialogs;
 using Golether.UI.ViewModels;
 using Microsoft.Extensions.DependencyInjection;
@@ -37,9 +39,11 @@ public sealed class AppServices : IAsyncDisposable
     /// <param name="provider">The service provider.</param>
     /// <param name="identity">The device identity.</param>
     /// <param name="fileLog">The log file writer.</param>
-    private AppServices(AppDataPaths paths, ServiceProvider provider, DeviceIdentity identity, FileLogProvider fileLog)
+    /// <param name="language">The language service, already initialized.</param>
+    private AppServices(AppDataPaths paths, ServiceProvider provider, DeviceIdentity identity, FileLogProvider fileLog, ILanguageService language)
     {
         Paths = paths;
+        Language = language;
         _provider = provider;
         Identity = identity;
         LoggerFactory = provider.GetRequiredService<ILoggerFactory>();
@@ -85,6 +89,11 @@ public sealed class AppServices : IAsyncDisposable
     /// Gets the data paths.
     /// </summary>
     public AppDataPaths Paths { get; }
+
+    /// <summary>
+    /// Gets the language of the user interface.
+    /// </summary>
+    public ILanguageService Language { get; }
 
     /// <summary>
     /// Gets the writer of diagnostic reports.
@@ -173,12 +182,17 @@ public sealed class AppServices : IAsyncDisposable
             .AddGoletherData(paths.ConnectionString)
             .BuildServiceProvider();
 
+        // The stored language (or, on the first start, the one of the operating system) is applied before anything
+        // composes a text, so nothing starts in the wrong language.
+        var language = new LanguageService(Texts.Localizer, services.GetRequiredService<ISettingsStore>());
+        language.InitializeAsync(CancellationToken.None).GetAwaiter().GetResult();
+
         var store = new FileDeviceIdentityStore(
             paths.IdentityDirectory,
             services.GetRequiredService<ISecretProtector>(),
             TimeProvider.System,
             services.GetRequiredService<ILogger<FileDeviceIdentityStore>>());
-        return new AppServices(paths, services, store.LoadOrCreate(), fileLog);
+        return new AppServices(paths, services, store.LoadOrCreate(), fileLog, language);
     }
 
     /// <summary>
@@ -206,7 +220,8 @@ public sealed class AppServices : IAsyncDisposable
             Player,
             Diagnostics,
             Updates,
-            Path.Combine(Paths.Root, "updates"));
+            Path.Combine(Paths.Root, "updates"),
+            new LanguageViewModel(Language, FlagImages.Load, dialogs));
     }
 
     /// <summary>

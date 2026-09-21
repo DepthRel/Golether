@@ -271,7 +271,10 @@ public sealed class MainWindowTests
         Assert.Contains(OverflowPanel.OverflowedClass, more.Classes);
         Assert.True(IsInside(leave, fixture.Window));
 
+        // Over the video the bar holds fewer buttons (no tunnels, no language), so at the narrowest window it still fits;
+        // a long session name or a long translation crowds it, which is simulated by limiting the width of the bar.
         fixture.Window.Width = 960;
+        panel.MaxWidth = 380;
         await fixture.Settle();
         Assert.True(panel.IsOverflowing);
         Assert.Contains(OverflowPanel.OverflowedClass, leave.Classes);
@@ -286,11 +289,14 @@ public sealed class MainWindowTests
         more.Flyout!.ShowAt(more);
         await fixture.Settle();
         var items = ((MenuFlyout)more.Flyout).Items.OfType<MenuItem>().ToArray();
+        // The tunnel item belongs to the start screen: it is in the menu but hidden over the video.
+        Assert.False(items[0].IsVisible);
         Assert.Equal(["Туннели AWG", "Пригласить", "Отчёт для диагностики…", "Завершить"], items.Select(i => (string)i.Header!));
         Assert.Same(fixture.ViewModel.LeaveCommand, items[3].Command);
         more.Flyout.Hide();
 
         fixture.Window.Width = 1600;
+        panel.MaxWidth = double.PositiveInfinity;
         await fixture.Settle();
         Assert.False(panel.IsOverflowing);
     });
@@ -773,6 +779,90 @@ public sealed class MainWindowTests
     });
 
     /// <summary>
+    /// The language selector sits in the top bar next to the tunnel button, both on the start screen only (a tunnel is
+    /// raised before the connection, and the video screen has no use for either); it lists the languages with their
+    /// flags, and picking one changes every text of the window at once.
+    /// </summary>
+    /// <returns>A task that completes when the test is done.</returns>
+    [Fact]
+    public async Task LanguageSelector_SwitchesTheTextsOfTheWindow()
+    {
+        var localizer = Golether.Localization.Texts.Localizer;
+        localizer.SetLanguage("ru");
+        var settings = Substitute.For<ISettingsStore>();
+        settings.GetAsync(LanguageService.Setting, Arg.Any<CancellationToken>()).Returns("ru");
+        var service = new LanguageService(localizer, settings);
+        await service.InitializeAsync(CancellationToken.None);
+
+        // The flags are images of the application resources, so the selector is built where the application runs.
+        var selector = await Session.Value.Dispatch(() => new LanguageViewModel(service, Golether.UI.Localization.FlagImages.Load), TestContext.Current.CancellationToken);
+
+        await RunAsync(
+            async fixture =>
+            {
+                try
+                {
+                    var panel = fixture.Window.FindControl<OverflowPanel>("TopActions")!;
+                    var combo = fixture.Window.FindControl<ComboBox>("LanguageSelector")!;
+                    var tunnels = fixture.Window.FindControl<Button>("TunnelsButton")!;
+
+                    // Over the video (the fixture starts in a session) neither the language nor the tunnels are offered.
+                    Assert.False(combo.IsVisible);
+                    Assert.False(tunnels.IsVisible);
+                    SaveFrame(fixture.Window, "language-session");
+
+                    // The start screen offers both, side by side, and it is the longest text of the application.
+                    fixture.Sessions.GetSnapshot().Returns((SessionSnapshot?)null);
+                    fixture.ViewModel.Refresh();
+                    await fixture.Settle();
+                    Assert.True(combo.IsVisible);
+                    Assert.True(tunnels.IsVisible);
+                    Assert.Equal("Туннели AWG", (string?)tunnels.Content);
+                    Assert.Equal(panel.Children.IndexOf(tunnels) + 1, panel.Children.IndexOf(combo));
+                    Assert.Equal(["English", "Русский"], selector.Options.Select(o => o.Name));
+                    Assert.All(selector.Options, o => Assert.NotNull(o.Flag));
+                    Assert.Equal("Русский", ((LanguageOption)combo.SelectedItem!).Name);
+                    Assert.Contains(fixture.Window.GetVisualDescendants().OfType<TextBlock>(), t => t.Text == "Смотрим вместе, где бы вы ни были");
+                    SaveFrame(fixture.Window, "language-ru-start");
+
+                    combo.SelectedItem = selector.Options.Single(o => o.Code == "en");
+                    await fixture.Settle();
+                    SaveFrame(fixture.Window, "language-en-start");
+
+                    Assert.Equal("en", localizer.Current.Code);
+                    Assert.Equal("AWG tunnels", (string?)tunnels.Content);
+                    Assert.Contains(fixture.Window.GetVisualDescendants().OfType<TextBlock>(), t => t.Text == "Watch together, wherever you are");
+                    Assert.Contains(fixture.Window.GetVisualDescendants().OfType<TextBlock>(), t => t.Text == "Device A249-B9CC");
+                    Assert.DoesNotContain(fixture.Window.GetVisualDescendants().OfType<TextBlock>(), t => t.Text == "Смотрим вместе, где бы вы ни были");
+                    await settings.Received().SetAsync(LanguageService.Setting, "en", Arg.Any<CancellationToken>());
+                }
+                finally
+                {
+                    localizer.SetLanguage("ru");
+                }
+            },
+            selector);
+    }
+
+    /// <summary>
+    /// Saves the rendered window for a visual check when <c>GOLETHER_TEST_SCREENSHOTS</c> names a folder.
+    /// </summary>
+    /// <param name="window">The window.</param>
+    /// <param name="name">The file name without the extension.</param>
+    private static void SaveFrame(Window window, string name)
+    {
+        var folder = Environment.GetEnvironmentVariable("GOLETHER_TEST_SCREENSHOTS");
+        if (string.IsNullOrEmpty(folder))
+        {
+            return;
+        }
+
+        Directory.CreateDirectory(folder);
+        using var file = File.Create(Path.Combine(folder, name + ".png"));
+        window.CaptureRenderedFrame()!.Save(file, Avalonia.Media.Imaging.PngBitmapEncoderOptions.Default);
+    }
+
+    /// <summary>
     /// Checks that a control is within the window.
     /// </summary>
     /// <param name="control">The control.</param>
@@ -806,14 +896,15 @@ public sealed class MainWindowTests
     /// Runs a test on the UI thread with a fresh window.
     /// </summary>
     /// <param name="test">The test.</param>
+    /// <param name="language">The language selector of the window, or <see langword="null"/> for a window without one.</param>
     /// <returns>A task that completes when the test is done and fails with the test's exception.</returns>
-    private static Task RunAsync(Func<WindowFixture, Task> test)
+    private static Task RunAsync(Func<WindowFixture, Task> test, LanguageViewModel? language = null)
         => Session.Value.Dispatch(
             () =>
             {
                 // The UI loop runs here until the test finishes, so its continuations execute and its failures (or a
                 // hang) are reported instead of being lost with an unobserved task.
-                var body = RunBodyAsync(test);
+                var body = RunBodyAsync(test, language);
                 using var done = new CancellationTokenSource();
                 using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(60));
                 using var stop = CancellationTokenSource.CreateLinkedTokenSource(done.Token, timeout.Token);
@@ -832,10 +923,11 @@ public sealed class MainWindowTests
     /// Creates the window, runs the test and closes the window.
     /// </summary>
     /// <param name="test">The test.</param>
+    /// <param name="language">The language selector of the window, or <see langword="null"/>.</param>
     /// <returns>A task that completes when the test is done.</returns>
-    private static async Task RunBodyAsync(Func<WindowFixture, Task> test)
+    private static async Task RunBodyAsync(Func<WindowFixture, Task> test, LanguageViewModel? language)
     {
-        var fixture = new WindowFixture();
+        var fixture = new WindowFixture(language);
         try
         {
             await fixture.Settle();
@@ -855,7 +947,8 @@ public sealed class MainWindowTests
         /// <summary>
         /// Initializes a new instance of the <see cref="WindowFixture"/> class.
         /// </summary>
-        public WindowFixture()
+        /// <param name="language">The language selector of the window, or <see langword="null"/>.</param>
+        public WindowFixture(LanguageViewModel? language = null)
         {
             Sessions.GetSnapshot().Returns(_ => Snapshot());
             Settings.GetAsync(MainWindowViewModel.VoiceVolumeSettingPrefix + Guest.Value, Arg.Any<CancellationToken>()).Returns("70");
@@ -876,7 +969,8 @@ public sealed class MainWindowTests
                 "A249-B9CC",
                 conference,
                 components,
-                Player);
+                Player,
+                language: language);
             Window = new MainWindow { Width = 1280, Height = 780 };
             Window.Initialize(ViewModel, new PlayerHost(NullLoggerFactory.Instance, Path.GetTempPath()), conference);
             Window.Show();

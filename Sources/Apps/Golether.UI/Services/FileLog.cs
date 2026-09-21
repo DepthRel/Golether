@@ -1,5 +1,6 @@
 using System.Globalization;
 using System.Text;
+using Golether.Localization;
 using Microsoft.Extensions.Logging;
 
 namespace Golether.UI.Services;
@@ -148,13 +149,6 @@ public sealed class FileLogProvider : ILoggerProvider
         /// </summary>
         /// <param name="level">The level.</param>
         /// <returns>The name.</returns>
-        private static string Short(LogLevel level) => level switch
-        {
-            LogLevel.Critical => "крит",
-            LogLevel.Error => "ошиб",
-            LogLevel.Warning => "пред",
-            LogLevel.Information => "инфо",
-            _ => "отлд",
-        };
+        private static string Short(LogLevel level) => Texts.Get("Log.Level." + level);
     }
 }

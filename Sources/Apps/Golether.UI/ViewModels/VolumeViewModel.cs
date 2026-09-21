@@ -1,6 +1,7 @@
 using System.Globalization;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using Golether.Localization;
 using Golether.Core.Data.Stores;
 using Golether.Media.Player;
 
@@ -95,9 +96,16 @@ public sealed partial class VolumeViewModel : ObservableObject
     public bool IsLoud => Level == 2;
 
     /// <summary>
-    /// Gets the text of the volume, for example <c>75 %</c> or <c>без звука</c>.
+    /// Gets the text of the volume, for example <c>75 %</c> or <c>muted</c>.
     /// </summary>
-    public string Caption => IsMuted ? "без звука" : Math.Round(Volume).ToString(CultureInfo.InvariantCulture) + " %";
+    public string Caption => IsMuted
+        ? Texts.Get("Volume.Muted")
+        : Texts.Format("Format.Percent", Math.Round(Volume).ToString(CultureInfo.InvariantCulture));
+
+    /// <summary>
+    /// Tells the view that the texts changed with the language.
+    /// </summary>
+    public void RefreshTexts() => OnPropertyChanged(nameof(Caption));
 
     /// <summary>
     /// Loads the stored volume and applies it.

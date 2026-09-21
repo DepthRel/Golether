@@ -1,5 +1,6 @@
 using System.Security.Cryptography;
 using Golether.Core.Networking;
+using Golether.Localization;
 using Golether.Security.Identity;
 using Golether.Security.Verification;
 using Golether.Tunnels.AmneziaWG.Configuration;
@@ -115,18 +116,18 @@ public sealed class TunnelNegotiator
         var offer = TunnelPackageCodec.Decode<TunnelOfferBody>(TunnelPackageCodec.OfferKind, offerText, b => b.HostCertificate);
         if (offer.Signer == _identity.PeerId)
         {
-            throw new FormatException("Это предложение принадлежит вашему устройству.");
+            throw new FormatException(Texts.Get("Tunnel.Error.OfferIsOwn"));
         }
 
         if (offer.Body.ExpiresAt <= _time.GetUtcNow().ToUnixTimeSeconds())
         {
-            throw new FormatException("Срок действия предложения истёк. Попросите ведущего создать новое.");
+            throw new FormatException(Texts.Get("Tunnel.Error.OfferExpiredAskHost"));
         }
 
         var hostEndpoint = FirstEndpoint(offer.Body.HostEndpoints);
         if (hostEndpoint is null)
         {
-            throw new FormatException("В предложении нет адреса, по которому можно связаться с ведущим.");
+            throw new FormatException(Texts.Get("Tunnel.Error.OfferNoAddress"));
         }
 
         using var ephemeral = NewEphemeralKey();
@@ -192,12 +193,12 @@ public sealed class TunnelNegotiator
         var answer = TunnelPackageCodec.Decode<TunnelAnswerBody>(TunnelPackageCodec.AnswerKind, answerText, b => b.ParticipantCertificate);
         if (answer.Body.OfferId != secrets.OfferId)
         {
-            throw new FormatException("Ответ относится к другому предложению.");
+            throw new FormatException(Texts.Get("Tunnel.Error.AnswerOtherOffer"));
         }
 
         if (secrets.ExpiresAt <= _time.GetUtcNow())
         {
-            throw new FormatException("Срок действия предложения истёк.");
+            throw new FormatException(Texts.Get("Tunnel.Error.OfferExpired"));
         }
 
         using var ephemeral = ImportEphemeralPrivateKey(secrets.EphemeralPrivateKey);

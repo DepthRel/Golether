@@ -33,6 +33,7 @@
     <Project Path="Sources/Core/Golether.Core.Data/Golether.Core.Data.csproj" />
     <Project Path="Sources/Core/Golether.Core.Data.Migrations/Golether.Core.Data.Migrations.csproj" />
     <Project Path="Sources/Core/Golether.Core.Data.Migrations.SQLite/Golether.Core.Data.Migrations.SQLite.csproj" />
+    <Project Path="Sources/Core/Golether.Localization/Golether.Localization.csproj" />
   </Folder>
   <Folder Name="/Sources/Database/">
     <Project Path="Sources/Database/Golether.Dbs.SQLite.DbMigrator/Golether.Dbs.SQLite.DbMigrator.csproj" />
@@ -64,10 +65,14 @@
   <Folder Name="/Sources/Tunnels/">
     <Project Path="Sources/Tunnels/Golether.Tunnels.AmneziaWG/Golether.Tunnels.AmneziaWG.csproj" />
   </Folder>
+  <Folder Name="/Tests/Shared/">
+    <File Path="Tests/Shared/UseRussianTexts.cs" />
+  </Folder>
   <Folder Name="/Tests/">
     <Project Path="Tests/Golether.Components.Tests/Golether.Components.Tests.csproj" />
     <Project Path="Tests/Golether.Core.Data.Tests/Golether.Core.Data.Tests.csproj" />
     <Project Path="Tests/Golether.Core.Tests/Golether.Core.Tests.csproj" />
+    <Project Path="Tests/Golether.Localization.Tests/Golether.Localization.Tests.csproj" />
     <Project Path="Tests/Golether.Media.Conference.GStreamer.Tests/Golether.Media.Conference.GStreamer.Tests.csproj" />
     <Project Path="Tests/Golether.Media.Player.Tests/Golether.Media.Player.Tests.csproj" />
     <Project Path="Tests/Golether.Media.Streaming.Tests/Golether.Media.Streaming.Tests.csproj" />

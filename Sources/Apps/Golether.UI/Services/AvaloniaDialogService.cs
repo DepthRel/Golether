@@ -2,6 +2,7 @@ using Avalonia.Controls;
 using Avalonia.Input.Platform;
 using Avalonia.Platform.Storage;
 using Avalonia.Threading;
+using Golether.Localization;
 using Golether.Security.Admission;
 using Golether.UI.ViewModels.Dialogs;
 using Golether.UI.Views.Dialogs;
@@ -59,11 +60,11 @@ public sealed class AvaloniaDialogService : IDialogService
     {
         var files = await _owner.StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
         {
-            Title = "Выберите видео",
+            Title = Texts.Get("Dialog.PickVideo.Title"),
             AllowMultiple = false,
             FileTypeFilter =
             [
-                new FilePickerFileType("Видео") { Patterns = ["*.mkv", "*.mp4", "*.m4v", "*.avi", "*.mov", "*.webm", "*.ts", "*.m2ts", "*.wmv", "*.flv"] },
+                new FilePickerFileType(Texts.Get("Dialog.PickVideo.Filter")) { Patterns = ["*.mkv", "*.mp4", "*.m4v", "*.avi", "*.mov", "*.webm", "*.ts", "*.m2ts", "*.wmv", "*.flv"] },
                 FilePickerFileTypes.All,
             ],
         });
@@ -75,11 +76,11 @@ public sealed class AvaloniaDialogService : IDialogService
     {
         var files = await _owner.StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
         {
-            Title = "Выберите субтитры",
+            Title = Texts.Get("Dialog.PickSubtitles.Title"),
             AllowMultiple = false,
             FileTypeFilter =
             [
-                new FilePickerFileType("Субтитры") { Patterns = ["*.srt", "*.ass", "*.ssa", "*.vtt", "*.sub", "*.sup", "*.idx"] },
+                new FilePickerFileType(Texts.Get("Dialog.PickSubtitles.Filter")) { Patterns = ["*.srt", "*.ass", "*.ssa", "*.vtt", "*.sub", "*.sup", "*.idx"] },
                 FilePickerFileTypes.All,
             ],
         });
@@ -91,11 +92,11 @@ public sealed class AvaloniaDialogService : IDialogService
     {
         var files = await _owner.StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
         {
-            Title = "Выберите звуковую дорожку",
+            Title = Texts.Get("Dialog.PickAudio.Title"),
             AllowMultiple = false,
             FileTypeFilter =
             [
-                new FilePickerFileType("Звук") { Patterns = ["*.mka", "*.mp3", "*.aac", "*.ac3", "*.dts", "*.flac", "*.opus", "*.wav", "*.m4a"] },
+                new FilePickerFileType(Texts.Get("Dialog.PickAudio.Filter")) { Patterns = ["*.mka", "*.mp3", "*.aac", "*.ac3", "*.dts", "*.flac", "*.opus", "*.wav", "*.m4a"] },
                 FilePickerFileTypes.All,
             ],
         });
@@ -107,10 +108,10 @@ public sealed class AvaloniaDialogService : IDialogService
     {
         var file = await _owner.StorageProvider.SaveFilePickerAsync(new FilePickerSaveOptions
         {
-            Title = "Сохранить конфигурацию AmneziaWG",
+            Title = Texts.Get("Dialog.SaveConfig.Title"),
             SuggestedFileName = suggestedName,
             DefaultExtension = "conf",
-            FileTypeChoices = [new FilePickerFileType("Конфигурация AmneziaWG") { Patterns = ["*.conf"] }],
+            FileTypeChoices = [new FilePickerFileType(Texts.Get("Dialog.SaveConfig.Filter")) { Patterns = ["*.conf"] }],
         });
         return file?.TryGetLocalPath();
     }

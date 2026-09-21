@@ -1,3 +1,4 @@
+using Golether.Localization;
 using NSec.Cryptography;
 
 namespace Golether.Tunnels.AmneziaWG.Keys;
@@ -35,7 +36,7 @@ public static class AwgKeys
     {
         if (!IsValidKey(privateKey))
         {
-            throw new FormatException("The private key must be 32 bytes in base64.");
+            throw new FormatException(Texts.Get("Config.Error.PrivateKey"));
         }
 
         var parameters = new KeyCreationParameters { ExportPolicy = KeyExportPolicies.AllowPlaintextExport };

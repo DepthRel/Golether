@@ -2,6 +2,7 @@ using System.Buffers.Text;
 using System.Security.Cryptography;
 using System.Text.Json;
 using Golether.Core.Identity;
+using Golether.Localization;
 using Golether.Core.Networking;
 
 namespace Golether.Security.Invites;
@@ -103,7 +104,7 @@ public sealed record Invite
         var text = (link ?? string.Empty).Trim();
         if (text.Length > MaxLinkLength || !text.StartsWith(LinkPrefix, StringComparison.Ordinal))
         {
-            throw new FormatException("Это не приглашение Golether.");
+            throw new FormatException(Texts.Get("Invite.Error.NotInvite"));
         }
 
         InvitePayload? payload;
@@ -114,7 +115,7 @@ public sealed record Invite
         }
         catch (Exception ex) when (ex is FormatException or JsonException)
         {
-            throw new FormatException("Приглашение повреждено.", ex);
+            throw new FormatException(Texts.Get("Invite.Error.Damaged"), ex);
         }
 
         if (payload is null
@@ -122,7 +123,7 @@ public sealed record Invite
             || payload.Endpoints is null || payload.Endpoints.Length is 0 or > MaxEndpoints
             || !IsValidToken(payload.Token))
         {
-            throw new FormatException("Приглашение повреждено.");
+            throw new FormatException(Texts.Get("Invite.Error.Damaged"));
         }
 
         var endpoints = new List<PeerEndpoint>(payload.Endpoints.Length);
@@ -130,7 +131,7 @@ public sealed record Invite
         {
             if (!PeerEndpoint.TryParse(item, out var endpoint))
             {
-                throw new FormatException($"Приглашение содержит неверный адрес '{item}'.");
+                throw new FormatException(Texts.Format("Invite.Error.BadAddress", item));
             }
 
             endpoints.Add(endpoint);

@@ -1,5 +1,7 @@
 using System.Globalization;
+using Golether.Core.Data.Enums;
 using Golether.Core.Playback;
+using Golether.Localization;
 
 namespace Golether.Session;
 
@@ -8,6 +10,16 @@ namespace Golether.Session;
 /// </summary>
 public static class SessionTexts
 {
+    /// <summary>
+    /// The prefix of the keys that word a playback change; the rest of the key is the <see cref="PlaybackCause"/>.
+    /// </summary>
+    private const string PlaybackPrefix = "Session.Playback.";
+
+    /// <summary>
+    /// The prefix of the keys that word a rejection; the rest of the key is the <see cref="RejectReason"/>.
+    /// </summary>
+    private const string RejectPrefix = "Session.Reject.";
+
     /// <summary>
     /// Formats a media position as <c>h:mm:ss</c>.
     /// </summary>
@@ -25,17 +37,15 @@ public static class SessionTexts
     public static string Describe(PlaybackState state, string name)
     {
         ArgumentNullException.ThrowIfNull(state);
-        var position = FormatPosition(state.Position);
-        return state.Cause switch
-        {
-            PlaybackCause.Play => $"{name} запускает воспроизведение с {position}",
-            PlaybackCause.Pause => $"{name} ставит на паузу на {position}",
-            PlaybackCause.Seek => $"{name} перематывает на {position}",
-            PlaybackCause.WaitingForParticipants => $"Пауза на {position}: ждём, пока все участники будут готовы",
-            PlaybackCause.StartedWithoutWaiting => "Старт без ожидания: отставшие догонят",
-            PlaybackCause.ParticipantsReady => "Все участники готовы, продолжаем",
-            PlaybackCause.Ended => "Фильм закончился: «Смотреть сначала» запустит его с начала у всех",
-            _ => "Файл готов к просмотру",
-        };
+        var key = Enum.IsDefined(state.Cause) ? PlaybackPrefix + state.Cause : PlaybackPrefix + nameof(PlaybackCause.Initial);
+        return Texts.Format(key, name, FormatPosition(state.Position));
     }
+
+    /// <summary>
+    /// Words why the host did not admit a participant, in the language of this device.
+    /// </summary>
+    /// <param name="reason">The reason the host reported.</param>
+    /// <returns>The text.</returns>
+    public static string DescribeRejection(RejectReason reason)
+        => Texts.Get(Enum.IsDefined(reason) ? RejectPrefix + reason : RejectPrefix + "Unknown");
 }

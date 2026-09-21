@@ -1,5 +1,6 @@
 using System.Reflection;
 using System.Runtime.InteropServices;
+using Golether.Localization;
 
 namespace Golether.Media.Conference.GStreamer.Native;
 
@@ -68,7 +69,7 @@ public static unsafe class GstRuntime
                 GError* gerror = null;
                 if (Gst.InitCheck(0, 0, &gerror) == 0)
                 {
-                    _error = "GStreamer не запустился: " + Gst.TakeError(gerror);
+                    _error = Texts.Format("Conference.Error.GStreamerFailed", Gst.TakeError(gerror));
                 }
                 else
                 {
@@ -78,7 +79,7 @@ public static unsafe class GstRuntime
             }
             catch (Exception ex) when (ex is DllNotFoundException or EntryPointNotFoundException or BadImageFormatException)
             {
-                _error = "Компонент камер и голоса (GStreamer) не найден: " + ex.Message;
+                _error = Texts.Format("Conference.Error.GStreamerMissing", ex.Message);
             }
 
             error = _error;

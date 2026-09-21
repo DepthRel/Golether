@@ -7,6 +7,7 @@ using Golether.Core.Networking;
 using Golether.Core.Playback;
 using Golether.Core.Session;
 using Golether.Core.Time;
+using Golether.Localization;
 using Golether.Media.Conference;
 using Golether.Media.Streaming.Files;
 using Golether.Media.Streaming.Protocol;
@@ -261,7 +262,7 @@ public sealed class HostSession : IAsyncDisposable
         _loops.Add(Task.Run(() => AcceptLoopAsync(_stopping.Token)));
         _loops.Add(Task.Run(() => TickLoopAsync(_stopping.Token)));
         _conference?.Start();
-        Raise(null, $"Сеанс «{SessionName}» создан. Порт {Port}.");
+        Raise(null, Texts.Format("Session.Event.Created", SessionName, Port));
     }
 
     /// <summary>
@@ -317,7 +318,7 @@ public sealed class HostSession : IAsyncDisposable
 
         await BroadcastAsync(new MediaChangedMessage(descriptor)).ConfigureAwait(false);
         await BroadcastAsync(new PlaybackStateMessage(state)).ConfigureAwait(false);
-        Raise(_identity.PeerId, $"{DisplayName} показывает «{descriptor.FileName}»");
+        Raise(_identity.PeerId, Texts.Format("Session.Event.MediaShown", DisplayName, descriptor.FileName));
         return descriptor;
     }
 
@@ -404,13 +405,13 @@ public sealed class HostSession : IAsyncDisposable
             connection.Status = status with { MicrophoneOff = status.MicrophoneOff || microphone, CameraOff = status.CameraOff || camera };
         }
 
-        var what = (microphone, camera) switch
+        var key = (microphone, camera) switch
         {
-            (true, true) => "микрофон и камеру",
-            (true, false) => "микрофон",
-            _ => "камеру",
+            (true, true) => "Session.Event.HostSwitchesOffBoth",
+            (true, false) => "Session.Event.HostSwitchesOffMicrophone",
+            _ => "Session.Event.HostSwitchesOffCamera",
         };
-        Raise(_identity.PeerId, $"Ведущий выключает {what} участника {connection.Info.DisplayName}");
+        Raise(_identity.PeerId, Texts.Format(key, connection.Info.DisplayName));
     }
 
     /// <summary>
@@ -423,7 +424,7 @@ public sealed class HostSession : IAsyncDisposable
         if (_participants.TryRemove(peerId, out var connection))
         {
             connection.End();
-            await TrySendAsync(connection, new RejectedMessage(RejectReason.Removed, "Ведущий завершил ваше участие.")).ConfigureAwait(false);
+            await TrySendAsync(connection, new RejectedMessage(RejectReason.Removed, nameof(RejectReason.Removed))).ConfigureAwait(false);
             await connection.Channel.DisposeAsync().ConfigureAwait(false);
         }
     }
@@ -460,7 +461,7 @@ public sealed class HostSession : IAsyncDisposable
             return;
         }
 
-        await BroadcastAsync(new ByeMessage("Ведущий завершил сеанс.")).ConfigureAwait(false);
+        await BroadcastAsync(new ByeMessage(null)).ConfigureAwait(false);
         await _stopping.CancelAsync().ConfigureAwait(false);
         foreach (var connection in _participants.Values)
         {
@@ -583,7 +584,7 @@ public sealed class HostSession : IAsyncDisposable
             connection?.End();
             if (connection is not null && _participants.TryRemove(new KeyValuePair<PeerId, Connection>(peer, connection)))
             {
-                Raise(peer, $"{connection.Info.DisplayName} покидает сеанс");
+                Raise(peer, Texts.Format("Session.Event.ParticipantLeft", connection.Info.DisplayName));
                 await SyncConferenceAsync().ConfigureAwait(false);
                 await BroadcastParticipantsAsync().ConfigureAwait(false);
             }
@@ -610,13 +611,13 @@ public sealed class HostSession : IAsyncDisposable
 
         if (hello.Version != SessionMessage.ProtocolVersion)
         {
-            await channel.SendAsync(new RejectedMessage(RejectReason.IncompatibleVersion, "Версии Golether несовместимы. Обновите приложение."), cancellationToken).ConfigureAwait(false);
+            await channel.SendAsync(new RejectedMessage(RejectReason.IncompatibleVersion, nameof(RejectReason.IncompatibleVersion)), cancellationToken).ConfigureAwait(false);
             return null;
         }
 
         if (_participants.Count + 1 >= _options.MaxParticipants && !_participants.ContainsKey(peer))
         {
-            await channel.SendAsync(new RejectedMessage(RejectReason.SessionFull, $"В сеансе уже {_options.MaxParticipants} участников."), cancellationToken).ConfigureAwait(false);
+            await channel.SendAsync(new RejectedMessage(RejectReason.SessionFull, nameof(RejectReason.SessionFull)), cancellationToken).ConfigureAwait(false);
             return null;
         }
 
@@ -631,8 +632,7 @@ public sealed class HostSession : IAsyncDisposable
             var check = _invites.TryConsume(hello.InviteToken);
             if (check != InviteCheckResult.Accepted)
             {
-                var text = check == InviteCheckResult.Expired ? "Срок действия приглашения истёк." : "Приглашение недействительно или уже использовано.";
-                await channel.SendAsync(new RejectedMessage(RejectReason.InvalidInvite, text), cancellationToken).ConfigureAwait(false);
+                await channel.SendAsync(new RejectedMessage(RejectReason.InvalidInvite, check.ToString()), cancellationToken).ConfigureAwait(false);
                 _logger.LogWarning("Rejected {Peer}: invite {Result}", peer.ToShortString(), check);
                 return null;
             }
@@ -645,8 +645,8 @@ public sealed class HostSession : IAsyncDisposable
         if (decision != AdmissionDecision.Approved)
         {
             var reason = decision == AdmissionDecision.TimedOut ? RejectReason.ApprovalTimedOut : RejectReason.Declined;
-            await channel.SendAsync(new RejectedMessage(reason, decision == AdmissionDecision.TimedOut ? "Ведущий не ответил." : "Ведущий отклонил запрос."), cancellationToken).ConfigureAwait(false);
-            Raise(peer, $"{name}: запрос на подключение отклонён");
+            await channel.SendAsync(new RejectedMessage(reason, reason.ToString()), cancellationToken).ConfigureAwait(false);
+            Raise(peer, Texts.Format("Session.Event.JoinDeclined", name));
             return null;
         }
 
@@ -669,7 +669,7 @@ public sealed class HostSession : IAsyncDisposable
         await channel.SendAsync(
             new WelcomeMessage(SessionName, participants, _authority.Current, _media.Descriptor, _options.MediaDataStreams) { Relay = Relay, ReconnectTicket = reconnectTicket },
             cancellationToken).ConfigureAwait(false);
-        Raise(peer, $"{name} присоединяется");
+        Raise(peer, Texts.Format("Session.Event.ParticipantJoined", name));
         _ = SyncConferenceAsync();
         await BroadcastParticipantsAsync().ConfigureAwait(false);
         return connection;
@@ -888,7 +888,7 @@ public sealed class HostSession : IAsyncDisposable
     private string NameOf(PeerId peer)
         => peer == _identity.PeerId ? DisplayName
             : _participants.TryGetValue(peer, out var connection) ? connection.Info.DisplayName
-            : "Участник";
+            : Texts.Get("Session.DefaultParticipantName");
 
     /// <summary>
     /// Sends the participant list to everybody.

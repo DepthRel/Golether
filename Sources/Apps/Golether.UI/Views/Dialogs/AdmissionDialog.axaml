@@ -1,16 +1,17 @@
 <Window xmlns="https://github.com/avaloniaui"
+        xmlns:loc="using:Golether.UI.Localization"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:vm="using:Golether.UI.ViewModels.Dialogs"
         x:Class="Golether.UI.Views.Dialogs.AdmissionDialog"
         x:DataType="vm:AdmissionDialogViewModel"
-        Title="Запрос на подключение"
+        Title="{loc:Loc Admission.WindowTitle}"
         Width="480" SizeToContent="Height" CanResize="False"
         WindowStartupLocation="CenterOwner" Topmost="True" Icon="/Assets/golether.ico">
   <!-- The host decides whether a participant may join after comparing the verification code. -->
   <StackPanel Margin="22" Spacing="14">
     <TextBlock Classes="title" Text="{Binding Title}" TextWrapping="Wrap" />
     <TextBlock Classes="muted" Text="{Binding Explanation}" TextWrapping="Wrap" />
-    <TextBlock Classes="label" Text="КОД СВЕРКИ" />
+    <TextBlock Classes="label" Text="{loc:Loc Admission.CodeLabel}" />
     <WrapPanel>
       <ItemsControl ItemsSource="{Binding Words}">
         <ItemsControl.ItemsPanel>
@@ -30,11 +31,11 @@
         <TextBlock Text="{Binding Number}" />
       </Border>
     </WrapPanel>
-    <TextBlock Classes="label" Text="ОТПЕЧАТОК УСТРОЙСТВА" />
+    <TextBlock Classes="label" Text="{loc:Loc Admission.FingerprintLabel}" />
     <TextBlock Classes="mono" Text="{Binding Fingerprint}" />
     <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Spacing="8">
-      <Button Classes="danger" Content="Отклонить" Click="OnReject" IsCancel="True" />
-      <Button Classes="accent" Content="Коды совпали, впустить" Click="OnApprove" />
+      <Button Classes="danger" Content="{loc:Loc Admission.Reject}" Click="OnReject" IsCancel="True" />
+      <Button Classes="accent" Content="{loc:Loc Admission.Approve}" Click="OnApprove" />
     </StackPanel>
   </StackPanel>
 </Window>

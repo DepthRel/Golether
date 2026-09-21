@@ -1,4 +1,5 @@
 using System.Security.Cryptography;
+using Golether.Localization;
 using Golether.Security.Secrets;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -72,11 +73,7 @@ public sealed class FileDeviceIdentityStore : IDeviceIdentityStore
             }
             catch (CryptographicException ex)
             {
-                throw new CryptographicException(
-                    $"Не удаётся прочитать ключ устройства «{FilePath}» ({_protector.Description}). Обычно так бывает, если папку " +
-                    "Golether перенесли на другой компьютер или запустили под другим пользователем. Верните папку на прежнее место " +
-                    "или удалите папку identity: будет создан новый ключ, и контактам придётся заново сверить код.",
-                    ex);
+                throw new CryptographicException(Texts.Format("Security.Error.DeviceKeyUnreadable", FilePath, _protector.Description), ex);
             }
         }
 

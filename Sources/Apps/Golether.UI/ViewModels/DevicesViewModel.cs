@@ -3,6 +3,7 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Golether.Core.Data.Enums;
 using Golether.Core.Data.Stores;
+using Golether.Localization;
 using Golether.Media.Conference;
 
 namespace Golether.UI.ViewModels;
@@ -99,7 +100,7 @@ public sealed partial class DevicesViewModel : ObservableObject
         }
         catch (Exception ex) when (ex is not OutOfMemoryException)
         {
-            Error = "Не удалось получить список устройств: " + ex.Message;
+            Error = Texts.Format("Devices.Error.List", ex.Message);
             return;
         }
 
@@ -188,7 +189,7 @@ public sealed partial class DevicesViewModel : ObservableObject
         }
         catch (Exception ex) when (ex is not OutOfMemoryException)
         {
-            Error = "Не удалось переключить устройство: " + ex.Message;
+            Error = Texts.Format("Devices.Error.Switch", ex.Message);
         }
     }
 }

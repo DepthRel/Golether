@@ -1,6 +1,7 @@
 using System.Collections.ObjectModel;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using Golether.Localization;
 using Golether.Core.Data.Enums;
 using Golether.Core.Data.Stores;
 using Golether.Media.Player;
@@ -120,7 +121,7 @@ public sealed partial class TracksViewModel : ObservableObject
     /// Gets or sets the tooltip of the track button.
     /// </summary>
     [ObservableProperty]
-    public partial string Summary { get; set; } = "Звук и субтитры";
+    public partial string Summary { get; set; } = Texts.Get("Tracks.Summary");
 
     /// <summary>
     /// Loads the stored preferences.
@@ -208,7 +209,7 @@ public sealed partial class TracksViewModel : ObservableObject
         }
         catch (Exception ex) when (ex is IOException or InvalidOperationException or UnauthorizedAccessException or Media.Player.Mpv.MpvException)
         {
-            await _dialogs.ShowErrorAsync("Субтитры не загружены", ex.Message);
+            await _dialogs.ShowErrorAsync(Texts.Get("Tracks.Error.SubtitlesTitle"), ex.Message);
         }
     }
 
@@ -231,7 +232,7 @@ public sealed partial class TracksViewModel : ObservableObject
         }
         catch (Exception ex) when (ex is IOException or InvalidOperationException or UnauthorizedAccessException or Media.Player.Mpv.MpvException)
         {
-            await _dialogs.ShowErrorAsync("Дорожка не загружена", ex.Message);
+            await _dialogs.ShowErrorAsync(Texts.Get("Tracks.Error.AudioTitle"), ex.Message);
         }
     }
 
@@ -302,7 +303,7 @@ public sealed partial class TracksViewModel : ObservableObject
 
         var subtitles = tracks.Where(t => t.Kind == MediaTrackKind.Subtitle).ToArray();
         var shown = subtitles.FirstOrDefault(t => t.IsSelected);
-        SubtitleTracks.Add(new TrackOptionViewModel(this, MediaTrackKind.Subtitle, null, "Без субтитров", shown is null));
+        SubtitleTracks.Add(new TrackOptionViewModel(this, MediaTrackKind.Subtitle, null, Texts.Get("Tracks.NoSubtitles"), shown is null));
         foreach (var track in subtitles)
         {
             SubtitleTracks.Add(new TrackOptionViewModel(this, track.Kind, track, track.DisplayName, track.IsSelected));
@@ -311,6 +312,9 @@ public sealed partial class TracksViewModel : ObservableObject
         HasTracks = tracks.Count > 0;
         SubtitlesShown = shown is not null;
         var audio = AudioTracks.FirstOrDefault(t => t.IsSelected);
-        Summary = $"Звук: {audio?.Label ?? "нет"}\nСубтитры: {shown?.DisplayName ?? "выключены"}";
+        Summary = Texts.Format(
+            "Tracks.SummaryDetails",
+            audio?.Label ?? Texts.Get("Tracks.None"),
+            shown?.DisplayName ?? Texts.Get("Tracks.Off"));
     }
 }

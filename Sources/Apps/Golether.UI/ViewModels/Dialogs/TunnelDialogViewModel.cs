@@ -2,6 +2,7 @@ using System.Security.Cryptography;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Golether.Core.Networking;
+using Golether.Localization;
 using Golether.Tunnels.AmneziaWG.Configuration;
 using Golether.Tunnels.AmneziaWG.Control;
 using Golether.UI.Services;
@@ -62,7 +63,7 @@ public sealed partial class TunnelDialogViewModel : ObservableObject
     /// Gets or sets the availability of the AmneziaWG tools.
     /// </summary>
     [ObservableProperty]
-    public partial string AvailabilityText { get; set; } = "Проверка AmneziaWG…";
+    public partial string AvailabilityText { get; set; } = Texts.Get("Tunnel.Dialog.Checking");
 
     /// <summary>
     /// Gets or sets a value indicating whether the tools are installed.
@@ -182,7 +183,7 @@ public sealed partial class TunnelDialogViewModel : ObservableObject
         var problem = await _workflow.CheckAvailabilityAsync(CancellationToken.None);
         IsAvailable = problem is null;
         NeedsComponent = problem is not null && Component is { IsAvailable: false };
-        AvailabilityText = problem ?? "Движок туннеля на месте. При подъёме туннеля система один раз спросит разрешение администратора.";
+        AvailabilityText = problem ?? Texts.Get("Tunnel.Dialog.EngineReady");
     }
 
     /// <summary>
@@ -193,7 +194,7 @@ public sealed partial class TunnelDialogViewModel : ObservableObject
     private Task CreateOfferAsync() => RunAsync(async () =>
     {
         OfferText = await _workflow.CreateOfferAsync(_userName, ParsePublicAddress(), CancellationToken.None);
-        Message = "Предложение готово. Отправьте его участнику, затем вставьте его ответ ниже.";
+        Message = Texts.Get("Tunnel.Dialog.OfferReady");
     });
 
     /// <summary>
@@ -206,8 +207,8 @@ public sealed partial class TunnelDialogViewModel : ObservableObject
         var result = await _workflow.CompleteOfferAsync(AnswerInput, CancellationToken.None);
         _hostConfiguration = (result.InterfaceName, result.Configuration);
         HasHostConfiguration = true;
-        HostResult = $"{result.ParticipantName} добавлен(а). Сверьте код голосом: {result.VerificationCode}";
-        Message = "Поднимите туннель заново, чтобы новый участник смог подключиться.";
+        HostResult = Texts.Format("Tunnel.Dialog.ParticipantAdded", result.ParticipantName, result.VerificationCode);
+        Message = Texts.Get("Tunnel.Dialog.RaiseAgain");
     });
 
     /// <summary>
@@ -221,8 +222,8 @@ public sealed partial class TunnelDialogViewModel : ObservableObject
         _participantConfiguration = (result.InterfaceName, result.Configuration);
         HasParticipantConfiguration = true;
         AnswerText = result.AnswerText;
-        ParticipantResult = $"Туннель к {result.HostName}. Код: {result.VerificationCode}. Адрес ведущего в туннеле: {result.HostAddress}";
-        Message = "Отправьте ответ ведущему и поднимите туннель. В приглашении ведущий укажет адрес " + result.HostAddress + ".";
+        ParticipantResult = Texts.Format("Tunnel.Dialog.TunnelTo", result.HostName, result.VerificationCode, result.HostAddress);
+        Message = Texts.Format("Tunnel.Dialog.SendAnswer", result.HostAddress);
     });
 
     /// <summary>
@@ -295,7 +296,7 @@ public sealed partial class TunnelDialogViewModel : ObservableObject
 
         return PeerEndpoint.TryParse(PublicAddress.Trim(), out var endpoint)
             ? [endpoint]
-            : throw new FormatException("Внешний адрес указывается как хост:порт, например 203.0.113.24:51944.");
+            : throw new FormatException(Texts.Get("Tunnel.Dialog.BadPublicAddress"));
     }
 
     /// <summary>
@@ -308,7 +309,7 @@ public sealed partial class TunnelDialogViewModel : ObservableObject
         if (!string.IsNullOrEmpty(text))
         {
             await _dialogs.CopyTextAsync(text);
-            Message = "Скопировано.";
+            Message = Texts.Get("Tunnel.Dialog.Copied");
         }
     }
 
@@ -326,7 +327,7 @@ public sealed partial class TunnelDialogViewModel : ObservableObject
 
         await _workflow.ApplyAsync(value.Name, value.Configuration, CancellationToken.None);
         HasRaisedTunnels = true;
-        Message = $"Туннель {value.Name} поднят. Он опустится сам, когда вы закроете Golether.";
+        Message = Texts.Format("Tunnel.Dialog.Raised", value.Name);
     });
 
     /// <summary>
@@ -339,8 +340,8 @@ public sealed partial class TunnelDialogViewModel : ObservableObject
         var remaining = await _workflow.DropRaisedAsync(CancellationToken.None);
         HasRaisedTunnels = remaining.Count > 0;
         Message = remaining.Count == 0
-            ? "Туннели Golether опущены."
-            : $"Остались подняты: {string.Join(", ", remaining)}. Для этого нужны права администратора.";
+            ? Texts.Get("Tunnel.Dialog.Dropped")
+            : Texts.Format("Tunnel.Dialog.StillRaised", string.Join(", ", remaining));
     });
 
     /// <summary>
@@ -359,7 +360,7 @@ public sealed partial class TunnelDialogViewModel : ObservableObject
         if (path is not null)
         {
             await _workflow.ExportAsync(value.Configuration, path, CancellationToken.None);
-            Message = $"Конфигурация сохранена: {path}. Файл содержит ключи — храните его в тайне.";
+            Message = Texts.Format("Tunnel.Dialog.ConfigSaved", path);
         }
     });
 

@@ -4,6 +4,7 @@ using CommunityToolkit.Mvvm.Input;
 using Golether.Components.Catalog;
 using Golether.Components.Installation;
 using Golether.Core.Data.Enums;
+using Golether.Localization;
 using Golether.UI.Services;
 
 namespace Golether.UI.ViewModels;
@@ -39,9 +40,6 @@ public sealed partial class ComponentItemViewModel : ObservableObject
         Id = id;
         _components = components ?? throw new ArgumentNullException(nameof(components));
         _dialogs = dialogs ?? throw new ArgumentNullException(nameof(dialogs));
-        var description = ComponentCatalog.Describe(id);
-        Title = description.Title;
-        Purpose = char.ToUpper(description.Purpose[0], CultureInfo.CurrentCulture) + description.Purpose[1..];
         Refresh();
     }
 
@@ -53,12 +51,19 @@ public sealed partial class ComponentItemViewModel : ObservableObject
     /// <summary>
     /// Gets the title.
     /// </summary>
-    public string Title { get; }
+    public string Title => ComponentCatalog.Describe(Id).Title;
 
     /// <summary>
     /// Gets what the component is for.
     /// </summary>
-    public string Purpose { get; }
+    public string Purpose
+    {
+        get
+        {
+            var purpose = ComponentCatalog.Describe(Id).Purpose;
+            return char.ToUpper(purpose[0], Texts.Localizer.Culture) + purpose[1..];
+        }
+    }
 
     /// <summary>
     /// Gets or sets the state text.
@@ -82,7 +87,7 @@ public sealed partial class ComponentItemViewModel : ObservableObject
     /// Gets or sets the caption of the install button.
     /// </summary>
     [ObservableProperty]
-    public partial string InstallText { get; set; } = "Установить";
+    public partial string InstallText { get; set; } = Texts.Get("Component.Install");
 
     /// <summary>
     /// Gets or sets a value indicating whether an installation runs.
@@ -127,19 +132,15 @@ public sealed partial class ComponentItemViewModel : ObservableObject
         var status = _components.GetStatus(Id);
         IsAvailable = status.IsAvailable;
         CanInstall = status.CanInstall && !IsInstalling;
-        StatusText = status.Source switch
-        {
-            ComponentSource.Bundled => "входит в поставку",
-            ComponentSource.Installed => "установлен",
-            ComponentSource.System => "найден в системе",
-            _ => "не установлен",
-        };
+        StatusText = Texts.Get("Component.Source." + (Enum.IsDefined(status.Source) ? status.Source : ComponentSource.Missing));
         InstallText = status.Package is { } package
-            ? $"Установить ({FormatSize(package.Size)})"
-            : "Установить";
+            ? Texts.Format("Component.InstallWithSize", FormatSize(package.Size))
+            : Texts.Get("Component.Install");
         AdviceText = status.Advice?.Text ?? string.Empty;
         AdviceCommand = status.Advice?.Command ?? string.Empty;
         OnPropertyChanged(nameof(HasAdviceCommand));
+        OnPropertyChanged(nameof(Title));
+        OnPropertyChanged(nameof(Purpose));
     }
 
     /// <summary>
@@ -161,11 +162,11 @@ public sealed partial class ComponentItemViewModel : ObservableObject
         try
         {
             await _components.InstallAsync(Id, progress, _cancellation.Token);
-            ProgressText = "Готово";
+            ProgressText = Texts.Get("Component.Progress.Done");
         }
         catch (OperationCanceledException)
         {
-            ProgressText = "Установка отменена";
+            ProgressText = Texts.Get("Component.Progress.Cancelled");
         }
         catch (ComponentInstallException ex)
         {
@@ -197,7 +198,7 @@ public sealed partial class ComponentItemViewModel : ObservableObject
         if (HasAdviceCommand)
         {
             await _dialogs.CopyTextAsync(AdviceCommand);
-            ProgressText = "Команда скопирована";
+            ProgressText = Texts.Get("Component.Progress.CommandCopied");
         }
     }
 
@@ -205,8 +206,8 @@ public sealed partial class ComponentItemViewModel : ObservableObject
     /// Formats a size in megabytes.
     /// </summary>
     /// <param name="bytes">The size.</param>
-    /// <returns>The text, for example <c>31 МБ</c>.</returns>
-    private static string FormatSize(long bytes) => $"{Math.Max(1, bytes / (1024 * 1024))} МБ";
+    /// <returns>The text, for example <c>31 MB</c>.</returns>
+    private static string FormatSize(long bytes) => Texts.Format("Format.Megabytes", Math.Max(1, bytes / (1024 * 1024)));
 
     /// <summary>
     /// Shows installation progress.
@@ -215,14 +216,8 @@ public sealed partial class ComponentItemViewModel : ObservableObject
     private void Report(InstallProgress progress)
     {
         Progress = progress.Fraction * 100;
-        ProgressText = progress.Stage switch
-        {
-            InstallStage.Downloading when progress.TotalBytes > 0 => $"Загрузка {progress.Bytes / (1024 * 1024)} из {progress.TotalBytes / (1024 * 1024)} МБ",
-            InstallStage.Verifying => "Проверка контрольной суммы…",
-            InstallStage.Unpacking => "Распаковка…",
-            InstallStage.Finishing => "Подготовка файлов…",
-            InstallStage.Completed => "Готово",
-            _ => "Загрузка…",
-        };
+        ProgressText = progress.Stage == InstallStage.Downloading && progress.TotalBytes > 0
+            ? Texts.Format("Component.Stage.DownloadingProgress", progress.Bytes / (1024 * 1024), progress.TotalBytes / (1024 * 1024))
+            : Texts.Get("Component.Stage." + (Enum.IsDefined(progress.Stage) ? progress.Stage : InstallStage.Downloading));
     }
 }

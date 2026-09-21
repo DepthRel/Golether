@@ -160,7 +160,7 @@ public static class WindowsFirewall
                 [
                     "advfirewall", "firewall", "add", "rule", $"name={RuleName}", "dir=in", "action=allow",
                     $"program={program}", "enable=yes", "profile=any",
-                    $"description=Golether: приём подключений участников сеанса",
+                    "description=Golether: incoming connections of session participants",
                 ],
                 ignoreFailure: false);
             return Success;

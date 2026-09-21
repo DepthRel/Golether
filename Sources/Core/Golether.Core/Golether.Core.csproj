@@ -5,4 +5,8 @@
     <RootNamespace>Golether.Core</RootNamespace>
   </PropertyGroup>
 
+  <ItemGroup>
+    <ProjectReference Include="..\Golether.Localization\Golether.Localization.csproj" />
+  </ItemGroup>
+
 </Project>

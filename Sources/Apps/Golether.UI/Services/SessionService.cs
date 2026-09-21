@@ -3,6 +3,7 @@ using Golether.Core.Data.Stores;
 using Golether.Core.Identity;
 using Golether.Core.Networking;
 using Golether.Core.Time;
+using Golether.Localization;
 using Golether.Media.Conference;
 using Golether.Media.Player.Mpv;
 using Golether.Security.Admission;
@@ -192,7 +193,7 @@ public sealed class SessionService : ISessionService, IAsyncDisposable
         catch (System.Net.Sockets.SocketException ex)
         {
             _ = listener.DisposeAsync();
-            throw new InvalidOperationException($"Порт {port} занят или недоступен: {ex.Message}", ex);
+            throw new InvalidOperationException(Texts.Format("Session.Error.PortBusy", port, ex.Message), ex);
         }
 
         var host = new HostSession(
@@ -225,12 +226,12 @@ public sealed class SessionService : ISessionService, IAsyncDisposable
 
     /// <inheritdoc />
     public Task ShareMediaAsync(string path, CancellationToken cancellationToken)
-        => (_host ?? throw new InvalidOperationException("Файл показывает только ведущий.")).ShareMediaAsync(path, cancellationToken);
+        => (_host ?? throw new InvalidOperationException(Texts.Get("Session.Error.OnlyHostShares"))).ShareMediaAsync(path, cancellationToken);
 
     /// <inheritdoc />
     public Invite CreateInvite(IReadOnlyList<PeerEndpoint> additionalEndpoints, TimeSpan lifetime)
     {
-        var host = _host ?? throw new InvalidOperationException("Приглашать может только ведущий.");
+        var host = _host ?? throw new InvalidOperationException(Texts.Get("Session.Error.OnlyHostInvites"));
         var mapping = _portLease?.Mapping;
         var external = mapping is { IsPubliclyReachable: true, ExternalAddress: { } address }
             ? [new PeerEndpoint(address.ToString(), mapping.ExternalPort)]
@@ -264,7 +265,7 @@ public sealed class SessionService : ISessionService, IAsyncDisposable
 
     /// <inheritdoc />
     public Task<bool> UseLocalCopyAsync(string path, CancellationToken cancellationToken)
-        => (_participant ?? throw new InvalidOperationException("Локальная копия доступна только участнику.")).UseLocalCopyAsync(path, cancellationToken);
+        => (_participant ?? throw new InvalidOperationException(Texts.Get("Session.Error.OnlyParticipantCopy"))).UseLocalCopyAsync(path, cancellationToken);
 
     /// <inheritdoc />
     public Task RequestAsync(PlaybackRequest request, CancellationToken cancellationToken)
@@ -274,7 +275,7 @@ public sealed class SessionService : ISessionService, IAsyncDisposable
 
     /// <inheritdoc />
     public Task SwitchOffParticipantDevicesAsync(PeerId peerId, bool microphone, bool camera)
-        => (_host ?? throw new InvalidOperationException("Отключать устройства участников может только ведущий."))
+        => (_host ?? throw new InvalidOperationException(Texts.Get("Session.Error.OnlyHostModerates")))
             .SwitchOffParticipantDevicesAsync(peerId, microphone, camera);
 
     /// <inheritdoc />
@@ -378,10 +379,10 @@ public sealed class SessionService : ISessionService, IAsyncDisposable
         var mapping = lease?.Mapping;
         var text = mapping switch
         {
-            null when HasTunnelAddress() => $"Роутер не открыл порт {port} автоматически, но найдена сеть туннеля: её адрес идёт в приглашении первым, и участники из этой сети подключатся.",
-            null => $"Роутер не открыл порт {port} автоматически. В своей сети показ работает; для участников из других сетей нужен проброс порта вручную или общий туннель.",
-            { IsPubliclyReachable: true } => $"Порт открыт на роутере ({mapping.Method}): {mapping.ExternalAddress}:{mapping.ExternalPort}. Адрес добавляется в приглашения.",
-            _ => $"Роутер открыл порт ({mapping.Method}), но его внешний адрес {mapping.ExternalAddress?.ToString() ?? "неизвестен"} не публичный (NAT провайдера). Для других сетей нужен туннель AWG.",
+            null when HasTunnelAddress() => Texts.Format("Session.Router.NotOpenedTunnelFound", port),
+            null => Texts.Format("Session.Router.NotOpened", port),
+            { IsPubliclyReachable: true } => Texts.Format("Session.Router.Opened", mapping.Method, mapping.ExternalAddress, mapping.ExternalPort),
+            _ => Texts.Format("Session.Router.OpenedNotPublic", mapping.Method, mapping.ExternalAddress?.ToString() ?? Texts.Get("Session.Router.UnknownAddress")),
         };
         if (_host == host)
         {
@@ -405,7 +406,7 @@ public sealed class SessionService : ISessionService, IAsyncDisposable
         EventRaised?.Invoke(this, new SessionEvent(
             _timeProvider.GetLocalNow(),
             null,
-            "Брандмауэр Windows не пропускает входящие подключения к Golether. Пока правила нет, участники не подключатся — ни из другой сети, ни через туннель."));
+            Texts.Get("Session.Firewall.Blocked")));
     }
 
     /// <inheritdoc />
@@ -438,7 +439,7 @@ public sealed class SessionService : ISessionService, IAsyncDisposable
         FirewallBlocked = WindowsFirewall.Check() == FirewallState.Missing;
         if (!FirewallBlocked)
         {
-            EventRaised?.Invoke(this, new SessionEvent(_timeProvider.GetLocalNow(), null, "Брандмауэр теперь пропускает подключения к Golether."));
+            EventRaised?.Invoke(this, new SessionEvent(_timeProvider.GetLocalNow(), null, Texts.Get("Session.Firewall.Allowed")));
         }
 
         Changed?.Invoke(this, EventArgs.Empty);
@@ -539,14 +540,14 @@ public sealed class SessionService : ISessionService, IAsyncDisposable
             for (var attempt = 1; attempt <= ReconnectAttempts && !token.IsCancellationRequested; attempt++)
             {
                 var delay = ReconnectDelays[Math.Min(attempt - 1, ReconnectDelays.Length - 1)];
-                Report($"Связь с ведущим потеряна. Повторная попытка {attempt} из {ReconnectAttempts} через {delay.TotalSeconds:0} с…");
+                Report(Texts.Format("Session.Reconnect.Lost", attempt, ReconnectAttempts, delay.TotalSeconds.ToString("0", System.Globalization.CultureInfo.InvariantCulture)));
                 await Task.Delay(delay, _timeProvider, token).ConfigureAwait(false);
                 if (!ReferenceEquals(_participant, ended) || _reconnectInvite is not { } ticket)
                 {
                     return;
                 }
 
-                Report($"Переподключение к ведущему… (попытка {attempt} из {ReconnectAttempts})");
+                Report(Texts.Format("Session.Reconnect.Trying", attempt, ReconnectAttempts));
                 var session = CreateParticipant(_joinName);
                 try
                 {
@@ -562,13 +563,13 @@ public sealed class SessionService : ISessionService, IAsyncDisposable
                 _participant = session;
                 _reconnectInvite = session.ReconnectInvite ?? ticket;
                 await ended.DisposeAsync().ConfigureAwait(false);
-                Report("Связь с ведущим восстановлена.");
+                Report(Texts.Get("Session.Reconnect.Restored"));
                 ReconnectMessage = string.Empty;
                 Changed?.Invoke(this, EventArgs.Empty);
                 return;
             }
 
-            Report("Не удалось переподключиться к ведущему. Попросите новое приглашение.");
+            Report(Texts.Get("Session.Reconnect.Failed"));
         }
         catch (OperationCanceledException)
         {
@@ -626,7 +627,7 @@ public sealed class SessionService : ISessionService, IAsyncDisposable
     {
         if (IsActive)
         {
-            throw new InvalidOperationException("Сначала завершите текущий сеанс.");
+            throw new InvalidOperationException(Texts.Get("Session.Error.EndCurrentFirst"));
         }
     }
 

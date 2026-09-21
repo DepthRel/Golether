@@ -7,6 +7,7 @@ using Golether.Core.Data.Entities;
 using Golether.Core.Data.Enums;
 using Golether.Core.Data.Stores;
 using Golether.Core.Networking;
+using Golether.Localization;
 using Golether.Security.Identity;
 using Golether.Security.Secrets;
 using Golether.Session;
@@ -173,7 +174,7 @@ public sealed class TunnelWorkflow
         var record = await _store.FindByOfferAsync(TunnelRole.Host, answer.Body.OfferId, cancellationToken).ConfigureAwait(false);
         if (record is null || record.Status != TunnelStatus.Pending || record.SecretData is null)
         {
-            throw new FormatException("Ответ относится к неизвестному или уже использованному предложению.");
+            throw new FormatException(Texts.Get("Tunnel.Error.AnswerUnknownOffer"));
         }
 
         var secrets = Unprotect<PendingOfferSecrets>(record.SecretData);
@@ -228,7 +229,7 @@ public sealed class TunnelWorkflow
         var existing = await _store.FindByOfferAsync(TunnelRole.Participant, offerId, cancellationToken).ConfigureAwait(false);
         if (existing is not null)
         {
-            throw new FormatException("Это предложение уже принято. Попросите ведущего создать новое.");
+            throw new FormatException(Texts.Get("Tunnel.Error.OfferAlreadyAccepted"));
         }
 
         await _store.AddAsync(new TunnelEntity

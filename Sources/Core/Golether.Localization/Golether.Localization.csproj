@@ -1,0 +1,15 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    Texts of the user interface and of the messages raised by the code, one JSON file per language. A new language is
+    a new file in Languages/ (it is picked up automatically): the code decides nothing by language.
+  -->
+  <PropertyGroup>
+    <RootNamespace>Golether.Localization</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <EmbeddedResource Include="Languages\*.json" />
+  </ItemGroup>
+
+</Project>

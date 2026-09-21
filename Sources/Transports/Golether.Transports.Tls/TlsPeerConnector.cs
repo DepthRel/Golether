@@ -4,6 +4,7 @@ using System.Security.Authentication;
 using Golether.Core.Data.Enums;
 using Golether.Core.Identity;
 using Golether.Core.Networking;
+using Golether.Localization;
 using Golether.Security.Identity;
 
 namespace Golether.Transports.Tls;
@@ -85,9 +86,9 @@ public sealed class TlsPeerConnector : IPeerConnector
             catch (AuthenticationException ex)
             {
                 var detail = presented.IsEmpty
-                    ? "узел не предъявил ключ"
-                    : $"узел предъявил ключ {presented.ToShortString()} вместо {expectedPeer.ToShortString()}";
-                throw new PeerAuthenticationException($"Проверка ключа {endpoint} не пройдена: {detail}.", ex);
+                    ? Texts.Get("Net.Error.NoKeyPresented")
+                    : Texts.Format("Net.Error.WrongKeyPresented", presented.ToShortString(), expectedPeer.ToShortString());
+                throw new PeerAuthenticationException(Texts.Format("Net.Error.KeyCheckFailed", endpoint, detail), ex);
             }
 
             await ssl.WriteAsync(TlsProtocol.BuildPreamble(purpose), timeout.Token).ConfigureAwait(false);
@@ -96,7 +97,7 @@ public sealed class TlsPeerConnector : IPeerConnector
             if (await ssl.ReadAtLeastAsync(answer, 1, throwOnEndOfStream: false, timeout.Token).ConfigureAwait(false) != 1
                 || answer[0] != TlsProtocol.Accepted)
             {
-                throw new IOException($"Узел {endpoint} отклонил соединение.");
+                throw new IOException(Texts.Format("Net.Error.PeerRefused", endpoint));
             }
 
             var stream = new PeerStream(expectedPeer, purpose, ssl, endpoint.ToString());
@@ -105,11 +106,11 @@ public sealed class TlsPeerConnector : IPeerConnector
         }
         catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
         {
-            throw new IOException($"Узел {endpoint} не ответил за {_options.HandshakeTimeout.TotalSeconds:0} с.");
+            throw new IOException(Texts.Format("Net.Error.PeerTimedOut", endpoint, _options.HandshakeTimeout.TotalSeconds.ToString("0", System.Globalization.CultureInfo.InvariantCulture)));
         }
         catch (SocketException ex)
         {
-            throw new IOException($"Не удалось подключиться к {endpoint}: {ex.Message}", ex);
+            throw new IOException(Texts.Format("Net.Error.ConnectFailed", endpoint, ex.Message), ex);
         }
         finally
         {

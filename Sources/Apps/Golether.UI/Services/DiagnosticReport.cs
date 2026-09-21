@@ -2,6 +2,7 @@ using System.Globalization;
 using System.Text;
 using System.Text.RegularExpressions;
 using Golether.Components.Installation;
+using Golether.Localization;
 using Golether.Session;
 
 namespace Golether.UI.Services;
@@ -56,13 +57,13 @@ public static partial class DiagnosticReport
         DateTimeOffset now)
     {
         var report = new StringBuilder();
-        report.AppendLine(CultureInfo.InvariantCulture, $"Отчёт Golether от {now:yyyy-MM-dd HH:mm:ss zzz}");
-        report.AppendLine(CultureInfo.InvariantCulture, $"Версия: {version}");
-        report.AppendLine(CultureInfo.InvariantCulture, $"Система: {Environment.OSVersion.VersionString}, {Environment.ProcessorCount} ядер, .NET {Environment.Version}");
-        report.AppendLine(CultureInfo.InvariantCulture, $"Устройство: {deviceFingerprint}");
+        report.AppendLine(Texts.Format("Report.Title", now.ToString("yyyy-MM-dd HH:mm:ss zzz", CultureInfo.InvariantCulture)));
+        report.AppendLine(Texts.Format("Report.Version", version));
+        report.AppendLine(Texts.Format("Report.System", Environment.OSVersion.VersionString, Environment.ProcessorCount, Environment.Version));
+        report.AppendLine(Texts.Format("Report.Device", deviceFingerprint));
         report.AppendLine();
 
-        report.AppendLine("Компоненты:");
+        report.AppendLine(Texts.Get("Report.Components"));
         foreach (var component in components ?? [])
         {
             report.AppendLine(CultureInfo.InvariantCulture, $"  {component.Id}: {component.Source}{(component.Path is { Length: > 0 } path ? " — " + Redact(path) : string.Empty)}");
@@ -71,7 +72,7 @@ public static partial class DiagnosticReport
         if (notes is { Count: > 0 })
         {
             report.AppendLine();
-            report.AppendLine("Состояние:");
+            report.AppendLine(Texts.Get("Report.State"));
             foreach (var note in notes)
             {
                 report.AppendLine("  " + Redact(note));
@@ -81,28 +82,46 @@ public static partial class DiagnosticReport
         report.AppendLine();
         if (snapshot is null)
         {
-            report.AppendLine("Сеанс: не запущен.");
+            report.AppendLine(Texts.Get("Report.NoSession"));
         }
         else
         {
-            report.AppendLine(CultureInfo.InvariantCulture, $"Сеанс: {(snapshot.IsHost ? "ведущий" : "участник")}, состояние {snapshot.State}, участников {snapshot.Participants.Count}");
-            report.AppendLine(CultureInfo.InvariantCulture, $"  Файл: {(snapshot.Media is { } media ? $"{Path.GetExtension(media.FileName)}, {media.Length} байт{(snapshot.UsesLocalCopy ? ", локальная копия" : string.Empty)}" : "не выбран")}");
-            report.AppendLine(CultureInfo.InvariantCulture,
-                $"  Воспроизведение: {(snapshot.Playback is { } playback ? $"{playback.State}, позиция {playback.Position}, причина {playback.Cause}, версия {playback.Version}" : "нет")}");
-            report.AppendLine(CultureInfo.InvariantCulture,
-                $"  Часы: пинг {snapshot.RoundTrip?.TotalMilliseconds ?? 0:0} мс, неопределённость {snapshot.ClockUncertainty?.TotalMilliseconds ?? 0:0} мс");
+            report.AppendLine(Texts.Format(
+                "Report.Session",
+                Texts.Get(snapshot.IsHost ? "Report.Role.Host" : "Report.Role.Participant"),
+                snapshot.State,
+                snapshot.Participants.Count));
+            var file = snapshot.Media is { } media
+                ? Texts.Format("Report.File.Details", Path.GetExtension(media.FileName), media.Length.ToString(CultureInfo.InvariantCulture))
+                    + (snapshot.UsesLocalCopy ? Texts.Get("Report.File.LocalCopy") : string.Empty)
+                : Texts.Get("Report.File.None");
+            report.AppendLine(Texts.Format("Report.File", file));
+            var playing = snapshot.Playback is { } playback
+                ? Texts.Format("Report.Playback.Details", playback.State, playback.Position, playback.Cause, playback.Version.ToString(CultureInfo.InvariantCulture))
+                : Texts.Get("Report.Playback.None");
+            report.AppendLine(Texts.Format("Report.Playback", playing));
+            report.AppendLine(Texts.Format(
+                "Report.Clock",
+                Whole(snapshot.RoundTrip?.TotalMilliseconds ?? 0),
+                Whole(snapshot.ClockUncertainty?.TotalMilliseconds ?? 0)));
             foreach (var participant in snapshot.Participants)
             {
                 var status = participant.Status;
-                report.AppendLine(CultureInfo.InvariantCulture,
-                    $"  · {participant.Info.PeerId.ToShortString()}{(participant.IsLocal ? " (вы)" : string.Empty)}: " +
-                    $"позиция {status?.Position}, расхождение {status?.Drift.TotalMilliseconds ?? 0:0} мс, буфер {status?.CacheAhead.TotalSeconds ?? 0:0} с, " +
-                    $"пинг {status?.RoundTripMilliseconds ?? 0} мс, микрофон {(status?.MicrophoneOff == true ? "выкл" : "вкл")}, камера {(status?.CameraOff == true ? "выкл" : "вкл")}");
+                report.AppendLine(Texts.Format(
+                    "Report.Participant",
+                    participant.Info.PeerId.ToShortString(),
+                    participant.IsLocal ? Texts.Get("Report.You") : string.Empty,
+                    status?.Position,
+                    Whole(status?.Drift.TotalMilliseconds ?? 0),
+                    Whole(status?.CacheAhead.TotalSeconds ?? 0),
+                    (status?.RoundTripMilliseconds ?? 0).ToString(CultureInfo.InvariantCulture),
+                    Texts.Get(status?.MicrophoneOff == true ? "Report.Off" : "Report.On"),
+                    Texts.Get(status?.CameraOff == true ? "Report.Off" : "Report.On")));
             }
         }
 
         report.AppendLine();
-        report.AppendLine(CultureInfo.InvariantCulture, $"Журнал (последние {log?.Count ?? 0} строк):");
+        report.AppendLine(Texts.Format("Report.Log", (log?.Count ?? 0).ToString(CultureInfo.InvariantCulture)));
         foreach (var line in log ?? [])
         {
             report.AppendLine(Redact(line));
@@ -143,9 +162,16 @@ public static partial class DiagnosticReport
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
-            return [$"Журнал не прочитан: {ex.Message}"];
+            return [Texts.Format("Report.LogNotRead", ex.Message)];
         }
     }
+
+    /// <summary>
+    /// Rounds a number of milliseconds or seconds to a whole number, written the same way in every language.
+    /// </summary>
+    /// <param name="value">The value.</param>
+    /// <returns>The text.</returns>
+    private static string Whole(double value) => value.ToString("0", CultureInfo.InvariantCulture);
 
     /// <summary>
     /// Matches the credentials of a relay address.

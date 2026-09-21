@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using System.Text;
+using Golether.Localization;
 
 namespace Golether.Tunnels.AmneziaWG.Control;
 
@@ -32,7 +33,7 @@ public sealed class ProcessRunner : IProcessRunner
             info.ArgumentList.Add(argument);
         }
 
-        using var process = Process.Start(info) ?? throw new InvalidOperationException($"'{fileName}' did not start.");
+        using var process = Process.Start(info) ?? throw new InvalidOperationException(Texts.Format("Tunnel.Error.ProcessNotStarted", fileName));
         var output = ReadLimitedAsync(process.StandardOutput);
         var error = ReadLimitedAsync(process.StandardError);
         using var linked = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
@@ -49,7 +50,7 @@ public sealed class ProcessRunner : IProcessRunner
                 throw;
             }
 
-            throw new TimeoutException($"'{Path.GetFileName(fileName)}' did not finish in {timeout.TotalSeconds:0} s.");
+            throw new TimeoutException(Texts.Format("Tunnel.Error.ProcessTimeout", Path.GetFileName(fileName), timeout.TotalSeconds.ToString("0", System.Globalization.CultureInfo.InvariantCulture)));
         }
 
         return new ProcessResult(process.ExitCode, await output.ConfigureAwait(false), await error.ConfigureAwait(false));

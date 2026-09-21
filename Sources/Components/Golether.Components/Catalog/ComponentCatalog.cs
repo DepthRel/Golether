@@ -1,5 +1,6 @@
 using System.Runtime.InteropServices;
 using Golether.Core.Data.Enums;
+using Golether.Localization;
 
 namespace Golether.Components.Catalog;
 
@@ -77,8 +78,8 @@ public static class ComponentCatalog
     /// <returns>The description.</returns>
     public static ComponentDescription Describe(ComponentId id) => id switch
     {
-        ComponentId.Video => new("Компонент видео (libmpv)", "показывает фильм в исходном качестве", "GPL-2.0-or-later", "mpv.io"),
-        ComponentId.Tunnel => new("Компонент туннеля (AmneziaWG)", "поднимает сеть сеанса, когда участники в разных сетях", "MIT", "github.com/amnezia-vpn"),
-        _ => new("Компонент камер и голоса (GStreamer)", "передаёт изображение с камер и звук микрофонов", "LGPL-2.1-or-later", "gstreamer.freedesktop.org"),
+        ComponentId.Video => new(Texts.Get("Component.Video.Title"), Texts.Get("Component.Video.Purpose"), "GPL-2.0-or-later", "mpv.io"),
+        ComponentId.Tunnel => new(Texts.Get("Component.Tunnel.Title"), Texts.Get("Component.Tunnel.Purpose"), "MIT", "github.com/amnezia-vpn"),
+        _ => new(Texts.Get("Component.Conference.Title"), Texts.Get("Component.Conference.Purpose"), "LGPL-2.1-or-later", "gstreamer.freedesktop.org"),
     };
 }
