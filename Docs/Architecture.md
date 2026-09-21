@@ -183,7 +183,8 @@ flowchart LR
 - Закрытые ключи не покидают устройство; секреты в БД защищены `ISecretProtector`.
 - Туннель поднимается через `amneziawg.exe /installtunnelservice` (Windows) или `awg-quick up` (Linux/macOS).
   Конфигурация экспортируется в формате, совместимом с AmneziaVPN.
-- **Свой движок.** На Windows приложение везёт AmneziaWG само: компонент `Tunnel` — это официальный пакет
+- **Свой движок.** На Windows у приложения свой AmneziaWG: в пакет приложения он не входит, а скачивается по
+  требованию как компонент `Tunnel` (кнопка «Установить» в окне «Туннели AWG»). Это официальный пакет
   `amneziawg-<arch>-3.1.0.msi`, закреплённый по SHA-256 и размеру, из которого `msiexec /a` достаёт
   `amneziawg.exe`, `awg.exe` и `wintun.dll` в `data/components/tunnel/<версия>/amneziawg`. В систему ничего не
   ставится и права администратора для распаковки не нужны. `ComponentLocator` намеренно **не** ищет AmneziaWG,
