@@ -12,6 +12,7 @@ using Golether.Security.Admission;
 using Golether.Security.Identity;
 using Golether.Security.Invites;
 using Golether.Sync.Protocol;
+using Golether.Transports;
 using Golether.Transports.Tls;
 using NSubstitute;
 
@@ -261,6 +262,58 @@ public sealed class SessionIntegrationTests : IAsyncLifetime
         await Task.Delay(300, token);
         Assert.Equal(3, hostLines.Count(e => e.Text.StartsWith("спам", StringComparison.Ordinal)));
         Assert.DoesNotContain(hostLines, e => e.Text is "плохой id" || e.Kind == ChatKind.Reaction && e.Text == "💩");
+    }
+
+    /// <summary>
+    /// An avatar reaches everybody with the authenticated owner, comes back to its sender, and a participant who joins
+    /// later is sent the avatars already chosen.
+    /// </summary>
+    /// <returns>A task that completes when the test is done.</returns>
+    [Fact]
+    public async Task Avatar_IsRelayedAndSentToLateJoiners()
+    {
+        var token = TestContext.Current.CancellationToken;
+        byte[] Png(byte tag) => [0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, tag, tag];
+        var hostAvatars = new ConcurrentQueue<AvatarUpdate>();
+        var guestAvatars = new ConcurrentQueue<AvatarUpdate>();
+        _host.AvatarReceived += (_, e) => hostAvatars.Enqueue(e);
+        await using var guest = CreateGuest();
+        guest.AvatarReceived += (_, e) => guestAvatars.Enqueue(e);
+        await guest.JoinAsync(_host.CreateInvite([new PeerEndpoint("127.0.0.1", _host.Port)]), token);
+
+        // The host chooses an avatar; the participant sees it. The participant chooses one; it comes back to them and
+        // the host sees it with the authenticated owner.
+        await _host.SetAvatarAsync(Png(1));
+        await guest.SendAvatarAsync(Png(2), token);
+        await WaitUntilAsync(() => guestAvatars.Count == 2 && hostAvatars.Any(a => a.Peer == _guestIdentity.PeerId), token);
+
+        var hostAvatarAtGuest = guestAvatars.Single(a => a.Peer == _hostIdentity.PeerId);
+        Assert.Equal(Png(1), hostAvatarAtGuest.Image);
+        Assert.False(hostAvatarAtGuest.IsLocal);
+        var ownAtGuest = guestAvatars.Single(a => a.Peer == _guestIdentity.PeerId);
+        Assert.Equal(Png(2), ownAtGuest.Image);
+        Assert.True(ownAtGuest.IsLocal);
+        Assert.Equal(Png(2), hostAvatars.Single(a => a.Peer == _guestIdentity.PeerId).Image);
+
+        // A participant who joins now (with its own identity) is sent both avatars that were already chosen.
+        using var secondIdentity = DeviceIdentity.CreateNew(TimeProvider.System);
+        await using var secondPlayer = new SimulatedPlayer(StopwatchMonotonicClock.Instance, TimeSpan.FromHours(2));
+        await using var second = new ParticipantSession(
+            secondIdentity,
+            new TlsPeerConnector(secondIdentity, Transport),
+            secondPlayer,
+            new CapturingRegistry(),
+            StopwatchMonotonicClock.Instance,
+            TimeProvider.System,
+            "Олег",
+            Options,
+            conference: new FakeConference());
+        var secondAvatars = new ConcurrentQueue<AvatarUpdate>();
+        second.AvatarReceived += (_, e) => secondAvatars.Enqueue(e);
+        await second.JoinAsync(_host.CreateInvite([new PeerEndpoint("127.0.0.1", _host.Port)]), token);
+        await WaitUntilAsync(() => secondAvatars.Count(a => a.Peer == _hostIdentity.PeerId || a.Peer == _guestIdentity.PeerId) == 2, token);
+        Assert.Equal(Png(1), secondAvatars.Single(a => a.Peer == _hostIdentity.PeerId).Image);
+        Assert.Equal(Png(2), secondAvatars.Single(a => a.Peer == _guestIdentity.PeerId).Image);
     }
 
     /// <summary>
@@ -581,6 +634,84 @@ public sealed class SessionIntegrationTests : IAsyncLifetime
             conference: _guestConference);
 
     /// <summary>
+    /// When no address of the invitation answers, the participant meets the host through the rendezvous server of the
+    /// invitation, and the media streams take the same route. The cameras ask the STUN port of that server.
+    /// </summary>
+    [Fact]
+    public async Task Participant_MeetsHostThroughRendezvousWhenAddressesFail()
+    {
+        var token = TestContext.Current.CancellationToken;
+        await _host.ShareMediaAsync(_mediaPath, token);
+        var point = new RendezvousPoint(PeerEndpoint.Parse("203.0.113.7:47900"), RendezvousPoint.CreateRoom());
+        _host.Rendezvous = point;
+        var invite = _host.CreateInvite([new PeerEndpoint("127.0.0.1", ClosedPort())]);
+        Assert.Equal(point, invite.Rendezvous);
+        var rendezvous = new LoopbackRendezvous(_guestIdentity, _host.Port);
+        await using var guest = CreateGuest(rendezvous);
+
+        await guest.JoinAsync(invite, token);
+
+        Assert.Equal(SessionState.Active, guest.GetSnapshot().State);
+        Assert.Equal(point.StunUri, _guestConference.StunServer);
+        using (var stream = _registry.Open())
+        {
+            var copy = new MemoryStream();
+            await stream.CopyToAsync(copy, token);
+            Assert.Equal(_content, copy.ToArray());
+        }
+
+        Assert.Contains(StreamPurpose.Control, rendezvous.Purposes);
+        Assert.Contains(StreamPurpose.MediaData, rendezvous.Purposes);
+        Assert.All(rendezvous.Points, p => Assert.Equal(point, p));
+    }
+
+    /// <summary>
+    /// When an address of the invitation answers, the rendezvous server is not bothered.
+    /// </summary>
+    [Fact]
+    public async Task Participant_PrefersDirectAddresses()
+    {
+        var token = TestContext.Current.CancellationToken;
+        _host.Rendezvous = new RendezvousPoint(PeerEndpoint.Parse("203.0.113.7:47900"), RendezvousPoint.CreateRoom());
+        var rendezvous = new LoopbackRendezvous(_guestIdentity, _host.Port);
+        await using var guest = CreateGuest(rendezvous);
+
+        await guest.JoinAsync(_host.CreateInvite([new PeerEndpoint("127.0.0.1", _host.Port)]), token);
+
+        Assert.Equal(SessionState.Active, guest.GetSnapshot().State);
+        Assert.Empty(rendezvous.Purposes);
+    }
+
+    /// <summary>
+    /// Finds a port nobody listens on.
+    /// </summary>
+    /// <returns>The port.</returns>
+    private static int ClosedPort()
+    {
+        using var probe = new System.Net.Sockets.TcpListener(System.Net.IPAddress.Loopback, 0);
+        probe.Start();
+        return ((System.Net.IPEndPoint)probe.LocalEndpoint).Port;
+    }
+
+    /// <summary>
+    /// Creates a participant session that may meet the host through a rendezvous server.
+    /// </summary>
+    /// <param name="rendezvous">Meets the host.</param>
+    /// <returns>The session.</returns>
+    private ParticipantSession CreateGuest(IRendezvousConnector rendezvous)
+        => new(
+            _guestIdentity,
+            new TlsPeerConnector(_guestIdentity, Transport),
+            _guestPlayer,
+            _registry,
+            StopwatchMonotonicClock.Instance,
+            TimeProvider.System,
+            "Марина",
+            Options,
+            conference: _guestConference,
+            rendezvous: rendezvous);
+
+    /// <summary>
     /// Polls a condition.
     /// </summary>
     /// <param name="condition">The condition.</param>
@@ -598,6 +729,37 @@ public sealed class SessionIntegrationTests : IAsyncLifetime
             }
 
             await Task.Delay(25, cancellationToken);
+        }
+    }
+
+    /// <summary>
+    /// A rendezvous connector that "meets" the host over loopback and records what was asked of it.
+    /// </summary>
+    /// <param name="identity">The participant device.</param>
+    /// <param name="hostPort">The port of the host on loopback.</param>
+    private sealed class LoopbackRendezvous(DeviceIdentity identity, int hostPort) : IRendezvousConnector
+    {
+        /// <summary>
+        /// Runs the real TLS handshake with the pinned key.
+        /// </summary>
+        private readonly TlsPeerConnector _tls = new(identity, Transport);
+
+        /// <summary>
+        /// Gets the purposes of the met streams.
+        /// </summary>
+        public ConcurrentBag<StreamPurpose> Purposes { get; } = [];
+
+        /// <summary>
+        /// Gets the points asked for.
+        /// </summary>
+        public ConcurrentBag<RendezvousPoint> Points { get; } = [];
+
+        /// <inheritdoc />
+        public Task<PeerStream> ConnectAsync(RendezvousPoint point, Core.Identity.PeerId expectedPeer, StreamPurpose purpose, CancellationToken cancellationToken)
+        {
+            Purposes.Add(purpose);
+            Points.Add(point);
+            return _tls.ConnectAsync(new PeerEndpoint("127.0.0.1", hostPort), expectedPeer, purpose, cancellationToken);
         }
     }
 

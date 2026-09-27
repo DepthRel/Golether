@@ -221,7 +221,8 @@ public sealed class AppServices : IAsyncDisposable
             Diagnostics,
             Updates,
             Path.Combine(Paths.Root, "updates"),
-            new LanguageViewModel(Language, FlagImages.Load, dialogs));
+            new LanguageViewModel(Language, FlagImages.Load, dialogs),
+            new AvatarStore(Paths.AvatarsDirectory));
     }
 
     /// <summary>

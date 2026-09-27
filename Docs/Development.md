@@ -34,7 +34,7 @@ dotnet test --project Tests/Golether.Sync.Tests/Golether.Sync.Tests.csproj  # о
 | Golether.Core.Tests | PeerId, PlaybackState, DriftCorrector, адреса, пути данных |
 | Golether.Localization.Tests | языковые пакеты: чтение, каталог, выбор языка по культуре, запасной английский, одинаковые ключи и подстановки во всех языках, каждый запрошенный ключ существует, в коде нет русского текста |
 | Golether.Security.Tests | подписи, хранилище ключа, приглашения, код сверки, допуск |
-| Golether.Transports.Tests | кадры, mTLS через loopback, закрепление ключа, NAT-PMP и UPnP с поддельным роутером |
+| Golether.Transports.Tests | кадры, mTLS через loopback, закрепление ключа, NAT-PMP и UPnP с поддельным роутером, сообщения и подпись сервера рукопожатий, пробивание TCP через loopback |
 | Golether.Sync.Tests | часы при RTT 1240 мс, сообщения, authority, follower |
 | Golether.Media.Streaming.Tests | передача кусков, кэш, поток для плеера, хэши без данных, обмен кусками между участниками и проверка по хэшам |
 | Golether.Media.Player.Tests | плеер-симулятор, реестр `golether://`, привязки мыши, громкость, звуковые дорожки и субтитры, загруженные участки настоящего libmpv (пропускаются без него) |
@@ -42,6 +42,7 @@ dotnet test --project Tests/Golether.Sync.Tests/Golether.Sync.Tests.csproj  # о
 | Golether.Core.Data.Tests | миграции, хранилища EF Core, мигратор |
 | Golether.Session.Tests | ведущий и участник целиком: допуск, файл, совместный старт, пауза |
 | Golether.UI.Tests | процесс туннелей на двух базах, модели представлений, громкость (своя и каждого участника), выключение устройств, чат и реакции, дорожки и субтитры, продолжение с места остановки, отчёт для диагностики, обновления, выбор и хранение языка, тексты на английском |
+| Golether.Web.Server.Tests | сервер рукопожатий: настройки, лимиты, комнаты и встречи, STUN, встреча целиком до mTLS-потока по пробитому соединению, отказы (подпись, чужая комната, пустая комната, молчащий ведущий) |
 | Golether.UI.Headless.Tests | главное окно в Avalonia Headless: меню плитки участника, вкладки чата и событий, всплывающая громкость, щелчки по видео, плавная шкала с индикатором загруженного, реакции поверх видео, список языков и смена всех надписей на лету |
 
 Тесты (кроме `Golether.Localization.Tests`) работают на русском: `Tests/Shared/UseRussianTexts.cs` включает русский пакет
@@ -70,6 +71,7 @@ dotnet test --project Tests/Golether.Sync.Tests/Golether.Sync.Tests.csproj  # о
 | Golether: ведущий | собирает `Golether.UI` с зависимостями и запускает с данными в `.vscode/dev/host/data` |
 | Golether: участник | то же с данными в `.vscode/dev/guest/data` |
 | Golether: ведущий + участник | два независимых устройства на одном компьютере; приглашайте по адресу `127.0.0.1` |
+| Сервер рукопожатий | собирает и запускает `Golether.Web.Server` на `127.0.0.1:47900`; впишите этот адрес ведущему в поле «Сервер рукопожатий» ([RendezvousServer.md](RendezvousServer.md)) |
 | DbMigrator | собирает и запускает мигратор с аргументами из запроса |
 
 Задачи сборки (`.vscode/tasks.json`) вызывают `dotnet build <csproj>`: собирается только выбранный проект и

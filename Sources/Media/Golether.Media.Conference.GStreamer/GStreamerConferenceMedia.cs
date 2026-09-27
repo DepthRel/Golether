@@ -106,6 +106,11 @@ public sealed class GStreamerConferenceMedia : IConferenceMedia, IPeerHost
     private volatile string? _turnServer;
 
     /// <summary>
+    /// The STUN server set for new connections, or <see langword="null"/> for <see cref="GStreamerConferenceOptions.StunServer"/>.
+    /// </summary>
+    private volatile string? _stunServer;
+
+    /// <summary>
     /// Tells who is speaking.
     /// </summary>
     private readonly VoiceActivityDetector _voices = new();
@@ -204,6 +209,17 @@ public sealed class GStreamerConferenceMedia : IConferenceMedia, IPeerHost
         }
 
         _turnServer = turnServer;
+    }
+
+    /// <inheritdoc />
+    public void SetStunServer(string? stunServer)
+    {
+        if (stunServer is not null && !stunServer.StartsWith("stun://", StringComparison.Ordinal))
+        {
+            throw new ArgumentException("The STUN server must be a stun:// address.", nameof(stunServer));
+        }
+
+        _stunServer = stunServer;
     }
 
     /// <inheritdoc />
@@ -969,7 +985,7 @@ public sealed class GStreamerConferenceMedia : IConferenceMedia, IPeerHost
                 return null;
             }
 
-            var created = new WebRtcPeer(peer, isOfferer, slot, this, new PeerNetwork(_options.StunServer, _turnServer, _options.RelayOnly), _logger);
+            var created = new WebRtcPeer(peer, isOfferer, slot, this, new PeerNetwork(_stunServer ?? _options.StunServer, _turnServer, _options.RelayOnly), _logger);
             _peers[peer] = created;
             created.Start();
             _logger.LogInformation("Connecting to {Peer} as {Role}", peer.ToShortString(), isOfferer ? "offerer" : "answerer");

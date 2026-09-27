@@ -44,6 +44,48 @@ public sealed class InviteTests
     }
 
     /// <summary>
+    /// The rendezvous server and the room survive the link; a link without them has none.
+    /// </summary>
+    [Fact]
+    public void Link_CarriesRendezvous()
+    {
+        var point = new RendezvousPoint(PeerEndpoint.Parse("meet.example.org:47900"), RendezvousPoint.CreateRoom());
+        var invite = Sample() with { Rendezvous = point };
+
+        Assert.Equal(point, Invite.ParseLink(invite.ToLink()).Rendezvous);
+        Assert.Null(Invite.ParseLink(Sample().ToLink()).Rendezvous);
+        Assert.DoesNotContain("meet", DecodePayload(Sample().ToLink()), StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// A rendezvous part that is incomplete or malformed makes the link damaged instead of being dropped silently.
+    /// </summary>
+    /// <param name="meet">The server field.</param>
+    /// <param name="room">The room field.</param>
+    [Theory]
+    [InlineData("meet.example.org:47900", null)]
+    [InlineData(null, "AAAAAAAAAAAAAAAAAAAAAA")]
+    [InlineData("meet.example.org", "AAAAAAAAAAAAAAAAAAAAAA")]
+    [InlineData("meet.example.org:47900", "short")]
+    public void Link_RejectsBrokenRendezvous(string? meet, string? room)
+    {
+        var payload = System.Text.Json.Nodes.JsonNode.Parse(DecodePayload(Sample().ToLink()))!.AsObject();
+        payload["meet"] = meet;
+        payload["room"] = room;
+        var link = Invite.LinkPrefix + System.Buffers.Text.Base64Url.EncodeToString(System.Text.Encoding.UTF8.GetBytes(payload.ToJsonString()));
+
+        Assert.Throws<FormatException>(() => Invite.ParseLink(link));
+    }
+
+    /// <summary>
+    /// Decodes the JSON payload of a link.
+    /// </summary>
+    /// <param name="link">The link.</param>
+    /// <returns>The JSON text.</returns>
+    private static string DecodePayload(string link)
+        => System.Text.Encoding.UTF8.GetString(System.Buffers.Text.Base64Url.DecodeFromChars(link.AsSpan(Invite.LinkPrefix.Length)));
+
+    /// <summary>
     /// Foreign or damaged links are rejected.
     /// </summary>
     /// <param name="link">The link.</param>

@@ -33,6 +33,12 @@ public interface ISessionService
     event EventHandler<StrokeUpdate>? DrawReceived;
 
     /// <summary>
+    /// Raised when a participant's avatar arrived or changed, including this device's own. Raised on a background
+    /// thread.
+    /// </summary>
+    event EventHandler<AvatarUpdate>? AvatarReceived;
+
+    /// <summary>
     /// Gets the state of an automatic reconnection, or an empty string while the connection is fine.
     /// </summary>
     string ReconnectMessage { get; }
@@ -51,6 +57,12 @@ public interface ISessionService
     /// Gets or sets a value indicating whether a hosted session asks the router to open its port.
     /// </summary>
     bool OpenRouterPort { get; set; }
+
+    /// <summary>
+    /// Gets or sets the rendezvous server a hosted session holds a room on, as <c>host:port</c>, or an empty string
+    /// for none. Participants from other networks meet the host through it when neither side has an open port.
+    /// </summary>
+    string RendezvousServer { get; set; }
 
     /// <summary>
     /// Gets a value indicating whether the Windows firewall has no rule for this copy of the application, so
@@ -151,6 +163,14 @@ public interface ISessionService
     /// <param name="cancellationToken">The cancellation token.</param>
     /// <returns>A task that completes when the piece was sent.</returns>
     Task SendDrawAsync(string strokeId, StrokePhase phase, IReadOnlyList<StrokePoint> points, CancellationToken cancellationToken);
+
+    /// <summary>
+    /// Sends this device's avatar to everybody, shown while the camera is off; an empty picture clears it.
+    /// </summary>
+    /// <param name="image">The PNG bytes, or <see langword="null"/> to clear the avatar.</param>
+    /// <param name="cancellationToken">The cancellation token.</param>
+    /// <returns>A task that completes when the avatar was sent.</returns>
+    Task SetAvatarAsync(byte[]? image, CancellationToken cancellationToken);
 
     /// <summary>
     /// Leaves or ends the session.

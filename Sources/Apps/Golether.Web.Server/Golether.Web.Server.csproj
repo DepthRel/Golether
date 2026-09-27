@@ -1,0 +1,75 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+
+  <!--
+    The Golether rendezvous server: introduces a host and a participant that sit behind routers without open ports
+    and tells both where to knock, so they punch a direct TCP connection; answers STUN for the cameras and voices.
+    It never carries the session itself. Runs on one machine with a public address; see Docs/RendezvousServer.md.
+  -->
+  <PropertyGroup>
+    <RootNamespace>Golether.Web.Server</RootNamespace>
+    <AssemblyName>golether-server</AssemblyName>
+    <InvariantGlobalization>false</InvariantGlobalization>
+    <ApplicationIcon>Assets\golether-server.ico</ApplicationIcon>
+    <!-- The published server needs neither the XML documentation nor static web files. -->
+    <PublishDocumentationFile>false</PublishDocumentationFile>
+    <PublishReferencesDocumentationFiles>false</PublishReferencesDocumentationFiles>
+    <StaticWebAssetsEnabled>false</StaticWebAssetsEnabled>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="Golether.Web.Server.Tests" />
+  </ItemGroup>
+
+  <!-- The administrator guide travels with the program in every package, whatever the system. -->
+  <ItemGroup>
+    <None Update="ADMIN-GUIDE.md" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+  </ItemGroup>
+
+  <!-- Lets the same program run as a Windows service (the installer registers it) and as a systemd unit. -->
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Extensions.Hosting.WindowsServices" />
+    <PackageReference Include="Microsoft.Extensions.Hosting.Systemd" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="../../Transports/Golether.Transports.Rendezvous/Golether.Transports.Rendezvous.csproj" />
+    <ProjectReference Include="../../Transports/Golether.Transports.Relay/Golether.Transports.Relay.csproj" />
+  </ItemGroup>
+
+  <!--
+    The package layout, made when the publish scripts pass -p:GoletherServerPackageRoot=<folder> and publish into
+    <folder>/bin:
+      <folder>/golether-server(.exe)   the launcher: the same .NET host with the server icon, pointing at bin/
+      <folder>/bin/                    the program, the runtime and the libraries
+      <folder>/config/appsettings.json the settings (PackageLayout finds them from bin/)
+      <folder>/docs/ADMIN-GUIDE.md     the administrator guide
+  -->
+  <Target Name="GoletherServerPackageLayout" AfterTargets="Publish" DependsOnTargets="_GetAppHostPaths"
+          Condition="'$(GoletherServerPackageRoot)' != ''">
+    <PropertyGroup>
+      <_ServerPackageRoot>$([MSBuild]::EnsureTrailingSlash('$(GoletherServerPackageRoot)'))</_ServerPackageRoot>
+      <_ServerForWindows>$(RuntimeIdentifier.StartsWith('win'))</_ServerForWindows>
+      <_ServerLauncherName Condition="'$(_ServerForWindows)' == 'true'">$(AssemblyName).exe</_ServerLauncherName>
+      <_ServerLauncherName Condition="'$(_ServerForWindows)' != 'true'">$(AssemblyName)</_ServerLauncherName>
+      <_ServerProgramPath Condition="'$(_ServerForWindows)' == 'true'">bin\$(AssemblyName)$(TargetExt)</_ServerProgramPath>
+      <_ServerProgramPath Condition="'$(_ServerForWindows)' != 'true'">bin/$(AssemblyName)$(TargetExt)</_ServerProgramPath>
+    </PropertyGroup>
+
+    <Error Condition="'$(AppHostSourcePath)' == ''" Text="The package layout needs an application host: publish with a runtime identifier (-r)." />
+    <Error Condition="!$([System.String]::Copy('$(PublishDir)').TrimEnd('\/').EndsWith('bin'))" Text="Publish the package into $(_ServerPackageRoot)bin (-o), not into $(PublishDir)." />
+
+    <CreateAppHost AppHostSourcePath="$(AppHostSourcePath)"
+                   AppHostDestinationPath="$(_ServerPackageRoot)$(_ServerLauncherName)"
+                   AppBinaryName="$(_ServerProgramPath)"
+                   IntermediateAssembly="@(IntermediateAssembly->'%(FullPath)')"
+                   WindowsGraphicalUserInterface="false"
+                   Retries="$(CopyRetryCount)"
+                   RetryDelayMilliseconds="$(CopyRetryDelayMilliseconds)" />
+
+    <Copy SourceFiles="$(PublishDir)appsettings.json" DestinationFolder="$(_ServerPackageRoot)config" />
+    <Copy SourceFiles="$(PublishDir)ADMIN-GUIDE.md" DestinationFolder="$(_ServerPackageRoot)docs" />
+    <!-- web.config is written for IIS, which the server does not use. -->
+    <Delete Files="$(PublishDir)appsettings.json;$(PublishDir)ADMIN-GUIDE.md;$(PublishDir)web.config" />
+  </Target>
+
+</Project>

@@ -115,6 +115,17 @@ public sealed class ParticipantSession : IAsyncDisposable
     private readonly ConferenceLink? _conference;
 
     /// <summary>
+    /// Meets the host through its rendezvous server when no address answers directly, or <see langword="null"/>.
+    /// </summary>
+    private readonly IRendezvousConnector? _rendezvous;
+
+    /// <summary>
+    /// The head start of the direct addresses before a meeting through the rendezvous server begins: in one network
+    /// they answer at once, and a meeting costs a round through the server.
+    /// </summary>
+    private static readonly TimeSpan RendezvousHeadStart = TimeSpan.FromSeconds(10);
+
+    /// <summary>
     /// Guards the mutable view fields.
     /// </summary>
     private readonly Lock _gate = new();
@@ -140,9 +151,10 @@ public sealed class ParticipantSession : IAsyncDisposable
     private bool _returning;
 
     /// <summary>
-    /// The host endpoint that answered.
+    /// The host endpoint that answered, or <see langword="null"/> when the host was met through the rendezvous server
+    /// (every further stream is met the same way).
     /// </summary>
-    private PeerEndpoint _hostEndpoint;
+    private PeerEndpoint? _hostEndpoint;
 
     /// <summary>
     /// The number of parallel media streams allowed by the host.
@@ -232,6 +244,10 @@ public sealed class ParticipantSession : IAsyncDisposable
     /// <param name="options">The options.</param>
     /// <param name="loggerFactory">The logger factory.</param>
     /// <param name="conference">Cameras and voices, or <see langword="null"/>.</param>
+    /// <param name="rendezvous">
+    /// Meets the host through the rendezvous server of the invitation when no address answers directly, or
+    /// <see langword="null"/> for direct connections only.
+    /// </param>
     public ParticipantSession(
         DeviceIdentity identity,
         IPeerConnector connector,
@@ -242,8 +258,10 @@ public sealed class ParticipantSession : IAsyncDisposable
         string displayName,
         SessionOptions options,
         ILoggerFactory? loggerFactory = null,
-        IConferenceMedia? conference = null)
+        IConferenceMedia? conference = null,
+        IRendezvousConnector? rendezvous = null)
     {
+        _rendezvous = rendezvous;
         _identity = identity ?? throw new ArgumentNullException(nameof(identity));
         _connector = connector ?? throw new ArgumentNullException(nameof(connector));
         _player = player ?? throw new ArgumentNullException(nameof(player));
@@ -284,6 +302,12 @@ public sealed class ParticipantSession : IAsyncDisposable
     /// on a background thread.
     /// </summary>
     public event EventHandler<StrokeUpdate>? DrawReceived;
+
+    /// <summary>
+    /// Raised when a participant's avatar arrived from the host, including this device's own. Raised on a background
+    /// thread.
+    /// </summary>
+    public event EventHandler<AvatarUpdate>? AvatarReceived;
 
     /// <summary>
     /// Gets the participant name.
@@ -393,6 +417,9 @@ public sealed class ParticipantSession : IAsyncDisposable
             _conference?.SetRelay(relay.ToTurnUri(hostEndpoint.Host));
         }
 
+        // The STUN port of the host's rendezvous server tells the cameras and voices their public addresses, so they
+        // reach the others directly through the routers as well.
+        _conference?.SetStunServer(invite.Rendezvous?.StunUri);
         _conference?.Start();
         _ = SyncConferenceAsync();
         if (welcome.Media is not null)
@@ -486,6 +513,18 @@ public sealed class ParticipantSession : IAsyncDisposable
     }
 
     /// <summary>
+    /// Sends this device's avatar to the host, which relays it to everybody; an empty picture clears it.
+    /// </summary>
+    /// <param name="image">The PNG bytes, or <see langword="null"/> to clear the avatar.</param>
+    /// <param name="cancellationToken">The cancellation token.</param>
+    /// <returns>A task that completes when the avatar was sent.</returns>
+    public async Task SendAvatarAsync(byte[]? image, CancellationToken cancellationToken)
+    {
+        var channel = _channel ?? throw new InvalidOperationException(Texts.Get("Session.Error.NotJoined"));
+        await channel.SendAsync(new AvatarMessage(image, null), cancellationToken).ConfigureAwait(false);
+    }
+
+    /// <summary>
     /// Returns the current view of the session.
     /// </summary>
     /// <returns>The snapshot.</returns>
@@ -554,23 +593,91 @@ public sealed class ParticipantSession : IAsyncDisposable
     }
 
     /// <summary>
-    /// Connects to the first reachable endpoint of an invitation.
+    /// Connects to the host by the first route that works: the addresses of the invitation one by one and, when the
+    /// invitation names a rendezvous server, a meeting through it that starts after a short head start of the direct
+    /// addresses or as soon as they all failed. The route that won is used for every further stream.
     /// </summary>
     /// <param name="invite">The invitation.</param>
     /// <param name="cancellationToken">The cancellation token.</param>
     /// <returns>The control stream.</returns>
-    /// <exception cref="SessionJoinException">No endpoint answered.</exception>
+    /// <exception cref="SessionJoinException">No route reached the host.</exception>
     private async Task<PeerStream> ConnectAnyAsync(Invite invite, CancellationToken cancellationToken)
     {
-        var errors = new List<string>();
+        var errors = new System.Collections.Concurrent.ConcurrentQueue<string>();
+        using var race = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        var direct = ConnectDirectAsync(invite, errors, race.Token);
+        var met = _rendezvous is { } rendezvous && invite.Rendezvous is { } point
+            ? MeetAsync(rendezvous, point, invite.HostPeerId, direct, errors, race.Token)
+            : Task.FromResult<(PeerStream Stream, PeerEndpoint? Endpoint)?>(null);
+        var routes = new List<Task<(PeerStream Stream, PeerEndpoint? Endpoint)?>> { direct, met };
+        (PeerStream Stream, PeerEndpoint? Endpoint)? winner = null;
+        SessionJoinException? spoofing = null;
+        while (routes.Count > 0)
+        {
+            var done = await Task.WhenAny(routes).ConfigureAwait(false);
+            routes.Remove(done);
+            (PeerStream Stream, PeerEndpoint? Endpoint)? route;
+            try
+            {
+                route = await done.ConfigureAwait(false);
+            }
+            catch (SessionJoinException ex)
+            {
+                spoofing ??= ex;
+                continue;
+            }
+            catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+            {
+                continue;
+            }
+
+            if (route is null)
+            {
+                continue;
+            }
+
+            if (winner is null)
+            {
+                winner = route;
+                await race.CancelAsync().ConfigureAwait(false);
+            }
+            else
+            {
+                await route.Value.Stream.DisposeAsync().ConfigureAwait(false);
+            }
+        }
+
+        cancellationToken.ThrowIfCancellationRequested();
+        if (winner is { } won)
+        {
+            // A route that verified the pinned key wins even if another address presented a foreign one.
+            _hostEndpoint = won.Endpoint;
+            return won.Stream;
+        }
+
+        throw spoofing ?? new SessionJoinException(Texts.Get("Session.Error.HostUnreachable") + "\n" + string.Join("\n", errors));
+    }
+
+    /// <summary>
+    /// Tries the addresses of an invitation one by one.
+    /// </summary>
+    /// <param name="invite">The invitation.</param>
+    /// <param name="errors">Collects the reasons of the failures.</param>
+    /// <param name="cancellationToken">Stops the attempts once another route won.</param>
+    /// <returns>The stream and the address that answered, or <see langword="null"/> when none did.</returns>
+    /// <exception cref="SessionJoinException">An address presented a foreign key.</exception>
+    private async Task<(PeerStream Stream, PeerEndpoint? Endpoint)?> ConnectDirectAsync(
+        Invite invite,
+        System.Collections.Concurrent.ConcurrentQueue<string> errors,
+        CancellationToken cancellationToken)
+    {
         foreach (var endpoint in invite.Endpoints)
         {
             try
             {
                 var stream = await _connector.ConnectAsync(endpoint, invite.HostPeerId, StreamPurpose.Control, cancellationToken).ConfigureAwait(false);
-                _hostEndpoint = endpoint;
                 _logger.LogInformation("Connected to host at {Endpoint}", endpoint);
-                return stream;
+                return (stream, endpoint);
             }
             catch (PeerAuthenticationException ex)
             {
@@ -578,11 +685,70 @@ public sealed class ParticipantSession : IAsyncDisposable
             }
             catch (IOException ex)
             {
-                errors.Add(ex.Message);
+                errors.Enqueue(ex.Message);
             }
         }
 
-        throw new SessionJoinException(Texts.Get("Session.Error.HostUnreachable") + "\n" + string.Join("\n", errors));
+        return null;
+    }
+
+    /// <summary>
+    /// Meets the host through its rendezvous server, after the head start of the direct addresses.
+    /// </summary>
+    /// <param name="rendezvous">Meets the host.</param>
+    /// <param name="point">The server and the room of the host.</param>
+    /// <param name="host">The pinned identifier of the host.</param>
+    /// <param name="direct">The direct attempts; a meeting is not needed when they succeed.</param>
+    /// <param name="errors">Collects the reasons of the failures.</param>
+    /// <param name="cancellationToken">Stops the meeting once another route won.</param>
+    /// <returns>The stream, or <see langword="null"/> when the meeting failed or was not needed.</returns>
+    /// <exception cref="SessionJoinException">The met device presented a foreign key.</exception>
+    private async Task<(PeerStream Stream, PeerEndpoint? Endpoint)?> MeetAsync(
+        IRendezvousConnector rendezvous,
+        RendezvousPoint point,
+        PeerId host,
+        Task<(PeerStream Stream, PeerEndpoint? Endpoint)?> direct,
+        System.Collections.Concurrent.ConcurrentQueue<string> errors,
+        CancellationToken cancellationToken)
+    {
+        await Task.WhenAny(direct, Task.Delay(RendezvousHeadStart, _timeProvider, cancellationToken)).ConfigureAwait(false);
+        if (cancellationToken.IsCancellationRequested || direct is { IsCompletedSuccessfully: true, Result: not null })
+        {
+            return null;
+        }
+
+        try
+        {
+            var stream = await rendezvous.ConnectAsync(point, host, StreamPurpose.Control, cancellationToken).ConfigureAwait(false);
+            _logger.LogInformation("Met the host through the rendezvous server {Server}", point.Server);
+            return (stream, null);
+        }
+        catch (PeerAuthenticationException ex)
+        {
+            throw new SessionJoinException(Texts.Format("Session.Error.PossibleSpoofing", ex.Message), ex);
+        }
+        catch (IOException ex)
+        {
+            errors.Enqueue(ex.Message);
+            return null;
+        }
+    }
+
+    /// <summary>
+    /// Opens another stream to the host by the route the control stream took.
+    /// </summary>
+    /// <param name="purpose">The stream purpose.</param>
+    /// <param name="cancellationToken">The cancellation token.</param>
+    /// <returns>The stream.</returns>
+    /// <exception cref="IOException">The host could not be reached.</exception>
+    private Task<PeerStream> OpenStreamAsync(StreamPurpose purpose, CancellationToken cancellationToken)
+    {
+        var invite = _invite ?? throw new InvalidOperationException("The session was not joined.");
+        return _hostEndpoint is { } endpoint
+            ? _connector.ConnectAsync(endpoint, invite.HostPeerId, purpose, cancellationToken)
+            : _rendezvous is { } rendezvous && invite.Rendezvous is { } point
+                ? rendezvous.ConnectAsync(point, invite.HostPeerId, purpose, cancellationToken)
+                : throw new InvalidOperationException("The session has no route to the host.");
     }
 
     /// <summary>
@@ -636,6 +802,9 @@ public sealed class ParticipantSession : IAsyncDisposable
                         break;
                     case DrawMessage stroke when stroke.Sender is { } author && stroke.Sanitize() is { } cleanStroke:
                         DrawReceived?.Invoke(this, new StrokeUpdate(author, cleanStroke.StrokeId, cleanStroke.Phase, cleanStroke.Points, author == _identity.PeerId));
+                        break;
+                    case AvatarMessage avatar when avatar.Sender is { } owner && avatar.Sanitize() is { } cleanAvatar:
+                        AvatarReceived?.Invoke(this, new AvatarUpdate(owner, cleanAvatar.Image, owner == _identity.PeerId));
                         break;
                     case ByeMessage bye:
                         reason = bye.Reason ?? Texts.Get("Session.Error.HostEnded");
@@ -830,11 +999,9 @@ public sealed class ParticipantSession : IAsyncDisposable
     private async Task PrepareMediaAsync(MediaDescriptor media, CancellationToken cancellationToken)
     {
         await ReleaseRemoteMediaAsync().ConfigureAwait(false);
-        var host = _invite!.HostPeerId;
-        var endpoint = _hostEndpoint;
         var source = new RemoteChunkSource(
             media,
-            async token => (await _connector.ConnectAsync(endpoint, host, StreamPurpose.MediaData, token).ConfigureAwait(false)).Stream,
+            async token => (await OpenStreamAsync(StreamPurpose.MediaData, token).ConfigureAwait(false)).Stream,
             _mediaStreams,
             _loggerFactory.CreateLogger<RemoteChunkSource>());
         var cache = new ChunkCache();
@@ -864,7 +1031,7 @@ public sealed class ParticipantSession : IAsyncDisposable
         }
 
         await LoadAsync(uri, cancellationToken).ConfigureAwait(false);
-        Raise(host, Texts.Format("Session.Event.HostShows", media.FileName));
+        Raise(_invite!.HostPeerId, Texts.Format("Session.Event.HostShows", media.FileName));
     }
 
     /// <summary>

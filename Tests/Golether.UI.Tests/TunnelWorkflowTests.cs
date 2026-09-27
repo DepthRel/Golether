@@ -210,6 +210,27 @@ public sealed class TunnelWorkflowTests : IDisposable
     }
 
     /// <summary>
+    /// A tunnel that is no longer up is forgotten without touching the tools, so closing Golether does not ask for
+    /// administrator rights for a tunnel that is already gone.
+    /// </summary>
+    /// <returns>A task that completes when the test is done.</returns>
+    [Fact]
+    public async Task DropRaised_ForgetsTunnelsThatAreNotUp()
+    {
+        var token = TestContext.Current.CancellationToken;
+        var state = Path.Combine(_directory.FullName, "gone.txt");
+        var controller = Substitute.For<ITunnelController>();
+        var host = CreateWorkflow("gone", _hostIdentity, controller, raisedStatePath: state, isInterfaceUp: _ => false);
+        await host.ApplyAsync(TunnelWorkflow.HostInterfaceName, await host.BuildHostConfigurationAsync(token), token);
+        Assert.Equal([TunnelWorkflow.HostInterfaceName], host.GetRaised());
+
+        Assert.Empty(await host.DropRaisedAsync(token));
+
+        await controller.DidNotReceiveWithAnyArgs().DownAsync(default!, token);
+        Assert.Empty(host.GetRaised());
+    }
+
+    /// <summary>
     /// Creates a workflow over its own migrated database.
     /// </summary>
     /// <param name="name">The database name.</param>
@@ -217,8 +238,15 @@ public sealed class TunnelWorkflowTests : IDisposable
     /// <param name="controller">The tunnel controller.</param>
     /// <param name="stunServers">The STUN servers; none by default, so the tests touch no outside server.</param>
     /// <param name="raisedStatePath">The file remembering raised tunnels, or null to keep them in memory.</param>
+    /// <param name="isInterfaceUp">Tells whether a tunnel is still up; every tunnel is up by default.</param>
     /// <returns>The workflow.</returns>
-    private TunnelWorkflow CreateWorkflow(string name, DeviceIdentity identity, ITunnelController controller, IReadOnlyList<string>? stunServers = null, string? raisedStatePath = null)
+    private TunnelWorkflow CreateWorkflow(
+        string name,
+        DeviceIdentity identity,
+        ITunnelController controller,
+        IReadOnlyList<string>? stunServers = null,
+        string? raisedStatePath = null,
+        Func<string, bool>? isInterfaceUp = null)
     {
         var connection = $"Data Source={Path.Combine(_directory.FullName, name + ".db")};Pooling=False";
         SqliteDatabaseMigrator.MigrateUp(connection);
@@ -230,7 +258,8 @@ public sealed class TunnelWorkflowTests : IDisposable
             controller,
             TimeProvider.System,
             stunServers ?? [],
-            raisedStatePath);
+            raisedStatePath,
+            isInterfaceUp ?? (_ => true));
     }
 
     /// <summary>

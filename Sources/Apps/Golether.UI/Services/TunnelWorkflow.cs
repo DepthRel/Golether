@@ -79,6 +79,9 @@ public sealed class TunnelWorkflow
     /// The file that remembers which tunnels this application raised, so they can be brought down at the end even
     /// after a crash; <see langword="null"/> keeps the list in memory only.
     /// </param>
+    /// <param name="isInterfaceUp">
+    /// Tells whether a tunnel interface is still up; <see langword="null"/> asks the network adapters of this machine.
+    /// </param>
     public TunnelWorkflow(
         DeviceIdentity identity,
         ITunnelStore store,
@@ -86,8 +89,10 @@ public sealed class TunnelWorkflow
         ITunnelController controller,
         TimeProvider timeProvider,
         IReadOnlyList<string>? stunServers = null,
-        string? raisedStatePath = null)
+        string? raisedStatePath = null,
+        Func<string, bool>? isInterfaceUp = null)
     {
+        _isInterfaceUp = isInterfaceUp ?? IsAdapterPresent;
         _raisedStatePath = raisedStatePath;
         _identity = identity ?? throw new ArgumentNullException(nameof(identity));
         _store = store ?? throw new ArgumentNullException(nameof(store));
@@ -113,6 +118,11 @@ public sealed class TunnelWorkflow
     /// The names of the raised tunnels, mirroring the file.
     /// </summary>
     private readonly List<string> _raised = [];
+
+    /// <summary>
+    /// Tells whether a tunnel interface is still up.
+    /// </summary>
+    private readonly Func<string, bool> _isInterfaceUp;
 
     /// <summary>
     /// Checks whether the AmneziaWG tools are installed.
@@ -296,6 +306,15 @@ public sealed class TunnelWorkflow
         var remaining = new List<string>();
         foreach (var name in ReadRaised())
         {
+            // Bringing a tunnel down asks for administrator rights. A tunnel that is not up any more (the user closed
+            // it, or a previous run noted it and it never came back) needs nothing: it is simply forgotten, so closing
+            // Golether does not ask for rights for no reason.
+            if (!_isInterfaceUp(name))
+            {
+                Trace.WriteLine($"Golether tunnel {name} is not up any more; forgetting it.");
+                continue;
+            }
+
             try
             {
                 await _controller.DownAsync(name, cancellationToken).ConfigureAwait(false);
@@ -309,6 +328,27 @@ public sealed class TunnelWorkflow
 
         WriteRaised(remaining);
         return remaining;
+    }
+
+    /// <summary>
+    /// Checks whether a tunnel interface exists on this machine. A raised AmneziaWG tunnel shows up as a network
+    /// adapter named after it; when no adapter carries the name, the tunnel is down.
+    /// </summary>
+    /// <param name="interfaceName">The interface name.</param>
+    /// <returns><see langword="true"/> when the adapter is there, and when the adapters cannot be listed at all (then
+    /// the tunnel is brought down as before rather than silently forgotten).</returns>
+    private static bool IsAdapterPresent(string interfaceName)
+    {
+        try
+        {
+            return System.Net.NetworkInformation.NetworkInterface.GetAllNetworkInterfaces()
+                .Any(adapter => string.Equals(adapter.Name, interfaceName, StringComparison.OrdinalIgnoreCase)
+                    || string.Equals(adapter.Description, interfaceName, StringComparison.OrdinalIgnoreCase));
+        }
+        catch (System.Net.NetworkInformation.NetworkInformationException)
+        {
+            return true;
+        }
     }
 
     /// <summary>

@@ -36,6 +36,11 @@ transcode or install a server.
 - **Draw on the screen.** Grab the pen and circle a detail: everyone sees the line as you draw it, in your colour.
   It fades after two seconds and stays attached to the picture, not to the window.
 - **Webcams and voice** in one window: a tile for each person, echo cancellation, per-person volume, and a chat.
+- **Works behind grey IPs.** A tiny rendezvous server of your own (any machine with a public IP) introduces the
+  host and the guests, and they punch a direct connection through their routers: no port forwarding on either side,
+  and nothing of the session passes through the server. See the
+  [administrator guide](Sources/Apps/Golether.Web.Server/ADMIN-GUIDE.md) (Windows, Linux, macOS) and
+  [how it works](Docs/RendezvousServer.md).
 - **AmneziaWG tunnel, built in.** When the direct path is blocked, raise a tunnel between participants right from the
   app: no server of your own, no separate VPN client to set up.
 - **Secure by default.** Device keys are pinned, the host admits every participant, and both sides compare a

@@ -13,6 +13,7 @@ using Golether.Session;
 using Golether.Sync.Protocol;
 using Golether.Transports.PortMapping;
 using Golether.Transports.Relay;
+using Golether.Transports.Rendezvous;
 using Golether.Transports.Tls;
 using Microsoft.Extensions.Logging;
 
@@ -77,6 +78,11 @@ public sealed class SessionService : ISessionService, IAsyncDisposable
     /// The TURN relay of the hosted session.
     /// </summary>
     private TurnServer? _relay;
+
+    /// <summary>
+    /// Holds the room of the hosted session on the rendezvous server, or <see langword="null"/>.
+    /// </summary>
+    private RendezvousHost? _rendezvousHost;
 
     /// <summary>
     /// The session options.
@@ -170,6 +176,9 @@ public sealed class SessionService : ISessionService, IAsyncDisposable
     public event EventHandler<StrokeUpdate>? DrawReceived;
 
     /// <inheritdoc />
+    public event EventHandler<AvatarUpdate>? AvatarReceived;
+
+    /// <inheritdoc />
     public bool IsActive => _host is not null || _participant is not null;
 
     /// <inheritdoc />
@@ -182,9 +191,21 @@ public sealed class SessionService : ISessionService, IAsyncDisposable
     public bool OpenRouterPort { get; set; } = true;
 
     /// <inheritdoc />
+    public string RendezvousServer { get; set; } = string.Empty;
+
+    /// <inheritdoc />
     public Task StartHostingAsync(string sessionName, string displayName, int port, CancellationToken cancellationToken)
     {
         EnsureIdle();
+        RendezvousPoint? rendezvous = null;
+        if (!string.IsNullOrWhiteSpace(RendezvousServer))
+        {
+            // A fresh room for every session: an old invitation does not lead to a new session.
+            rendezvous = PeerEndpoint.TryParse(RendezvousServer.Trim(), out var server)
+                ? new RendezvousPoint(server, RendezvousPoint.CreateRoom())
+                : throw new InvalidOperationException(Texts.Get("Session.Error.BadRendezvousServer"));
+        }
+
         var listener = new TlsPeerListener(_identity, new TlsTransportOptions { Port = port }, _loggerFactory.CreateLogger<TlsPeerListener>());
         try
         {
@@ -212,9 +233,14 @@ public sealed class SessionService : ISessionService, IAsyncDisposable
             _conference);
         _relay = StartRelay(listener.Port);
         host.Relay = _relay?.Credentials;
+        host.Rendezvous = rendezvous;
         Attach(host);
         _host = host;
         host.Start();
+        if (rendezvous is not null)
+        {
+            _rendezvousHost = StartRendezvous(host, listener, rendezvous);
+        }
         if (_portMapper is not null && OpenRouterPort)
         {
             _ = OpenPortAsync(host, host.Port, _relay?.Port);
@@ -291,6 +317,12 @@ public sealed class SessionService : ISessionService, IAsyncDisposable
             : Task.CompletedTask;
 
     /// <inheritdoc />
+    public Task SetAvatarAsync(byte[]? image, CancellationToken cancellationToken)
+        => _host is not null ? _host.SetAvatarAsync(image)
+            : _participant is not null ? _participant.SendAvatarAsync(image, cancellationToken)
+            : Task.CompletedTask;
+
+    /// <inheritdoc />
     public SessionSnapshot? GetSnapshot() => _host?.GetSnapshot() ?? _participant?.GetSnapshot();
 
     /// <inheritdoc />
@@ -318,6 +350,12 @@ public sealed class SessionService : ISessionService, IAsyncDisposable
         if (relay is not null)
         {
             await relay.DisposeAsync().ConfigureAwait(false);
+        }
+
+        var rendezvous = Interlocked.Exchange(ref _rendezvousHost, null);
+        if (rendezvous is not null)
+        {
+            await rendezvous.DisposeAsync().ConfigureAwait(false);
         }
 
         if (host is not null)
@@ -510,6 +548,41 @@ public sealed class SessionService : ISessionService, IAsyncDisposable
     }
 
     /// <summary>
+    /// Takes the room of the hosted session on the rendezvous server. The connections punched to participants go to
+    /// the listener of the session, which authenticates and admits them like any other.
+    /// </summary>
+    /// <param name="host">The hosted session.</param>
+    /// <param name="listener">The listener of the session.</param>
+    /// <param name="point">The server and the room.</param>
+    /// <returns>The running agent.</returns>
+    private RendezvousHost StartRendezvous(HostSession host, TlsPeerListener listener, RendezvousPoint point)
+    {
+        var agent = new RendezvousHost(
+            point,
+            new RendezvousOwner(_identity.PublicCertificateDer, data => _identity.Sign(data)),
+            socket => listener.Adopt(socket),
+            timeProvider: _timeProvider,
+            logger: _loggerFactory.CreateLogger<RendezvousHost>());
+        agent.StateChanged += (_, _) =>
+        {
+            if (_host != host)
+            {
+                return;
+            }
+
+            var text = agent.IsRegistered
+                ? Texts.Format("Session.Rendezvous.Registered", point.Server)
+                : agent.LastError is { } error ? Texts.Format("Session.Rendezvous.Lost", point.Server, RendezvousException.Describe(error)) : null;
+            if (text is not null)
+            {
+                EventRaised?.Invoke(this, new SessionEvent(_timeProvider.GetLocalNow(), null, text));
+            }
+        };
+        agent.Start();
+        return agent;
+    }
+
+    /// <summary>
     /// Starts reconnecting after the connection to the host broke: the ticket from the session is used, so no new
     /// invitation is needed, and the host is asked again on every attempt.
     /// </summary>
@@ -605,9 +678,10 @@ public sealed class SessionService : ISessionService, IAsyncDisposable
     /// <returns>The session.</returns>
     private ParticipantSession CreateParticipant(string displayName)
     {
+        var connector = new TlsPeerConnector(_identity, new TlsTransportOptions());
         var participant = new ParticipantSession(
             _identity,
-            new TlsPeerConnector(_identity, new TlsTransportOptions()),
+            connector,
             _player,
             new MpvMediaUriRegistry(),
             StopwatchMonotonicClock.Instance,
@@ -615,7 +689,8 @@ public sealed class SessionService : ISessionService, IAsyncDisposable
             displayName,
             _options,
             _loggerFactory,
-            _conference);
+            _conference,
+            new RendezvousPeerConnector(connector, new RendezvousDialer(logger: _loggerFactory.CreateLogger<RendezvousDialer>())));
         Attach(participant);
         return participant;
     }
@@ -641,6 +716,7 @@ public sealed class SessionService : ISessionService, IAsyncDisposable
         session.EventRaised += (_, e) => EventRaised?.Invoke(this, e);
         session.ChatReceived += (_, e) => ChatReceived?.Invoke(this, e);
         session.DrawReceived += (_, e) => DrawReceived?.Invoke(this, e);
+        session.AvatarReceived += (_, e) => AvatarReceived?.Invoke(this, e);
     }
 
     /// <summary>
@@ -661,5 +737,6 @@ public sealed class SessionService : ISessionService, IAsyncDisposable
         session.EventRaised += (_, e) => EventRaised?.Invoke(this, e);
         session.ChatReceived += (_, e) => ChatReceived?.Invoke(this, e);
         session.DrawReceived += (_, e) => DrawReceived?.Invoke(this, e);
+        session.AvatarReceived += (_, e) => AvatarReceived?.Invoke(this, e);
     }
 }

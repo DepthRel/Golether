@@ -1,0 +1,16 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    Tests of the rendezvous server: settings, limits, rooms, meetings, STUN, and whole meetings over loopback from the
+    registration of the host to a mutual-TLS stream over the punched connection.
+  -->
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="../../Sources/Apps/Golether.Web.Server/Golether.Web.Server.csproj" />
+    <ProjectReference Include="../../Sources/Transports/Golether.Transports.Tls/Golether.Transports.Tls.csproj" />
+  </ItemGroup>
+
+</Project>

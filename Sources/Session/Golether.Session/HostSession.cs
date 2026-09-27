@@ -110,6 +110,12 @@ public sealed class HostSession : IAsyncDisposable
     private readonly ConcurrentDictionary<PeerId, string> _reconnectTickets = new();
 
     /// <summary>
+    /// The latest avatar of each participant (this device included), kept so a participant who joins later is sent
+    /// the avatars already chosen.
+    /// </summary>
+    private readonly ConcurrentDictionary<PeerId, byte[]> _avatars = new();
+
+    /// <summary>
     /// Serializes player access.
     /// </summary>
     private readonly SemaphoreSlim _playerGate = new(1, 1);
@@ -214,6 +220,12 @@ public sealed class HostSession : IAsyncDisposable
     public event EventHandler<StrokeUpdate>? DrawReceived;
 
     /// <summary>
+    /// Raised when a participant's avatar arrived or changed, including this device's own. Raised on a background
+    /// thread.
+    /// </summary>
+    public event EventHandler<AvatarUpdate>? AvatarReceived;
+
+    /// <summary>
     /// Gets the session name.
     /// </summary>
     public string SessionName { get; }
@@ -232,6 +244,13 @@ public sealed class HostSession : IAsyncDisposable
     /// Gets or sets the TURN relay announced to admitted participants, or <see langword="null"/>.
     /// </summary>
     public Transports.Relay.RelayCredentials? Relay { get; set; }
+
+    /// <summary>
+    /// Gets or sets the rendezvous server and the room this host holds on it, or <see langword="null"/>. Set before
+    /// <see cref="Start"/>: invitations then carry it, and the cameras and voices ask its STUN port for their
+    /// public addresses.
+    /// </summary>
+    public RendezvousPoint? Rendezvous { get; set; }
 
     /// <summary>
     /// Gets the number of file chunks the host uploaded.
@@ -261,6 +280,7 @@ public sealed class HostSession : IAsyncDisposable
         _follower.ApplyAsync(_authority.Current, CancellationToken.None).GetAwaiter().GetResult();
         _loops.Add(Task.Run(() => AcceptLoopAsync(_stopping.Token)));
         _loops.Add(Task.Run(() => TickLoopAsync(_stopping.Token)));
+        _conference?.SetStunServer(Rendezvous?.StunUri);
         _conference?.Start();
         Raise(null, Texts.Format("Session.Event.Created", SessionName, Port));
     }
@@ -288,6 +308,7 @@ public sealed class HostSession : IAsyncDisposable
             Endpoints = endpoints.Take(Invite.MaxEndpoints).ToArray(),
             Token = token,
             ExpiresAt = expires,
+            Rendezvous = Rendezvous,
         };
     }
 
@@ -364,6 +385,24 @@ public sealed class HostSession : IAsyncDisposable
         var signed = message with { Sender = _identity.PeerId };
         RaiseChat(signed);
         await BroadcastAsync(signed).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Sets this device's avatar and sends it to everybody; an empty picture clears it.
+    /// </summary>
+    /// <param name="image">The PNG bytes, or <see langword="null"/> to clear the avatar.</param>
+    /// <returns>A task that completes when the avatar was sent.</returns>
+    public async Task SetAvatarAsync(byte[]? image)
+    {
+        var clean = new AvatarMessage(image, _identity.PeerId).Sanitize();
+        if (clean is null)
+        {
+            return;
+        }
+
+        RememberAvatar(_identity.PeerId, clean.Image);
+        AvatarReceived?.Invoke(this, new AvatarUpdate(_identity.PeerId, clean.Image, true));
+        await BroadcastAsync(clean).ConfigureAwait(false);
     }
 
     /// <summary>
@@ -584,6 +623,7 @@ public sealed class HostSession : IAsyncDisposable
             connection?.End();
             if (connection is not null && _participants.TryRemove(new KeyValuePair<PeerId, Connection>(peer, connection)))
             {
+                _avatars.TryRemove(peer, out _);
                 Raise(peer, Texts.Format("Session.Event.ParticipantLeft", connection.Info.DisplayName));
                 await SyncConferenceAsync().ConfigureAwait(false);
                 await BroadcastParticipantsAsync().ConfigureAwait(false);
@@ -670,6 +710,13 @@ public sealed class HostSession : IAsyncDisposable
             new WelcomeMessage(SessionName, participants, _authority.Current, _media.Descriptor, _options.MediaDataStreams) { Relay = Relay, ReconnectTicket = reconnectTicket },
             cancellationToken).ConfigureAwait(false);
         Raise(peer, Texts.Format("Session.Event.ParticipantJoined", name));
+
+        // Bring the newcomer up to date with the avatars everybody already chose.
+        foreach (var (owner, image) in _avatars)
+        {
+            await TrySendAsync(connection, new AvatarMessage(image, owner)).ConfigureAwait(false);
+        }
+
         _ = SyncConferenceAsync();
         await BroadcastParticipantsAsync().ConfigureAwait(false);
         return connection;
@@ -744,6 +791,14 @@ public sealed class HostSession : IAsyncDisposable
                     await BroadcastAsync(relayed).ConfigureAwait(false);
                 }
 
+                break;
+
+            case AvatarMessage avatar when avatar.Sanitize() is { } cleanAvatar:
+                // The owner is the authenticated connection, never taken from the message.
+                var signedAvatar = cleanAvatar with { Sender = connection.Info.PeerId };
+                RememberAvatar(connection.Info.PeerId, signedAvatar.Image);
+                AvatarReceived?.Invoke(this, new AvatarUpdate(connection.Info.PeerId, signedAvatar.Image, false));
+                await BroadcastAsync(signedAvatar).ConfigureAwait(false);
                 break;
 
             case StatusReportMessage report:
@@ -940,6 +995,23 @@ public sealed class HostSession : IAsyncDisposable
     {
         EventRaised?.Invoke(this, new SessionEvent(_timeProvider.GetLocalNow(), actor, text));
         Changed?.Invoke(this, EventArgs.Empty);
+    }
+
+    /// <summary>
+    /// Stores or clears the remembered avatar of a participant.
+    /// </summary>
+    /// <param name="peer">The participant.</param>
+    /// <param name="image">The PNG bytes, or <see langword="null"/> to forget the avatar.</param>
+    private void RememberAvatar(PeerId peer, byte[]? image)
+    {
+        if (image is null)
+        {
+            _avatars.TryRemove(peer, out _);
+        }
+        else
+        {
+            _avatars[peer] = image;
+        }
     }
 
     /// <summary>

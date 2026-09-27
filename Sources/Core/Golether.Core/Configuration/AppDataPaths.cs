@@ -88,6 +88,11 @@ public sealed class AppDataPaths
     public string LogsDirectory => Path.Combine(Root, "logs");
 
     /// <summary>
+    /// Gets the directory of the chosen avatar shown to other participants when the camera is off.
+    /// </summary>
+    public string AvatarsDirectory => Path.Combine(Root, "avatars");
+
+    /// <summary>
     /// Gets the directory of downloaded components (libmpv, GStreamer).
     /// </summary>
     public string ComponentsDirectory => Path.Combine(Root, "components");
@@ -193,7 +198,7 @@ public sealed class AppDataPaths
     {
         try
         {
-            foreach (var directory in new[] { Root, IdentityDirectory, TunnelsDirectory, LogsDirectory })
+            foreach (var directory in new[] { Root, IdentityDirectory, TunnelsDirectory, LogsDirectory, AvatarsDirectory })
             {
                 Directory.CreateDirectory(directory);
             }

@@ -22,6 +22,7 @@ namespace Golether.Sync.Protocol;
 [JsonDerivedType(typeof(ModerationMessage), "moderate")]
 [JsonDerivedType(typeof(ChatMessage), "chat")]
 [JsonDerivedType(typeof(DrawMessage), "draw")]
+[JsonDerivedType(typeof(AvatarMessage), "avatar")]
 public abstract record SessionMessage
 {
     /// <summary>

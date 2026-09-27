@@ -158,9 +158,11 @@
     </Style.Animations>
   </Style>
 
-  <!-- Toolbar items folded into the "more" button keep their size but cannot be seen, clicked or focused. -->
+  <!--
+    Toolbar items folded into the "more" button cannot be clicked or focused. Their size and opacity are animated by
+    the panel itself (see OverflowPanel.Fold), so they glide out of the row rather than blink away.
+  -->
   <Style Selector=":is(Control).overflowed">
-    <Setter Property="Opacity" Value="0" />
     <Setter Property="IsHitTestVisible" Value="False" />
   </Style>
   <Style Selector="Button.overflowed">

@@ -20,6 +20,22 @@
       "problemMatcher": "$msCompile"
     },
     {
+      "label": "build: Golether.Web.Server",
+      "detail": "Golether.Web.Server (rendezvous server) and its dependencies",
+      "type": "process",
+      "command": "dotnet",
+      "args": [
+        "build",
+        "${workspaceFolder}/Sources/Apps/Golether.Web.Server/Golether.Web.Server.csproj",
+        "-nologo",
+        "/property:GenerateFullPaths=true",
+        "/consoleloggerparameters:NoSummary;ForceNoAlign"
+      ],
+      "group": "build",
+      "presentation": { "reveal": "silent", "panel": "dedicated", "clear": true },
+      "problemMatcher": "$msCompile"
+    },
+    {
       "label": "build: DbMigrator",
       "detail": "Golether.Dbs.SQLite.DbMigrator and its dependencies",
       "type": "process",
@@ -68,6 +84,16 @@
       "windows": { "command": "powershell -NoProfile -ExecutionPolicy Bypass -File ${workspaceFolder}/Scripts/publish-win.ps1" },
       "linux": { "command": "bash ${workspaceFolder}/Scripts/publish-linux.sh" },
       "osx": { "command": "bash ${workspaceFolder}/Scripts/publish-macos.sh" },
+      "presentation": { "reveal": "always", "panel": "dedicated", "clear": true },
+      "problemMatcher": []
+    },
+    {
+      "label": "publish: server",
+      "detail": "Rendezvous server: folder and archive for this OS; on Windows also the installer (needs Inno Setup)",
+      "type": "shell",
+      "windows": { "command": "powershell -NoProfile -ExecutionPolicy Bypass -File ${workspaceFolder}/Scripts/build-server-installer.ps1" },
+      "linux": { "command": "bash ${workspaceFolder}/Scripts/publish-server.sh linux-x64" },
+      "osx": { "command": "bash ${workspaceFolder}/Scripts/publish-server.sh osx-arm64" },
       "presentation": { "reveal": "always", "panel": "dedicated", "clear": true },
       "problemMatcher": []
     }

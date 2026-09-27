@@ -107,6 +107,22 @@ public sealed class ConferenceLink : IAsyncDisposable
     public static bool IsOfferer(PeerId self, PeerId other) => string.CompareOrdinal(self.Value, other.Value) < 0;
 
     /// <summary>
+    /// Sets the STUN server for the connections of this session.
+    /// </summary>
+    /// <param name="stunServer">The server address, or <see langword="null"/>.</param>
+    public void SetStunServer(string? stunServer)
+    {
+        try
+        {
+            _media.SetStunServer(stunServer);
+        }
+        catch (ArgumentException ex)
+        {
+            _logger.LogWarning("STUN server ignored: {Reason}", ex.Message);
+        }
+    }
+
+    /// <summary>
     /// Sets the TURN relay for the connections of this session.
     /// </summary>
     /// <param name="turnServer">The relay address, or <see langword="null"/>.</param>
@@ -203,6 +219,7 @@ public sealed class ConferenceLink : IAsyncDisposable
         _media.SignalReady -= OnSignalReady;
         await RunAsync(_media.StopAsync, "stopping").ConfigureAwait(false);
         SetRelay(null);
+        SetStunServer(null);
         _connected.Clear();
     }
 

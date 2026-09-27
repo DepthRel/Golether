@@ -30,6 +30,18 @@
       "justMyCode": true
     },
     {
+      "name": "Сервер рукопожатий",
+      "type": "coreclr",
+      "request": "launch",
+      "preLaunchTask": "build: Golether.Web.Server",
+      "program": "${workspaceFolder}/Sources/Apps/Golether.Web.Server/bin/Debug/net10.0/golether-server.dll",
+      "args": ["--Rendezvous:ListenAddress=127.0.0.1"],
+      "cwd": "${workspaceFolder}/Sources/Apps/Golether.Web.Server/bin/Debug/net10.0",
+      "console": "integratedTerminal",
+      "stopAtEntry": false,
+      "justMyCode": true
+    },
+    {
       "name": "DbMigrator",
       "type": "coreclr",
       "request": "launch",

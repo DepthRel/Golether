@@ -1,6 +1,9 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
-  <!-- Tests of message framing, the mutual-TLS transport, router port mapping and the TURN relay. -->
+  <!--
+    Tests of message framing, the mutual-TLS transport, router port mapping, the TURN relay, the rendezvous protocol
+    and TCP hole punching.
+  -->
   <ItemGroup>
     <ProjectReference Include="../../Sources/Transports/Golether.Transports.Tls/Golether.Transports.Tls.csproj" />
     <ProjectReference Include="../../Sources/Transports/Golether.Transports.PortMapping/Golether.Transports.PortMapping.csproj" />

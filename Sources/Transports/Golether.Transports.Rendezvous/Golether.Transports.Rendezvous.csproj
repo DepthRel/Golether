@@ -1,0 +1,25 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    Meeting through a rendezvous server: the protocol shared by the server and the application, the client of the host
+    and of the participant, and TCP hole punching. The server only introduces the peers; the session goes directly.
+    Deliberately free of the data layer, so the server does not carry EF Core and SQLite.
+  -->
+  <PropertyGroup>
+    <RootNamespace>Golether.Transports.Rendezvous</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\Core\Golether.Core\Golether.Core.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="Golether.Transports.Tests" />
+    <InternalsVisibleTo Include="Golether.Web.Server.Tests" />
+  </ItemGroup>
+
+</Project>

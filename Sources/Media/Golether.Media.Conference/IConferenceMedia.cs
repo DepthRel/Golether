@@ -99,6 +99,14 @@ public interface IConferenceMedia : IAsyncDisposable
     void SetRelay(string? turnServer);
 
     /// <summary>
+    /// Sets the STUN server used by connections created from now on, so they learn their public addresses and reach
+    /// participants behind other routers directly.
+    /// </summary>
+    /// <param name="stunServer">The server, for example <c>stun://203.0.113.7:47900</c>, or <see langword="null"/>
+    /// for the configured default.</param>
+    void SetStunServer(string? stunServer);
+
+    /// <summary>
     /// Sets how loud a participant's voice is played on this device. Other participants are not affected.
     /// </summary>
     /// <param name="peer">The participant.</param>

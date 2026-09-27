@@ -103,6 +103,9 @@ internal sealed class FakeConference : IConferenceMedia
     public void SetRelay(string? turnServer) => Relay = turnServer;
 
     /// <inheritdoc />
+    public void SetStunServer(string? stunServer) => StunServer = stunServer;
+
+    /// <inheritdoc />
     public void SetVoiceVolume(PeerId peer, double volume) => VoiceVolumes[peer] = volume;
 
     /// <summary>
@@ -163,6 +166,11 @@ internal sealed class FakeConference : IConferenceMedia
     /// Gets the relay set by the session.
     /// </summary>
     public string? Relay { get; private set; }
+
+    /// <summary>
+    /// Gets the STUN server set by the session.
+    /// </summary>
+    public string? StunServer { get; private set; }
 
     /// <inheritdoc />
     public Task StopAsync()

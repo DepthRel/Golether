@@ -1,4 +1,6 @@
+using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Input.Platform;
 using Avalonia.Platform.Storage;
 using Avalonia.Threading;
@@ -27,6 +29,13 @@ public sealed class AvaloniaDialogService : IDialogService
     {
         _owner = owner ?? throw new ArgumentNullException(nameof(owner));
     }
+
+    /// <summary>
+    /// Gets the window a new dialog should belong to: the active one (so a dialog opened from the settings window
+    /// belongs to it, not to the disabled main window), or the main window when none is active.
+    /// </summary>
+    private Window ActiveOwner
+        => (Application.Current?.ApplicationLifetime as IClassicDesktopStyleApplicationLifetime)?.Windows.FirstOrDefault(w => w.IsActive) ?? _owner;
 
     /// <inheritdoc />
     public async Task<bool> ConfirmAdmissionAsync(AdmissionRequest request, CancellationToken cancellationToken)
@@ -102,6 +111,30 @@ public sealed class AvaloniaDialogService : IDialogService
         });
         return files.Count > 0 ? files[0].TryGetLocalPath() : null;
     }
+
+    /// <inheritdoc />
+    public async Task<string?> PickImageFileAsync()
+    {
+        var files = await ActiveOwner.StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
+        {
+            Title = Texts.Get("Dialog.PickImage.Title"),
+            AllowMultiple = false,
+            FileTypeFilter =
+            [
+                new FilePickerFileType(Texts.Get("Dialog.PickImage.Filter")) { Patterns = ["*.png", "*.jpg", "*.jpeg", "*.bmp", "*.webp", "*.gif"] },
+                FilePickerFileTypes.All,
+            ],
+        });
+        return files.Count > 0 ? files[0].TryGetLocalPath() : null;
+    }
+
+    /// <inheritdoc />
+    public Task<AvatarSelection?> ShowAvatarAsync(AvatarDialogViewModel viewModel)
+        => new AvatarDialog { DataContext = viewModel }.ShowDialog<AvatarSelection?>(ActiveOwner);
+
+    /// <inheritdoc />
+    public Task ShowSettingsAsync(SettingsViewModel viewModel)
+        => new SettingsDialog { DataContext = viewModel }.ShowDialog(_owner);
 
     /// <inheritdoc />
     public async Task<string?> PickConfigSavePathAsync(string suggestedName)

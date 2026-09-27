@@ -65,6 +65,26 @@ public interface IDialogService
     Task<string?> PickAudioFileAsync();
 
     /// <summary>
+    /// Lets the user pick an image file for the avatar.
+    /// </summary>
+    /// <returns>The local path, or <see langword="null"/> when cancelled.</returns>
+    Task<string?> PickImageFileAsync();
+
+    /// <summary>
+    /// Shows the avatar chooser and returns the rendered avatar with its original and framing.
+    /// </summary>
+    /// <param name="viewModel">The dialog view model.</param>
+    /// <returns>The chosen avatar, or <see langword="null"/> when cancelled.</returns>
+    Task<AvatarSelection?> ShowAvatarAsync(AvatarDialogViewModel viewModel);
+
+    /// <summary>
+    /// Shows the settings window.
+    /// </summary>
+    /// <param name="viewModel">The settings view model.</param>
+    /// <returns>A task that completes when the window is closed.</returns>
+    Task ShowSettingsAsync(SettingsViewModel viewModel);
+
+    /// <summary>
     /// Lets the user choose where to save a tunnel configuration.
     /// </summary>
     /// <param name="suggestedName">The suggested file name.</param>

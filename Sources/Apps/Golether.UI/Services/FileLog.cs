@@ -7,12 +7,14 @@ namespace Golether.UI.Services;
 
 /// <summary>
 /// Writes the application log into <c>data/logs</c>, one file per day, so a problem can be looked at later and put
-/// into a diagnostic report. Keys and tokens never reach the log: see <see cref="DiagnosticReport.Redact"/>.
+/// into a diagnostic report. Keys and tokens never reach the log: see <see cref="DiagnosticReport.Redact"/>. On start
+/// it clears everything in the folder (daily logs and saved diagnostic reports alike) not touched for
+/// <see cref="KeepDays"/> days, so the directory does not fill up.
 /// </summary>
 public sealed class FileLogProvider : ILoggerProvider
 {
     /// <summary>
-    /// How many daily files are kept.
+    /// How many days a log or report is kept before it is removed on the next start.
     /// </summary>
     public const int KeepDays = 7;
 
@@ -54,17 +56,47 @@ public sealed class FileLogProvider : ILoggerProvider
         try
         {
             Directory.CreateDirectory(directory);
-            foreach (var file in Directory.GetFiles(directory, "golether-*.log"))
-            {
-                if (_timeProvider.GetUtcNow() - File.GetLastWriteTimeUtc(file) > TimeSpan.FromDays(KeepDays))
-                {
-                    File.Delete(file);
-                }
-            }
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
             _broken = true;
+            return;
+        }
+
+        CleanUpOldFiles();
+    }
+
+    /// <summary>
+    /// Removes every file in the log directory not written to for longer than <see cref="KeepDays"/> days: old daily
+    /// logs and diagnostic reports alike. The current day's log keeps its recent write time, so it stays. A file that
+    /// cannot be removed (locked or read-only) is left behind and never stops logging.
+    /// </summary>
+    private void CleanUpOldFiles()
+    {
+        var cutoff = TimeSpan.FromDays(KeepDays);
+        IEnumerable<string> files;
+        try
+        {
+            files = Directory.EnumerateFiles(_directory);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or DirectoryNotFoundException)
+        {
+            return;
+        }
+
+        foreach (var file in files)
+        {
+            try
+            {
+                if (_timeProvider.GetUtcNow() - File.GetLastWriteTimeUtc(file) > cutoff)
+                {
+                    File.Delete(file);
+                }
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+                // One stubborn file must not abort the sweep or disable logging.
+            }
         }
     }
 

@@ -11,6 +11,7 @@
     <File Path="Docs/Architecture.md" />
     <File Path="Docs/Development.md" />
     <File Path="Docs/Protocol.md" />
+    <File Path="Docs/RendezvousServer.md" />
     <File Path="Docs/UserGuide.md" />
     <File Path="Native/README.md" />
   </Folder>
@@ -20,10 +21,15 @@
     <File Path="Scripts/publish-linux.sh" />
     <File Path="Scripts/publish-macos.sh" />
     <File Path="Scripts/publish-win.ps1" />
+    <File Path="Scripts/publish-server-win.ps1" />
+    <File Path="Scripts/publish-server.sh" />
+    <File Path="Scripts/build-server-installer.ps1" />
+    <File Path="Scripts/golether-server.iss" />
   </Folder>
   <Folder Name="/Sources/" />
   <Folder Name="/Sources/Apps/">
     <Project Path="Sources/Apps/Golether.UI/Golether.UI.csproj" />
+    <Project Path="Sources/Apps/Golether.Web.Server/Golether.Web.Server.csproj" />
   </Folder>
   <Folder Name="/Sources/Components/">
     <Project Path="Sources/Components/Golether.Components/Golether.Components.csproj" />
@@ -60,6 +66,7 @@
     <Project Path="Sources/Transports/Golether.Transports.Abstractions/Golether.Transports.Abstractions.csproj" />
     <Project Path="Sources/Transports/Golether.Transports.PortMapping/Golether.Transports.PortMapping.csproj" />
     <Project Path="Sources/Transports/Golether.Transports.Relay/Golether.Transports.Relay.csproj" />
+    <Project Path="Sources/Transports/Golether.Transports.Rendezvous/Golether.Transports.Rendezvous.csproj" />
     <Project Path="Sources/Transports/Golether.Transports.Tls/Golether.Transports.Tls.csproj" />
   </Folder>
   <Folder Name="/Sources/Tunnels/">
@@ -83,5 +90,6 @@
     <Project Path="Tests/Golether.Tunnels.AmneziaWG.Tests/Golether.Tunnels.AmneziaWG.Tests.csproj" />
     <Project Path="Tests/Golether.UI.Headless.Tests/Golether.UI.Headless.Tests.csproj" />
     <Project Path="Tests/Golether.UI.Tests/Golether.UI.Tests.csproj" />
+    <Project Path="Tests/Golether.Web.Server.Tests/Golether.Web.Server.Tests.csproj" />
   </Folder>
 </Solution>

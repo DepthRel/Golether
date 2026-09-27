@@ -1,6 +1,9 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
-  <!-- Mutual TLS over TCP with pinned device keys: the base transport that works on every supported system. -->
+  <!--
+    Mutual TLS over TCP with pinned device keys: the base transport that works on every supported system. The same
+    handshake runs over connections punched through the routers with the help of a rendezvous server.
+  -->
   <PropertyGroup>
     <RootNamespace>Golether.Transports.Tls</RootNamespace>
   </PropertyGroup>
@@ -11,6 +14,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\Golether.Transports.Abstractions\Golether.Transports.Abstractions.csproj" />
+    <ProjectReference Include="..\Golether.Transports.Rendezvous\Golether.Transports.Rendezvous.csproj" />
     <ProjectReference Include="..\..\Security\Golether.Security\Golether.Security.csproj" />
   </ItemGroup>
 

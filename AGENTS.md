@@ -23,7 +23,7 @@ Golether — открытое (GPL-3.0-or-later) кроссплатформен�
 
 ```
 Sources/
-  Apps/          приложения (Golether.UI)
+  Apps/          приложения (Golether.UI, сервер рукопожатий Golether.Web.Server)
   Core/          ядро, данные и миграции
   Database/      консольный мигратор БД
   Media/         плеер (libmpv), раздача файла, камеры и голос

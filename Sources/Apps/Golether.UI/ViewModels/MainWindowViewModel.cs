@@ -1,5 +1,6 @@
 using System.Collections.ObjectModel;
 using System.Globalization;
+using Avalonia.Media.Imaging;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Golether.Core.Data.Enums;
@@ -53,6 +54,11 @@ public sealed partial class MainWindowViewModel : ObservableObject
     public const string OpenRouterPortSetting = "network.openRouterPort";
 
     /// <summary>
+    /// The setting with the rendezvous server of hosted sessions (<c>host:port</c>, empty for none).
+    /// </summary>
+    public const string RendezvousServerSetting = "network.rendezvousServer";
+
+    /// <summary>
     /// The maximum number of event feed entries.
     /// </summary>
     private const int MaxEvents = 50;
@@ -103,6 +109,21 @@ public sealed partial class MainWindowViewModel : ObservableObject
     private readonly IConferenceMedia _conference;
 
     /// <summary>
+    /// Keeps this device's chosen avatar between sessions, or <see langword="null"/> when avatars are not offered.
+    /// </summary>
+    private readonly IAvatarStore? _avatarStore;
+
+    /// <summary>
+    /// The avatar bitmaps received for each participant, applied to their tiles.
+    /// </summary>
+    private readonly Dictionary<PeerId, object?> _peerAvatars = [];
+
+    /// <summary>
+    /// This device's chosen avatar (PNG bytes), sent to a session as soon as it starts, or <see langword="null"/>.
+    /// </summary>
+    private byte[]? _ownAvatar;
+
+    /// <summary>
     /// Whether a refresh is already queued.
     /// </summary>
     private int _refreshQueued;
@@ -143,6 +164,11 @@ public sealed partial class MainWindowViewModel : ObservableObject
     private long _voiceVolumeVersion;
 
     /// <summary>
+    /// Cancels the join that is waiting for the host, or <see langword="null"/> when no join is running.
+    /// </summary>
+    private CancellationTokenSource? _joinCancellation;
+
+    /// <summary>
     /// Initializes a new instance of the <see cref="MainWindowViewModel"/> class.
     /// </summary>
     /// <param name="session">The session service.</param>
@@ -158,6 +184,7 @@ public sealed partial class MainWindowViewModel : ObservableObject
     /// <param name="updates">Looks for new versions, or <see langword="null"/> when updates are not offered.</param>
     /// <param name="updateFolder">The folder for downloaded updates.</param>
     /// <param name="language">The language selector, or <see langword="null"/> when the language cannot be chosen.</param>
+    /// <param name="avatarStore">Keeps the chosen avatar, or <see langword="null"/> when avatars are not offered.</param>
     public MainWindowViewModel(
         ISessionService session,
         IDialogService dialogs,
@@ -171,9 +198,11 @@ public sealed partial class MainWindowViewModel : ObservableObject
         IDiagnosticsWriter? diagnostics = null,
         IUpdateService? updates = null,
         string? updateFolder = null,
-        LanguageViewModel? language = null)
+        LanguageViewModel? language = null,
+        IAvatarStore? avatarStore = null)
     {
         ArgumentNullException.ThrowIfNull(components);
+        _avatarStore = avatarStore;
         Language = language;
         VideoComponent = new ComponentItemViewModel(ComponentId.Video, components, dialogs);
         ConferenceComponent = new ComponentItemViewModel(ComponentId.Conference, components, dialogs);
@@ -232,6 +261,7 @@ public sealed partial class MainWindowViewModel : ObservableObject
         UpdateConferenceNotice();
         _session.Changed += (_, _) => QueueRefresh();
         _session.EventRaised += (_, e) => _dispatcher.Post(() => AddEvent(e));
+        _session.AvatarReceived += (_, update) => _dispatcher.Post(() => ApplyAvatar(update));
         Texts.Localizer.LanguageChanged += (_, _) => _dispatcher.Post(RefreshTexts);
     }
 
@@ -540,6 +570,166 @@ public sealed partial class MainWindowViewModel : ObservableObject
     }
 
     /// <summary>
+    /// Gets a value indicating whether choosing an avatar is offered.
+    /// </summary>
+    public bool CanChooseAvatar => _avatarStore is not null;
+
+    /// <summary>
+    /// Opens the settings window with the language, avatar, camera and microphone, and tunnel settings.
+    /// </summary>
+    /// <returns>A task that completes when the window is closed.</returns>
+    [RelayCommand]
+    private Task OpenSettingsAsync()
+    {
+        var settings = new Dialogs.SettingsViewModel(
+            Language,
+            Devices,
+            ConferenceAvailable,
+            ConferenceNotice,
+            CanChooseAvatar,
+            canConfigureTunnels: !IsInSession,
+            DecodeOwnAvatar(),
+            PickAvatarAsync,
+            ApplyAvatarAsync,
+            OpenTunnelsAsync);
+
+        // Reading the device lists asks the media backend and takes a moment, so it runs while the window is already
+        // on screen. Refilling the lists empties the boxes, so the choice is put back once the lists are complete.
+        _ = RefreshDevicesAsync(settings);
+        return _dialogs.ShowSettingsAsync(settings);
+    }
+
+    /// <summary>
+    /// Re-reads the camera and microphone lists and shows the restored choice in the settings window.
+    /// </summary>
+    /// <param name="settings">The open settings window.</param>
+    /// <returns>A task that completes when the lists are read.</returns>
+    private async Task RefreshDevicesAsync(Dialogs.SettingsViewModel settings)
+    {
+        if (Devices is null)
+        {
+            return;
+        }
+
+        await Devices.RefreshAsync();
+        settings.SyncDevices();
+    }
+
+    /// <summary>
+    /// Opens the avatar chooser on the stored original, so the picture can be re-positioned. Nothing is stored yet:
+    /// the settings window applies the result.
+    /// </summary>
+    /// <returns>The chosen avatar, or <see langword="null"/> when the chooser was cancelled.</returns>
+    private async Task<AvatarSelection?> PickAvatarAsync()
+    {
+        if (_avatarStore is null)
+        {
+            return null;
+        }
+
+        var dialog = new Dialogs.AvatarDialogViewModel(_dialogs, await _avatarStore.LoadForEditingAsync());
+        return await _dialogs.ShowAvatarAsync(dialog);
+    }
+
+    /// <summary>
+    /// Stores a chosen avatar (round picture, original and framing) and, in a running session, sends it to everybody.
+    /// </summary>
+    /// <param name="selection">The chosen avatar.</param>
+    /// <returns>A task that completes when the avatar is stored and sent.</returns>
+    private async Task ApplyAvatarAsync(AvatarSelection selection)
+    {
+        if (_avatarStore is null)
+        {
+            return;
+        }
+
+        try
+        {
+            await _avatarStore.SaveAsync(selection);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            await _dialogs.ShowErrorAsync(Texts.Get("Avatar.NotSaved.Title"), ex.Message);
+            return;
+        }
+
+        _ownAvatar = selection.Avatar;
+        if (_session.IsActive)
+        {
+            await _session.SetAvatarAsync(selection.Avatar, CancellationToken.None);
+        }
+    }
+
+    /// <summary>
+    /// Decodes this device's stored avatar into an image for previews, or <see langword="null"/> when there is none.
+    /// </summary>
+    /// <returns>The bitmap, or <see langword="null"/>.</returns>
+    private object? DecodeOwnAvatar()
+    {
+        if (_ownAvatar is not { Length: > 0 } bytes)
+        {
+            return null;
+        }
+
+        try
+        {
+            return new Bitmap(new MemoryStream(bytes));
+        }
+        catch (Exception ex) when (ex is not OutOfMemoryException)
+        {
+            return null;
+        }
+    }
+
+    /// <summary>
+    /// Sends the chosen avatar to the session, if one was chosen.
+    /// </summary>
+    /// <param name="cancellationToken">The cancellation token.</param>
+    /// <returns>A task that completes when the avatar was sent.</returns>
+    private async Task SendStoredAvatarAsync(CancellationToken cancellationToken)
+    {
+        if (_ownAvatar is { Length: > 0 } png)
+        {
+            await _session.SetAvatarAsync(png, cancellationToken);
+        }
+    }
+
+    /// <summary>
+    /// Applies an avatar received for a participant to its tile, remembering it for tiles that appear later.
+    /// </summary>
+    /// <param name="update">The avatar.</param>
+    private void ApplyAvatar(AvatarUpdate update)
+    {
+        object? image = null;
+        if (update.Image is { Length: > 0 } bytes)
+        {
+            try
+            {
+                image = new Bitmap(new MemoryStream(bytes));
+            }
+            catch (Exception ex) when (ex is not OutOfMemoryException)
+            {
+                // The bytes came from another device: a picture that cannot be decoded is simply not shown.
+                image = null;
+            }
+        }
+
+        if (image is null)
+        {
+            _peerAvatars.Remove(update.Peer);
+        }
+        else
+        {
+            _peerAvatars[update.Peer] = image;
+        }
+
+        if (Participants.FirstOrDefault(p => p.PeerId == update.Peer) is { } tile)
+        {
+            tile.AvatarImage = image;
+        }
+    }
+
+    /// <summary>
     /// Shows whether cameras and voices work.
     /// </summary>
     private void UpdateConferenceNotice()
@@ -588,6 +778,28 @@ public sealed partial class MainWindowViewModel : ObservableObject
     }
 
     /// <summary>
+    /// Gets or sets the rendezvous server of hosted sessions as <c>host:port</c>, or an empty string for none.
+    /// </summary>
+    [ObservableProperty]
+    public partial string RendezvousServer { get; set; } = string.Empty;
+
+    /// <summary>
+    /// Passes the rendezvous server to the sessions and remembers it. The address is checked when a session starts.
+    /// </summary>
+    /// <param name="value">The new value.</param>
+    partial void OnRendezvousServerChanged(string value)
+    {
+        var trimmed = value.Trim();
+        if (trimmed == _session.RendezvousServer)
+        {
+            return;
+        }
+
+        _session.RendezvousServer = trimmed;
+        _ = _settings.SetAsync(RendezvousServerSetting, trimmed, CancellationToken.None);
+    }
+
+    /// <summary>
     /// Gets or sets the invitation link to join.
     /// </summary>
     [ObservableProperty]
@@ -605,6 +817,13 @@ public sealed partial class MainWindowViewModel : ObservableObject
     /// </summary>
     [ObservableProperty]
     public partial string BusyText { get; set; } = string.Empty;
+
+    /// <summary>
+    /// Gets or sets a value indicating whether the running operation can be cancelled by the user (a join waiting for
+    /// the host). The busy overlay and the approval screen then offer a cancel button.
+    /// </summary>
+    [ObservableProperty]
+    public partial bool IsCancellable { get; set; }
 
     /// <summary>
     /// Gets or sets a value indicating whether a session runs.
@@ -871,6 +1090,7 @@ public sealed partial class MainWindowViewModel : ObservableObject
         }
 
         OpenRouterPort = await _settings.GetAsync(OpenRouterPortSetting, CancellationToken.None) != "false";
+        RendezvousServer = await _settings.GetAsync(RendezvousServerSetting, CancellationToken.None) ?? string.Empty;
         UpdateUrl = await _settings.GetAsync(UpdateService.UrlSetting, CancellationToken.None) ?? string.Empty;
         if (_updates is not null)
         {
@@ -895,6 +1115,11 @@ public sealed partial class MainWindowViewModel : ObservableObject
         {
             await Devices.RefreshAsync();
         }
+
+        if (_avatarStore is not null)
+        {
+            _ownAvatar = await _avatarStore.LoadCurrentAsync();
+        }
     }
 
     /// <summary>
@@ -916,6 +1141,7 @@ public sealed partial class MainWindowViewModel : ObservableObject
             {
                 await SaveNameAsync();
                 await _session.StartHostingAsync(Path.GetFileNameWithoutExtension(path), DisplayName, (int)(Port ?? TlsTransportOptions.DefaultPort), token);
+                await SendStoredAvatarAsync(token);
             }
 
             await _session.ShareMediaAsync(path, token);
@@ -960,6 +1186,7 @@ public sealed partial class MainWindowViewModel : ObservableObject
         if (snapshot is null)
         {
             Participants.Clear();
+            _peerAvatars.Clear();
             IsHost = false;
             IsAwaitingApproval = false;
             _resumeMedia = null;
@@ -1307,19 +1534,41 @@ public sealed partial class MainWindowViewModel : ObservableObject
     {
         await SaveNameAsync();
         await _session.StartHostingAsync(NewSessionName, DisplayName, (int)(Port ?? TlsTransportOptions.DefaultPort), token);
+        await SendStoredAvatarAsync(token);
     });
 
     /// <summary>
-    /// Joins a session.
+    /// Joins a session. The wait for the host can be cancelled with <see cref="CancelJoinCommand"/>.
     /// </summary>
-    /// <returns>A task that completes when the host admitted this device.</returns>
+    /// <returns>A task that completes when the host admitted this device or the user cancelled.</returns>
     [RelayCommand(CanExecute = nameof(CanStart))]
-    private Task JoinAsync() => RunAsync(Texts.Get("Main.Busy.Connecting"), async token =>
+    private async Task JoinAsync()
     {
-        await SaveNameAsync();
-        await _session.JoinAsync(InviteLink, DisplayName, token);
-        InviteLink = string.Empty;
-    });
+        using var cancellation = new CancellationTokenSource();
+        _joinCancellation = cancellation;
+        IsCancellable = true;
+        try
+        {
+            await RunAsync(Texts.Get("Main.Busy.Connecting"), async token =>
+            {
+                await SaveNameAsync();
+                await _session.JoinAsync(InviteLink, DisplayName, token);
+                await SendStoredAvatarAsync(token);
+                InviteLink = string.Empty;
+            }, cancellation.Token);
+        }
+        finally
+        {
+            IsCancellable = false;
+            _joinCancellation = null;
+        }
+    }
+
+    /// <summary>
+    /// Stops a join that is still waiting for the host to admit this device.
+    /// </summary>
+    [RelayCommand]
+    private void CancelJoin() => _joinCancellation?.Cancel();
 
     /// <summary>
     /// Pastes an invitation from the clipboard.
@@ -1455,6 +1704,8 @@ public sealed partial class MainWindowViewModel : ObservableObject
     [RelayCommand]
     private async Task LeaveAsync()
     {
+        // A join may still be waiting for the host; cancel it so its progress does not linger.
+        _joinCancellation?.Cancel();
         await _session.LeaveAsync();
         Events.Clear();
         LastEvent = string.Empty;
@@ -1489,14 +1740,19 @@ public sealed partial class MainWindowViewModel : ObservableObject
     /// </summary>
     /// <param name="text">The progress text.</param>
     /// <param name="operation">The operation.</param>
+    /// <param name="cancellationToken">Cancels the operation.</param>
     /// <returns>A task that completes when the operation finished.</returns>
-    private async Task RunAsync(string text, Func<CancellationToken, Task> operation)
+    private async Task RunAsync(string text, Func<CancellationToken, Task> operation, CancellationToken cancellationToken = default)
     {
         IsBusy = true;
         BusyText = text;
         try
         {
-            await operation(CancellationToken.None);
+            await operation(cancellationToken);
+        }
+        catch (OperationCanceledException)
+        {
+            // The user stopped the operation (for example a join waiting for the host); nothing to report.
         }
         catch (Exception ex) when (ex is FormatException or SessionJoinException or InvalidOperationException or IOException or UnauthorizedAccessException)
         {
@@ -1577,6 +1833,7 @@ public sealed partial class MainWindowViewModel : ObservableObject
             }
 
             item.Update(views[i], duration);
+            item.AvatarImage = _peerAvatars.GetValueOrDefault(item.PeerId);
             item.CanModerate = IsHost && !item.IsLocal;
         }
     }

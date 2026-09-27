@@ -1,6 +1,7 @@
 using System.Buffers.Text;
 using System.Security.Cryptography;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using Golether.Core.Identity;
 using Golether.Localization;
 using Golether.Core.Networking;
@@ -62,6 +63,12 @@ public sealed record Invite
     public required IReadOnlyList<PeerEndpoint> Endpoints { get; init; }
 
     /// <summary>
+    /// Gets the rendezvous server and the room of the host, or <see langword="null"/> when the host uses none.
+    /// Participants whose direct attempts fail meet the host through it.
+    /// </summary>
+    public RendezvousPoint? Rendezvous { get; init; }
+
+    /// <summary>
     /// Gets the one-time token (base64url, <see cref="TokenBytes"/> bytes).
     /// </summary>
     public required string Token { get; init; }
@@ -89,7 +96,9 @@ public sealed record Invite
             SessionName,
             Endpoints.Select(e => e.ToString()).ToArray(),
             Token,
-            ExpiresAt.ToUnixTimeSeconds());
+            ExpiresAt.ToUnixTimeSeconds(),
+            Rendezvous?.Server.ToString(),
+            Rendezvous?.Room);
         return LinkPrefix + Base64Url.EncodeToString(JsonSerializer.SerializeToUtf8Bytes(payload, JsonOptions));
     }
 
@@ -137,6 +146,12 @@ public sealed record Invite
             endpoints.Add(endpoint);
         }
 
+        RendezvousPoint? rendezvous = null;
+        if ((payload.Meet is not null || payload.Room is not null) && !RendezvousPoint.TryCreate(payload.Meet, payload.Room, out rendezvous))
+        {
+            throw new FormatException(Texts.Get("Invite.Error.Damaged"));
+        }
+
         return new Invite
         {
             HostPeerId = host,
@@ -145,6 +160,7 @@ public sealed record Invite
             Endpoints = endpoints,
             Token = payload.Token!,
             ExpiresAt = DateTimeOffset.FromUnixTimeSeconds(payload.Expires),
+            Rendezvous = rendezvous,
         };
     }
 
@@ -175,5 +191,15 @@ public sealed record Invite
     /// <param name="Endpoints">The candidate endpoints.</param>
     /// <param name="Token">The one-time token.</param>
     /// <param name="Expires">The expiry time in Unix seconds.</param>
-    private sealed record InvitePayload(string? Host, string? Name, string? Session, string[]? Endpoints, string? Token, long Expires);
+    /// <param name="Meet">The rendezvous server as <c>host:port</c>; absent without one and in older links.</param>
+    /// <param name="Room">The room of the host on the rendezvous server; absent without one.</param>
+    private sealed record InvitePayload(
+        string? Host,
+        string? Name,
+        string? Session,
+        string[]? Endpoints,
+        string? Token,
+        long Expires,
+        [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? Meet = null,
+        [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? Room = null);
 }

@@ -98,6 +98,11 @@ public sealed class UnavailableConferenceMedia : IConferenceMedia
     }
 
     /// <inheritdoc />
+    public void SetStunServer(string? stunServer)
+    {
+    }
+
+    /// <inheritdoc />
     public void SetVoiceVolume(PeerId peer, double volume)
     {
     }

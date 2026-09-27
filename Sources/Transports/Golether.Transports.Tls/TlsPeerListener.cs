@@ -103,6 +103,38 @@ public sealed class TlsPeerListener : IPeerListener
         _acceptLoop = Task.Run(() => AcceptLoopAsync(_stopping.Token));
     }
 
+    /// <summary>
+    /// Takes a TCP connection opened by other means (for example punched through the routers with the help of a
+    /// rendezvous server) and treats it like an accepted one: the same TLS handshake, preamble and limits.
+    /// </summary>
+    /// <param name="socket">The connected socket; ownership is transferred.</param>
+    /// <returns><see langword="false"/> when the listener is stopped or busy and the socket was closed.</returns>
+    public bool Adopt(Socket socket)
+    {
+        ArgumentNullException.ThrowIfNull(socket);
+        if (_acceptLoop is null || _stopping.IsCancellationRequested || !_handshakeSlots.Wait(0))
+        {
+            socket.Dispose();
+            return false;
+        }
+
+        CancellationToken token;
+        try
+        {
+            token = _stopping.Token;
+        }
+        catch (ObjectDisposedException)
+        {
+            // Disposed between the check and here.
+            _handshakeSlots.Release();
+            socket.Dispose();
+            return false;
+        }
+
+        _ = Task.Run(() => HandshakeAsync(socket, token), CancellationToken.None);
+        return true;
+    }
+
     /// <inheritdoc />
     public ValueTask<PeerStream> AcceptAsync(CancellationToken cancellationToken)
     {

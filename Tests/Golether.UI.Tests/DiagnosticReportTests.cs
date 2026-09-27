@@ -131,4 +131,38 @@ public sealed class DiagnosticReportTests
             folder.Delete(recursive: true);
         }
     }
+
+    /// <summary>
+    /// On start the log writer removes every file in the folder older than a week — daily logs and saved diagnostic
+    /// reports alike — while recent files stay.
+    /// </summary>
+    [Fact]
+    public void FileLog_RemovesOldLogsAndReports()
+    {
+        var folder = Directory.CreateTempSubdirectory("golether-filelog-clean-");
+        try
+        {
+            var oldLog = Path.Combine(folder.FullName, "golether-2000-01-01.log");
+            var oldReport = Path.Combine(folder.FullName, "golether-report-2000-01-01.txt");
+            var freshReport = Path.Combine(folder.FullName, "golether-report-today.txt");
+            foreach (var file in new[] { oldLog, oldReport, freshReport })
+            {
+                File.WriteAllText(file, "x");
+            }
+
+            var stale = DateTime.UtcNow - TimeSpan.FromDays(FileLogProvider.KeepDays + 1);
+            File.SetLastWriteTimeUtc(oldLog, stale);
+            File.SetLastWriteTimeUtc(oldReport, stale);
+
+            using var provider = new FileLogProvider(folder.FullName);
+
+            Assert.False(File.Exists(oldLog));
+            Assert.False(File.Exists(oldReport));
+            Assert.True(File.Exists(freshReport));
+        }
+        finally
+        {
+            folder.Delete(recursive: true);
+        }
+    }
 }

@@ -54,6 +54,12 @@ public sealed class MainWindowTests
     private static readonly Lazy<HeadlessUnitTestSession> Session = new(() => HeadlessUnitTestSession.StartNew(typeof(TestApp)));
 
     /// <summary>
+    /// Initializes static members of the <see cref="MainWindowTests"/> class. The toolbar folds without its
+    /// animation, so the tests see the settled row instead of a frame in the middle of it.
+    /// </summary>
+    static MainWindowTests() => OverflowPanel.FoldDuration = TimeSpan.Zero;
+
+    /// <summary>
     /// This device, the host.
     /// </summary>
     private static readonly PeerId Host = PeerId.Parse(new string('a', 64));
@@ -262,7 +268,7 @@ public sealed class MainWindowTests
     {
         var panel = fixture.Window.FindControl<OverflowPanel>("TopActions")!;
         var more = fixture.Window.FindControl<Button>("MoreActions")!;
-        var leave = panel.Children.OfType<Button>().Single(b => (string?)b.Content == "Завершить");
+        var leave = panel.Children.OfType<Button>().Single(b => b.Content as string == "Завершить");
 
         fixture.Window.Width = 1600;
         await fixture.Settle();
@@ -289,9 +295,9 @@ public sealed class MainWindowTests
         more.Flyout!.ShowAt(more);
         await fixture.Settle();
         var items = ((MenuFlyout)more.Flyout).Items.OfType<MenuItem>().ToArray();
-        // The tunnel item belongs to the start screen: it is in the menu but hidden over the video.
-        Assert.False(items[0].IsVisible);
-        Assert.Equal(["Туннели AWG", "Пригласить", "Отчёт для диагностики…", "Завершить"], items.Select(i => (string)i.Header!));
+        // Settings is available everywhere, so its menu item shows over the video too.
+        Assert.True(items[0].IsVisible);
+        Assert.Equal(["Настройки", "Пригласить", "Отчёт для диагностики…", "Завершить"], items.Select(i => (string)i.Header!));
         Assert.Same(fixture.ViewModel.LeaveCommand, items[3].Command);
         more.Flyout.Hide();
 
@@ -299,6 +305,32 @@ public sealed class MainWindowTests
         panel.MaxWidth = double.PositiveInfinity;
         await fixture.Settle();
         Assert.False(panel.IsOverflowing);
+    });
+
+    /// <summary>
+    /// The row is laid out from the fold of its items, which is what the folding animation drives: half folded is half
+    /// the width and half the opacity, so the neighbours glide along instead of jumping.
+    /// </summary>
+    /// <returns>A task that completes when the test is done.</returns>
+    [Fact]
+    public Task ToolbarFold_DrivesWidthAndOpacity() => RunAsync(async fixture =>
+    {
+        var panel = fixture.Window.FindControl<OverflowPanel>("TopActions")!;
+        var leave = panel.Children.OfType<Button>().Single(b => b.Content as string == "Завершить");
+        fixture.Window.Width = 1600;
+        await fixture.Settle();
+        var full = leave.Bounds.Width;
+        Assert.True(full > 0, "The button is shown to begin with.");
+
+        OverflowPanel.SetFold(leave, 0.5);
+        await fixture.Settle();
+        Assert.InRange(leave.Bounds.Width, full * 0.4, full * 0.6);
+        Assert.Equal(0.5, leave.Opacity, 3);
+
+        OverflowPanel.SetFold(leave, 1);
+        await fixture.Settle();
+        Assert.Equal(0, leave.Bounds.Width);
+        Assert.Equal(0, leave.Opacity, 3);
     });
 
     /// <summary>
@@ -779,9 +811,8 @@ public sealed class MainWindowTests
     });
 
     /// <summary>
-    /// The language selector sits in the top bar next to the tunnel button, both on the start screen only (a tunnel is
-    /// raised before the connection, and the video screen has no use for either); it lists the languages with their
-    /// flags, and picking one changes every text of the window at once.
+    /// The language selector lives in the settings window; it lists the languages with their flags, and picking one
+    /// changes every text of the main window at once.
     /// </summary>
     /// <returns>A task that completes when the test is done.</returns>
     [Fact]
@@ -802,35 +833,23 @@ public sealed class MainWindowTests
             {
                 try
                 {
-                    var panel = fixture.Window.FindControl<OverflowPanel>("TopActions")!;
-                    var combo = fixture.Window.FindControl<ComboBox>("LanguageSelector")!;
-                    var tunnels = fixture.Window.FindControl<Button>("TunnelsButton")!;
-
-                    // Over the video (the fixture starts in a session) neither the language nor the tunnels are offered.
-                    Assert.False(combo.IsVisible);
-                    Assert.False(tunnels.IsVisible);
-                    SaveFrame(fixture.Window, "language-session");
-
-                    // The start screen offers both, side by side, and it is the longest text of the application.
+                    // The selector is wired into the window as its language service; the settings window binds to it.
+                    // Move to the start screen, where the hero text (the longest in the application) shows.
                     fixture.Sessions.GetSnapshot().Returns((SessionSnapshot?)null);
                     fixture.ViewModel.Refresh();
                     await fixture.Settle();
-                    Assert.True(combo.IsVisible);
-                    Assert.True(tunnels.IsVisible);
-                    Assert.Equal("Туннели AWG", (string?)tunnels.Content);
-                    Assert.Equal(panel.Children.IndexOf(tunnels) + 1, panel.Children.IndexOf(combo));
                     Assert.Equal(["English", "Русский"], selector.Options.Select(o => o.Name));
                     Assert.All(selector.Options, o => Assert.NotNull(o.Flag));
-                    Assert.Equal("Русский", ((LanguageOption)combo.SelectedItem!).Name);
+                    Assert.Equal("Русский", selector.Selected!.Name);
                     Assert.Contains(fixture.Window.GetVisualDescendants().OfType<TextBlock>(), t => t.Text == "Смотрим вместе, где бы вы ни были");
                     SaveFrame(fixture.Window, "language-ru-start");
 
-                    combo.SelectedItem = selector.Options.Single(o => o.Code == "en");
+                    // Picking English, as the settings window's selector does, changes every text of the window at once.
+                    selector.Selected = selector.Options.Single(o => o.Code == "en");
                     await fixture.Settle();
                     SaveFrame(fixture.Window, "language-en-start");
 
                     Assert.Equal("en", localizer.Current.Code);
-                    Assert.Equal("AWG tunnels", (string?)tunnels.Content);
                     Assert.Contains(fixture.Window.GetVisualDescendants().OfType<TextBlock>(), t => t.Text == "Watch together, wherever you are");
                     Assert.Contains(fixture.Window.GetVisualDescendants().OfType<TextBlock>(), t => t.Text == "Device A249-B9CC");
                     Assert.DoesNotContain(fixture.Window.GetVisualDescendants().OfType<TextBlock>(), t => t.Text == "Смотрим вместе, где бы вы ни были");

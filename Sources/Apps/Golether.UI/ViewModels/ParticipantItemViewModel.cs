@@ -192,13 +192,31 @@ public sealed partial class ParticipantItemViewModel : ObservableObject
     /// Gets or sets the latest camera image (an Avalonia bitmap set by the view), or <see langword="null"/>.
     /// </summary>
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(HasCamera))]
+    [NotifyPropertyChangedFor(nameof(HasCamera), nameof(ShowAvatarImage))]
     public partial object? CameraImage { get; set; }
 
     /// <summary>
     /// Gets a value indicating whether a camera image is shown instead of the avatar.
     /// </summary>
     public bool HasCamera => CameraImage is not null;
+
+    /// <summary>
+    /// Gets or sets the chosen avatar (an Avalonia bitmap), shown while the camera is off, or <see langword="null"/>
+    /// when the participant has none.
+    /// </summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasAvatar), nameof(ShowAvatarImage))]
+    public partial object? AvatarImage { get; set; }
+
+    /// <summary>
+    /// Gets a value indicating whether the participant chose an avatar.
+    /// </summary>
+    public bool HasAvatar => AvatarImage is not null;
+
+    /// <summary>
+    /// Gets a value indicating whether the chosen avatar is shown: there is one and the camera is off.
+    /// </summary>
+    public bool ShowAvatarImage => AvatarImage is not null && CameraImage is null;
 
     /// <summary>
     /// Gets or sets the display name.

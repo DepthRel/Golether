@@ -145,24 +145,59 @@ public sealed partial class DevicesViewModel : ObservableObject
     }
 
     /// <summary>
-    /// Replaces the entries of a list and returns the entry to select.
+    /// Brings a list up to date and returns the entry to select.
     /// </summary>
     /// <param name="target">The list.</param>
     /// <param name="devices">All devices.</param>
     /// <param name="kind">The kind for this list.</param>
     /// <param name="savedId">The saved device identifier.</param>
     /// <returns>The saved device, or the system default when it is absent.</returns>
+    /// <remarks>
+    /// The entries are removed and inserted one by one instead of the list being emptied and refilled. A box whose
+    /// items are cleared loses its selection, and the choice would blink away on every refresh; the entries that stay
+    /// keep their instance, so the selection sits still.
+    /// </remarks>
     private static DeviceOption Fill(ObservableCollection<DeviceOption> target, IReadOnlyList<CaptureDevice> devices, CaptureDeviceKind kind, string? savedId)
     {
-        target.Clear();
-        target.Add(DeviceOption.SystemDefault);
-        foreach (var device in devices.Where(d => d.Kind == kind).OrderBy(d => d.Name, StringComparer.CurrentCultureIgnoreCase))
+        var wanted = new List<DeviceOption> { DeviceOption.SystemDefault };
+        wanted.AddRange(devices
+            .Where(d => d.Kind == kind)
+            .OrderBy(d => d.Name, StringComparer.CurrentCultureIgnoreCase)
+            .Select(d => new DeviceOption(d.Name, d)));
+
+        // Whatever is gone leaves the list; the system default never does.
+        for (var index = target.Count - 1; index >= 0; index--)
         {
-            target.Add(new DeviceOption(device.Name, device));
+            if (!wanted.Any(option => IsSameDevice(option, target[index])))
+            {
+                target.RemoveAt(index);
+            }
+        }
+
+        // What is left is now a part of the wanted list in the same order, so the new devices slot in between.
+        for (var index = 0; index < wanted.Count; index++)
+        {
+            if (index >= target.Count)
+            {
+                target.Add(wanted[index]);
+            }
+            else if (!IsSameDevice(target[index], wanted[index]))
+            {
+                target.Insert(index, wanted[index]);
+            }
         }
 
         return target.FirstOrDefault(o => o.Device is not null && o.Device.Id == savedId) ?? DeviceOption.SystemDefault;
     }
+
+    /// <summary>
+    /// Tells whether two entries stand for the same device.
+    /// </summary>
+    /// <param name="left">The first entry.</param>
+    /// <param name="right">The second entry.</param>
+    /// <returns><see langword="true"/> for the same device, or for two system defaults.</returns>
+    private static bool IsSameDevice(DeviceOption left, DeviceOption right)
+        => string.Equals(left.Device?.Id, right.Device?.Id, StringComparison.Ordinal);
 
     /// <summary>
     /// Saves a choice and switches capture to it.

@@ -52,6 +52,11 @@ public sealed class ConferenceHost : IConferenceMedia, Golether.UI.ViewModels.IC
     private string? _relay;
 
     /// <summary>
+    /// The STUN server of the current session; applied to every backend.
+    /// </summary>
+    private string? _stunServer;
+
+    /// <summary>
     /// The voice volumes, applied again when the backend changes.
     /// </summary>
     private readonly System.Collections.Concurrent.ConcurrentDictionary<PeerId, double> _voiceVolumes = new();
@@ -142,6 +147,7 @@ public sealed class ConferenceHost : IConferenceMedia, Golether.UI.ViewModels.IC
         media.DataReceived += (_, peer, data) => DataReceived?.Invoke(this, peer, data);
         media.SetMuted(_microphoneMuted, _cameraOff);
         media.SetRelay(_relay);
+        media.SetStunServer(_stunServer);
         foreach (var (peer, volume) in _voiceVolumes)
         {
             media.SetVoiceVolume(peer, volume);
@@ -215,6 +221,13 @@ public sealed class ConferenceHost : IConferenceMedia, Golether.UI.ViewModels.IC
     {
         _relay = turnServer;
         _current.SetRelay(turnServer);
+    }
+
+    /// <inheritdoc />
+    public void SetStunServer(string? stunServer)
+    {
+        _stunServer = stunServer;
+        _current.SetStunServer(stunServer);
     }
 
     /// <inheritdoc />

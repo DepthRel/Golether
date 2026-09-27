@@ -36,6 +36,8 @@
     <StreamGeometry x:Key="IconSpeakerLoud">M0,0 H0.01 V0.01 Z M23.99,23.99 H24 V24 H23.99 Z M2,9 H6 L11,4 V20 L6,15 H2 Z M13.6,8.2 C15.9,9.6 15.9,14.4 13.6,15.8 L14.6,17.2 C18,15 18,9 14.6,6.8 Z M16.6,4.6 C21.1,7.3 21.1,16.7 16.6,19.4 L17.6,20.8 C23.1,17.5 23.1,6.5 17.6,3.2 Z</StreamGeometry>
     <StreamGeometry x:Key="IconMicrophone">M12,2 C10.3,2 9,3.3 9,5 V11 C9,12.7 10.3,14 12,14 C13.7,14 15,12.7 15,11 V5 C15,3.3 13.7,2 12,2 Z M5,11 H7 C7,13.8 9.2,16 12,16 C14.8,16 17,13.8 17,11 H19 C19,14.5 16.4,17.4 13,17.9 V21 H11 V17.9 C7.6,17.4 5,14.5 5,11 Z</StreamGeometry>
     <StreamGeometry x:Key="IconCamera">M2,6 H15 V18 H2 Z M16,10 L22,6.5 V17.5 L16,14 Z</StreamGeometry>
+    <!-- "Settings" gear from Material Icons (Apache License 2.0). -->
+    <StreamGeometry x:Key="IconSettings">M0,0 H0.01 V0.01 Z M23.99,23.99 H24 V24 H23.99 Z M19.14,12.94 c0.04,-0.3 0.06,-0.61 0.06,-0.94 c0,-0.32 -0.02,-0.64 -0.07,-0.94 l2.03,-1.58 c0.18,-0.14 0.23,-0.41 0.12,-0.61 l-1.92,-3.32 c-0.12,-0.22 -0.37,-0.29 -0.59,-0.22 l-2.39,0.96 c-0.5,-0.38 -1.03,-0.7 -1.62,-0.94 L14.4,2.81 c-0.04,-0.24 -0.24,-0.41 -0.48,-0.41 h-3.84 c-0.24,0 -0.43,0.17 -0.47,0.41 L9.25,5.35 C8.66,5.59 8.12,5.92 7.63,6.29 L5.24,5.33 c-0.22,-0.08 -0.47,0 -0.59,0.22 L2.74,8.87 C2.62,9.08 2.66,9.34 2.86,9.48 l2.03,1.58 C4.84,11.36 4.8,11.69 4.8,12 c0,0.31 0.02,0.64 0.07,0.94 l-2.03,1.58 c-0.18,0.14 -0.23,0.41 -0.12,0.61 l1.92,3.32 c0.12,0.22 0.37,0.29 0.59,0.22 l2.39,-0.96 c0.5,0.38 1.03,0.7 1.62,0.94 l0.36,2.54 c0.05,0.24 0.24,0.41 0.48,0.41 h3.84 c0.24,0 0.44,-0.17 0.47,-0.41 l0.36,-2.54 c0.59,-0.24 1.13,-0.56 1.62,-0.94 l2.39,0.96 c0.22,0.08 0.47,0 0.59,-0.22 l1.92,-3.32 c0.12,-0.22 0.07,-0.47 -0.12,-0.61 Z M12,15.6 c-1.98,0 -3.6,-1.62 -3.6,-3.6 c0,-1.98 1.62,-3.6 3.6,-3.6 c1.98,0 3.6,1.62 3.6,3.6 c0,1.98 -1.62,3.6 -3.6,3.6 Z</StreamGeometry>
   </Window.Resources>
 
   <Panel>
@@ -63,30 +65,22 @@
               <Border Classes="chip" IsVisible="{Binding IsHost}" controls:OverflowPanel.CanOverflow="True">
                 <TextBlock Text="{loc:Loc Main.HostYou}" Foreground="{StaticResource GoletherMuted}" />
               </Border>
-              <!-- A tunnel is raised before the connection (its address goes into the invitation), so it is offered on the start screen only. -->
-              <Button x:Name="TunnelsButton" Classes="ghost" Content="{loc:Loc Main.Tunnels}" Command="{Binding OpenTunnelsCommand}"
-                      IsVisible="{Binding !IsInSession}" controls:OverflowPanel.CanOverflow="True" />
-              <!-- The language of the application: the flag and the name of each language in that language. Start screen only. -->
-              <ComboBox x:Name="LanguageSelector" ItemsSource="{Binding Language.Options}" SelectedItem="{Binding Language.Selected}"
-                        IsVisible="{Binding CanChooseLanguage}"
-                        AutomationProperties.Name="{loc:Loc Main.Language.Name}" ToolTip.Tip="{loc:Loc Main.Language.Tip}"
-                        MinWidth="150" Padding="10,6" CornerRadius="7" VerticalAlignment="Center">
-                <ComboBox.ItemTemplate>
-                  <DataTemplate x:DataType="vm:LanguageOption">
-                    <StackPanel Orientation="Horizontal" Spacing="8">
-                      <Image Source="{Binding Flag}" Width="20" Height="14" Stretch="Uniform" VerticalAlignment="Center" />
-                      <TextBlock Text="{Binding Name}" VerticalAlignment="Center" />
-                    </StackPanel>
-                  </DataTemplate>
-                </ComboBox.ItemTemplate>
-              </ComboBox>
+              <!-- Language, avatar, cameras and tunnels all live behind one Settings button now. -->
+              <Button x:Name="SettingsButton" Classes="ghost" Command="{Binding OpenSettingsCommand}"
+                      controls:OverflowPanel.CanOverflow="True"
+                      AutomationProperties.Name="{loc:Loc Main.Settings}" ToolTip.Tip="{loc:Loc Main.SettingsTip}">
+                <StackPanel Orientation="Horizontal" Spacing="6">
+                  <PathIcon Data="{StaticResource IconSettings}" Width="14" Height="14" />
+                  <TextBlock Text="{loc:Loc Main.Settings}" />
+                </StackPanel>
+              </Button>
               <Button Classes="ghost" Content="{loc:Loc Main.Invite}" Command="{Binding InviteCommand}" IsVisible="{Binding IsHost}" controls:OverflowPanel.CanOverflow="True" />
               <Button Classes="danger" Content="{loc:Loc Main.Leave}" Command="{Binding LeaveCommand}" IsVisible="{Binding IsInSession}" controls:OverflowPanel.CanOverflow="True" />
               <Button x:Name="MoreActions" Classes="ghost square" controls:OverflowPanel.IsOverflowButton="True"
                       AutomationProperties.Name="{loc:Loc Main.MoreName}" ToolTip.Tip="{loc:Loc Main.MoreTip}" FontSize="18" Content="⋯">
                 <Button.Flyout>
                   <MenuFlyout Placement="BottomEdgeAlignedRight">
-                    <MenuItem Header="{loc:Loc Main.Tunnels}" Command="{Binding OpenTunnelsCommand}" IsVisible="{Binding !IsInSession}" />
+                    <MenuItem Header="{loc:Loc Main.Settings}" Command="{Binding OpenSettingsCommand}" />
                     <MenuItem Header="{loc:Loc Main.Invite}" Command="{Binding InviteCommand}" IsVisible="{Binding IsHost}" />
                     <MenuItem Header="{loc:Loc Main.Report}" Command="{Binding SaveReportCommand}" IsVisible="{Binding CanSaveReport}"
                               ToolTip.Tip="{loc:Loc Main.ReportTip}" />
@@ -142,6 +136,10 @@
                   <TextBox Text="{Binding UpdateUrl}" MaxLength="300" PlaceholderText="https://…/golether-updates.json"
                            AutomationProperties.Name="{loc:Loc Main.Host.UpdateSourceName}"
                            ToolTip.Tip="{loc:Loc Main.Host.UpdateSourceTip}" />
+                  <TextBlock Classes="label" Text="{loc:Loc Main.Host.Rendezvous}" />
+                  <TextBox Text="{Binding RendezvousServer}" MaxLength="260" PlaceholderText="203.0.113.7:47900"
+                           AutomationProperties.Name="{loc:Loc Main.Host.RendezvousName}"
+                           ToolTip.Tip="{loc:Loc Main.Host.RendezvousTip}" />
                   <CheckBox IsChecked="{Binding OpenRouterPort}" AutomationProperties.Name="{loc:Loc Main.Host.OpenPortName}">
                     <TextBlock TextWrapping="Wrap" Text="{loc:Loc Main.Host.OpenPortText}" />
                   </CheckBox>
@@ -158,13 +156,6 @@
                     <Button Classes="ghost" Content="{loc:Loc Common.Paste}" Command="{Binding PasteInviteCommand}" />
                     <Button Classes="accent" Content="{loc:Loc Main.Join.Connect}" Command="{Binding JoinCommand}" />
                   </StackPanel>
-                </StackPanel>
-              </Border>
-              <Border Classes="card" Width="460" Margin="0,0,20,20">
-                <StackPanel Spacing="12">
-                  <TextBlock Classes="title" Text="{loc:Loc Main.Tunnel.Title}" />
-                  <TextBlock Classes="muted" TextWrapping="Wrap" Text="{loc:Loc Main.Tunnel.Text}" />
-                  <Button Classes="ghost" Content="{loc:Loc Main.Tunnel.Setup}" Command="{Binding OpenTunnelsCommand}" />
                 </StackPanel>
               </Border>
               <Border Classes="card" Width="460" Margin="0,0,20,20">
@@ -494,6 +485,9 @@
                   <Border Classes="code" HorizontalAlignment="Center">
                     <TextBlock Text="{Binding VerificationText}" FontSize="20" />
                   </Border>
+                  <!-- The wait for the host can be cancelled at any time. -->
+                  <Button Classes="ghost" HorizontalAlignment="Center" IsVisible="{Binding IsCancellable}"
+                          Content="{loc:Loc Main.Approval.Cancel}" Command="{Binding CancelJoinCommand}" />
                 </StackPanel>
                 <StackPanel IsVisible="{Binding !IsAwaitingApproval}" Spacing="12">
                   <TextBlock Classes="title" HorizontalAlignment="Center" TextWrapping="Wrap" TextAlignment="Center" Text="{Binding VideoPlaceholder}" />
@@ -533,26 +527,7 @@
                                 AutomationProperties.Name="{loc:Loc Main.Camera.Name}"
                                 Content="{Binding CameraText}" />
                 </UniformGrid>
-                <Button Classes="ghost" HorizontalAlignment="Stretch" HorizontalContentAlignment="Center"
-                        Content="{loc:Loc Main.Devices.Button}" AutomationProperties.Name="{loc:Loc Main.Devices.Name}"
-                        IsVisible="{Binding ConferenceAvailable}" Command="{Binding Devices.RefreshCommand, FallbackValue={x:Null}}">
-                  <Button.Flyout>
-                    <Flyout Placement="LeftEdgeAlignedBottom">
-                      <StackPanel Width="300" Spacing="8" Margin="4" DataContext="{Binding Devices}" x:DataType="vm:DevicesViewModel">
-                        <TextBlock Classes="label" Text="{loc:Loc Main.Devices.CameraLabel}" />
-                        <ComboBox HorizontalAlignment="Stretch" ItemsSource="{Binding Cameras}" SelectedItem="{Binding SelectedCamera}"
-                                  AutomationProperties.Name="{loc:Loc Main.Camera.Name}" />
-                        <TextBlock Classes="label" Text="{loc:Loc Main.Devices.MicrophoneLabel}" />
-                        <ComboBox HorizontalAlignment="Stretch" ItemsSource="{Binding Microphones}" SelectedItem="{Binding SelectedMicrophone}"
-                                  AutomationProperties.Name="{loc:Loc Main.Microphone.Name}" />
-                        <TextBlock Classes="muted" FontSize="12" TextWrapping="Wrap" Text="{Binding Error}"
-                                   IsVisible="{Binding Error, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
-                        <TextBlock Classes="muted" FontSize="12" TextWrapping="Wrap"
-                                   Text="{loc:Loc Main.Devices.Note}" />
-                      </StackPanel>
-                    </Flyout>
-                  </Button.Flyout>
-                </Button>
+                <!-- Camera/microphone selection and the avatar now live in the Settings window. -->
                 <!-- Chat and event feed share one area; a click on the open tab (or on the feed) hides it. -->
                 <Grid ColumnDefinitions="Auto,Auto,*,Auto">
                   <Button Classes="ghost tab" Classes.selected="{Binding IsChatTab}" Padding="8,4"
@@ -691,6 +666,11 @@
                               <TextBlock Text="{Binding Initial}" FontSize="28" FontWeight="Bold" Foreground="#0A0F11"
                                          HorizontalAlignment="Center" VerticalAlignment="Center" />
                             </Border>
+                            <!-- The chosen avatar covers the coloured initial while the camera is off. -->
+                            <Border Width="64" Height="64" CornerRadius="32" ClipToBounds="True" HorizontalAlignment="Center" VerticalAlignment="Center"
+                                    IsVisible="{Binding ShowAvatarImage}">
+                              <Image Source="{Binding AvatarImage}" Stretch="UniformToFill" />
+                            </Border>
                             <Image Source="{Binding CameraImage}" IsVisible="{Binding HasCamera}" Stretch="UniformToFill" />
                             <Border Background="#8C0A0F11" IsVisible="{Binding IsBuffering}">
                               <TextBlock Text="{loc:Loc Main.Participant.Loading}" Classes="mono" Foreground="{StaticResource GoletherWarn}"
@@ -754,6 +734,9 @@
           <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center" Spacing="12">
             <ProgressBar IsIndeterminate="True" Width="260" />
             <TextBlock HorizontalAlignment="Center" Text="{Binding BusyText}" />
+            <!-- A join waiting for the host can be stopped without waiting for the timeout. -->
+            <Button Classes="ghost" HorizontalAlignment="Center" IsVisible="{Binding IsCancellable}"
+                    Content="{loc:Loc Common.Cancel}" Command="{Binding CancelJoinCommand}" />
           </StackPanel>
         </Border>
       </Panel>

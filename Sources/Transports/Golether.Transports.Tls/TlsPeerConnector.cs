@@ -45,6 +45,72 @@ public sealed class TlsPeerConnector : IPeerConnector
     /// <inheritdoc />
     public async Task<PeerStream> ConnectAsync(PeerEndpoint endpoint, PeerId expectedPeer, StreamPurpose purpose, CancellationToken cancellationToken)
     {
+        CheckExpected(expectedPeer);
+        using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        timeout.CancelAfter(_options.HandshakeTimeout);
+
+        var socket = new Socket(SocketType.Stream, ProtocolType.Tcp);
+        try
+        {
+            TlsProtocol.ConfigureSocket(socket, purpose, _options);
+            await socket.ConnectAsync(endpoint.Host, endpoint.Port, timeout.Token).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+        {
+            socket.Dispose();
+            throw TimedOut(endpoint.ToString());
+        }
+        catch (SocketException ex)
+        {
+            socket.Dispose();
+            throw new IOException(Texts.Format("Net.Error.ConnectFailed", endpoint, ex.Message), ex);
+        }
+        catch
+        {
+            socket.Dispose();
+            throw;
+        }
+
+        return await AuthenticateAsync(socket, endpoint.ToString(), expectedPeer, purpose, timeout.Token, cancellationToken).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Runs the handshake over a TCP connection opened by other means (for example punched through the routers with
+    /// the help of a rendezvous server) and pins the remote key, exactly as <see cref="ConnectAsync(PeerEndpoint, PeerId, StreamPurpose, CancellationToken)"/> does.
+    /// </summary>
+    /// <param name="socket">The connected socket; ownership is transferred, it is closed on failure.</param>
+    /// <param name="remoteAddress">The remote address for messages and diagnostics.</param>
+    /// <param name="expectedPeer">The pinned peer identifier.</param>
+    /// <param name="purpose">The stream purpose.</param>
+    /// <param name="cancellationToken">The cancellation token.</param>
+    /// <returns>The stream.</returns>
+    /// <exception cref="PeerAuthenticationException">The peer presented another key.</exception>
+    /// <exception cref="IOException">The handshake failed.</exception>
+    public async Task<PeerStream> ConnectAsync(Socket socket, string remoteAddress, PeerId expectedPeer, StreamPurpose purpose, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(socket);
+        try
+        {
+            CheckExpected(expectedPeer);
+            TlsProtocol.ConfigureSocket(socket, purpose, _options);
+        }
+        catch
+        {
+            socket.Dispose();
+            throw;
+        }
+
+        using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        timeout.CancelAfter(_options.HandshakeTimeout);
+        return await AuthenticateAsync(socket, remoteAddress, expectedPeer, purpose, timeout.Token, cancellationToken).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Checks that the expected peer is known and is not this device.
+    /// </summary>
+    /// <param name="expectedPeer">The pinned peer identifier.</param>
+    private void CheckExpected(PeerId expectedPeer)
+    {
         if (expectedPeer.IsEmpty)
         {
             throw new ArgumentException("The expected peer must be known.", nameof(expectedPeer));
@@ -54,17 +120,23 @@ public sealed class TlsPeerConnector : IPeerConnector
         {
             throw new ArgumentException("A device cannot connect to itself.", nameof(expectedPeer));
         }
+    }
 
-        using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-        timeout.CancelAfter(_options.HandshakeTimeout);
-
-        var socket = new Socket(SocketType.Stream, ProtocolType.Tcp);
+    /// <summary>
+    /// Runs the TLS handshake as the client, pins the key and exchanges the preamble.
+    /// </summary>
+    /// <param name="socket">The connected socket; ownership is transferred.</param>
+    /// <param name="remote">The remote address for messages.</param>
+    /// <param name="expectedPeer">The pinned peer identifier.</param>
+    /// <param name="purpose">The stream purpose.</param>
+    /// <param name="timeoutToken">Cancelled when the handshake takes too long or the caller cancels.</param>
+    /// <param name="cancellationToken">The cancellation token of the caller.</param>
+    /// <returns>The stream.</returns>
+    private async Task<PeerStream> AuthenticateAsync(Socket socket, string remote, PeerId expectedPeer, StreamPurpose purpose, CancellationToken timeoutToken, CancellationToken cancellationToken)
+    {
         SslStream? ssl = null;
         try
         {
-            TlsProtocol.ConfigureSocket(socket, purpose, _options);
-            await socket.ConnectAsync(endpoint.Host, endpoint.Port, timeout.Token).ConfigureAwait(false);
-
             PeerId presented = default;
             ssl = new SslStream(new NetworkStream(socket, ownsSocket: true), leaveInnerStreamOpen: false);
             var authentication = new SslClientAuthenticationOptions
@@ -81,36 +153,36 @@ public sealed class TlsPeerConnector : IPeerConnector
 
             try
             {
-                await ssl.AuthenticateAsClientAsync(authentication, timeout.Token).ConfigureAwait(false);
+                await ssl.AuthenticateAsClientAsync(authentication, timeoutToken).ConfigureAwait(false);
             }
             catch (AuthenticationException ex)
             {
                 var detail = presented.IsEmpty
                     ? Texts.Get("Net.Error.NoKeyPresented")
                     : Texts.Format("Net.Error.WrongKeyPresented", presented.ToShortString(), expectedPeer.ToShortString());
-                throw new PeerAuthenticationException(Texts.Format("Net.Error.KeyCheckFailed", endpoint, detail), ex);
+                throw new PeerAuthenticationException(Texts.Format("Net.Error.KeyCheckFailed", remote, detail), ex);
             }
 
-            await ssl.WriteAsync(TlsProtocol.BuildPreamble(purpose), timeout.Token).ConfigureAwait(false);
-            await ssl.FlushAsync(timeout.Token).ConfigureAwait(false);
+            await ssl.WriteAsync(TlsProtocol.BuildPreamble(purpose), timeoutToken).ConfigureAwait(false);
+            await ssl.FlushAsync(timeoutToken).ConfigureAwait(false);
             var answer = new byte[1];
-            if (await ssl.ReadAtLeastAsync(answer, 1, throwOnEndOfStream: false, timeout.Token).ConfigureAwait(false) != 1
+            if (await ssl.ReadAtLeastAsync(answer, 1, throwOnEndOfStream: false, timeoutToken).ConfigureAwait(false) != 1
                 || answer[0] != TlsProtocol.Accepted)
             {
-                throw new IOException(Texts.Format("Net.Error.PeerRefused", endpoint));
+                throw new IOException(Texts.Format("Net.Error.PeerRefused", remote));
             }
 
-            var stream = new PeerStream(expectedPeer, purpose, ssl, endpoint.ToString());
+            var stream = new PeerStream(expectedPeer, purpose, ssl, remote);
             ssl = null;
             return stream;
         }
         catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
         {
-            throw new IOException(Texts.Format("Net.Error.PeerTimedOut", endpoint, _options.HandshakeTimeout.TotalSeconds.ToString("0", System.Globalization.CultureInfo.InvariantCulture)));
+            throw TimedOut(remote);
         }
         catch (SocketException ex)
         {
-            throw new IOException(Texts.Format("Net.Error.ConnectFailed", endpoint, ex.Message), ex);
+            throw new IOException(Texts.Format("Net.Error.ConnectFailed", remote, ex.Message), ex);
         }
         finally
         {
@@ -124,4 +196,12 @@ public sealed class TlsPeerConnector : IPeerConnector
             }
         }
     }
+
+    /// <summary>
+    /// Builds the error of a handshake that took too long.
+    /// </summary>
+    /// <param name="remote">The remote address.</param>
+    /// <returns>The error.</returns>
+    private IOException TimedOut(string remote)
+        => new(Texts.Format("Net.Error.PeerTimedOut", remote, _options.HandshakeTimeout.TotalSeconds.ToString("0", System.Globalization.CultureInfo.InvariantCulture)));
 }

@@ -677,6 +677,12 @@ internal sealed partial class WebRtcPeer : IDisposable
             }
 
             _verified = true;
+
+            // The valve opens partway through a group of pictures. If the first frame the peer receives is an
+            // inter-frame it cannot be decoded and the peer shows an avatar instead of the picture, sometimes until
+            // the next key frame is lost too. Hold video back until a key frame so the first frame the peer sees can
+            // be decoded on its own.
+            _awaitingKeyFrame = true;
             Gst.UtilSetObjectArg(_pipeline.Element("vgate"), "drop", "false");
             Gst.UtilSetObjectArg(_pipeline.Element("agate"), "drop", "false");
         }

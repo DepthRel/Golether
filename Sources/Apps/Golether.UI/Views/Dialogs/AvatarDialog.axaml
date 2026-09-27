@@ -1,0 +1,55 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:loc="using:Golether.UI.Localization"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vmd="using:Golether.UI.ViewModels.Dialogs"
+        x:Class="Golether.UI.Views.Dialogs.AvatarDialog"
+        x:DataType="vmd:AvatarDialogViewModel"
+        Width="420" SizeToContent="Height" CanResize="False"
+        WindowStartupLocation="CenterOwner" Icon="/Assets/golether.ico"
+        Title="{Binding Title}">
+  <!-- Pick an image, then drag and zoom it inside the round frame. The visible circle is what others see. -->
+  <StackPanel Margin="22" Spacing="16">
+    <TextBlock Classes="title" Text="{Binding Title}" />
+    <TextBlock Classes="muted" TextWrapping="Wrap" Text="{Binding Hint}" />
+
+    <!-- The round crop frame; dragging pans, the wheel and the slider zoom. -->
+    <Border HorizontalAlignment="Center" CornerRadius="132" Background="#0E1518"
+            BorderBrush="{StaticResource GoletherLine}" BorderThickness="1" Padding="4">
+      <Panel Width="256" Height="256">
+        <Panel x:Name="CropArea" Width="256" Height="256" Background="Transparent"
+               PointerPressed="OnPointerPressed" PointerMoved="OnPointerMoved" PointerReleased="OnPointerReleased"
+               PointerWheelChanged="OnWheel">
+          <Panel.Clip>
+            <EllipseGeometry Rect="0,0,256,256" />
+          </Panel.Clip>
+          <Image Source="{Binding Source}" Width="256" Height="256" Stretch="UniformToFill"
+                 RenderTransformOrigin="0.5,0.5">
+            <Image.RenderTransform>
+              <TransformGroup>
+                <ScaleTransform ScaleX="{Binding Zoom}" ScaleY="{Binding Zoom}" />
+                <TranslateTransform X="{Binding OffsetX}" Y="{Binding OffsetY}" />
+              </TransformGroup>
+            </Image.RenderTransform>
+          </Image>
+        </Panel>
+        <!-- The ring is drawn over the picture and never eats the drag. -->
+        <Ellipse Width="256" Height="256" Stroke="{StaticResource GoletherAccent}" StrokeThickness="2" IsHitTestVisible="False" />
+        <TextBlock Text="{loc:Loc Avatar.Empty}" Classes="muted" TextAlignment="Center" TextWrapping="Wrap"
+                   HorizontalAlignment="Center" VerticalAlignment="Center" MaxWidth="180" IsVisible="{Binding !HasImage}" />
+      </Panel>
+    </Border>
+
+    <!-- Zoom -->
+    <StackPanel Orientation="Horizontal" Spacing="10" HorizontalAlignment="Center" IsVisible="{Binding HasImage}">
+      <TextBlock Classes="label" Text="{loc:Loc Avatar.Zoom}" VerticalAlignment="Center" />
+      <Slider Width="220" Minimum="1" Maximum="4" SmallChange="0.1" LargeChange="0.5"
+              Value="{Binding Zoom}" AutomationProperties.Name="{loc:Loc Avatar.Zoom}" />
+    </StackPanel>
+
+    <Grid ColumnDefinitions="Auto,*,Auto,Auto">
+      <Button Classes="ghost" Content="{loc:Loc Avatar.Pick}" Command="{Binding PickImageCommand}" />
+      <Button Grid.Column="2" Classes="ghost" Margin="0,0,8,0" Content="{loc:Loc Common.Cancel}" Click="OnCancel" />
+      <Button Grid.Column="3" Classes="accent" Content="{loc:Loc Avatar.Save}" Click="OnSave" IsEnabled="{Binding CanConfirm}" IsDefault="True" />
+    </Grid>
+  </StackPanel>
+</Window>
