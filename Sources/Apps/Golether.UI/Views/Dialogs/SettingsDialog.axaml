@@ -62,11 +62,13 @@
         <TextBlock Classes="label" Text="{loc:Loc Main.Devices.CameraLabel}" />
         <ComboBox HorizontalAlignment="Stretch" ItemsSource="{Binding Devices.Cameras, FallbackValue={x:Null}}"
                   SelectedItem="{Binding SelectedCamera}"
-                  AutomationProperties.Name="{loc:Loc Main.Camera.Name}" />
+                  AutomationProperties.Name="{loc:Loc Main.Camera.Name}"
+                  Padding="10,6" CornerRadius="7" Margin="0,0,0,6" />
         <TextBlock Classes="label" Text="{loc:Loc Main.Devices.MicrophoneLabel}" />
         <ComboBox HorizontalAlignment="Stretch" ItemsSource="{Binding Devices.Microphones, FallbackValue={x:Null}}"
                   SelectedItem="{Binding SelectedMicrophone}"
-                  AutomationProperties.Name="{loc:Loc Main.Microphone.Name}" />
+                  AutomationProperties.Name="{loc:Loc Main.Microphone.Name}"
+                  Padding="10,6" CornerRadius="7" />
         <TextBlock Classes="muted" FontSize="12" TextWrapping="Wrap" Text="{Binding Devices.Error, FallbackValue={x:Null}}"
                    IsVisible="{Binding Devices.Error, Converter={x:Static StringConverters.IsNotNullOrEmpty}, FallbackValue=False}" />
         <TextBlock Classes="muted" FontSize="12" TextWrapping="Wrap" Text="{loc:Loc Main.Devices.Note}" />

@@ -5,6 +5,7 @@
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         xmlns:vm="using:Golether.UI.ViewModels"
         xmlns:controls="using:Golether.UI.Controls"
+        xmlns:protocol="using:Golether.Sync.Protocol"
         mc:Ignorable="d" d:DesignWidth="1280" d:DesignHeight="760"
         x:Class="Golether.UI.Views.MainWindow"
         x:DataType="vm:MainWindowViewModel"
@@ -588,8 +589,9 @@
                     </Panel>
                   </ScrollViewer>
                   <Grid ColumnDefinitions="*,Auto">
-                    <TextBox x:Name="ChatInput" Text="{Binding Chat.Draft}" PlaceholderText="{loc:Loc Main.Chat.Placeholder}" MaxLength="500"
-                             AcceptsReturn="False" TextWrapping="Wrap" MaxHeight="80" AutomationProperties.Name="{loc:Loc Main.Chat.InputName}">
+                    <TextBox x:Name="ChatInput" Text="{Binding Chat.Draft}" PlaceholderText="{loc:Loc Main.Chat.Placeholder}" MaxLength="{x:Static protocol:ChatMessage.MaxTextLength}"
+                             AcceptsReturn="False" TextWrapping="Wrap" MaxHeight="80" VerticalContentAlignment="Center"
+                             AutomationProperties.Name="{loc:Loc Main.Chat.InputName}">
                       <TextBox.KeyBindings>
                         <KeyBinding Gesture="Enter" Command="{Binding Chat.SendCommand}" />
                       </TextBox.KeyBindings>

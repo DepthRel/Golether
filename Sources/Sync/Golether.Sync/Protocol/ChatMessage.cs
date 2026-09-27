@@ -18,7 +18,7 @@ public sealed record ChatMessage(string Id, ChatKind Kind, string Text, PeerId? 
     /// <summary>
     /// The maximum length of a text line, in characters.
     /// </summary>
-    public const int MaxTextLength = 500;
+    public const int MaxTextLength = 100;
 
     /// <summary>
     /// The maximum length of an identifier.
