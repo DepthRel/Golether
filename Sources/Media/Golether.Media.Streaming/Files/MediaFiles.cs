@@ -63,7 +63,7 @@ public static class MediaFiles
         await using var stream = OpenRead(path);
         return new MediaDescriptor
         {
-            FileName = Path.GetFileName(path),
+            FileName = MediaDescriptor.NormalizeFileName(Path.GetFileName(path)),
             Length = stream.Length,
             QuickId = await ComputeQuickIdAsync(stream, cancellationToken).ConfigureAwait(false),
         };

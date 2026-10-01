@@ -116,10 +116,16 @@ public sealed class PlaybackAuthority
     /// <param name="request">The request.</param>
     /// <param name="maxRoundTrip">The largest round trip among the participants, used to schedule starts.</param>
     /// <returns>The new state to broadcast, or <see langword="null"/> when nothing changed.</returns>
-    /// <exception cref="ArgumentException">A seek request has no position.</exception>
+    /// <exception cref="ArgumentException">The kind of the request is unknown, or a seek request has no position.</exception>
     public PlaybackState? Apply(PeerId origin, PlaybackRequest request, TimeSpan maxRoundTrip)
     {
         ArgumentNullException.ThrowIfNull(request);
+        if (!Enum.IsDefined(request.Kind))
+        {
+            // The kind comes from the network as a number: an unknown one must not be taken for a seek.
+            throw new ArgumentException("The kind of the request is unknown.", nameof(request));
+        }
+
         if (request.Kind == PlaybackRequestKind.Seek && request.Position is null)
         {
             throw new ArgumentException("A seek request must specify a position.", nameof(request));
@@ -340,7 +346,14 @@ public sealed class PlaybackAuthority
             return TimeSpan.Zero;
         }
 
-        return Duration is { } duration && position > duration ? duration : position;
+        if (Duration is { } duration && position > duration)
+        {
+            return duration;
+        }
+
+        // While the duration is unknown a participant may ask for any position: it still stays inside the range
+        // every node accepts.
+        return position > PlaybackState.MaxPosition ? PlaybackState.MaxPosition : position;
     }
 
     /// <summary>

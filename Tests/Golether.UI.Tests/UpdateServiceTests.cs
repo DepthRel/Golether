@@ -120,4 +120,30 @@ public sealed class UpdateServiceTests
                 Content = new ByteArrayContent(payload) { Headers = { ContentType = new("application/json") } },
             });
     }
+
+    /// <summary>
+    /// Until the hash is checked the download carries a temporary name, and nothing is left behind when the check
+    /// fails: no file under the name of the update, and no temporary one either.
+    /// </summary>
+    /// <returns>A task that completes when the test is done.</returns>
+    [Fact]
+    public async Task Download_LeavesNothingBehindWhenTheCheckFails()
+    {
+        var token = TestContext.Current.CancellationToken;
+        var payload = Encoding.UTF8.GetBytes("это установщик");
+        var folder = Directory.CreateTempSubdirectory("golether-update-");
+        try
+        {
+            var service = new UpdateService(new HttpClient(new StubHandler(payload)), new Version(0, 1, 0));
+            var wrong = new UpdateInfo("0.2.0", null, "https://example.org/golether-0.2.0.exe", new string('b', 64), payload.Length);
+
+            await Assert.ThrowsAsync<InvalidDataException>(() => service.DownloadAsync(wrong, folder.FullName, null, token));
+
+            Assert.Empty(Directory.EnumerateFileSystemEntries(folder.FullName));
+        }
+        finally
+        {
+            folder.Delete(recursive: true);
+        }
+    }
 }

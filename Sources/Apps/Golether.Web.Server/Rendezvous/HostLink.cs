@@ -37,6 +37,10 @@ internal sealed class HostLink : IDisposable
         Owner = owner;
         Observed = observed;
         _channel = channel;
+
+        // The token is taken once: participants still read it after the host has left and the source is disposed,
+        // and asking a disposed source for its token throws.
+        Closed = _closed.Token;
     }
 
     /// <summary>
@@ -57,7 +61,7 @@ internal sealed class HostLink : IDisposable
     /// <summary>
     /// Gets a token cancelled when the room is taken over or the connection ends.
     /// </summary>
-    public CancellationToken Closed => _closed.Token;
+    public CancellationToken Closed { get; }
 
     /// <summary>
     /// Sends a message to the host.

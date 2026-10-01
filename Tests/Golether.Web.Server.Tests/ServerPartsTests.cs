@@ -163,6 +163,16 @@ public sealed class ServerPartsTests
         Assert.Null(StunResponder.Answer(allocate, remote));
         Assert.Null(StunResponder.Answer("GET / HTTP/1.1\r\n\r\n"u8, remote));
         Assert.Null(StunResponder.Answer(new byte[600], remote));
+
+        // A datagram with a STUN header but a broken body passes the quick checks and fails in the parser: it is
+        // ignored as well instead of stopping the responder.
+        var cutAttribute = request[..24];
+        cutAttribute[3] = 4;
+        cutAttribute[23] = 100;
+        Assert.Null(StunResponder.Answer(cutAttribute, remote));
+        var oddLength = request[..21];
+        oddLength[3] = 1;
+        Assert.Null(StunResponder.Answer(oddLength, remote));
     }
 
     /// <summary>
@@ -173,4 +183,50 @@ public sealed class ServerPartsTests
     /// <returns>The registration.</returns>
     private static HostLink Link(string room, PeerId owner)
         => new(room, owner, new IPEndPoint(IPAddress.Loopback, 1), new RendezvousChannel(Stream.Null));
+
+    /// <summary>
+    /// A participant may still ask a registration whether it is closed after the host has left and the registration
+    /// was released: the answer is "closed", not an exception.
+    /// </summary>
+    [Fact]
+    public void HostLink_CanBeAskedAfterItIsReleased()
+    {
+        var link = Link(RendezvousPoint.CreateRoom(), PeerId.FromSubjectPublicKeyInfo([1]));
+        Assert.False(link.Closed.IsCancellationRequested);
+
+        link.Close();
+        link.Dispose();
+
+        Assert.True(link.Closed.IsCancellationRequested);
+        using var linked = CancellationTokenSource.CreateLinkedTokenSource(link.Closed);
+        Assert.True(linked.IsCancellationRequested);
+        link.Close();
+    }
+
+    /// <summary>
+    /// Senders of datagrams can forge their address, so the table of addresses has a ceiling: over it, an address
+    /// not seen yet is refused, an address already counted keeps its quota, and room comes back when the old ones
+    /// expire.
+    /// </summary>
+    [Fact]
+    public void RateLimiter_DoesNotGrowWithoutEnd()
+    {
+        var time = new FakeTimeProvider(DateTimeOffset.Parse("2026-09-24T12:00:00Z", System.Globalization.CultureInfo.InvariantCulture));
+        var limiter = new AddressRateLimiter(2, time);
+        var bytes = new byte[4];
+        for (var i = 0; i < AddressRateLimiter.MaxTracked; i++)
+        {
+            System.Buffers.Binary.BinaryPrimitives.WriteInt32BigEndian(bytes, 0x0A000000 + i);
+            Assert.True(limiter.TryAcquire(new IPAddress(bytes)));
+        }
+
+        var known = IPAddress.Parse("10.0.0.5");
+        var newcomer = IPAddress.Parse("203.0.113.77");
+        Assert.False(limiter.TryAcquire(newcomer));
+        Assert.True(limiter.TryAcquire(known));
+        Assert.False(limiter.TryAcquire(known));
+
+        time.Advance(TimeSpan.FromSeconds(61));
+        Assert.True(limiter.TryAcquire(newcomer));
+    }
 }

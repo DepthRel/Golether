@@ -23,6 +23,12 @@ public sealed class ChunkServer
     private readonly ILogger<ChunkServer> _logger;
 
     /// <summary>
+    /// Guards the switch of <see cref="_hashes"/> to another media. The dictionary itself cannot be the lock: it is
+    /// replaced inside it, and two threads would then hold two different locks.
+    /// </summary>
+    private readonly Lock _hashGate = new();
+
+    /// <summary>
     /// The hashes computed for <see cref="_hashesFor"/>, by chunk index.
     /// </summary>
     private ConcurrentDictionary<long, byte[]> _hashes;
@@ -175,7 +181,7 @@ public sealed class ChunkServer
     /// <returns>The cache.</returns>
     private ConcurrentDictionary<long, byte[]> HashesFor(ulong key)
     {
-        lock (_hashes)
+        lock (_hashGate)
         {
             if (_hashesFor != key)
             {

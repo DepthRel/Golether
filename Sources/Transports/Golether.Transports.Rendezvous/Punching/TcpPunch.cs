@@ -132,7 +132,13 @@ public static class TcpPunch
             }
         }
 
-        cancellationToken.ThrowIfCancellationRequested();
+        if (cancellationToken.IsCancellationRequested)
+        {
+            // The caller gave up while a connection opened: nobody would close it.
+            winner?.Dispose();
+            cancellationToken.ThrowIfCancellationRequested();
+        }
+
         return winner ?? throw new RendezvousException(RendezvousError.PunchFailed);
     }
 

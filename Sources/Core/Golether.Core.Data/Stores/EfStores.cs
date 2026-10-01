@@ -22,6 +22,11 @@ public sealed class EfStores : IContactStore, ITunnelStore, ISettingsStore
     private readonly TimeProvider _timeProvider;
 
     /// <summary>
+    /// Lets one write of a setting run at a time.
+    /// </summary>
+    private readonly SemaphoreSlim _settingsGate = new(1, 1);
+
+    /// <summary>
     /// Initializes a new instance of the <see cref="EfStores"/> class.
     /// </summary>
     /// <param name="factory">The context factory.</param>
@@ -168,17 +173,27 @@ public sealed class EfStores : IContactStore, ITunnelStore, ISettingsStore
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(key);
         ArgumentNullException.ThrowIfNull(value);
-        await using var db = await _factory.CreateDbContextAsync(cancellationToken).ConfigureAwait(false);
-        var setting = await db.Settings.FirstOrDefaultAsync(s => s.Key == key, cancellationToken).ConfigureAwait(false);
-        if (setting is null)
+        // Settings are written without waiting (on every change of a field): two writes of one key running at the
+        // same time would both find nothing and both insert, or finish in the wrong order and keep the older value.
+        await _settingsGate.WaitAsync(cancellationToken).ConfigureAwait(false);
+        try
         {
-            db.Settings.Add(new SettingEntity { Key = key, Value = value });
-        }
-        else
-        {
-            setting.Value = value;
-        }
+            await using var db = await _factory.CreateDbContextAsync(cancellationToken).ConfigureAwait(false);
+            var setting = await db.Settings.FirstOrDefaultAsync(s => s.Key == key, cancellationToken).ConfigureAwait(false);
+            if (setting is null)
+            {
+                db.Settings.Add(new SettingEntity { Key = key, Value = value });
+            }
+            else
+            {
+                setting.Value = value;
+            }
 
-        await db.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+            await db.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+        }
+        finally
+        {
+            _settingsGate.Release();
+        }
     }
 }

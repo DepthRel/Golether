@@ -61,4 +61,36 @@ public sealed record ParticipantStatus
     /// Gets the file bytes the participant sent to other participants.
     /// </summary>
     public long BytesToPeers { get; init; }
+    /// <summary>
+    /// The largest time accepted in a status that came from the network. Larger values (up to the limits of
+    /// <see cref="TimeSpan"/>) would overflow as soon as they are compared, negated or subtracted.
+    /// </summary>
+    public static readonly TimeSpan MaxSpan = TimeSpan.FromDays(30);
+
+    /// <summary>
+    /// The largest round trip accepted from the network, in milliseconds.
+    /// </summary>
+    public const int MaxRoundTripMilliseconds = 600_000;
+
+    /// <summary>
+    /// Returns the status with every number brought into a sane range. A status comes from another device and is
+    /// used in arithmetic by the host and shown by everybody, so it is never taken as it is.
+    /// </summary>
+    /// <returns>The status with bounded values.</returns>
+    public ParticipantStatus Sanitize() => this with
+    {
+        Position = Position is { } position ? Bound(position) : null,
+        Drift = Bound(Drift),
+        CacheAhead = Bound(CacheAhead),
+        RoundTripMilliseconds = RoundTripMilliseconds is { } roundTrip ? Math.Clamp(roundTrip, 0, MaxRoundTripMilliseconds) : null,
+        BytesFromPeers = Math.Max(0, BytesFromPeers),
+        BytesToPeers = Math.Max(0, BytesToPeers),
+    };
+
+    /// <summary>
+    /// Brings a time into the range from minus to plus <see cref="MaxSpan"/>.
+    /// </summary>
+    /// <param name="value">The time.</param>
+    /// <returns>The bounded time.</returns>
+    private static TimeSpan Bound(TimeSpan value) => value < -MaxSpan ? -MaxSpan : value > MaxSpan ? MaxSpan : value;
 }

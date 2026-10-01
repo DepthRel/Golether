@@ -67,11 +67,21 @@ public sealed class PortMappingTests
         {
             while (!stop.IsCancellationRequested)
             {
-                var received = await gateway.ReceiveAsync(stop.Token);
-                requests.Enqueue(received.Buffer);
-                var response = received.Buffer[1] == 0 ? AddressResponse() : MappingResponse(received.Buffer);
-                await gateway.SendAsync(response, received.RemoteEndPoint, stop.Token);
+                try
+                {
+                    var received = await gateway.ReceiveAsync(stop.Token);
+                    requests.Enqueue(received.Buffer);
+                    var response = received.Buffer[1] == 0 ? AddressResponse() : MappingResponse(received.Buffer);
+                    await gateway.SendAsync(response, received.RemoteEndPoint, stop.Token);
+                }
+                catch (SocketException)
+                {
+                    // On a busy machine the client asks twice; the second answer finds its socket closed, and
+                    // Windows reports that as a failed receive. The gateway keeps serving.
+                }
             }
+
+            stop.Token.ThrowIfCancellationRequested();
         }, token);
         var client = new NatPmpClient(() => [(IPEndPoint)gateway.Client.LocalEndPoint!]);
 
@@ -289,5 +299,17 @@ public sealed class PortMappingTests
         /// <inheritdoc />
         protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
             => Task.FromResult(respond(request));
+    }
+
+    /// <summary>
+    /// The wait before a renewal is half of the lifetime the router answered, kept inside limits: a huge lifetime
+    /// must not make a wait that cannot be scheduled, and a tiny one must not keep the router busy.
+    /// </summary>
+    [Fact]
+    public void Lease_RenewalDelayStaysInsideLimits()
+    {
+        Assert.Equal(TimeSpan.FromMinutes(30), PortMappingLease.RenewalDelay(TimeSpan.FromHours(1)));
+        Assert.Equal(PortMappingLease.MaxRenewalDelay, PortMappingLease.RenewalDelay(TimeSpan.FromSeconds(uint.MaxValue)));
+        Assert.Equal(PortMappingLease.MinRenewalDelay, PortMappingLease.RenewalDelay(TimeSpan.FromSeconds(1)));
     }
 }

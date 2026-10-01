@@ -63,4 +63,41 @@ public sealed class PlaybackStateTests
         Assert.Equal(TimeSpan.FromSeconds(30), state.ExpectedPositionAt(9_000_000));
         Assert.Equal(TimeSpan.FromSeconds(31), state.ExpectedPositionAt(11_000_000));
     }
+
+    /// <summary>
+    /// A position at the largest value (a participant may ask for any) stays there instead of overflowing.
+    /// </summary>
+    [Fact]
+    public void ExpectedPosition_AtTheLargestValue_DoesNotOverflow()
+    {
+        var state = new PlaybackState
+        {
+            State = PlayState.Playing,
+            Position = TimeSpan.MaxValue,
+            ReferenceTime = 5_000_000,
+            Version = 3,
+            Origin = Host,
+        };
+
+        Assert.Equal(TimeSpan.MaxValue, state.ExpectedPositionAt(8_000_000));
+    }
+
+    /// <summary>
+    /// A state from the network is followed only with a known mode, a position inside the limit and a rate a player
+    /// accepts.
+    /// </summary>
+    [Fact]
+    public void IsValid_RefusesWhatCannotBeFollowed()
+    {
+        var good = PlaybackState.Initial(Host, 0) with { Position = TimeSpan.FromHours(2) };
+
+        Assert.True(good.IsValid());
+        Assert.True((good with { State = PlayState.Playing, Rate = PlaybackState.MaxRate }).IsValid());
+        Assert.False((good with { State = (PlayState)7 }).IsValid());
+        Assert.False((good with { Position = TimeSpan.FromSeconds(-1) }).IsValid());
+        Assert.False((good with { Position = TimeSpan.MaxValue }).IsValid());
+        Assert.False((good with { Rate = double.NaN }).IsValid());
+        Assert.False((good with { Rate = 0 }).IsValid());
+        Assert.False((good with { Rate = 50 }).IsValid());
+    }
 }

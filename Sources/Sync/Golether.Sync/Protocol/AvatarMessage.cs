@@ -1,3 +1,4 @@
+using System.Buffers.Binary;
 using Golether.Core.Identity;
 
 namespace Golether.Sync.Protocol;
@@ -18,13 +19,20 @@ public sealed record AvatarMessage(byte[]? Image, PeerId? Sender) : SessionMessa
     public const int MaxImageBytes = 128 * 1024;
 
     /// <summary>
+    /// The largest width and height of an avatar, in pixels. A PNG of a few kilobytes may declare a picture of
+    /// thousands of megapixels, and decoding it would take all the memory of everybody it is shown to.
+    /// </summary>
+    public const int MaxDimension = 1024;
+
+    /// <summary>
     /// The eight-byte signature every PNG file starts with.
     /// </summary>
     private static readonly byte[] PngSignature = [0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A];
 
     /// <summary>
     /// Validates a received avatar: an empty picture (a clear) is allowed, otherwise the bytes must be a PNG no larger
-    /// than <see cref="MaxImageBytes"/>. The bytes come from another device, so they are never trusted on their shape.
+    /// than <see cref="MaxImageBytes"/> whose header declares no more than <see cref="MaxDimension"/> pixels a side.
+    /// The bytes come from another device, so they are never trusted on their shape.
     /// </summary>
     /// <returns>The message with a valid or cleared image, or <see langword="null"/> when it must be dropped.</returns>
     public AvatarMessage? Sanitize()
@@ -34,8 +42,31 @@ public sealed record AvatarMessage(byte[]? Image, PeerId? Sender) : SessionMessa
             return this with { Image = null };
         }
 
-        return Image.Length <= MaxImageBytes && Image.AsSpan(0, Math.Min(Image.Length, PngSignature.Length)).SequenceEqual(PngSignature)
+        return Image.Length <= MaxImageBytes
+               && Image.AsSpan(0, Math.Min(Image.Length, PngSignature.Length)).SequenceEqual(PngSignature)
+               && HasAcceptableSize(Image)
             ? this
             : null;
+    }
+
+    /// <summary>
+    /// Reads the size a PNG declares in its header and checks it against <see cref="MaxDimension"/>. The header
+    /// chunk (IHDR) is always the first one; bytes without it are not a picture any decoder would expand, so they
+    /// are let through to fail harmlessly when decoded.
+    /// </summary>
+    /// <param name="png">The bytes, starting with the PNG signature.</param>
+    /// <returns><see langword="false"/> when the declared picture is empty or too large.</returns>
+    private static bool HasAcceptableSize(ReadOnlySpan<byte> png)
+    {
+        // Signature (8), chunk length (4), chunk type (4), then the width and the height, big-endian.
+        const int HeaderEnd = 24;
+        if (png.Length < HeaderEnd || !png.Slice(12, 4).SequenceEqual("IHDR"u8))
+        {
+            return true;
+        }
+
+        var width = BinaryPrimitives.ReadUInt32BigEndian(png[16..]);
+        var height = BinaryPrimitives.ReadUInt32BigEndian(png[20..]);
+        return width is >= 1 and <= MaxDimension && height is >= 1 and <= MaxDimension;
     }
 }

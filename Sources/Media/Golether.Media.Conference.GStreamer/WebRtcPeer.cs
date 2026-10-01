@@ -541,7 +541,15 @@ internal sealed partial class WebRtcPeer : IDisposable
                 return;
             }
 
-            peer._host.SendSignal(peer.Peer, SignalKinds.Candidate, line.ToString(CultureInfo.InvariantCulture) + "\n" + text);
+            try
+            {
+                peer._host.SendSignal(peer.Peer, SignalKinds.Candidate, line.ToString(CultureInfo.InvariantCulture) + "\n" + text);
+            }
+            catch (Exception ex) when (ex is not OutOfMemoryException)
+            {
+                // An exception must not leave a native callback: it would end the process.
+                peer._logger.LogWarning(ex, "A candidate for {Peer} was not sent", peer.Peer.ToShortString());
+            }
         }
     }
 
@@ -563,8 +571,9 @@ internal sealed partial class WebRtcPeer : IDisposable
         {
             peer.AttachReceiver(pad);
         }
-        catch (Exception ex) when (ex is GstException)
+        catch (Exception ex) when (ex is not OutOfMemoryException)
         {
+            // Whatever it is, it must not leave a native callback: that would end the process.
             peer._logger.LogWarning(ex, "Incoming stream of {Peer} could not be decoded", peer.Peer.ToShortString());
         }
     }
@@ -742,8 +751,18 @@ internal sealed partial class WebRtcPeer : IDisposable
     [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
     private static void OnDataChannel(nint element, nint channel, nint data)
     {
-        if (From(data) is { _disposed: false } peer && Signals.GetString(channel, "label") == DataChannelLabel)
+        if (From(data) is not { _disposed: false } peer)
         {
+            return;
+        }
+
+        try
+        {
+            if (Signals.GetString(channel, "label") != DataChannelLabel)
+            {
+                return;
+            }
+
             lock (peer._nativeGate)
             {
                 if (!peer._disposed && peer._channel == 0)
@@ -751,6 +770,11 @@ internal sealed partial class WebRtcPeer : IDisposable
                     peer.AttachChannel(Gst.ObjectRef(channel));
                 }
             }
+        }
+        catch (Exception ex) when (ex is not OutOfMemoryException)
+        {
+            // An exception must not leave a native callback: it would end the process.
+            peer._logger.LogWarning(ex, "The data channel of {Peer} could not be attached", peer.Peer.ToShortString());
         }
     }
 
@@ -855,19 +879,24 @@ internal sealed partial class WebRtcPeer : IDisposable
     /// <param name="applied">The caps already applied.</param>
     private void PushEncoded(string source, ReadOnlySpan<byte> data, nint caps, ref nint applied)
     {
-        if (_disposed)
+        // The frames come from the capture threads while the peer may be leaving on another one. Without the gate
+        // a frame could be pushed into a pipeline that Dispose has just released, which is freed native memory.
+        lock (_nativeGate)
         {
-            return;
-        }
+            if (_disposed)
+            {
+                return;
+            }
 
-        var element = _pipeline.Element(source);
-        if (caps != 0 && caps != applied)
-        {
-            Gst.AppSrcSetCaps(element, caps);
-            applied = caps;
-        }
+            var element = _pipeline.Element(source);
+            if (caps != 0 && caps != applied)
+            {
+                Gst.AppSrcSetCaps(element, caps);
+                applied = caps;
+            }
 
-        Samples.Push(element, data);
+            Samples.Push(element, data);
+        }
 
         // Counted for the diagnostic report: a frame pushed here still goes nowhere while the valve is shut.
         if (source == "vsrc")

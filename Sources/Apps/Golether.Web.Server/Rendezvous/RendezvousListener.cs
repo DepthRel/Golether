@@ -13,9 +13,19 @@ namespace Golether.Web.Server.Rendezvous;
 internal sealed class RendezvousListener : BackgroundService
 {
     /// <summary>
+    /// The wait after a failed accept before the next one.
+    /// </summary>
+    private static readonly TimeSpan AcceptRetryDelay = TimeSpan.FromMilliseconds(200);
+
+    /// <summary>
     /// The options.
     /// </summary>
     private readonly RendezvousServerOptions _options;
+
+    /// <summary>
+    /// The time provider.
+    /// </summary>
+    private readonly TimeProvider _timeProvider;
 
     /// <summary>
     /// Serves the connections.
@@ -61,6 +71,7 @@ internal sealed class RendezvousListener : BackgroundService
         _handler = handler ?? throw new ArgumentNullException(nameof(handler));
         _statistics = statistics ?? throw new ArgumentNullException(nameof(statistics));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+        _timeProvider = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
         _limiter = new AddressRateLimiter(options.MaxConnectionsPerMinute, timeProvider);
         _slots = new SemaphoreSlim(options.MaxConnections, options.MaxConnections);
     }
@@ -134,6 +145,17 @@ internal sealed class RendezvousListener : BackgroundService
             catch (SocketException ex)
             {
                 _logger.LogWarning("Accepting a connection failed: {Error}", ex.SocketErrorCode);
+
+                // A lasting failure (no free descriptors, for example) must not turn the loop into a busy one.
+                try
+                {
+                    await Task.Delay(AcceptRetryDelay, _timeProvider, stoppingToken).ConfigureAwait(false);
+                }
+                catch (OperationCanceledException)
+                {
+                    return;
+                }
+
                 continue;
             }
 

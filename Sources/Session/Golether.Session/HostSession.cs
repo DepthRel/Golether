@@ -1,4 +1,5 @@
 using System.Collections.Concurrent;
+using Golether.Core.Data.Entities;
 using Golether.Core.Data.Enums;
 using Golether.Core.Data.Stores;
 using Golether.Core.Identity;
@@ -321,15 +322,36 @@ public sealed class HostSession : IAsyncDisposable
     public async Task<MediaDescriptor> ShareMediaAsync(string path, CancellationToken cancellationToken)
     {
         var descriptor = await MediaFiles.DescribeAsync(path, cancellationToken).ConfigureAwait(false);
-        _media.Share(path, descriptor);
-        var state = _authority.Reset();
-        _authority.Duration = null;
-
+        PlaybackState state;
         await _playerGate.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
         {
             _follower.Reset();
-            await _player.LoadAsync(new Uri(Path.GetFullPath(path)), TimeSpan.Zero, paused: true, cancellationToken).ConfigureAwait(false);
+            try
+            {
+                await _player.LoadAsync(new Uri(Path.GetFullPath(path)), TimeSpan.Zero, paused: true, cancellationToken).ConfigureAwait(false);
+            }
+            catch
+            {
+                // The player refused the file. Nothing was announced yet, so the session stays on what it had: the
+                // participants are not told about a file the host cannot show, and the follower takes the current
+                // state up again.
+                try
+                {
+                    await _follower.ApplyAsync(_authority.Current, CancellationToken.None).ConfigureAwait(false);
+                }
+                catch (Exception ex) when (ex is not OutOfMemoryException)
+                {
+                    // The reason the file was refused is what the caller must see, not this second failure.
+                    _logger.LogWarning(ex, "The state was not applied after a refused file");
+                }
+
+                throw;
+            }
+
+            _media.Share(path, descriptor);
+            state = _authority.Reset();
+            _authority.Duration = null;
             await _follower.ApplyAsync(state, cancellationToken).ConfigureAwait(false);
         }
         finally
@@ -460,11 +482,17 @@ public sealed class HostSession : IAsyncDisposable
     /// <returns>A task that completes when the participant was notified.</returns>
     public async Task RemoveParticipantAsync(PeerId peerId)
     {
+        // The ticket goes first: with it the removed device would come back as a returning participant.
+        _reconnectTickets.TryRemove(peerId, out _);
         if (_participants.TryRemove(peerId, out var connection))
         {
             connection.End();
+            _avatars.TryRemove(peerId, out _);
             await TrySendAsync(connection, new RejectedMessage(RejectReason.Removed, nameof(RejectReason.Removed))).ConfigureAwait(false);
             await connection.Channel.DisposeAsync().ConfigureAwait(false);
+            Raise(peerId, Texts.Format("Session.Event.ParticipantLeft", connection.Info.DisplayName));
+            await SyncConferenceAsync().ConfigureAwait(false);
+            await BroadcastParticipantsAsync().ConfigureAwait(false);
         }
     }
 
@@ -661,7 +689,7 @@ public sealed class HostSession : IAsyncDisposable
             return null;
         }
 
-        var contact = _contacts is null ? null : await _contacts.FindAsync(peer, cancellationToken).ConfigureAwait(false);
+        var contact = await FindContactAsync(peer, cancellationToken).ConfigureAwait(false);
         var returning = hello.InviteToken is { Length: > 0 } ticket
             && _reconnectTickets.TryGetValue(peer, out var known)
             && System.Security.Cryptography.CryptographicOperations.FixedTimeEquals(
@@ -690,10 +718,7 @@ public sealed class HostSession : IAsyncDisposable
             return null;
         }
 
-        if (_contacts is not null)
-        {
-            await _contacts.TouchAsync(peer, name, remoteAddress, cancellationToken).ConfigureAwait(false);
-        }
+        await RememberContactAsync(peer, name, remoteAddress, cancellationToken).ConfigureAwait(false);
 
         // The ticket lets the participant come back after a broken connection; the host is asked again every time.
         var reconnectTicket = _reconnectTickets.GetOrAdd(peer, _ => Convert.ToHexString(System.Security.Cryptography.RandomNumberGenerator.GetBytes(24)));
@@ -720,6 +745,57 @@ public sealed class HostSession : IAsyncDisposable
         _ = SyncConferenceAsync();
         await BroadcastParticipantsAsync().ConfigureAwait(false);
         return connection;
+    }
+
+    /// <summary>
+    /// Looks a device up among the contacts. The contacts are a convenience: when the store fails, the device is
+    /// treated as unknown and goes through the invitation and the question to the host like anybody else.
+    /// </summary>
+    /// <param name="peer">The device.</param>
+    /// <param name="cancellationToken">Stops the session.</param>
+    /// <returns>The contact, or <see langword="null"/> when there is none or the store failed.</returns>
+    private async Task<ContactEntity?> FindContactAsync(PeerId peer, CancellationToken cancellationToken)
+    {
+        if (_contacts is null)
+        {
+            return null;
+        }
+
+        try
+        {
+            return await _contacts.FindAsync(peer, cancellationToken).ConfigureAwait(false);
+        }
+        catch (Exception ex) when (ex is not (OperationCanceledException or OutOfMemoryException))
+        {
+            _logger.LogWarning(ex, "The contacts could not be read");
+            return null;
+        }
+    }
+
+    /// <summary>
+    /// Notes an admitted device among the contacts. A failure of the store must not turn away a participant the
+    /// host has just approved.
+    /// </summary>
+    /// <param name="peer">The device.</param>
+    /// <param name="name">The name it joined with.</param>
+    /// <param name="remoteAddress">The address it came from.</param>
+    /// <param name="cancellationToken">Stops the session.</param>
+    /// <returns>A task that completes when the contact is stored or the attempt failed.</returns>
+    private async Task RememberContactAsync(PeerId peer, string name, string? remoteAddress, CancellationToken cancellationToken)
+    {
+        if (_contacts is null)
+        {
+            return;
+        }
+
+        try
+        {
+            await _contacts.TouchAsync(peer, name, remoteAddress, cancellationToken).ConfigureAwait(false);
+        }
+        catch (Exception ex) when (ex is not (OperationCanceledException or OutOfMemoryException))
+        {
+            _logger.LogWarning(ex, "The contact of {Peer} could not be stored", peer.ToShortString());
+        }
     }
 
     /// <summary>
@@ -757,7 +833,7 @@ public sealed class HostSession : IAsyncDisposable
 
                 break;
 
-            case ConferenceSignalMessage signal when signal.Kind.Length <= 16 && signal.Payload.Length <= 64 * 1024:
+            case ConferenceSignalMessage { Kind.Length: <= 16, Payload.Length: <= 64 * 1024 } signal:
                 if (signal.Peer == _identity.PeerId)
                 {
                     await (_conference?.ReceiveAsync(connection.Info.PeerId, signal.Kind, signal.Payload) ?? Task.CompletedTask).ConfigureAwait(false);
@@ -793,16 +869,24 @@ public sealed class HostSession : IAsyncDisposable
 
                 break;
 
-            case AvatarMessage avatar when avatar.Sanitize() is { } cleanAvatar:
-                // The owner is the authenticated connection, never taken from the message.
-                var signedAvatar = cleanAvatar with { Sender = connection.Info.PeerId };
-                RememberAvatar(connection.Info.PeerId, signedAvatar.Image);
-                AvatarReceived?.Invoke(this, new AvatarUpdate(connection.Info.PeerId, signedAvatar.Image, false));
-                await BroadcastAsync(signedAvatar).ConfigureAwait(false);
+            case AvatarMessage avatar:
+                // A picture is the largest message a participant can make the host send to everybody, so it is
+                // limited like the chat and the strokes.
+                if (avatar.Sanitize() is { } cleanAvatar
+                    && connection.AvatarLimiter.TryAcquire(_timeProvider.GetTimestamp(), _timeProvider))
+                {
+                    // The owner is the authenticated connection, never taken from the message.
+                    var signedAvatar = cleanAvatar with { Sender = connection.Info.PeerId };
+                    RememberAvatar(connection.Info.PeerId, signedAvatar.Image);
+                    AvatarReceived?.Invoke(this, new AvatarUpdate(connection.Info.PeerId, signedAvatar.Image, false));
+                    await BroadcastAsync(signedAvatar).ConfigureAwait(false);
+                }
+
                 break;
 
-            case StatusReportMessage report:
-                connection.Status = report.Status with { PeerId = connection.Info.PeerId };
+            case StatusReportMessage { Status: not null } report:
+                // The numbers go into the arithmetic of the authority and to every participant: they are bounded first.
+                connection.Status = report.Status.Sanitize() with { PeerId = connection.Info.PeerId };
                 break;
 
             default:
@@ -823,6 +907,13 @@ public sealed class HostSession : IAsyncDisposable
         try
         {
             await _follower.ApplyAsync(state, cancellationToken).ConfigureAwait(false);
+        }
+        catch (Exception ex) when (ex is not (OperationCanceledException or OutOfMemoryException))
+        {
+            // The state is committed already. A failure of the local player must not keep it from the participants
+            // (they would stay on the old one) nor end the connection of the participant who asked for it; the
+            // follower applies it again on its next tick.
+            _logger.LogWarning(ex, "Applying the state to the local player failed");
         }
         finally
         {
@@ -877,30 +968,39 @@ public sealed class HostSession : IAsyncDisposable
                     _playerGate.Release();
                 }
 
-                if (_localStatus?.Snapshot.Duration is { } duration)
+                try
                 {
-                    _authority.Duration = duration;
-                }
+                    if (_localStatus?.Snapshot.Duration is { } duration)
+                    {
+                        _authority.Duration = duration;
+                    }
 
-                if (_authority.EvaluateEnd() is { } ended)
+                    if (_authority.EvaluateEnd() is { } ended)
+                    {
+                        await PublishAsync(ended, cancellationToken).ConfigureAwait(false);
+                    }
+
+                    if (_timeProvider.GetElapsedTime(lastBroadcast) < _options.StatusInterval)
+                    {
+                        continue;
+                    }
+
+                    lastBroadcast = _timeProvider.GetTimestamp();
+                    var statuses = _participants.Values.Select(c => c.Status).OfType<ParticipantStatus>().ToArray();
+                    var hold = _authority.EvaluateBuffering(statuses, MaxRoundTrip());
+                    if (hold is not null)
+                    {
+                        await PublishAsync(hold, cancellationToken).ConfigureAwait(false);
+                    }
+
+                    await BroadcastParticipantsAsync().ConfigureAwait(false);
+                }
+                catch (Exception ex) when (ex is not (OperationCanceledException or OutOfMemoryException))
                 {
-                    await PublishAsync(ended, cancellationToken).ConfigureAwait(false);
+                    // One failed round (the player refusing a state, for example) must not stop the synchronization
+                    // for the rest of the session: the next round tries again.
+                    _logger.LogWarning(ex, "Session tick failed");
                 }
-
-                if (_timeProvider.GetElapsedTime(lastBroadcast) < _options.StatusInterval)
-                {
-                    continue;
-                }
-
-                lastBroadcast = _timeProvider.GetTimestamp();
-                var statuses = _participants.Values.Select(c => c.Status).OfType<ParticipantStatus>().ToArray();
-                var hold = _authority.EvaluateBuffering(statuses, MaxRoundTrip());
-                if (hold is not null)
-                {
-                    await PublishAsync(hold, cancellationToken).ConfigureAwait(false);
-                }
-
-                await BroadcastParticipantsAsync().ConfigureAwait(false);
             }
         }
         catch (OperationCanceledException)
@@ -1088,6 +1188,12 @@ public sealed class HostSession : IAsyncDisposable
         /// The limit of stroke messages of the participant: a stroke sends a few times per second.
         /// </summary>
         public SlidingRateLimiter DrawLimiter { get; } = new(TimeSpan.FromSeconds(1), 40);
+
+        /// <summary>
+        /// The limit of avatar changes of the participant: a person picks a picture now and then, not many times a
+        /// second, and each one is relayed to everybody.
+        /// </summary>
+        public SlidingRateLimiter AvatarLimiter { get; } = new(TimeSpan.FromSeconds(10), 5);
 
         /// <summary>
         /// Gets a token that is cancelled when the admission ends.

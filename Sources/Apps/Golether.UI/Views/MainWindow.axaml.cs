@@ -181,7 +181,17 @@ public sealed partial class MainWindow : Window
 
         e.Cancel = true;
         _closeConfirmed = true;
-        await viewModel.LeaveCommand.ExecuteAsync(null);
+        try
+        {
+            await viewModel.LeaveCommand.ExecuteAsync(null);
+        }
+        catch (Exception ex) when (ex is not OutOfMemoryException)
+        {
+            // The window must close whatever leaving the session ran into; this method returns nothing, so an
+            // exception here would end the application before it could release the rest.
+            System.Diagnostics.Trace.WriteLine($"Golether: leaving the session on close failed: {ex.Message}");
+        }
+
         Close();
     }
 

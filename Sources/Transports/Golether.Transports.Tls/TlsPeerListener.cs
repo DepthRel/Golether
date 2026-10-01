@@ -80,8 +80,16 @@ public sealed class TlsPeerListener : IPeerListener
         _logger = logger ?? NullLogger<TlsPeerListener>.Instance;
         _context = TlsProtocol.CreateContext(identity);
         _handshakeSlots = new SemaphoreSlim(_options.MaxPendingHandshakes, _options.MaxPendingHandshakes);
-        _listener = new TcpListener(IPAddress.IPv6Any, _options.Port);
-        _listener.Server.DualMode = true;
+        if (Socket.OSSupportsIPv6)
+        {
+            _listener = new TcpListener(IPAddress.IPv6Any, _options.Port);
+            _listener.Server.DualMode = true;
+        }
+        else
+        {
+            // IPv6 is switched off in the system: a dual socket cannot be made at all, IPv4 still works.
+            _listener = new TcpListener(IPAddress.Any, _options.Port);
+        }
     }
 
     /// <inheritdoc />

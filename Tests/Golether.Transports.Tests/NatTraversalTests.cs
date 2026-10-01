@@ -75,6 +75,29 @@ public sealed class NatTraversalTests
     }
 
     /// <summary>
+    /// A datagram that is not STUN (for example the tunnel of the other side knocking at the same port) is skipped:
+    /// the answer of the server is still taken and nothing is thrown.
+    /// </summary>
+    /// <returns>A task that completes when the test is done.</returns>
+    [Fact]
+    public async Task Discover_SkipsForeignDatagrams()
+    {
+        var token = TestContext.Current.CancellationToken;
+        var seen = new IPEndPoint(IPAddress.Parse("203.0.113.7"), 41234);
+        await using var first = new FakeStunServer(seen);
+        await using var second = new FakeStunServer(seen);
+        using var socket = NatTraversal.Open(0);
+        using var stranger = NatTraversal.Open(0);
+        var port = ((IPEndPoint)socket.LocalEndPoint!).Port;
+        await stranger.SendToAsync(new byte[64], SocketFlags.None, new IPEndPoint(IPAddress.Loopback, port), token);
+
+        var found = await NatTraversal.DiscoverAsync(socket, [first.Address, second.Address], token);
+
+        Assert.NotNull(found);
+        Assert.Equal(seen, found.Endpoint);
+    }
+
+    /// <summary>
     /// The punch sends packets from the port the tunnel will use, so the router of the sender opens the path; an
     /// unreachable address does not stop the rest.
     /// </summary>

@@ -180,7 +180,18 @@ public static class NatTraversal
                     continue;
                 }
 
-                var message = StunMessage.Parse(buffer.AsSpan(0, received.ReceivedBytes));
+                StunMessage message;
+                try
+                {
+                    message = StunMessage.Parse(buffer.AsSpan(0, received.ReceivedBytes));
+                }
+                catch (InvalidDataException)
+                {
+                    // Something else reached the port (for example the tunnel of the other side knocking already):
+                    // it is not the answer, and the answer may still come.
+                    continue;
+                }
+
                 if (message.Method != Stun.Binding || message.Class != Stun.ClassSuccess
                     || !message.TransactionId.AsSpan().SequenceEqual(request.TransactionId))
                 {
@@ -194,7 +205,7 @@ public static class NatTraversal
         {
             // The server did not answer in time; the next one is tried.
         }
-        catch (Exception ex) when (ex is SocketException or FormatException or ArgumentException)
+        catch (Exception ex) when (ex is SocketException or InvalidDataException or ArgumentException)
         {
             Trace.WriteLine($"Golether STUN {server}: {ex.Message}");
         }

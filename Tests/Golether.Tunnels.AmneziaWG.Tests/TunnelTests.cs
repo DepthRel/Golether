@@ -187,6 +187,28 @@ public sealed class TunnelTests
         Assert.Throws<FormatException>(() => guestSide.AcceptOffer("hello", "g", [], 40000));
         Assert.Throws<FormatException>(() => guestSide.AcceptOffer(offer.PackageText.Replace(":offer:", ":answer:", StringComparison.Ordinal), "g", [], 40000));
 
+        // A package signed by its author may still be incomplete or carry a broken key: it is refused with the same
+        // clear error instead of failing somewhere inside.
+        var body = new TunnelOfferBody
+        {
+            OfferId = "offer",
+            HostName = "h",
+            HostCertificate = Convert.ToBase64String(hostIdentity.PublicCertificateDer),
+            HostPublicKey = hostInterface.Keys.PublicKey,
+            HostEndpoints = ["203.0.113.10:51000"],
+            HostAddress = hostInterface.HostAddress,
+            AssignedAddress = hostInterface.AddressAt(2),
+            S1 = hostInterface.Obfuscation.S1,
+            S2 = hostInterface.Obfuscation.S2,
+            Headers = [5, 6],
+            EphemeralKey = "AAAA",
+            ExpiresAt = time.GetUtcNow().AddHours(1).ToUnixTimeSeconds(),
+        };
+        Func<TunnelOfferBody, string> signed = damaged => TunnelPackageCodec.Encode(TunnelPackageCodec.OfferKind, damaged, hostIdentity);
+        Assert.Throws<FormatException>(() => guestSide.AcceptOffer(signed(body), "g", [], 40000));
+        Assert.Throws<FormatException>(() => guestSide.AcceptOffer(signed(body with { Headers = [5, 6, 7, 8], HostEndpoints = null! }), "g", [], 40000));
+        Assert.Throws<FormatException>(() => guestSide.AcceptOffer(signed(body with { Headers = [5, 6, 7, 8] }), "g", [], 40000));
+
         var acceptance = guestSide.AcceptOffer(offer.PackageText.Insert(40, "\n  "), "g", [], 40000);
         var otherOffer = hostSide.CreateOffer(hostInterface, "Вы", endpoints, []);
         Assert.Throws<FormatException>(() => hostSide.CompleteOffer(otherOffer.Secrets, acceptance.AnswerText));

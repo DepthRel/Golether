@@ -147,7 +147,7 @@ public sealed class PeerChunkExchange : IAsyncDisposable
         _logger = logger ?? NullLogger.Instance;
         _mediaKey = ChunkProtocol.GetMediaKey(media);
         _transport.MessageReceived += OnMessage;
-        _announcer = _timeProvider.CreateTimer(_ => Announce(), null, TimeSpan.Zero, _options.AnnounceInterval);
+        _announcer = _timeProvider.CreateTimer(_ => AnnounceSafely(), null, TimeSpan.Zero, _options.AnnounceInterval);
     }
 
     /// <summary>
@@ -233,6 +233,22 @@ public sealed class PeerChunkExchange : IAsyncDisposable
         }
     }
 
+    /// <summary>
+    /// Announces from the timer. An exception that leaves a timer callback ends the whole process, and the channels
+    /// to the participants may be closing at any moment, so a failed announcement is only logged.
+    /// </summary>
+    private void AnnounceSafely()
+    {
+        try
+        {
+            Announce();
+        }
+        catch (Exception ex) when (ex is not OutOfMemoryException)
+        {
+            _logger.LogDebug("Announcing chunks failed: {Reason}", ex.Message);
+        }
+    }
+
     /// <inheritdoc />
     public async ValueTask DisposeAsync()
     {
@@ -282,12 +298,27 @@ public sealed class PeerChunkExchange : IAsyncDisposable
                 await Task.Delay(TimeSpan.FromMilliseconds(10), _timeProvider, linked.Token).ConfigureAwait(false);
             }
 
+            var started = _timeProvider.GetUtcNow();
             while (!download.Completion.IsCompleted)
             {
                 await Task.WhenAny(download.Completion, Task.Delay(TimeSpan.FromMilliseconds(250), _timeProvider, linked.Token)).ConfigureAwait(false);
-                if (!download.Completion.IsCompleted && _timeProvider.GetUtcNow() - download.LastProgress > _options.StallTimeout)
+                if (download.Completion.IsCompleted)
+                {
+                    break;
+                }
+
+                var now = _timeProvider.GetUtcNow();
+                if (now - download.LastProgress > _options.StallTimeout)
                 {
                     _logger.LogDebug("Chunk {Index} from {Peer} stalled", index, peer.ToShortString());
+                    return null;
+                }
+
+                if (now - started > _options.ChunkTimeout)
+                {
+                    // A participant that sends a few bytes now and then never stalls, yet would hold the chunk (and
+                    // the film of this device) for ever. The host is asked instead.
+                    _logger.LogDebug("Chunk {Index} from {Peer} is too slow", index, peer.ToShortString());
                     return null;
                 }
             }

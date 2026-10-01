@@ -124,7 +124,15 @@ public sealed class RendezvousHost : IAsyncDisposable
         await _stopping.CancelAsync().ConfigureAwait(false);
         if (_loop is not null)
         {
-            await _loop.ConfigureAwait(false);
+            try
+            {
+                await _loop.ConfigureAwait(false);
+            }
+            catch (Exception ex) when (ex is not OutOfMemoryException)
+            {
+                // The loop died of something unexpected earlier; ending the session must still release the rest.
+                _logger.LogWarning(ex, "The registration on {Server} had stopped with an error", Point.Server);
+            }
         }
 
         _stopping.Dispose();

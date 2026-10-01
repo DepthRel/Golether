@@ -100,6 +100,13 @@ public sealed class ParticipantSession : IAsyncDisposable
     private readonly SemaphoreSlim _playerGate = new(1, 1);
 
     /// <summary>
+    /// Lets one change of the played source run at a time: the media of the welcome, a new file announced by the
+    /// host and a local copy chosen by the user may arrive together, and two of them interleaved would leave the
+    /// reader of one and the player of the other.
+    /// </summary>
+    private readonly SemaphoreSlim _mediaGate = new(1, 1);
+
+    /// <summary>
     /// Stops the session.
     /// </summary>
     private readonly CancellationTokenSource _stopping = new();
@@ -315,6 +322,12 @@ public sealed class ParticipantSession : IAsyncDisposable
     public string DisplayName { get; }
 
     /// <summary>
+    /// Gets a value indicating whether the host itself closed the session for this device (ended the session, or
+    /// removed or rejected the device) instead of the connection breaking. Coming back makes no sense then.
+    /// </summary>
+    public bool ClosedByHost { get; private set; }
+
+    /// <summary>
     /// Comes back to a session this device was admitted to, using the ticket instead of an invitation. The host is
     /// asked again.
     /// </summary>
@@ -350,6 +363,12 @@ public sealed class ParticipantSession : IAsyncDisposable
             throw new InvalidOperationException("The session was already joined.");
         }
 
+        if (invite.HostPeerId == _identity.PeerId)
+        {
+            // An invitation pasted on the device that made it: there is nobody to connect to.
+            throw new SessionJoinException(Texts.Get("Session.Error.OwnInvite"));
+        }
+
         if (!_returning && invite.ExpiresAt <= _timeProvider.GetUtcNow())
         {
             throw new SessionJoinException(Texts.Get("Session.Error.InviteExpired"));
@@ -381,6 +400,9 @@ public sealed class ParticipantSession : IAsyncDisposable
                     SetState(SessionState.AwaitingApproval);
                     continue;
                 case RejectedMessage rejected:
+                    // A host that did not answer in time or has no free place may be asked again; any other
+                    // refusal is its decision.
+                    ClosedByHost = rejected.Reason is not (RejectReason.ApprovalTimedOut or RejectReason.SessionFull);
                     SetState(SessionState.Ended);
                     throw new SessionJoinException(SessionTexts.DescribeRejection(rejected.Reason));
                 case WelcomeMessage accepted:
@@ -396,17 +418,34 @@ public sealed class ParticipantSession : IAsyncDisposable
             break;
         }
 
+        // The welcome came from the network like everything else: its parts are checked before they are used.
+        try
+        {
+            if (welcome.SessionName is null || welcome.Participants is null || welcome.Participants.Any(p => p is null)
+                || welcome.Playback is null || !welcome.Playback.IsValid())
+            {
+                throw new InvalidDataException("The welcome of the host is incomplete.");
+            }
+
+            welcome.Media?.Validate();
+        }
+        catch (Exception ex) when (ex is InvalidDataException or ArgumentException)
+        {
+            SetState(SessionState.Ended);
+            throw new SessionJoinException(Texts.Get("Session.Error.ConnectionInterrupted"), ex);
+        }
+
         lock (_gate)
         {
-            _sessionName = welcome.SessionName;
+            _sessionName = ParticipantInfo.NormalizeDisplayName(welcome.SessionName);
             _mediaStreams = Math.Clamp(welcome.MediaDataStreams, 1, 16);
-            _participants = welcome.Participants.Select(p => new ParticipantView(p, null, p.PeerId == _identity.PeerId)).ToArray();
+            _participants = ToViews(welcome.Participants, []);
             _latestState = welcome.Playback;
             _reconnectTicket = welcome.ReconnectTicket is { Length: > 0 and <= 64 } ticket && ticket.All(char.IsAsciiHexDigit) ? ticket : null;
         }
 
         SetState(SessionState.Active);
-        Raise(null, Texts.Format("Session.Event.YouJoined", welcome.SessionName));
+        Raise(null, Texts.Format("Session.Event.YouJoined", _sessionName));
         var token = _stopping.Token;
         _loops.Add(Task.Run(() => ReceiveLoopAsync(token)));
         _loops.Add(Task.Run(() => ClockLoopAsync(token)));
@@ -443,13 +482,27 @@ public sealed class ParticipantSession : IAsyncDisposable
             return false;
         }
 
-        await ReleaseRemoteMediaAsync().ConfigureAwait(false);
-        await LoadAsync(new Uri(Path.GetFullPath(path)), cancellationToken).ConfigureAwait(false);
-        _usesLocalCopy = true;
-        if (_conferenceMedia is { IsAvailable: true } conference)
+        await _mediaGate.WaitAsync(cancellationToken).ConfigureAwait(false);
+        try
         {
-            // A local copy is served to the other participants in full.
-            _sharing = new ChunkSharing(media, conference, MediaFiles.OpenRead(path), _loggerFactory.CreateLogger<PeerChunkExchange>());
+            if (!ReferenceEquals(_media, media))
+            {
+                // The host showed another file while this one was being compared.
+                return false;
+            }
+
+            await ReleaseRemoteMediaAsync().ConfigureAwait(false);
+            await LoadAsync(new Uri(Path.GetFullPath(path)), cancellationToken).ConfigureAwait(false);
+            _usesLocalCopy = true;
+            if (_conferenceMedia is { IsAvailable: true } conference)
+            {
+                // A local copy is served to the other participants in full.
+                _sharing = new ChunkSharing(media, conference, MediaFiles.OpenRead(path), _loggerFactory.CreateLogger<PeerChunkExchange>());
+            }
+        }
+        finally
+        {
+            _mediaGate.Release();
         }
 
         Raise(_identity.PeerId, Texts.Get("Session.Event.LocalCopyPlaying"));
@@ -665,12 +718,13 @@ public sealed class ParticipantSession : IAsyncDisposable
     /// <param name="errors">Collects the reasons of the failures.</param>
     /// <param name="cancellationToken">Stops the attempts once another route won.</param>
     /// <returns>The stream and the address that answered, or <see langword="null"/> when none did.</returns>
-    /// <exception cref="SessionJoinException">An address presented a foreign key.</exception>
+    /// <exception cref="SessionJoinException">An address presented a foreign key and no other address was the host.</exception>
     private async Task<(PeerStream Stream, PeerEndpoint? Endpoint)?> ConnectDirectAsync(
         Invite invite,
         System.Collections.Concurrent.ConcurrentQueue<string> errors,
         CancellationToken cancellationToken)
     {
+        SessionJoinException? foreignKey = null;
         foreach (var endpoint in invite.Endpoints)
         {
             try
@@ -681,7 +735,11 @@ public sealed class ParticipantSession : IAsyncDisposable
             }
             catch (PeerAuthenticationException ex)
             {
-                throw new SessionJoinException(Texts.Format("Session.Error.PossibleSpoofing", ex.Message), ex);
+                // Another device may answer at an address of the invitation (the same private address exists in
+                // the network of the participant). The remaining addresses are still tried, each against the
+                // pinned key; the warning is raised only when none of them is the host.
+                _logger.LogWarning("The address {Endpoint} presented a foreign key", endpoint);
+                foreignKey ??= new SessionJoinException(Texts.Format("Session.Error.PossibleSpoofing", ex.Message), ex);
             }
             catch (IOException ex)
             {
@@ -689,7 +747,7 @@ public sealed class ParticipantSession : IAsyncDisposable
             }
         }
 
-        return null;
+        return foreignKey is null ? null : throw foreignKey;
     }
 
     /// <summary>
@@ -771,13 +829,13 @@ public sealed class ParticipantSession : IAsyncDisposable
                     case ClockPongMessage pong:
                         _estimator.AddSample(pong.ClientSendTime, pong.HostReceiveTime, pong.HostSendTime, _monotonic.NowMicroseconds);
                         break;
-                    case PlaybackStateMessage stateMessage:
+                    case PlaybackStateMessage { State: not null } stateMessage:
                         OnState(stateMessage.State);
                         break;
-                    case ConferenceSignalMessage signal when signal.Kind.Length <= 16 && signal.Payload.Length <= 64 * 1024:
+                    case ConferenceSignalMessage { Kind.Length: <= 16, Payload.Length: <= 64 * 1024 } signal:
                         await (_conference?.ReceiveAsync(signal.Peer, signal.Kind, signal.Payload) ?? Task.CompletedTask).ConfigureAwait(false);
                         break;
-                    case ParticipantsMessage participants:
+                    case ParticipantsMessage { Participants: not null } participants:
                         OnParticipants(participants);
                         await SyncConferenceAsync().ConfigureAwait(false);
                         break;
@@ -807,9 +865,11 @@ public sealed class ParticipantSession : IAsyncDisposable
                         AvatarReceived?.Invoke(this, new AvatarUpdate(owner, cleanAvatar.Image, owner == _identity.PeerId));
                         break;
                     case ByeMessage bye:
+                        ClosedByHost = true;
                         reason = bye.Reason ?? Texts.Get("Session.Error.HostEnded");
                         return;
                     case RejectedMessage rejected:
+                        ClosedByHost = true;
                         reason = SessionTexts.DescribeRejection(rejected.Reason);
                         return;
                 }
@@ -959,6 +1019,14 @@ public sealed class ParticipantSession : IAsyncDisposable
     /// <param name="state">The state.</param>
     private void OnState(PlaybackState state)
     {
+        if (!state.IsValid())
+        {
+            // A state that cannot be followed (an unknown mode, a position or a rate out of range) is skipped
+            // instead of being handed to the player.
+            _logger.LogWarning("Ignored an invalid playback state, version {Version}", state.Version);
+            return;
+        }
+
         lock (_gate)
         {
             if (_latestState is not null && state.Version <= _latestState.Version)
@@ -979,15 +1047,40 @@ public sealed class ParticipantSession : IAsyncDisposable
     /// <param name="message">The message.</param>
     private void OnParticipants(ParticipantsMessage message)
     {
-        var statuses = message.Statuses.Take(SessionOptions.MaxParticipantsLimit * 2).ToDictionary(s => s.PeerId, s => s);
+        var views = ToViews(message.Participants, message.Statuses ?? []);
         lock (_gate)
         {
-            _participants = message.Participants.Take(SessionOptions.MaxParticipantsLimit)
-                .Select(p => new ParticipantView(p with { DisplayName = ParticipantInfo.NormalizeDisplayName(p.DisplayName) }, statuses.GetValueOrDefault(p.PeerId), p.PeerId == _identity.PeerId))
-                .ToArray();
+            _participants = views;
         }
 
         Changed?.Invoke(this, EventArgs.Empty);
+    }
+
+    /// <summary>
+    /// Turns the participant list of the host into the local view. The list comes from the network: it is cut to the
+    /// largest session, names are normalized, the numbers of the statuses are bounded and broken entries are skipped.
+    /// </summary>
+    /// <param name="participants">The participants.</param>
+    /// <param name="statuses">Their statuses.</param>
+    /// <returns>The view of the participants.</returns>
+    private ParticipantView[] ToViews(IReadOnlyList<ParticipantInfo> participants, IReadOnlyList<ParticipantStatus> statuses)
+    {
+        var known = new Dictionary<PeerId, ParticipantStatus>();
+        foreach (var status in statuses.Take(SessionOptions.MaxParticipantsLimit * 2))
+        {
+            if (status is not null)
+            {
+                known[status.PeerId] = status.Sanitize();
+            }
+        }
+
+        return participants.Take(SessionOptions.MaxParticipantsLimit)
+            .Where(p => p is not null && !p.PeerId.IsEmpty)
+            .Select(p => new ParticipantView(
+                p with { DisplayName = ParticipantInfo.NormalizeDisplayName(p.DisplayName) },
+                known.GetValueOrDefault(p.PeerId),
+                p.PeerId == _identity.PeerId))
+            .ToArray();
     }
 
     /// <summary>
@@ -997,6 +1090,27 @@ public sealed class ParticipantSession : IAsyncDisposable
     /// <param name="cancellationToken">The cancellation token.</param>
     /// <returns>A task that completes when the player started loading.</returns>
     private async Task PrepareMediaAsync(MediaDescriptor media, CancellationToken cancellationToken)
+    {
+        await _mediaGate.WaitAsync(cancellationToken).ConfigureAwait(false);
+        try
+        {
+            await OpenRemoteMediaAsync(media, cancellationToken).ConfigureAwait(false);
+        }
+        finally
+        {
+            _mediaGate.Release();
+        }
+
+        Raise(_invite!.HostPeerId, Texts.Format("Session.Event.HostShows", media.FileName));
+    }
+
+    /// <summary>
+    /// Replaces the played source with the media of the host. Call under <see cref="_mediaGate"/>.
+    /// </summary>
+    /// <param name="media">The media.</param>
+    /// <param name="cancellationToken">The cancellation token.</param>
+    /// <returns>A task that completes when the player started loading.</returns>
+    private async Task OpenRemoteMediaAsync(MediaDescriptor media, CancellationToken cancellationToken)
     {
         await ReleaseRemoteMediaAsync().ConfigureAwait(false);
         var source = new RemoteChunkSource(
@@ -1031,7 +1145,6 @@ public sealed class ParticipantSession : IAsyncDisposable
         }
 
         await LoadAsync(uri, cancellationToken).ConfigureAwait(false);
-        Raise(_invite!.HostPeerId, Texts.Format("Session.Event.HostShows", media.FileName));
     }
 
     /// <summary>

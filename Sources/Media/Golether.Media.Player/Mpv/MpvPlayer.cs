@@ -23,6 +23,11 @@ public sealed class MpvPlayer : IPlaybackController, ILocalPlayerControls
     private const string PointerMessage = "golether-video";
 
     /// <summary>
+    /// The largest number of seconds turned into a time (about 31 years).
+    /// </summary>
+    private const double MaxSeconds = 1e9;
+
+    /// <summary>
     /// The input section with the mouse bindings of the video picture. Only the left button is bound; mpv's own
     /// bindings stay disabled.
     /// </summary>
@@ -409,11 +414,11 @@ public sealed class MpvPlayer : IPlaybackController, ILocalPlayerControls
         {
             return new PlayerSnapshot(
                 _loaded,
-                _position is { } position ? TimeSpan.FromSeconds(position) : null,
-                _duration is { } duration ? TimeSpan.FromSeconds(duration) : null,
+                ToTime(_position),
+                ToTime(_duration),
                 _paused,
                 _pausedForCache || _seeking,
-                TimeSpan.FromSeconds(_cacheAhead),
+                ToTime(_cacheAhead) ?? TimeSpan.Zero,
                 _speed)
             { Buffered = _buffered };
         }
@@ -572,6 +577,17 @@ public sealed class MpvPlayer : IPlaybackController, ILocalPlayerControls
     /// <param name="value">The time.</param>
     /// <returns>The invariant text.</returns>
     private static string Seconds(TimeSpan value) => value.TotalSeconds.ToString("0.000", CultureInfo.InvariantCulture);
+
+    /// <summary>
+    /// Turns a number of seconds reported by mpv into a time. A broken file may report anything: a value that is not
+    /// a number gives no time, and one beyond what a time can hold is cut, instead of failing every snapshot.
+    /// </summary>
+    /// <param name="seconds">The seconds, or <see langword="null"/>.</param>
+    /// <returns>The time, or <see langword="null"/>.</returns>
+    internal static TimeSpan? ToTime(double? seconds)
+        => seconds is not { } value || double.IsNaN(value)
+            ? null
+            : TimeSpan.FromSeconds(Math.Clamp(value, -MaxSeconds, MaxSeconds));
 
     /// <summary>
     /// Sets a flag property.

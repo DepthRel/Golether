@@ -23,6 +23,16 @@ public sealed class PortMappingLease : IAsyncDisposable
     private readonly CancellationTokenSource _stop = new();
 
     /// <summary>
+    /// The longest wait before a renewal.
+    /// </summary>
+    internal static readonly TimeSpan MaxRenewalDelay = TimeSpan.FromHours(12);
+
+    /// <summary>
+    /// The shortest wait before a renewal.
+    /// </summary>
+    internal static readonly TimeSpan MinRenewalDelay = TimeSpan.FromSeconds(5);
+
+    /// <summary>
     /// The renewal loop.
     /// </summary>
     private readonly Task _renewal;
@@ -75,6 +85,20 @@ public sealed class PortMappingLease : IAsyncDisposable
     }
 
     /// <summary>
+    /// Returns the wait before the next renewal: half of the lifetime, kept between <see cref="MinRenewalDelay"/> and
+    /// <see cref="MaxRenewalDelay"/>. The lifetime is what the router answered: half of a huge one is more than a
+    /// delay can be (it would fail at once, again and again, without ever waiting), and half of a tiny one would keep
+    /// the router busy.
+    /// </summary>
+    /// <param name="lifetime">The lifetime of the mapping.</param>
+    /// <returns>The wait.</returns>
+    internal static TimeSpan RenewalDelay(TimeSpan lifetime)
+    {
+        var delay = lifetime / 2;
+        return delay > MaxRenewalDelay ? MaxRenewalDelay : delay < MinRenewalDelay ? MinRenewalDelay : delay;
+    }
+
+    /// <summary>
     /// Renews the mapping at half of its lease until disposal.
     /// </summary>
     /// <param name="timeProvider">The time provider.</param>
@@ -85,7 +109,7 @@ public sealed class PortMappingLease : IAsyncDisposable
         {
             try
             {
-                await Task.Delay(Mapping.Lifetime / 2, timeProvider, _stop.Token).ConfigureAwait(false);
+                await Task.Delay(RenewalDelay(Mapping.Lifetime), timeProvider, _stop.Token).ConfigureAwait(false);
                 var renewed = await _protocol.MapAsync(Mapping.InternalPort, PortMapper.DefaultLifetime, _stop.Token).ConfigureAwait(false);
                 if (renewed is null)
                 {

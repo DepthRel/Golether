@@ -168,8 +168,11 @@ public sealed partial class ComponentItemViewModel : ObservableObject
         {
             ProgressText = Texts.Get("Component.Progress.Cancelled");
         }
-        catch (ComponentInstallException ex)
+        catch (Exception ex) when (ex is not OutOfMemoryException)
         {
+            // The installer reports what it expects as ComponentInstallException, but this is where a command of the
+            // user ends: a failure of any other kind (the disk, access rights) is shown too instead of ending the
+            // whole application.
             ProgressText = string.Empty;
             await _dialogs.ShowErrorAsync(Title, ex.Message);
         }

@@ -16,6 +16,11 @@ public sealed record MediaDescriptor
     public const int MaxChunkSize = 16 * 1024 * 1024;
 
     /// <summary>
+    /// The longest file name.
+    /// </summary>
+    public const int MaxFileNameLength = 255;
+
+    /// <summary>
     /// Gets the file name shown to participants (no directory part).
     /// </summary>
     public required string FileName { get; init; }
@@ -42,13 +47,32 @@ public sealed record MediaDescriptor
     public long ChunkCount => Length == 0 ? 0 : ((Length - 1) / ChunkSize) + 1;
 
     /// <summary>
+    /// Makes a file name every device accepts: control characters and path separators become underscores and the
+    /// name is cut to <see cref="MaxFileNameLength"/>. The name is only shown, never used as a path, and a name that
+    /// is fine on the system of the host (a backslash on Linux, for example) must not be refused by the others.
+    /// </summary>
+    /// <param name="name">The file name without a directory.</param>
+    /// <returns>The name to put into a descriptor.</returns>
+    public static string NormalizeFileName(string? name)
+    {
+        var cleaned = new string((name ?? string.Empty).Select(c => IsForbiddenInName(c) ? '_' : c).ToArray()).Trim();
+        if (cleaned.Length > MaxFileNameLength)
+        {
+            cleaned = cleaned[..MaxFileNameLength].TrimEnd();
+        }
+
+        return cleaned.Length == 0 ? "_" : cleaned;
+    }
+
+    /// <summary>
     /// Validates a descriptor received from the network.
     /// </summary>
     /// <exception cref="ArgumentException">The descriptor is invalid.</exception>
     public void Validate()
     {
-        if (string.IsNullOrWhiteSpace(FileName) || FileName.Length > 255
-            || FileName.IndexOfAny(Path.GetInvalidFileNameChars()) >= 0 || FileName.Contains('/') || FileName.Contains('\\'))
+        // The rule is the same on every system: the characters a file name may hold differ between Windows, Linux
+        // and macOS, and a name the system of the host allows must not end the session on another one.
+        if (string.IsNullOrWhiteSpace(FileName) || FileName.Length > MaxFileNameLength || FileName.Any(IsForbiddenInName))
         {
             throw new ArgumentException("The media file name is invalid.", nameof(FileName));
         }
@@ -82,4 +106,11 @@ public sealed record MediaDescriptor
         var start = index * ChunkSize;
         return (int)Math.Min(ChunkSize, Length - start);
     }
+
+    /// <summary>
+    /// Checks whether a character may not appear in a shared file name on any system.
+    /// </summary>
+    /// <param name="c">The character.</param>
+    /// <returns><see langword="true"/> for control characters and path separators.</returns>
+    private static bool IsForbiddenInName(char c) => char.IsControl(c) || c is '/' or '\\';
 }

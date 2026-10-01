@@ -210,7 +210,7 @@ public static class WindowsFirewall
 
         foreach (var rule in rules)
         {
-            if (Member(rule, "ApplicationName") is not string application
+            if (Member(rule, "ApplicationName") is not string { Length: > 0 } application
                 || !string.Equals(Path.GetFullPath(application), program, StringComparison.OrdinalIgnoreCase))
             {
                 continue;
@@ -253,12 +253,13 @@ public static class WindowsFirewall
     /// <exception cref="InvalidOperationException">The call failed.</exception>
     private static void Netsh(IReadOnlyList<string> arguments, bool ignoreFailure)
     {
-        var info = new ProcessStartInfo("netsh")
+        // The helper runs with administrator rights, so the program is named by its full path in the system
+        // folder: a bare name is looked for in the current folder first, where anybody may have put a "netsh.exe".
+        // The output is not captured: nobody reads it, and a full pipe would only make the program wait.
+        var info = new ProcessStartInfo(Path.Combine(Environment.SystemDirectory, "netsh.exe"))
         {
             UseShellExecute = false,
             CreateNoWindow = true,
-            RedirectStandardOutput = true,
-            RedirectStandardError = true,
         };
         foreach (var argument in arguments)
         {
@@ -266,7 +267,12 @@ public static class WindowsFirewall
         }
 
         using var process = Process.Start(info) ?? throw new InvalidOperationException("netsh did not start.");
-        process.WaitForExit(CallTimeout);
+        if (!process.WaitForExit(CallTimeout))
+        {
+            process.Kill(entireProcessTree: true);
+            throw new InvalidOperationException("netsh did not finish in time.");
+        }
+
         if (!ignoreFailure && process.ExitCode != 0)
         {
             throw new InvalidOperationException($"netsh finished with code {process.ExitCode}.");

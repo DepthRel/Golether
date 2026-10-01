@@ -376,8 +376,10 @@ public sealed partial class TunnelDialogViewModel : ObservableObject
         {
             await operation();
         }
-        catch (Exception ex) when (ex is FormatException or TunnelControlException or InvalidOperationException or IOException or UnauthorizedAccessException or CryptographicException)
+        catch (Exception ex) when (ex is not OutOfMemoryException)
         {
+            // This is where a command of the user ends: a failure of any kind (a damaged package, the tools, the
+            // network, the store) is shown in the dialog instead of ending the whole application.
             Message = ex.Message;
         }
         finally

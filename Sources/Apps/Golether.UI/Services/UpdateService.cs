@@ -28,6 +28,11 @@ public sealed class UpdateService : IUpdateService
     public const long MaxPackageBytes = 512L * 1024 * 1024;
 
     /// <summary>
+    /// The extension a download carries until its hash is checked.
+    /// </summary>
+    public const string PartialExtension = ".part";
+
+    /// <summary>
     /// The HTTP client.
     /// </summary>
     private readonly HttpClient _http;
@@ -132,6 +137,44 @@ public sealed class UpdateService : IUpdateService
             throw new InvalidDataException(Texts.Get("Update.Error.TooLarge"));
         }
 
+        // The file gets its name only after the hash is checked: a download that broke off half way, or one that
+        // failed the check, must not be left lying around looking like the update. An older file of the same name
+        // goes first for the same reason: whatever sits under that name afterwards is what was just checked.
+        var partial = path + PartialExtension;
+        try
+        {
+            File.Delete(path);
+            await DownloadToAsync(response, partial, total, progress, cancellationToken).ConfigureAwait(false);
+            var actual = await ComputeHashAsync(partial, cancellationToken).ConfigureAwait(false);
+            if (!string.Equals(actual, update.Sha256, StringComparison.OrdinalIgnoreCase))
+            {
+                throw new InvalidDataException(Texts.Get("Update.Error.ChecksumMismatch"));
+            }
+
+            File.Move(partial, path, overwrite: true);
+        }
+        catch
+        {
+            TryDelete(partial);
+            throw;
+        }
+
+        progress?.Report(1);
+        return path;
+    }
+
+    /// <summary>
+    /// Copies the body of a response into a file, refusing more than <see cref="MaxPackageBytes"/>.
+    /// </summary>
+    /// <param name="response">The response.</param>
+    /// <param name="path">The file to write.</param>
+    /// <param name="total">The expected size, for the progress.</param>
+    /// <param name="progress">Receives the progress from 0 to 1, or <see langword="null"/>.</param>
+    /// <param name="cancellationToken">The cancellation token.</param>
+    /// <returns>A task that completes when the body is written.</returns>
+    /// <exception cref="InvalidDataException">The body is larger than allowed.</exception>
+    private static async Task DownloadToAsync(HttpResponseMessage response, string path, long total, IProgress<double>? progress, CancellationToken cancellationToken)
+    {
         await using (var source = await response.Content.ReadAsStreamAsync(cancellationToken).ConfigureAwait(false))
         await using (var target = new FileStream(path, FileMode.Create, FileAccess.Write, FileShare.None))
         {
@@ -150,16 +193,21 @@ public sealed class UpdateService : IUpdateService
                 progress?.Report(total > 0 ? Math.Clamp((double)copied / total, 0, 1) : 0);
             }
         }
+    }
 
-        var actual = await ComputeHashAsync(path, cancellationToken).ConfigureAwait(false);
-        if (!string.Equals(actual, update.Sha256, StringComparison.OrdinalIgnoreCase))
+    /// <summary>
+    /// Removes a file that is not needed any more; a failure is not worth reporting.
+    /// </summary>
+    /// <param name="path">The file.</param>
+    private static void TryDelete(string path)
+    {
+        try
         {
             File.Delete(path);
-            throw new InvalidDataException(Texts.Get("Update.Error.ChecksumMismatch"));
         }
-
-        progress?.Report(1);
-        return path;
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+        }
     }
 
     /// <summary>

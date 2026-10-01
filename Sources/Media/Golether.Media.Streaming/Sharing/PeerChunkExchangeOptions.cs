@@ -26,6 +26,12 @@ public sealed record PeerChunkExchangeOptions
     public TimeSpan StallTimeout { get; init; } = TimeSpan.FromSeconds(5);
 
     /// <summary>
+    /// Gets how long one chunk may take from one participant in all. A transfer that keeps moving but would not
+    /// finish in this time is slower than the film plays, so the chunk is taken from the host instead.
+    /// </summary>
+    public TimeSpan ChunkTimeout { get; init; } = TimeSpan.FromSeconds(30);
+
+    /// <summary>
     /// Gets the number of chunks served to one participant at a time.
     /// </summary>
     public int UploadsPerPeer { get; init; } = 2;

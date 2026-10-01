@@ -128,8 +128,10 @@ internal sealed class StunResponder : BackgroundService
         {
             message = StunMessage.Parse(request);
         }
-        catch (Exception ex) when (ex is FormatException or ArgumentException)
+        catch (Exception ex) when (ex is InvalidDataException or ArgumentException)
         {
+            // A datagram that only looks like STUN (odd length, a cut attribute) is ignored like any other garbage:
+            // it must never stop the responder.
             return null;
         }
 

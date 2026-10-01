@@ -270,4 +270,26 @@ public sealed class DrawingViewModelTests
         /// <param name="value">The step.</param>
         public void Advance(TimeSpan value) => _now += value;
     }
+
+    /// <summary>
+    /// A stroke belongs to whoever started it: a piece with the same identifier from another participant neither
+    /// extends nor ends it.
+    /// </summary>
+    [Fact]
+    public void Stroke_IsNotChangedByAnotherParticipant()
+    {
+        _drawing.Apply(new StrokeUpdate(Guest, "AB12", StrokePhase.Start, [new StrokePoint(0.1f, 0.1f)], false));
+
+        _drawing.Apply(new StrokeUpdate(Self, "AB12", StrokePhase.Continue, [new StrokePoint(0.9f, 0.9f)], true));
+        _drawing.Apply(new StrokeUpdate(Self, "AB12", StrokePhase.End, [], true));
+
+        var stroke = Assert.Single(_drawing.Strokes);
+        Assert.Equal(Guest, stroke.Author);
+        Assert.Single(stroke.Points);
+        Assert.Null(stroke.EndedAt);
+
+        _drawing.Apply(new StrokeUpdate(Guest, "AB12", StrokePhase.End, [new StrokePoint(0.2f, 0.2f)], false));
+        Assert.Equal(2, stroke.Points.Count);
+        Assert.NotNull(stroke.EndedAt);
+    }
 }

@@ -65,5 +65,18 @@ public sealed class Localizer : ILocalizer
     }
 
     /// <inheritdoc />
-    public string Format(string key, params object?[] args) => string.Format(Culture, Get(key), args);
+    public string Format(string key, params object?[] args)
+    {
+        var text = Get(key);
+        try
+        {
+            return string.Format(Culture, text, args);
+        }
+        catch (FormatException)
+        {
+            // A text whose placeholders do not match the values (a mistake in a language file) is shown as it is:
+            // texts are composed everywhere, also while an error is being reported, and must never fail themselves.
+            return text;
+        }
+    }
 }

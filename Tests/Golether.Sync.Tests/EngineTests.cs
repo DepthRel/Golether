@@ -413,4 +413,38 @@ public sealed class EngineTests
         await follower.ApplyLocalIntentAsync(new PlaybackRequest(PlaybackRequestKind.Seek, TimeSpan.FromSeconds(12)), token);
         Assert.Equal(TimeSpan.FromSeconds(12), player.Position);
     }
+
+    /// <summary>
+    /// The kind of a request comes from the network as a number: an unknown one is refused instead of being taken
+    /// for a seek.
+    /// </summary>
+    [Fact]
+    public void Authority_RefusesUnknownRequestKind()
+    {
+        var authority = new PlaybackAuthority(Host, _clock);
+
+        Assert.Throws<ArgumentException>(() => authority.Apply(Guest, new PlaybackRequest((PlaybackRequestKind)99, null), TimeSpan.Zero));
+        Assert.Throws<ArgumentException>(() => authority.Apply(Guest, new PlaybackRequest((PlaybackRequestKind)99, TimeSpan.FromSeconds(5)), TimeSpan.Zero));
+        Assert.Equal(0, authority.Current.Version);
+    }
+
+    /// <summary>
+    /// While the duration is unknown a participant may ask for any position; it stays inside the range every node
+    /// accepts, and the statuses of the participants can still be evaluated afterwards.
+    /// </summary>
+    [Fact]
+    public void Authority_KeepsRequestedPositionInsideTheLimit()
+    {
+        var authority = new PlaybackAuthority(Host, _clock);
+
+        var state = authority.Apply(Guest, new PlaybackRequest(PlaybackRequestKind.Seek, TimeSpan.MaxValue), TimeSpan.Zero)!;
+
+        Assert.Equal(PlaybackState.MaxPosition, state.Position);
+        Assert.True(state.IsValid());
+        var playing = authority.Apply(Guest, new PlaybackRequest(PlaybackRequestKind.PlayNow, null), TimeSpan.Zero)!;
+        _clock.Advance(TimeSpan.FromHours(1));
+        Assert.True(playing.ExpectedPositionAt(_clock.NowMicroseconds) > PlaybackState.MaxPosition);
+        var status = new ParticipantStatus { PeerId = Guest, Position = TimeSpan.Zero, IsBuffering = true, Drift = -ParticipantStatus.MaxSpan };
+        Assert.NotNull(authority.EvaluateBuffering([status], TimeSpan.Zero));
+    }
 }

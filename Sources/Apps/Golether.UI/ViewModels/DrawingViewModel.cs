@@ -314,6 +314,12 @@ public sealed partial class DrawingViewModel : ObservableObject
             _byId[stroke.Id] = stroke;
             Strokes.Add(stroke);
         }
+        else if (stroke.Author != update.Sender)
+        {
+            // A stroke belongs to whoever started it: a piece with the same identifier from another participant
+            // would let one person extend or end what another is drawing.
+            return;
+        }
 
         stroke.Append(update.Points);
         if (update.Phase == StrokePhase.End)

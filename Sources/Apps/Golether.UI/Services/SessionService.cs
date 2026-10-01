@@ -179,7 +179,13 @@ public sealed class SessionService : ISessionService, IAsyncDisposable
     public event EventHandler<AvatarUpdate>? AvatarReceived;
 
     /// <inheritdoc />
-    public bool IsActive => _host is not null || _participant is not null;
+    /// <remarks>
+    /// A joined session that has ended and is not being restored does not count: the start screen is shown again by
+    /// then, and the next session releases what is left of it (see <see cref="ReleaseEndedAsync"/>).
+    /// </remarks>
+    public bool IsActive
+        => _host is not null
+           || (_participant is { } participant && (_reconnecting is not null || participant.GetSnapshot().State != SessionState.Ended));
 
     /// <inheritdoc />
     public bool IsHost => _host is not null;
@@ -194,8 +200,9 @@ public sealed class SessionService : ISessionService, IAsyncDisposable
     public string RendezvousServer { get; set; } = string.Empty;
 
     /// <inheritdoc />
-    public Task StartHostingAsync(string sessionName, string displayName, int port, CancellationToken cancellationToken)
+    public async Task StartHostingAsync(string sessionName, string displayName, int port, CancellationToken cancellationToken)
     {
+        await ReleaseEndedAsync().ConfigureAwait(false);
         EnsureIdle();
         RendezvousPoint? rendezvous = null;
         if (!string.IsNullOrWhiteSpace(RendezvousServer))
@@ -247,7 +254,6 @@ public sealed class SessionService : ISessionService, IAsyncDisposable
         }
 
         ReportFirewall();
-        return Task.CompletedTask;
     }
 
     /// <inheritdoc />
@@ -262,12 +268,20 @@ public sealed class SessionService : ISessionService, IAsyncDisposable
         var external = mapping is { IsPubliclyReachable: true, ExternalAddress: { } address }
             ? [new PeerEndpoint(address.ToString(), mapping.ExternalPort)]
             : Array.Empty<PeerEndpoint>();
-        return host.CreateInvite(EndpointDiscovery.Discover(host.Port, [.. additionalEndpoints, .. external]), lifetime);
+        var endpoints = EndpointDiscovery.Discover(host.Port, [.. additionalEndpoints, .. external]);
+        if (endpoints.Count == 0)
+        {
+            // A computer without a network has nothing to put into an invitation.
+            throw new InvalidOperationException(Texts.Get("Session.Error.NoAddresses"));
+        }
+
+        return host.CreateInvite(endpoints, lifetime);
     }
 
     /// <inheritdoc />
     public async Task JoinAsync(string inviteLink, string displayName, CancellationToken cancellationToken)
     {
+        await ReleaseEndedAsync().ConfigureAwait(false);
         EnsureIdle();
         var invite = Invite.ParseLink(inviteLink);
         var participant = CreateParticipant(displayName);
@@ -278,14 +292,24 @@ public sealed class SessionService : ISessionService, IAsyncDisposable
             _joinName = displayName;
             _reconnectInvite = participant.ReconnectInvite;
             ReconnectMessage = string.Empty;
-            await _contacts.TouchAsync(invite.HostPeerId, invite.HostName, null, cancellationToken).ConfigureAwait(false);
         }
         catch
         {
             _participant = null;
+            _reconnectInvite = null;
             await participant.DisposeAsync().ConfigureAwait(false);
             Changed?.Invoke(this, EventArgs.Empty);
             throw;
+        }
+
+        try
+        {
+            // The contacts are a convenience: a failure of the store must not end a session that has just begun.
+            await _contacts.TouchAsync(invite.HostPeerId, invite.HostName, null, cancellationToken).ConfigureAwait(false);
+        }
+        catch (Exception ex) when (ex is not (OperationCanceledException or OutOfMemoryException))
+        {
+            _loggerFactory.CreateLogger<SessionService>().LogWarning(ex, "The contact of the host could not be stored");
         }
     }
 
@@ -323,7 +347,26 @@ public sealed class SessionService : ISessionService, IAsyncDisposable
             : Task.CompletedTask;
 
     /// <inheritdoc />
-    public SessionSnapshot? GetSnapshot() => _host?.GetSnapshot() ?? _participant?.GetSnapshot();
+    /// <remarks>
+    /// A joined session that has ended and is not being restored has nothing to show any more: like
+    /// <see cref="IsActive"/>, the snapshot is gone, so the view clears the participants, the chat and the strokes
+    /// instead of carrying them into the next session.
+    /// </remarks>
+    public SessionSnapshot? GetSnapshot()
+    {
+        if (_host is { } host)
+        {
+            return host.GetSnapshot();
+        }
+
+        if (_participant is not { } participant)
+        {
+            return null;
+        }
+
+        var snapshot = participant.GetSnapshot();
+        return snapshot.State == SessionState.Ended && _reconnecting is null ? null : snapshot;
+    }
 
     /// <inheritdoc />
     public async Task LeaveAsync()
@@ -338,37 +381,38 @@ public sealed class SessionService : ISessionService, IAsyncDisposable
         ReconnectMessage = string.Empty;
         var host = Interlocked.Exchange(ref _host, null);
         var participant = Interlocked.Exchange(ref _participant, null);
-        foreach (var lease in new[] { Interlocked.Exchange(ref _portLease, null), Interlocked.Exchange(ref _relayLease, null) })
-        {
-            if (lease is not null)
-            {
-                await lease.DisposeAsync().ConfigureAwait(false);
-            }
-        }
 
-        var relay = Interlocked.Exchange(ref _relay, null);
-        if (relay is not null)
-        {
-            await relay.DisposeAsync().ConfigureAwait(false);
-        }
-
-        var rendezvous = Interlocked.Exchange(ref _rendezvousHost, null);
-        if (rendezvous is not null)
-        {
-            await rendezvous.DisposeAsync().ConfigureAwait(false);
-        }
-
-        if (host is not null)
-        {
-            await host.DisposeAsync().ConfigureAwait(false);
-        }
-
-        if (participant is not null)
-        {
-            await participant.DisposeAsync().ConfigureAwait(false);
-        }
-
+        // Every part is released on its own: one that fails must not leave the others behind (a session that keeps
+        // its port, a mapping that stays on the router).
+        await ReleaseAsync(Interlocked.Exchange(ref _portLease, null)).ConfigureAwait(false);
+        await ReleaseAsync(Interlocked.Exchange(ref _relayLease, null)).ConfigureAwait(false);
+        await ReleaseAsync(Interlocked.Exchange(ref _relay, null)).ConfigureAwait(false);
+        await ReleaseAsync(Interlocked.Exchange(ref _rendezvousHost, null)).ConfigureAwait(false);
+        await ReleaseAsync(host).ConfigureAwait(false);
+        await ReleaseAsync(participant).ConfigureAwait(false);
         Changed?.Invoke(this, EventArgs.Empty);
+    }
+
+    /// <summary>
+    /// Releases a part of a session, logging a failure instead of passing it on.
+    /// </summary>
+    /// <param name="part">The part, or <see langword="null"/>.</param>
+    /// <returns>A task that completes when the part is released or the attempt failed.</returns>
+    private async Task ReleaseAsync(IAsyncDisposable? part)
+    {
+        if (part is null)
+        {
+            return;
+        }
+
+        try
+        {
+            await part.DisposeAsync().ConfigureAwait(false);
+        }
+        catch (Exception ex) when (ex is not OutOfMemoryException)
+        {
+            _loggerFactory.CreateLogger<SessionService>().LogWarning(ex, "Releasing {Part} failed", part.GetType().Name);
+        }
     }
 
     /// <inheritdoc />
@@ -528,19 +572,28 @@ public sealed class SessionService : ISessionService, IAsyncDisposable
     {
         foreach (var port in new[] { sessionPort < 65535 ? sessionPort + 1 : 0, 0 })
         {
-            var relay = new TurnServer(
-                new TurnServerOptions { Credentials = RelayCredentials.CreateRandom(port) },
-                _timeProvider,
-                _loggerFactory.CreateLogger<TurnServer>());
+            TurnServer? relay = null;
             try
             {
+                // Creating the relay opens a socket already, so it may fail like the start does.
+                relay = new TurnServer(
+                    new TurnServerOptions
+                    {
+                        Credentials = RelayCredentials.CreateRandom(port),
+                        ListenAddress = System.Net.Sockets.Socket.OSSupportsIPv6 ? System.Net.IPAddress.IPv6Any : System.Net.IPAddress.Any,
+                    },
+                    _timeProvider,
+                    _loggerFactory.CreateLogger<TurnServer>());
                 relay.Start();
                 return relay;
             }
             catch (System.Net.Sockets.SocketException ex)
             {
                 _loggerFactory.CreateLogger<SessionService>().LogInformation("Relay port {Port} is busy: {Error}", port, ex.SocketErrorCode);
-                _ = relay.DisposeAsync();
+                if (relay is not null)
+                {
+                    _ = relay.DisposeAsync();
+                }
             }
         }
 
@@ -589,7 +642,9 @@ public sealed class SessionService : ISessionService, IAsyncDisposable
     /// <param name="session">The session that ended.</param>
     private void StartReconnecting(ParticipantSession session)
     {
-        if (!ReferenceEquals(_participant, session) || _reconnectInvite is null || _reconnecting is not null)
+        // Only a broken connection is restored: when the host ended the session or removed this device, knocking
+        // again would only bother the host.
+        if (!ReferenceEquals(_participant, session) || session.ClosedByHost || _reconnectInvite is null || _reconnecting is not null)
         {
             return;
         }
@@ -621,21 +676,46 @@ public sealed class SessionService : ISessionService, IAsyncDisposable
                 }
 
                 Report(Texts.Format("Session.Reconnect.Trying", attempt, ReconnectAttempts));
+
+                // The ended session shares the player and the cameras with the new one. It is released before the
+                // new one starts: released afterwards, its shutdown would stop the film and the cameras the new
+                // session has just started.
+                await ended.DisposeAsync().ConfigureAwait(false);
                 var session = CreateParticipant(_joinName);
                 try
                 {
                     await session.RejoinAsync(ticket, token).ConfigureAwait(false);
                 }
-                catch (Exception ex) when (ex is SessionJoinException or IOException or InvalidOperationException)
+                catch (Exception ex) when (ex is not (OperationCanceledException or OutOfMemoryException))
                 {
+                    // Whatever went wrong, the half-open session is released: left behind, it would keep its
+                    // connection and its loops for ever.
+                    var refused = session.ClosedByHost;
                     await session.DisposeAsync().ConfigureAwait(false);
                     _loggerFactory.CreateLogger<SessionService>().LogInformation("Reconnect attempt {Attempt} failed: {Error}", attempt, ex.Message);
+                    if (refused)
+                    {
+                        // The host answered and said no: asking again would only bother it.
+                        break;
+                    }
+
                     continue;
                 }
+                catch (OperationCanceledException)
+                {
+                    // The user left while the attempt was running: the half-open session must not stay behind.
+                    await session.DisposeAsync().ConfigureAwait(false);
+                    throw;
+                }
 
-                _participant = session;
+                if (!ReferenceEquals(Interlocked.CompareExchange(ref _participant, session, ended), ended))
+                {
+                    // The user left while the host was admitting this device again.
+                    await session.DisposeAsync().ConfigureAwait(false);
+                    return;
+                }
+
                 _reconnectInvite = session.ReconnectInvite ?? ticket;
-                await ended.DisposeAsync().ConfigureAwait(false);
                 Report(Texts.Get("Session.Reconnect.Restored"));
                 ReconnectMessage = string.Empty;
                 Changed?.Invoke(this, EventArgs.Empty);
@@ -693,6 +773,24 @@ public sealed class SessionService : ISessionService, IAsyncDisposable
             new RendezvousPeerConnector(connector, new RendezvousDialer(logger: _loggerFactory.CreateLogger<RendezvousDialer>())));
         Attach(participant);
         return participant;
+    }
+
+    /// <summary>
+    /// Releases a joined session that has ended and is not being restored, so that a new session can start. Without
+    /// it the ended session would stay "current" for ever: the start screen is shown, but hosting and joining would
+    /// be refused until the application is restarted.
+    /// </summary>
+    /// <returns>A task that completes when the ended session is released.</returns>
+    private async Task ReleaseEndedAsync()
+    {
+        if (_reconnecting is null
+            && _participant is { } ended
+            && ended.GetSnapshot().State == SessionState.Ended
+            && ReferenceEquals(Interlocked.CompareExchange(ref _participant, null, ended), ended))
+        {
+            _reconnectInvite = null;
+            await ended.DisposeAsync().ConfigureAwait(false);
+        }
     }
 
     /// <summary>

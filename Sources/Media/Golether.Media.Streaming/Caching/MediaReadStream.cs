@@ -59,9 +59,10 @@ public sealed class MediaReadStream : Stream
     /// </summary>
     public void CancelPendingRead()
     {
+        // The previous source is cancelled but not disposed: a read on another thread may be taking its token at
+        // this very moment, and a disposed source throws instead of cancelling. It holds no resources of its own.
         var previous = Interlocked.Exchange(ref _cancel, new CancellationTokenSource());
         previous.Cancel();
-        previous.Dispose();
     }
 
     /// <inheritdoc />

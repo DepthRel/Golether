@@ -114,6 +114,13 @@ public sealed class TunnelNegotiator
         ArgumentOutOfRangeException.ThrowIfGreaterThan(listenPort, 65535);
 
         var offer = TunnelPackageCodec.Decode<TunnelOfferBody>(TunnelPackageCodec.OfferKind, offerText, b => b.HostCertificate);
+        if (offer.Body.HostEndpoints is null
+            || offer.Body.Headers is not { Count: 4 }
+            || AnyMissing(offer.Body.OfferId, offer.Body.HostName, offer.Body.HostPublicKey, offer.Body.HostAddress, offer.Body.AssignedAddress, offer.Body.EphemeralKey))
+        {
+            throw new FormatException(Texts.Get("Tunnel.Error.PackageDamaged"));
+        }
+
         if (offer.Signer == _identity.PeerId)
         {
             throw new FormatException(Texts.Get("Tunnel.Error.OfferIsOwn"));
@@ -191,6 +198,12 @@ public sealed class TunnelNegotiator
         ArgumentNullException.ThrowIfNull(secrets);
 
         var answer = TunnelPackageCodec.Decode<TunnelAnswerBody>(TunnelPackageCodec.AnswerKind, answerText, b => b.ParticipantCertificate);
+        if (answer.Body.ParticipantEndpoints is null
+            || AnyMissing(answer.Body.OfferId, answer.Body.ParticipantName, answer.Body.ParticipantPublicKey, answer.Body.EphemeralKey))
+        {
+            throw new FormatException(Texts.Get("Tunnel.Error.PackageDamaged"));
+        }
+
         if (answer.Body.OfferId != secrets.OfferId)
         {
             throw new FormatException(Texts.Get("Tunnel.Error.AnswerOtherOffer"));
@@ -217,6 +230,15 @@ public sealed class TunnelNegotiator
         var code = VerificationCode.Compute(answer.Signer, _identity.PeerId, secrets.OfferId);
         return new HostCompletion(peer, answer.Signer, answer.Body.ParticipantName, code);
     }
+
+    /// <summary>
+    /// Checks whether a text field of a package is absent. The signature only proves who made the package, not that
+    /// it is complete: a field may be <c>null</c> in the JSON, and such a package is refused with a clear message
+    /// instead of failing somewhere inside.
+    /// </summary>
+    /// <param name="texts">The text fields that must be present.</param>
+    /// <returns><see langword="true"/> when a field is missing or blank.</returns>
+    private static bool AnyMissing(params string?[] texts) => texts.Any(string.IsNullOrWhiteSpace);
 
     /// <summary>
     /// Creates an ephemeral P-256 key pair for the preshared key agreement.
@@ -265,12 +287,23 @@ public sealed class TunnelNegotiator
     /// <param name="key">The local ephemeral key.</param>
     /// <param name="otherPublicKey">The base64 SubjectPublicKeyInfo of the other side.</param>
     /// <returns>The base64 preshared key.</returns>
+    /// <exception cref="FormatException">The key of the other side is not a P-256 public key.</exception>
     private static string PresharedKey(ECDiffieHellman key, string otherPublicKey)
     {
-        var der = Convert.FromBase64String(otherPublicKey);
-        using var other = ECDiffieHellman.Create(ECCurve.NamedCurves.nistP256);
-        other.ImportSubjectPublicKeyInfo(der, out _);
-        var secret = key.DeriveRawSecretAgreement(other.PublicKey);
+        byte[] secret;
+        try
+        {
+            var der = Convert.FromBase64String(otherPublicKey);
+            using var other = ECDiffieHellman.Create(ECCurve.NamedCurves.nistP256);
+            other.ImportSubjectPublicKeyInfo(der, out _);
+            secret = key.DeriveRawSecretAgreement(other.PublicKey);
+        }
+        catch (Exception ex) when (ex is FormatException or CryptographicException or ArgumentException)
+        {
+            // Not base64, not a key, or a key of another curve: the package came from outside and is refused.
+            throw new FormatException(Texts.Get("Tunnel.Error.PackageDamaged"), ex);
+        }
+
         try
         {
             return Convert.ToBase64String(SHA256.HashData(secret));

@@ -6,6 +6,7 @@ using Golether.Localization;
 using Golether.UI.Services;
 using Golether.UI.Views;
 using Golether.UI.Views.Dialogs;
+using Microsoft.Extensions.Logging;
 
 namespace Golether.UI;
 
@@ -60,35 +61,83 @@ public sealed class App : Application
         }
         catch (Exception ex)
         {
-            var failure = new MessageDialog(Texts.Get("Splash.StartFailed"), ex.Message);
-            desktop.MainWindow = failure;
-            desktop.ShutdownMode = ShutdownMode.OnMainWindowClose;
-            failure.Show();
-            splash.Close();
+            ShowStartFailure(desktop, splash, ex);
             return;
         }
 
         _services = services;
-        splash.ShowStep(Texts.Get("Splash.OpeningWindow"));
-        var window = new MainWindow();
-        services.SetDialogs(new AvaloniaDialogService(window));
-        var viewModel = services.CreateMainViewModel();
-        window.Initialize(viewModel, services.Player, services.Conference);
-        var fileToShow = desktop.Args?.FirstOrDefault(a => !a.StartsWith('-') && File.Exists(a));
-        window.Opened += async (_, _) =>
+        var log = services.LoggerFactory.CreateLogger<App>();
+        LogCrashes(log);
+        try
         {
-            // The window is drawn by now: the splash goes away without a gap.
-            splash.Close();
-            await viewModel.LoadAsync();
-            if (fileToShow is not null)
+            splash.ShowStep(Texts.Get("Splash.OpeningWindow"));
+            var window = new MainWindow();
+            services.SetDialogs(new AvaloniaDialogService(window));
+            var viewModel = services.CreateMainViewModel();
+            window.Initialize(viewModel, services.Player, services.Conference);
+            var fileToShow = desktop.Args?.FirstOrDefault(a => !a.StartsWith('-') && File.Exists(a));
+            window.Opened += async (_, _) =>
             {
-                // "Open with Golether": host a session and show the file right away.
-                await viewModel.HostFileAsync(Path.GetFullPath(fileToShow));
-            }
-        };
-        desktop.MainWindow = window;
+                // The window is drawn by now: the splash goes away without a gap.
+                splash.Close();
+                try
+                {
+                    await viewModel.LoadAsync();
+                    if (fileToShow is not null)
+                    {
+                        // "Open with Golether": host a session and show the file right away.
+                        await viewModel.HostFileAsync(Path.GetFullPath(fileToShow));
+                    }
+                }
+                catch (Exception ex) when (ex is not OutOfMemoryException)
+                {
+                    // The handler returns nothing, so an exception here would end the application. The window is
+                    // open and works with the settings it has; what failed goes to the log.
+                    log.LogError(ex, "The stored settings were not applied");
+                }
+            };
+            desktop.MainWindow = window;
+            desktop.ShutdownMode = ShutdownMode.OnMainWindowClose;
+            desktop.Exit += (_, _) => services.DisposeAsync().AsTask().GetAwaiter().GetResult();
+            window.Show();
+        }
+        catch (Exception ex) when (ex is not OutOfMemoryException)
+        {
+            // Nobody waits for this method: without the message the splash would stay on the screen for ever.
+            log.LogCritical("The main window could not be opened: {Exception}", ex);
+            ShowStartFailure(desktop, splash, ex);
+        }
+    }
+
+    /// <summary>
+    /// Tells the user that the application could not start and lets it end when the message is closed.
+    /// </summary>
+    /// <param name="desktop">The application lifetime.</param>
+    /// <param name="splash">The splash window.</param>
+    /// <param name="error">What went wrong.</param>
+    private static void ShowStartFailure(IClassicDesktopStyleApplicationLifetime desktop, SplashWindow splash, Exception error)
+    {
+        var failure = new MessageDialog(Texts.Get("Splash.StartFailed"), error.Message);
+        desktop.MainWindow = failure;
         desktop.ShutdownMode = ShutdownMode.OnMainWindowClose;
-        desktop.Exit += (_, _) => services.DisposeAsync().AsTask().GetAwaiter().GetResult();
-        window.Show();
+        failure.Show();
+        splash.Close();
+    }
+
+    /// <summary>
+    /// Writes what would otherwise vanish into the log: the exception the application stops on, and the failures of
+    /// background tasks nobody waited for. The log is what a diagnostic report carries, so a problem can be looked
+    /// at afterwards.
+    /// </summary>
+    /// <param name="log">The logger.</param>
+    private static void LogCrashes(ILogger log)
+    {
+        AppDomain.CurrentDomain.UnhandledException += (_, e) =>
+            log.LogCritical("The application stopped on an unhandled exception: {Exception}", e.ExceptionObject);
+        TaskScheduler.UnobservedTaskException += (_, e) =>
+        {
+            log.LogWarning("A background task failed: {Exception}", e.Exception);
+            e.SetObserved();
+        };
     }
 }

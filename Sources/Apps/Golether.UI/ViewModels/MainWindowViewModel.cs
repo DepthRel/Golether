@@ -1729,8 +1729,10 @@ public sealed partial class MainWindowViewModel : ObservableObject
         {
             await _session.RequestAsync(request, CancellationToken.None);
         }
-        catch (Exception ex) when (ex is IOException or InvalidOperationException or ObjectDisposedException)
+        catch (Exception ex) when (ex is not OutOfMemoryException)
         {
+            // This is where a command of the user ends: whatever failed below (the connection, the player), it is
+            // shown. An exception that leaves a command would end the whole application.
             await _dialogs.ShowErrorAsync(Texts.Get("Main.Error.CommandNotSent"), ex.Message);
         }
     }
@@ -1754,8 +1756,10 @@ public sealed partial class MainWindowViewModel : ObservableObject
         {
             // The user stopped the operation (for example a join waiting for the host); nothing to report.
         }
-        catch (Exception ex) when (ex is FormatException or SessionJoinException or InvalidOperationException or IOException or UnauthorizedAccessException)
+        catch (Exception ex) when (ex is not OutOfMemoryException)
         {
+            // This is where a command of the user ends: a failure of any kind (a bad link, the network, the player,
+            // the disk) is shown instead of ending the whole application.
             await _dialogs.ShowErrorAsync(Texts.Get("Main.Error.Failed"), ex.Message);
         }
         finally

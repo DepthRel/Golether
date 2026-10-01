@@ -14,6 +14,23 @@ namespace Golether.Core.Playback;
 public sealed record PlaybackState
 {
     /// <summary>
+    /// The largest position a state may carry. No film is that long; without a ceiling a position taken from the
+    /// network could sit at the limit of <see cref="TimeSpan"/> and overflow in the first subtraction.
+    /// </summary>
+    public static readonly TimeSpan MaxPosition = TimeSpan.FromDays(30);
+
+    /// <summary>
+    /// The slowest nominal rate accepted from the network. Together with the drift correction it stays inside what
+    /// a player accepts.
+    /// </summary>
+    public const double MinRate = 0.5;
+
+    /// <summary>
+    /// The fastest nominal rate accepted from the network.
+    /// </summary>
+    public const double MaxRate = 2.0;
+
+    /// <summary>
     /// Gets the playback mode.
     /// </summary>
     public required PlayState State { get; init; }
@@ -65,6 +82,16 @@ public sealed record PlaybackState
     };
 
     /// <summary>
+    /// Checks a state received from the network: a known mode, a position inside <see cref="MaxPosition"/> and a
+    /// finite rate between <see cref="MinRate"/> and <see cref="MaxRate"/>.
+    /// </summary>
+    /// <returns><see langword="true"/> when the state can be followed.</returns>
+    public bool IsValid()
+        => Enum.IsDefined(State)
+           && Position >= TimeSpan.Zero && Position <= MaxPosition
+           && double.IsFinite(Rate) && Rate is >= MinRate and <= MaxRate;
+
+    /// <summary>
     /// Computes the position every node should show at the given session time.
     /// </summary>
     /// <param name="sessionTime">The session time in microseconds.</param>
@@ -77,7 +104,11 @@ public sealed record PlaybackState
         }
 
         var elapsed = (long)((sessionTime - ReferenceTime) * Rate);
-        return Position + Microseconds.ToTimeSpan(elapsed);
+
+        // The position comes from the network (a participant may ask for any): near the largest value the sum
+        // stays at the limit instead of overflowing.
+        var ticks = (Int128)Position.Ticks + Microseconds.ToTimeSpan(elapsed).Ticks;
+        return TimeSpan.FromTicks((long)Int128.Clamp(ticks, TimeSpan.MinValue.Ticks, TimeSpan.MaxValue.Ticks));
     }
 
     /// <summary>

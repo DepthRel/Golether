@@ -38,6 +38,12 @@ public sealed record Invite
     public const int TokenBytes = 16;
 
     /// <summary>
+    /// The latest expiry time a link may carry, in Unix seconds (the end of year 9999): a larger number cannot be
+    /// turned into a date and would fail instead of being reported as a damaged link.
+    /// </summary>
+    private const long MaxExpiresSeconds = 253_402_300_799;
+
+    /// <summary>
     /// The JSON options of the link payload.
     /// </summary>
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
@@ -130,7 +136,8 @@ public sealed record Invite
         if (payload is null
             || !PeerId.TryParse(payload.Host, out var host)
             || payload.Endpoints is null || payload.Endpoints.Length is 0 or > MaxEndpoints
-            || !IsValidToken(payload.Token))
+            || !IsValidToken(payload.Token)
+            || payload.Expires is < 0 or > MaxExpiresSeconds)
         {
             throw new FormatException(Texts.Get("Invite.Error.Damaged"));
         }

@@ -158,4 +158,21 @@ public sealed class InviteTests
         Assert.Throws<ArgumentOutOfRangeException>(() => registry.Issue(TimeSpan.Zero));
         Assert.Throws<ArgumentOutOfRangeException>(() => registry.Issue(TimeSpan.FromDays(8)));
     }
+
+    /// <summary>
+    /// An expiry time that cannot be turned into a date makes a damaged link, not a failure of another kind.
+    /// </summary>
+    /// <param name="expires">The expiry time written into the link.</param>
+    [Theory]
+    [InlineData("9000000000000000000")]
+    [InlineData("253402300800")]
+    [InlineData("-1")]
+    public void Link_RejectsImpossibleExpiry(string expires)
+    {
+        var json = DecodePayload(Sample().ToLink()).Replace("\"expires\":2000000000", "\"expires\":" + expires, StringComparison.Ordinal);
+        Assert.Contains(expires, json, StringComparison.Ordinal);
+        var link = Invite.LinkPrefix + System.Buffers.Text.Base64Url.EncodeToString(System.Text.Encoding.UTF8.GetBytes(json));
+
+        Assert.Throws<FormatException>(() => Invite.ParseLink(link));
+    }
 }

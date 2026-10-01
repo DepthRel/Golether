@@ -101,8 +101,10 @@ public sealed class AwgCliTunnelController : ITunnelController
             await _runner.RunAsync(_options.QuickExecutable, ["--help"], TimeSpan.FromSeconds(10), cancellationToken).ConfigureAwait(false);
             return null;
         }
-        catch (Win32Exception)
+        catch (Exception ex) when (ex is Win32Exception or TimeoutException or InvalidOperationException)
         {
+            // Not found, not started or hanging: either way the tools cannot be used. The caller only asks whether
+            // they are there and must get an answer, not an exception.
             return Texts.Format("Tunnel.Availability.ToolsMissing", _options.QuickExecutable);
         }
     }

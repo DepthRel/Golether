@@ -174,4 +174,17 @@ public sealed class LocalizerTests
             Texts.Localizer = before;
         }
     }
+
+    /// <summary>
+    /// A text whose placeholders do not match the values (a mistake in a language file) is shown as it is: composing
+    /// a text never fails, because texts are also composed while an error is being reported.
+    /// </summary>
+    [Fact]
+    public void Format_WithMismatchedPlaceholders_ReturnsTheText()
+    {
+        var localizer = new Localizer(new LanguageCatalog([Pack("en", "English", ("Broken", "{0} of {3}"), ("Brace", "a { b"))]));
+
+        Assert.Equal("{0} of {3}", localizer.Format("Broken", 1));
+        Assert.Equal("a { b", localizer.Format("Brace", 1));
+    }
 }

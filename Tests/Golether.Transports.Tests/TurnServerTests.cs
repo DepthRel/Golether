@@ -260,4 +260,42 @@ public sealed class TurnServerTests : IAsyncLifetime
             return ValueTask.CompletedTask;
         }
     }
+
+    /// <summary>
+    /// The relay runs on the device of the host and every participant knows its password, so it does not send where
+    /// it must not: to everybody at once (multicast, broadcast), to nowhere, or to the device itself (loopback) when
+    /// it serves the network.
+    /// </summary>
+    /// <returns>A task that completes when the test is done.</returns>
+    [Fact]
+    public async Task Relay_RefusesPeersItMustNotReach()
+    {
+        var token = TestContext.Current.CancellationToken;
+        await using var server = new TurnServer(new TurnServerOptions { Credentials = _credentials, ListenAddress = IPAddress.Any });
+        server.Start();
+        await using var client = await TurnClient.ConnectAsync(server.Port, token);
+        var challenge = await client.RequestAsync(new StunMessage(Stun.Allocate, Stun.ClassRequest, RandomNumberGenerator.GetBytes(12))
+            .Add(Stun.AttrRequestedTransport, [17, 0, 0, 0]), null, token);
+        var realm = challenge.GetText(Stun.AttrRealm)!;
+        var nonce = challenge.GetText(Stun.AttrNonce)!;
+        var key = Stun.LongTermKey(_credentials.Username, realm, _credentials.Password);
+        var allocated = await client.RequestAsync(Signed(Stun.Allocate, realm, nonce).Add(Stun.AttrRequestedTransport, [17, 0, 0, 0]), key, token);
+        Assert.Equal(Stun.ClassSuccess, allocated.Class);
+
+        foreach (var address in new[] { "127.0.0.1", "239.255.255.250", "255.255.255.255", "0.0.0.0" })
+        {
+            var peer = new IPEndPoint(IPAddress.Parse(address), 1900);
+            var permission = await client.RequestAsync(Signed(Stun.CreatePermission, realm, nonce).AddXorAddress(Stun.AttrXorPeerAddress, peer), key, token);
+            Assert.Equal(403, permission.GetErrorCode());
+            var channel = await client.RequestAsync(Signed(Stun.ChannelBind, realm, nonce)
+                .Add(Stun.AttrChannelNumber, [0x40, 0x02, 0, 0])
+                .AddXorAddress(Stun.AttrXorPeerAddress, peer), key, token);
+            Assert.Equal(403, channel.GetErrorCode());
+        }
+
+        // An ordinary address of another network is still served.
+        var allowed = await client.RequestAsync(
+            Signed(Stun.CreatePermission, realm, nonce).AddXorAddress(Stun.AttrXorPeerAddress, new IPEndPoint(IPAddress.Parse("192.168.77.5"), 5000)), key, token);
+        Assert.Equal(Stun.ClassSuccess, allowed.Class);
+    }
 }

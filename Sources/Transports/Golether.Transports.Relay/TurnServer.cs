@@ -143,9 +143,17 @@ public sealed class TurnServer : IAsyncDisposable
             {
                 client = await _listener.AcceptTcpClientAsync(_stop.Token).ConfigureAwait(false);
             }
-            catch (Exception ex) when (ex is OperationCanceledException or ObjectDisposedException or SocketException)
+            catch (Exception ex) when (ex is OperationCanceledException or ObjectDisposedException
+                                       || (ex is SocketException && _stop.IsCancellationRequested))
             {
                 return;
+            }
+            catch (SocketException ex)
+            {
+                // One connection that broke while being accepted (a reset, for example) must not stop the relay for
+                // the rest of the session.
+                _logger.LogDebug("TURN accept failed: {Error}", ex.SocketErrorCode);
+                continue;
             }
 
             _ = Task.Run(() => ServeAsync(client));
@@ -213,15 +221,16 @@ public sealed class TurnServer : IAsyncDisposable
             var body = new byte[StunMessage.MaxSize];
             while (true)
             {
-                using var idle = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-                if (Allocation is null)
-                {
-                    idle.CancelAfter(server._options.IdleTimeout);
-                }
-                else if (Allocation.IsExpired)
+                if (Allocation is { IsExpired: true })
                 {
                     return;
                 }
+
+                // Without an allocation the client has the idle time to ask for one. With an allocation it must
+                // refresh it before it expires: a client that vanished without closing the connection (a router
+                // forgot it) would otherwise hold its place among the allocations until the session ends.
+                using var limit = new CancellationTokenSource(Allocation?.Remaining ?? server._options.IdleTimeout, server._timeProvider);
+                using var idle = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, limit.Token);
 
                 await stream.ReadExactlyAsync(header, idle.Token).ConfigureAwait(false);
                 var channel = BinaryPrimitives.ReadUInt16BigEndian(header);
@@ -436,6 +445,11 @@ public sealed class TurnServer : IAsyncDisposable
                 return Error(message, 400, "Bad Request", signed: true);
             }
 
+            if (peers.Any(p => !server.IsRelayablePeer(p!.Address)))
+            {
+                return Error(message, 403, "Forbidden", signed: true);
+            }
+
             foreach (var peer in peers)
             {
                 allocation.Permit(peer!.Address);
@@ -458,6 +472,11 @@ public sealed class TurnServer : IAsyncDisposable
 
             var number = message.Get(Stun.AttrChannelNumber) is { Length: 4 } raw ? BinaryPrimitives.ReadUInt16BigEndian(raw) : (ushort)0;
             var peer = message.GetXorAddress(Stun.AttrXorPeerAddress);
+            if (peer is not null && !server.IsRelayablePeer(peer.Address))
+            {
+                return Error(message, 403, "Forbidden", signed: true);
+            }
+
             if (number is < Stun.FirstChannel or > Stun.LastChannel || peer is null || !allocation.Bind(number, peer))
             {
                 return Error(message, 400, "Bad Request", signed: true);
@@ -576,7 +595,19 @@ public sealed class TurnServer : IAsyncDisposable
             _owner = owner;
             _timeProvider = timeProvider;
             _logger = logger;
-            _udp = new UdpClient(new IPEndPoint(address.AddressFamily == AddressFamily.InterNetworkV6 ? IPAddress.IPv6Any : IPAddress.Any, 0));
+            if (address.AddressFamily == AddressFamily.InterNetworkV6)
+            {
+                // A client that came over IPv6 still relays to IPv4 peers (as mapped addresses), which only a dual
+                // socket can send to.
+                _udp = new UdpClient(AddressFamily.InterNetworkV6);
+                _udp.Client.DualMode = true;
+                _udp.Client.Bind(new IPEndPoint(IPAddress.IPv6Any, 0));
+            }
+            else
+            {
+                _udp = new UdpClient(new IPEndPoint(IPAddress.Any, 0));
+            }
+
             RelayAddress = new IPEndPoint(address, ((IPEndPoint)_udp.Client.LocalEndPoint!).Port);
         }
 
@@ -594,6 +625,18 @@ public sealed class TurnServer : IAsyncDisposable
         /// Gets a value indicating whether the allocation expired.
         /// </summary>
         public bool IsExpired => _timeProvider.GetUtcNow() > _expires;
+
+        /// <summary>
+        /// Gets the time the client has left to refresh the allocation, with a second to spare.
+        /// </summary>
+        public TimeSpan Remaining
+        {
+            get
+            {
+                var left = _expires - _timeProvider.GetUtcNow();
+                return (left > TimeSpan.Zero ? left : TimeSpan.Zero) + TimeSpan.FromSeconds(1);
+            }
+        }
 
         /// <summary>
         /// Starts relaying peer packets to the client.
@@ -646,9 +689,20 @@ public sealed class TurnServer : IAsyncDisposable
         public async ValueTask SendAsync(IPEndPoint peer, ReadOnlyMemory<byte> data)
         {
             peer = Normalize(peer);
-            if (IsPermitted(peer.Address) && !IsExpired)
+            if (!IsPermitted(peer.Address) || IsExpired)
+            {
+                return;
+            }
+
+            try
             {
                 await _udp.SendAsync(data, ToSocket(peer)).ConfigureAwait(false);
+            }
+            catch (Exception ex) when (ex is SocketException or ArgumentException)
+            {
+                // A datagram that cannot be sent (no route, another address family, port zero) is lost like any
+                // other datagram. It must not close the connection of the client and with it every other path.
+                _logger.LogDebug("TURN relay {Relay} could not send to {Peer}: {Reason}", RelayAddress, peer, ex.Message);
             }
         }
 
@@ -734,6 +788,26 @@ public sealed class TurnServer : IAsyncDisposable
             => _udp.Client.AddressFamily == AddressFamily.InterNetworkV6 && peer.AddressFamily == AddressFamily.InterNetwork
                 ? new IPEndPoint(peer.Address.MapToIPv6(), peer.Port)
                 : peer;
+    }
+
+    /// <summary>
+    /// Checks whether the relay may send to a peer. The relay runs on the device of the host, and every admitted
+    /// participant knows its password: it must not become a way to reach the services of that device itself
+    /// (loopback) or to send to everybody at once (multicast, broadcast). Loopback is allowed only when the relay
+    /// itself listens on a loopback address, which is how it is tested.
+    /// </summary>
+    /// <param name="peer">The address of the peer.</param>
+    /// <returns><see langword="true"/> when datagrams may be relayed to the address.</returns>
+    private bool IsRelayablePeer(IPAddress peer)
+    {
+        peer = Normalize(peer);
+        if (peer.Equals(IPAddress.Any) || peer.Equals(IPAddress.IPv6Any) || peer.Equals(IPAddress.Broadcast)
+            || peer.IsIPv6Multicast || (peer.AddressFamily == AddressFamily.InterNetwork && peer.GetAddressBytes()[0] is >= 224 and <= 239))
+        {
+            return false;
+        }
+
+        return !IPAddress.IsLoopback(peer) || IPAddress.IsLoopback(_options.ListenAddress);
     }
 
     /// <summary>

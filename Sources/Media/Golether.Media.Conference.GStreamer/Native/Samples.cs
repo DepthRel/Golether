@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Runtime.InteropServices;
 
 namespace Golether.Media.Conference.GStreamer.Native;
@@ -37,6 +38,12 @@ internal static unsafe class Samples
             try
             {
                 consumer(new ReadOnlySpan<byte>((byte*)map.Data, checked((int)map.Size)), Gst.SampleGetCaps(sample));
+            }
+            catch (Exception ex) when (ex is not OutOfMemoryException)
+            {
+                // Samples are pulled inside native callbacks, and an exception that leaves one ends the process.
+                // A sample that could not be handled is one lost frame.
+                Trace.WriteLine($"Golether conference sample: {ex.GetType().Name}: {ex.Message}");
             }
             finally
             {

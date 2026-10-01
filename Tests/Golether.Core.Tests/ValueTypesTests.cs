@@ -193,4 +193,74 @@ public sealed class ValueTypesTests
             temp.Delete(recursive: true);
         }
     }
+
+    /// <summary>
+    /// The rule for a shared file name is the same on every system: a name that is fine where the host runs (a colon
+    /// or a question mark on Linux) is accepted everywhere, and only control characters and path separators are not.
+    /// </summary>
+    [Fact]
+    public void MediaDescriptor_FileNameRuleDoesNotDependOnTheSystem()
+    {
+        var valid = new MediaDescriptor { FileName = "a.mkv", Length = 1, QuickId = new string('a', 64) };
+
+        (valid with { FileName = "Film: part 2? <final> \"cut\" | 1*.mkv" }).Validate();
+        Assert.Throws<ArgumentException>(() => (valid with { FileName = "a\\b.mkv" }).Validate());
+        Assert.Throws<ArgumentException>(() => (valid with { FileName = "a\nb.mkv" }).Validate());
+        Assert.Throws<ArgumentException>(() => (valid with { FileName = new string('a', MediaDescriptor.MaxFileNameLength + 1) }).Validate());
+    }
+
+    /// <summary>
+    /// The host makes the name of the file it shares acceptable to everybody before sending it.
+    /// </summary>
+    [Fact]
+    public void MediaDescriptor_NormalizesTheSharedFileName()
+    {
+        Assert.Equal("Film: 2.mkv", MediaDescriptor.NormalizeFileName("Film: 2.mkv"));
+        Assert.Equal("a_b_c.mkv", MediaDescriptor.NormalizeFileName("a\\b/c.mkv"));
+        Assert.Equal("a_b", MediaDescriptor.NormalizeFileName(" a\tb "));
+        Assert.Equal("_", MediaDescriptor.NormalizeFileName(null));
+        Assert.Equal(MediaDescriptor.MaxFileNameLength, MediaDescriptor.NormalizeFileName(new string('x', 400)).Length);
+        foreach (var name in new[] { "a\\b/c.mkv", "  ", new string('x', 999), "ok.mp4" })
+        {
+            new MediaDescriptor { FileName = MediaDescriptor.NormalizeFileName(name), Length = 1, QuickId = new string('a', 64) }.Validate();
+        }
+    }
+
+    /// <summary>
+    /// The numbers of a status that came from another device are bounded: values at the limits of the types would
+    /// overflow as soon as the host compares or negates them.
+    /// </summary>
+    [Fact]
+    public void ParticipantStatus_SanitizeBoundsTheNumbers()
+    {
+        var hostile = new ParticipantStatus
+        {
+            PeerId = Golether.Core.Identity.PeerId.Parse(new string('b', 64)),
+            Position = TimeSpan.MinValue,
+            Drift = TimeSpan.MinValue,
+            CacheAhead = TimeSpan.MaxValue,
+            RoundTripMilliseconds = int.MaxValue,
+            BytesFromPeers = -5,
+            BytesToPeers = long.MinValue,
+            IsBuffering = true,
+        };
+
+        var clean = hostile.Sanitize();
+
+        Assert.Equal(-ParticipantStatus.MaxSpan, clean.Position);
+        Assert.Equal(-ParticipantStatus.MaxSpan, clean.Drift);
+        Assert.Equal(ParticipantStatus.MaxSpan, clean.CacheAhead);
+        Assert.Equal(ParticipantStatus.MaxRoundTripMilliseconds, clean.RoundTripMilliseconds);
+        Assert.Equal(0, clean.BytesFromPeers);
+        Assert.Equal(0, clean.BytesToPeers);
+        Assert.True(clean.IsBuffering);
+
+        // The arithmetic the host does with a status no longer fails.
+        Assert.True(-clean.Drift > TimeSpan.Zero);
+        Assert.True((clean.Position!.Value - TimeSpan.FromHours(1)).Duration() > TimeSpan.Zero);
+
+        var ordinary = new ParticipantStatus { PeerId = hostile.PeerId, Position = TimeSpan.FromMinutes(5), Drift = TimeSpan.FromMilliseconds(-40), RoundTripMilliseconds = 30 };
+        Assert.Equal(ordinary, ordinary.Sanitize());
+        Assert.Null((ordinary with { Position = null, RoundTripMilliseconds = null }).Sanitize().Position);
+    }
 }

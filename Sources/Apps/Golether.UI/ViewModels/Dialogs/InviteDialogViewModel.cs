@@ -3,6 +3,7 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Golether.Core.Networking;
 using Golether.Localization;
+using Golether.Security.Invites;
 using Golether.UI.Services;
 
 namespace Golether.UI.ViewModels.Dialogs;
@@ -98,7 +99,22 @@ public sealed partial class InviteDialogViewModel : ObservableObject
             extra.Add(endpoint);
         }
 
-        var invite = _session.CreateInvite(extra, SelectedLifetime.Lifetime);
+        Invite invite;
+        try
+        {
+            invite = _session.CreateInvite(extra, SelectedLifetime.Lifetime);
+        }
+        catch (Exception ex) when (ex is not OutOfMemoryException)
+        {
+            // The session may have ended meanwhile, or the computer has no network address: the reason is shown
+            // instead of ending the whole application.
+            Link = string.Empty;
+            AddressesText = string.Empty;
+            ExpiresText = string.Empty;
+            Message = ex.Message;
+            return;
+        }
+
         Link = invite.ToLink();
         AddressesText = string.Join(", ", invite.Endpoints);
         ExpiresText = Texts.Format("Invite.Dialog.ValidUntil", invite.ExpiresAt.ToLocalTime().ToString("dd.MM HH:mm", CultureInfo.InvariantCulture));

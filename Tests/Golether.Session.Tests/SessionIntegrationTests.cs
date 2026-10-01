@@ -3,6 +3,7 @@ using System.Security.Cryptography;
 using Golether.Core.Data.Enums;
 using Golether.Core.Networking;
 using Golether.Core.Playback;
+using Golether.Core.Session;
 using Golether.Core.Time;
 using Golether.Localization;
 using Golether.Media.Conference;
@@ -795,5 +796,82 @@ public sealed class SessionIntegrationTests : IAsyncLifetime
 
         /// <inheritdoc />
         public void Unregister(Uri uri) => _factories.TryRemove(uri, out _);
+    }
+
+    /// <summary>
+    /// An invitation pasted on the device that made it is refused with an explanation, before any connection is
+    /// tried.
+    /// </summary>
+    /// <returns>A task that completes when the test is done.</returns>
+    [Fact]
+    public async Task Join_RefusesTheOwnInvitation()
+    {
+        var invite = _host.CreateInvite([new PeerEndpoint("127.0.0.1", _host.Port)]);
+        await using var self = new ParticipantSession(
+            _hostIdentity,
+            new TlsPeerConnector(_hostIdentity, Transport),
+            _guestPlayer,
+            _registry,
+            StopwatchMonotonicClock.Instance,
+            TimeProvider.System,
+            "Вы",
+            Options);
+
+        var error = await Assert.ThrowsAsync<SessionJoinException>(() => self.JoinAsync(invite, TestContext.Current.CancellationToken));
+
+        Assert.Contains("на этом устройстве", error.Message, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// A status with numbers at the limits of their types does not stop the host: the session keeps broadcasting,
+    /// and the numbers the others see are bounded.
+    /// </summary>
+    /// <returns>A task that completes when the test is done.</returns>
+    [Fact]
+    public async Task Host_SurvivesAStatusWithImpossibleNumbers()
+    {
+        var token = TestContext.Current.CancellationToken;
+        var invite = _host.CreateInvite([new PeerEndpoint("127.0.0.1", _host.Port)]);
+        var connector = new TlsPeerConnector(_guestIdentity, Transport);
+        await using var stream = await connector.ConnectAsync(new PeerEndpoint("127.0.0.1", _host.Port), _hostIdentity.PeerId, StreamPurpose.Control, token);
+        await using var channel = new SessionMessageChannel(stream.Stream);
+        await channel.SendAsync(new HelloMessage(SessionMessage.ProtocolVersion, "Марина", invite.Token), token);
+        while (await channel.ReceiveAsync(token) is not WelcomeMessage)
+        {
+        }
+
+        await _host.RequestAsync(new PlaybackRequest(PlaybackRequestKind.PlayNow, null), token);
+        await channel.SendAsync(
+            new StatusReportMessage(new ParticipantStatus
+            {
+                PeerId = _guestIdentity.PeerId,
+                Position = TimeSpan.MinValue,
+                Drift = TimeSpan.MinValue,
+                CacheAhead = TimeSpan.MaxValue,
+                IsBuffering = true,
+                RoundTripMilliseconds = int.MinValue,
+            }),
+            token);
+
+        // The host still evaluates the statuses and tells everybody: the hostile one arrives bounded.
+        ParticipantStatus? seen = null;
+        using var limit = CancellationTokenSource.CreateLinkedTokenSource(token);
+        limit.CancelAfter(TimeSpan.FromSeconds(10));
+        while (seen is null)
+        {
+            if (await channel.ReceiveAsync(limit.Token) is ParticipantsMessage participants)
+            {
+                seen = participants.Statuses.FirstOrDefault(s => s.PeerId == _guestIdentity.PeerId);
+            }
+        }
+
+        Assert.Equal(-ParticipantStatus.MaxSpan, seen.Drift);
+        Assert.Equal(0, seen.RoundTripMilliseconds);
+        var before = _host.GetSnapshot().Playback!.Version;
+        await _host.RequestAsync(new PlaybackRequest(PlaybackRequestKind.Pause, TimeSpan.FromSeconds(3)), token);
+        Assert.True(_host.GetSnapshot().Playback!.Version > before);
+        while (await channel.ReceiveAsync(limit.Token) is not ParticipantsMessage)
+        {
+        }
     }
 }

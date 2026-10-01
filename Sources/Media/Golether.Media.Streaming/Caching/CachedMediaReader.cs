@@ -48,7 +48,7 @@ public sealed class CachedMediaReader : IAsyncDisposable
     /// <summary>
     /// The chunk index of the latest read.
     /// </summary>
-    private long _currentChunk;
+    private long _currentChunk = -1;
 
     /// <summary>
     /// Initializes a new instance of the <see cref="CachedMediaReader"/> class.
@@ -189,8 +189,10 @@ public sealed class CachedMediaReader : IAsyncDisposable
                 {
                     await Task.WhenAll(batch).ConfigureAwait(false);
                 }
-                catch (Exception ex) when (ex is IOException)
+                catch (Exception ex) when (ex is not (OperationCanceledException or OutOfMemoryException))
                 {
+                    // Reading ahead is an optimisation: whatever fails here, the player still gets its data through
+                    // ReadAsync, and the loop must stay alive for the next position.
                     _logger.LogWarning("Read-ahead stopped: {Reason}", ex.Message);
                     break;
                 }
