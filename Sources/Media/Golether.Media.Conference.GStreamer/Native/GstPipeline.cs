@@ -113,6 +113,46 @@ internal sealed unsafe class GstPipeline : IDisposable
     }
 
     /// <summary>
+    /// Reads the system clock, the origin for <see cref="UseTimeline"/>.
+    /// </summary>
+    /// <returns>The time in nanoseconds.</returns>
+    public static ulong SystemTime()
+    {
+        var clock = Gst.SystemClockObtain();
+        try
+        {
+            return Gst.ClockGetTime(clock);
+        }
+        finally
+        {
+            Gst.GstObjectUnref(clock);
+        }
+    }
+
+    /// <summary>
+    /// Puts the pipeline on a timeline shared with other pipelines: the system clock, counted from the same moment.
+    /// By default every pipeline counts time from its own start, and one with an audio device follows the clock of
+    /// that device, so the timestamps of two pipelines cannot be compared. Call before <see cref="Play"/>.
+    /// </summary>
+    /// <param name="origin">The moment of the system clock the time is counted from (<see cref="SystemTime"/>).</param>
+    public void UseTimeline(ulong origin)
+    {
+        var clock = Gst.SystemClockObtain();
+        try
+        {
+            Gst.PipelineUseClock(Handle, clock);
+        }
+        finally
+        {
+            Gst.GstObjectUnref(clock);
+        }
+
+        // Without a start time the pipeline keeps the base time it is given instead of choosing its own.
+        Gst.ElementSetStartTime(Handle, Gst.ClockTimeNone);
+        Gst.ElementSetBaseTime(Handle, origin);
+    }
+
+    /// <summary>
     /// Sets the pipeline to playing.
     /// </summary>
     /// <exception cref="GstException">The state change failed.</exception>
@@ -122,6 +162,16 @@ internal sealed unsafe class GstPipeline : IDisposable
         {
             throw new GstException($"{Name}: the pipeline could not start (device busy or missing?).");
         }
+    }
+
+    /// <summary>
+    /// Stops the pipeline and reports it as failed, as an error on its bus would (tests).
+    /// </summary>
+    /// <param name="error">The error to report.</param>
+    public void Break(string error)
+    {
+        Gst.ElementSetState(Handle, GstState.Null);
+        Failed?.Invoke(this, error);
     }
 
     /// <summary>

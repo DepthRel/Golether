@@ -145,6 +145,13 @@ public sealed class ConferenceHost : IConferenceMedia, Golether.UI.ViewModels.IC
         media.SpeakingChanged += (_, change) => SpeakingChanged?.Invoke(this, change);
         media.VideoQualityChanged += (_, change) => VideoQualityChanged?.Invoke(this, change);
         media.DataReceived += (_, peer, data) => DataReceived?.Invoke(this, peer, data);
+        media.MicrophoneFailed += (_, _) =>
+        {
+            // The backend switched the microphone off itself; the state kept here follows it.
+            _microphoneMuted = true;
+            MuteChanged?.Invoke(this, EventArgs.Empty);
+            MicrophoneFailed?.Invoke(this, EventArgs.Empty);
+        };
         media.SetMuted(_microphoneMuted, _cameraOff);
         media.SetRelay(_relay);
         media.SetStunServer(_stunServer);
@@ -191,6 +198,9 @@ public sealed class ConferenceHost : IConferenceMedia, Golether.UI.ViewModels.IC
 
     /// <inheritdoc />
     public event EventHandler? MuteChanged;
+
+    /// <inheritdoc />
+    public event EventHandler? MicrophoneFailed;
 
     /// <inheritdoc />
     public Task ConnectAsync(PeerId peer, bool isOfferer, CancellationToken cancellationToken) => _current.ConnectAsync(peer, isOfferer, cancellationToken);

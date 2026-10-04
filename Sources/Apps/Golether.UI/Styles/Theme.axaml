@@ -83,12 +83,36 @@
     <Setter Property="CornerRadius" Value="12" />
     <Setter Property="Padding" Value="20" />
   </Style>
+  <Style Selector="GridSplitter.layout">
+    <Setter Property="Background" Value="{StaticResource GoletherLine}" />
+    <Setter Property="MinWidth" Value="4" />
+  </Style>
+  <Style Selector="GridSplitter.layout:pointerover">
+    <Setter Property="Background" Value="{StaticResource GoletherAccent}" />
+  </Style>
   <Style Selector="Border.tile">
     <Setter Property="Background" Value="{StaticResource GoletherPanel2}" />
     <Setter Property="BorderBrush" Value="{StaticResource GoletherLine}" />
     <Setter Property="BorderThickness" Value="1" />
     <Setter Property="CornerRadius" Value="10" />
     <Setter Property="ClipToBounds" Value="True" />
+  </Style>
+  <!-- A tile being dragged to another place, and the tile it would swap with. -->
+  <!--
+    The carried tile is dimmed by a veil over it. Making the tile itself see-through would not do: opacity is applied
+    to every layer of it separately, so the initial under the avatar and the camera picture would show through them.
+  -->
+  <Style Selector="Border.dragVeil">
+    <Setter Property="Background" Value="#A60A0F11" />
+    <Setter Property="CornerRadius" Value="10" />
+    <Setter Property="IsVisible" Value="False" />
+  </Style>
+  <Style Selector="Panel.dragged > Border.dragVeil">
+    <Setter Property="IsVisible" Value="True" />
+  </Style>
+  <Style Selector="Border.tile.dropTarget">
+    <Setter Property="BorderBrush" Value="{StaticResource GoletherAccent}" />
+    <Setter Property="BorderThickness" Value="2" />
   </Style>
   <Style Selector="Border.speakingFrame">
     <Setter Property="BorderBrush" Value="{StaticResource GoletherGood}" />

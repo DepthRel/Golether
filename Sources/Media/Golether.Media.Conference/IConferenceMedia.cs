@@ -130,6 +130,12 @@ public interface IConferenceMedia : IAsyncDisposable
     event EventHandler? MuteChanged;
 
     /// <summary>
+    /// Raised when the microphone could not be used (the system refused to open it, or it kept stopping) and was
+    /// switched off, so that <see cref="MicrophoneMuted"/> tells the truth. May be raised on any thread.
+    /// </summary>
+    event EventHandler? MicrophoneFailed;
+
+    /// <summary>
     /// Starts media with a peer.
     /// </summary>
     /// <param name="peer">The peer.</param>

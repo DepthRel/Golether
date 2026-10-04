@@ -55,6 +55,12 @@ public sealed class ConferenceTests
         a.SignalReady += (_, s) => Track(b.HandleSignalAsync(s with { PeerId = Alice }, token), errors, s.Payload);
         b.SignalReady += (_, s) => Track(a.HandleSignalAsync(s with { PeerId = Bob }, token), errors, s.Payload);
 
+        // The instances are shared: a test that ran before leaves Alice's tone playing and her counted as speaking,
+        // and a state that does not change raises no event. A pause longer than the hold of the detector ends it.
+        a.SetMuted(true, false);
+        await Task.Delay(1000, token);
+        a.SetMuted(false, false);
+
         await a.StartCaptureAsync(null, null, token);
         await b.StartCaptureAsync(null, null, token);
         await a.ConnectAsync(Bob, isOfferer: true, token);
@@ -329,6 +335,167 @@ public sealed class ConferenceTests
         TestContext.Current.SendDiagnosticMessage($"4 MiB over the data channel: {clock.Elapsed.TotalMilliseconds:0} ms");
         await a.DisconnectAsync(frank);
         await b.DisconnectAsync(erin);
+    }
+
+    /// <summary>
+    /// A voice is heard whatever the devices of both sides were when the connection was made: a microphone or a
+    /// camera that is off then must not keep the connection from being negotiated, and a microphone switched on
+    /// later must reach the other side.
+    /// </summary>
+    /// <param name="offererMicrophoneOff">Whether the offering side connects with the microphone off.</param>
+    /// <param name="offererCameraOff">Whether the offering side connects with the camera off.</param>
+    /// <param name="answererMicrophoneOff">Whether the answering side connects with the microphone off.</param>
+    /// <param name="answererCameraOff">Whether the answering side connects with the camera off.</param>
+    /// <returns>A task that completes when the test is done.</returns>
+    [Theory]
+    [InlineData(false, false, false, false)]
+    [InlineData(false, false, true, false)]
+    [InlineData(false, false, false, true)]
+    [InlineData(false, false, true, true)]
+    [InlineData(true, false, false, false)]
+    [InlineData(false, true, false, true)]
+    [InlineData(true, true, true, true)]
+    public async Task Voice_IsHeard_WhateverWasOffWhenConnecting(bool offererMicrophoneOff, bool offererCameraOff, bool answererMicrophoneOff, bool answererCameraOff)
+    {
+        var (a, b, skip) = Pair.Value;
+        Assert.SkipWhen(skip is not null, skip ?? string.Empty);
+        var token = TestContext.Current.CancellationToken;
+        var ivan = PeerId.Parse(new string('a', 64));
+        var judy = PeerId.Parse(new string('b', 64));
+        EventHandler<ConferenceSignal> toB = (_, s) => { if (s.PeerId == judy) { _ = b!.HandleSignalAsync(s with { PeerId = ivan }, token); } };
+        EventHandler<ConferenceSignal> toA = (_, s) => { if (s.PeerId == ivan) { _ = a!.HandleSignalAsync(s with { PeerId = judy }, token); } };
+        a!.SignalReady += toB;
+        b!.SignalReady += toA;
+        try
+        {
+            a.SetMuted(offererMicrophoneOff, offererCameraOff);
+            b.SetMuted(answererMicrophoneOff, answererCameraOff);
+            await a.StartCaptureAsync(null, null, token);
+            await b.StartCaptureAsync(null, null, token);
+            await a.ConnectAsync(judy, isOfferer: true, token);
+            await b.ConnectAsync(ivan, isOfferer: false, token);
+
+            // The connection itself must not wait for a device to be switched on.
+            await WaitAsync(() => Link(a, judy) is { Verified: true } && Link(b, ivan) is { Verified: true });
+            Assert.True(Link(a, judy) is { Verified: true }, "The offering side is connected.");
+            Assert.True(Link(b, ivan) is { Verified: true }, "The answering side is connected.");
+
+            a.SetMuted(false, offererCameraOff);
+            b.SetMuted(false, answererCameraOff);
+            await WaitAsync(() => Link(a, judy) is { AudioReceived: > 0 } && Link(b, ivan) is { AudioReceived: > 0 });
+            Assert.True(Link(a, judy) is { AudioReceived: > 0 }, "The offering side hears the answering one.");
+            Assert.True(Link(b, ivan) is { AudioReceived: > 0 }, "The answering side hears the offering one.");
+        }
+        finally
+        {
+            a.SignalReady -= toB;
+            b.SignalReady -= toA;
+            await a.DisconnectAsync(judy);
+            await b.DisconnectAsync(ivan);
+            a.SetMuted(false, false);
+            b.SetMuted(false, false);
+        }
+
+        static ConferencePeerDiagnostics? Link(GStreamerConferenceMedia media, PeerId peer)
+            => media.GetPeerDiagnostics().FirstOrDefault(link => link.Peer == peer);
+
+        async Task WaitAsync(Func<bool> condition)
+        {
+            for (var i = 0; i < 150 && !condition(); i++)
+            {
+                await Task.Delay(100, token);
+            }
+        }
+    }
+
+    /// <summary>
+    /// A microphone that stops by itself after it has started (a device or its echo canceller failing) is started
+    /// again: the voice comes back without the participant touching anything.
+    /// </summary>
+    /// <returns>A task that completes when the test is done.</returns>
+    [Fact]
+    public async Task Microphone_ThatFails_IsRestarted()
+    {
+        var (a, b, skip) = Pair.Value;
+        Assert.SkipWhen(skip is not null, skip ?? string.Empty);
+        var token = TestContext.Current.CancellationToken;
+        var kate = PeerId.Parse(new string('c', 64));
+        var liam = PeerId.Parse(new string('d', 64));
+        EventHandler<ConferenceSignal> toB = (_, s) => { if (s.PeerId == liam) { _ = b!.HandleSignalAsync(s with { PeerId = kate }, token); } };
+        EventHandler<ConferenceSignal> toA = (_, s) => { if (s.PeerId == kate) { _ = a!.HandleSignalAsync(s with { PeerId = liam }, token); } };
+        a!.SignalReady += toB;
+        b!.SignalReady += toA;
+        try
+        {
+            await a.StartCaptureAsync(null, null, token);
+            await b.StartCaptureAsync(null, null, token);
+            await a.ConnectAsync(liam, isOfferer: true, token);
+            await WaitAsync(() => Heard() > 0);
+            Assert.True(Heard() > 0, "The voice is heard before the failure.");
+
+            a.BreakMicrophone();
+            await Task.Delay(500, token);
+            var silent = Heard();
+            await WaitAsync(() => Heard() > silent + 25);
+            Assert.True(Heard() > silent + 25, "The voice is heard again after the microphone failed.");
+        }
+        finally
+        {
+            a.SignalReady -= toB;
+            b.SignalReady -= toA;
+            await a.DisconnectAsync(liam);
+            await b.DisconnectAsync(kate);
+        }
+
+        long Heard() => b.GetPeerDiagnostics().FirstOrDefault(link => link.Peer == kate)?.AudioReceived ?? 0;
+
+        async Task WaitAsync(Func<bool> condition)
+        {
+            for (var i = 0; i < 150 && !condition(); i++)
+            {
+                await Task.Delay(100, token);
+            }
+        }
+    }
+
+    /// <summary>
+    /// A microphone that fails again after every restart (a device the system refuses to open) is switched off and
+    /// reported, instead of staying shown as on while nothing is sent; it can be switched on again afterwards.
+    /// </summary>
+    /// <returns>A task that completes when the test is done.</returns>
+    [Fact]
+    public async Task Microphone_ThatKeepsFailing_IsSwitchedOffAndReported()
+    {
+        var (a, _, skip) = Pair.Value;
+        Assert.SkipWhen(skip is not null, skip ?? string.Empty);
+        var token = TestContext.Current.CancellationToken;
+        var reported = 0;
+        EventHandler onFailed = (_, _) => Interlocked.Increment(ref reported);
+        a!.MicrophoneFailed += onFailed;
+        try
+        {
+            a.SetMuted(false, false);
+            await a.StartCaptureAsync(null, null, token);
+
+            // Every failure but the last is answered with a restart a second later.
+            for (var i = 0; i < 4 && !a.MicrophoneMuted; i++)
+            {
+                a.BreakMicrophone();
+                await Task.Delay(1800, token);
+                Assert.Equal(i == 3, a.MicrophoneMuted);
+            }
+
+            Assert.True(a.MicrophoneMuted, "The microphone is shown as off.");
+            Assert.Equal(1, Volatile.Read(ref reported));
+
+            a.SetMuted(false, false);
+            Assert.False(a.MicrophoneMuted);
+        }
+        finally
+        {
+            a.MicrophoneFailed -= onFailed;
+            a.SetMuted(false, false);
+        }
     }
 
     /// <summary>

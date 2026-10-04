@@ -50,9 +50,8 @@ internal sealed partial class WebRtcPeer
     /// Sends an encoded video frame of one of the streams; frames of the other stream are ignored.
     /// </summary>
     /// <param name="data">The VP8 frame.</param>
-    /// <param name="caps">The caps of the encoder output.</param>
     /// <param name="quality">The stream of the frame.</param>
-    public void PushVideo(ReadOnlySpan<byte> data, nint caps, VideoQuality quality)
+    public void PushVideo(ReadOnlySpan<byte> data, VideoQuality quality)
     {
         if ((int)quality != _videoQuality)
         {
@@ -70,7 +69,7 @@ internal sealed partial class WebRtcPeer
             _awaitingKeyFrame = false;
         }
 
-        PushVideo(data, caps);
+        PushVideo(data);
     }
 
     /// <summary>

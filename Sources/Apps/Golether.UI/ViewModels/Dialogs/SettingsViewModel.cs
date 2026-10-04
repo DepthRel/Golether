@@ -7,8 +7,8 @@ using Golether.UI.Services;
 namespace Golether.UI.ViewModels.Dialogs;
 
 /// <summary>
-/// The settings window: language, avatar, camera and microphone, and AmneziaWG tunnels, gathered from the pieces the
-/// main window already owns.
+/// The settings window: language, avatar, camera and microphone, display, and AmneziaWG tunnels, gathered from the
+/// pieces the main window already owns.
 /// </summary>
 /// <remarks>
 /// Nothing is applied while the window is open: the choices are held here and handed over by <see cref="ApplyAsync"/>,
@@ -30,6 +30,16 @@ public sealed partial class SettingsViewModel : ObservableObject
     /// Opens the tunnel dialog.
     /// </summary>
     private readonly Func<Task> _openTunnels;
+
+    /// <summary>
+    /// Switches the adjustable layout on or off, or <see langword="null"/> when the layout is not offered.
+    /// </summary>
+    private readonly Action<bool>? _applyLayoutResizable;
+
+    /// <summary>
+    /// Keeps the bars in full screen or lets them hide, or <see langword="null"/> when that is not offered.
+    /// </summary>
+    private readonly Action<bool>? _applyAlwaysShowBars;
 
     /// <summary>
     /// The avatar waiting to be applied, or <see langword="null"/> when it was not changed.
@@ -74,6 +84,10 @@ public sealed partial class SettingsViewModel : ObservableObject
     /// <param name="pickAvatar">Opens the avatar chooser and returns the chosen avatar without storing it.</param>
     /// <param name="applyAvatar">Stores an avatar and sends it to the session.</param>
     /// <param name="openTunnels">Opens the tunnel dialog.</param>
+    /// <param name="layoutResizable">Whether the border between the video and the participants can be dragged now.</param>
+    /// <param name="applyLayoutResizable">Switches the adjustable layout on or off.</param>
+    /// <param name="alwaysShowBars">Whether the bars stay in full screen now.</param>
+    /// <param name="applyAlwaysShowBars">Keeps the bars in full screen or lets them hide.</param>
     public SettingsViewModel(
         LanguageViewModel? language,
         DevicesViewModel? devices,
@@ -84,8 +98,16 @@ public sealed partial class SettingsViewModel : ObservableObject
         object? avatarPreview,
         Func<Task<AvatarSelection?>> pickAvatar,
         Func<AvatarSelection, Task> applyAvatar,
-        Func<Task> openTunnels)
+        Func<Task> openTunnels,
+        bool layoutResizable = false,
+        Action<bool>? applyLayoutResizable = null,
+        bool alwaysShowBars = false,
+        Action<bool>? applyAlwaysShowBars = null)
     {
+        AlwaysShowBars = alwaysShowBars;
+        _applyAlwaysShowBars = applyAlwaysShowBars;
+        LayoutResizable = layoutResizable;
+        _applyLayoutResizable = applyLayoutResizable;
         Language = language;
         Devices = devices;
         ConferenceAvailable = conferenceAvailable;
@@ -152,6 +174,20 @@ public sealed partial class SettingsViewModel : ObservableObject
     /// </summary>
     [ObservableProperty]
     public partial DeviceOption? SelectedMicrophone { get; set; }
+
+    /// <summary>
+    /// Gets or sets a value indicating whether the border between the video and the participants can be dragged; it
+    /// is applied only by <see cref="ApplyAsync"/>.
+    /// </summary>
+    [ObservableProperty]
+    public partial bool LayoutResizable { get; set; }
+
+    /// <summary>
+    /// Gets or sets a value indicating whether the top bar and the player bar stay in full screen; it is applied
+    /// only by <see cref="ApplyAsync"/>.
+    /// </summary>
+    [ObservableProperty]
+    public partial bool AlwaysShowBars { get; set; }
 
     /// <summary>
     /// Gets or sets the avatar shown in the window: the one waiting to be applied, or the current one.
@@ -296,8 +332,8 @@ public sealed partial class SettingsViewModel : ObservableObject
     private Task OpenTunnelsAsync() => _openTunnels();
 
     /// <summary>
-    /// Hands the chosen settings over: the avatar first, then the devices, and the language last, so the window is
-    /// already done when every text changes.
+    /// Hands the chosen settings over: the avatar first, then the devices and the layout, and the language last, so
+    /// the window is already done when every text changes.
     /// </summary>
     /// <returns>A task that completes when everything is applied.</returns>
     public async Task ApplyAsync()
@@ -320,6 +356,9 @@ public sealed partial class SettingsViewModel : ObservableObject
                 Devices.SelectedMicrophone = microphone;
             }
         }
+
+        _applyLayoutResizable?.Invoke(LayoutResizable);
+        _applyAlwaysShowBars?.Invoke(AlwaysShowBars);
 
         if (Language is { } language && SelectedLanguage is { } option && option.Code != language.Selected.Code)
         {

@@ -1,6 +1,7 @@
 using System.Collections.Concurrent;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
+using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Platform;
 using Golether.Core.Data.Enums;
@@ -19,6 +20,11 @@ namespace Golether.UI.Controls;
 /// <para>
 /// On Windows mpv creates its window disabled, so real mouse clicks reach this host window instead of mpv. The host
 /// window is subclassed to report them through <see cref="VideoPointer"/>. Other systems report clicks through mpv.
+/// </para>
+/// <para>
+/// For the same reason the host window is the one that sees the pointer move and is asked for the cursor, so it
+/// reports movements through <see cref="PointerMovedOverVideo"/> and hides the cursor while
+/// <see cref="CursorHidden"/> is set (Windows).
 /// </para>
 /// </remarks>
 public sealed partial class VideoHost : NativeControlHost
@@ -44,6 +50,26 @@ public sealed partial class VideoHost : NativeControlHost
     private const uint NonClientDestroy = 0x0082;
 
     /// <summary>
+    /// <c>WM_MOUSEMOVE</c>.
+    /// </summary>
+    private const uint MouseMove = 0x0200;
+
+    /// <summary>
+    /// <c>WM_SETCURSOR</c>.
+    /// </summary>
+    private const uint SetCursorMessage = 0x0020;
+
+    /// <summary>
+    /// <c>HTCLIENT</c>: the pointer is over the client area.
+    /// </summary>
+    private const int HitClient = 1;
+
+    /// <summary>
+    /// <c>IDC_ARROW</c>.
+    /// </summary>
+    private const nint ArrowCursor = 32512;
+
+    /// <summary>
     /// <c>SM_CXDOUBLECLK</c>.
     /// </summary>
     private const int DoubleClickWidthMetric = 36;
@@ -64,9 +90,49 @@ public sealed partial class VideoHost : NativeControlHost
     public event EventHandler<VideoPointerAction>? VideoPointer;
 
     /// <summary>
+    /// Raised on the UI thread when the pointer really moved over the video (Windows); the value is the position on
+    /// the screen in pixels.
+    /// </summary>
+    public event EventHandler<PixelPoint>? PointerMovedOverVideo;
+
+    /// <summary>
+    /// Backing field of <see cref="CursorHidden"/>.
+    /// </summary>
+    private bool _cursorHidden;
+
+    /// <summary>
+    /// The screen position reported last. The system repeats the movement message when the window changes under a
+    /// resting pointer, and that must not count as a movement.
+    /// </summary>
+    private PixelPoint? _lastPointer;
+
+    /// <summary>
     /// Gets or sets the player host to attach.
     /// </summary>
     public PlayerHost? Player { get; set; }
+
+    /// <summary>
+    /// Gets or sets a value indicating whether the cursor is hidden over the video (Windows). Elsewhere the cursor
+    /// belongs to the controls it is over.
+    /// </summary>
+    public bool CursorHidden
+    {
+        get => _cursorHidden;
+        set
+        {
+            if (_cursorHidden == value)
+            {
+                return;
+            }
+
+            _cursorHidden = value;
+            if (OperatingSystem.IsWindows())
+            {
+                // The system asks for the cursor only when the pointer moves, so a resting pointer is changed here.
+                SetCursor(value ? 0 : LoadCursor(0, ArrowCursor));
+            }
+        }
+    }
 
     /// <summary>
     /// Interprets a left button press: a second press close in time and place is a double click.
@@ -126,6 +192,63 @@ public sealed partial class VideoHost : NativeControlHost
     /// </summary>
     /// <param name="action">The action.</param>
     private void OnPointer(VideoPointerAction action) => VideoPointer?.Invoke(this, action);
+
+    /// <summary>
+    /// Raises <see cref="PointerMovedOverVideo"/> when the pointer is somewhere else on the screen than last time.
+    /// </summary>
+    private void OnPointerMoved()
+    {
+        if (!GetCursorPos(out var point))
+        {
+            return;
+        }
+
+        var position = new PixelPoint(point.X, point.Y);
+        if (position == _lastPointer)
+        {
+            return;
+        }
+
+        _lastPointer = position;
+        PointerMovedOverVideo?.Invoke(this, position);
+    }
+
+    /// <summary><c>SetCursor</c>.</summary>
+    /// <param name="cursor">The cursor, or <c>0</c> for none.</param>
+    /// <returns>The previous cursor.</returns>
+    [LibraryImport("user32.dll")]
+    private static partial nint SetCursor(nint cursor);
+
+    /// <summary><c>LoadCursorW</c> for a system cursor.</summary>
+    /// <param name="instance">The module, <c>0</c> for system cursors.</param>
+    /// <param name="name">The cursor identifier.</param>
+    /// <returns>The cursor.</returns>
+    [LibraryImport("user32.dll", EntryPoint = "LoadCursorW")]
+    private static partial nint LoadCursor(nint instance, nint name);
+
+    /// <summary><c>GetCursorPos</c>.</summary>
+    /// <param name="point">The position of the pointer on the screen.</param>
+    /// <returns><see langword="true"/> on success.</returns>
+    [LibraryImport("user32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static partial bool GetCursorPos(out ScreenPoint point);
+
+    /// <summary>
+    /// <c>POINT</c>.
+    /// </summary>
+    [StructLayout(LayoutKind.Sequential)]
+    private struct ScreenPoint
+    {
+        /// <summary>
+        /// The horizontal position.
+        /// </summary>
+        public int X;
+
+        /// <summary>
+        /// The vertical position.
+        /// </summary>
+        public int Y;
+    }
 
     /// <summary><c>SetWindowLongPtrW</c>.</summary>
     /// <param name="window">The window.</param>
@@ -201,7 +324,7 @@ public sealed partial class VideoHost : NativeControlHost
         }
 
         /// <summary>
-        /// Reports left clicks and passes every message on.
+        /// Reports left clicks and pointer movements, hides the cursor when asked, and passes the messages on.
         /// </summary>
         /// <param name="window">The window.</param>
         /// <param name="message">The message.</param>
@@ -232,6 +355,25 @@ public sealed partial class VideoHost : NativeControlHost
                 {
                     System.Diagnostics.Trace.WriteLine($"Golether video click handler failed: {ex}");
                 }
+            }
+
+            if (message == MouseMove)
+            {
+                try
+                {
+                    subclass.Host.OnPointerMoved();
+                }
+                catch (Exception ex) when (ex is not OutOfMemoryException)
+                {
+                    System.Diagnostics.Trace.WriteLine($"Golether video pointer handler failed: {ex}");
+                }
+            }
+
+            if (message == SetCursorMessage && subclass.Host.CursorHidden && (short)(lParam & 0xFFFF) == HitClient)
+            {
+                // Answering here keeps the parent window from putting the arrow back.
+                SetCursor(0);
+                return 1;
             }
 
             var result = CallWindowProc(subclass.Previous, window, message, wParam, lParam);

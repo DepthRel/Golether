@@ -39,6 +39,44 @@ public sealed partial class MainWindowViewModel : ObservableObject
     public const string SideTabSetting = "ui.sideTab";
 
     /// <summary>
+    /// The setting that lets the user drag the border between the video and the participants (<c>true</c> or
+    /// <c>false</c>).
+    /// </summary>
+    public const string LayoutResizableSetting = "ui.layout.resizable";
+
+    /// <summary>
+    /// The setting with the width of the participants panel chosen by dragging the border.
+    /// </summary>
+    public const string SidePanelWidthSetting = "ui.layout.sideWidth";
+
+    /// <summary>
+    /// The width of the participants panel the layout was designed with; a double click on the border and switching
+    /// the adjustable layout off both come back to it. The panel is never narrower.
+    /// </summary>
+    public const double DefaultSidePanelWidth = 300;
+
+    /// <summary>
+    /// The width the video always keeps, whatever the panel was dragged to.
+    /// </summary>
+    public const double MinVideoWidth = 480;
+
+    /// <summary>
+    /// The setting that keeps the top bar and the player bar in full screen instead of hiding them (<c>true</c> or
+    /// <c>false</c>).
+    /// </summary>
+    public const string AlwaysShowBarsSetting = "ui.fullscreen.alwaysShowBars";
+
+    /// <summary>
+    /// How many participants one column of tiles is kept for, however wide the panel is.
+    /// </summary>
+    public const int SingleColumnParticipants = 3;
+
+    /// <summary>
+    /// How many times wider than designed the participants panel must be before the tiles go in two columns.
+    /// </summary>
+    public const double TwoColumnWidthFactor = 3;
+
+    /// <summary>
     /// The prefix of the settings with the local voice volume of a participant (by device identifier).
     /// </summary>
     public const string VoiceVolumeSettingPrefix = "voice.volume.";
@@ -248,6 +286,8 @@ public sealed partial class MainWindowViewModel : ObservableObject
                 self.CameraImage = null;
             }
         });
+        conference.MicrophoneFailed += (_, _) => _dispatcher.Post(
+            () => _ = _dialogs.ShowErrorAsync(Texts.Get("Main.Error.MicrophoneFailed.Title"), Texts.Get("Main.Error.MicrophoneFailed.Text")));
         conference.SpeakingChanged += (_, change) => _dispatcher.Post(() => ShowSpeaking(change));
         conference.VideoQualityChanged += (_, change) => _dispatcher.Post(() =>
         {
@@ -534,6 +574,154 @@ public sealed partial class MainWindowViewModel : ObservableObject
     }
 
     /// <summary>
+    /// Gets or sets a value indicating whether the border between the video and the participants can be dragged.
+    /// </summary>
+    [ObservableProperty]
+    public partial bool IsLayoutResizable { get; set; }
+
+    /// <summary>
+    /// Gets or sets the width the participants panel was dragged to. The window narrows it when the video would get
+    /// less than <see cref="MinVideoWidth"/>.
+    /// </summary>
+    [ObservableProperty]
+    public partial double SidePanelWidth { get; set; } = DefaultSidePanelWidth;
+
+    /// <summary>
+    /// Fits a wanted width of the participants panel into the room there is: never narrower than the designed width,
+    /// never so wide that the video gets less than <see cref="MinVideoWidth"/>.
+    /// </summary>
+    /// <param name="wanted">The width asked for.</param>
+    /// <param name="available">The width shared by the video and the panel.</param>
+    /// <returns>The width to use.</returns>
+    public static double ClampSidePanelWidth(double wanted, double available)
+    {
+        if (!double.IsFinite(wanted))
+        {
+            return DefaultSidePanelWidth;
+        }
+
+        var widest = double.IsFinite(available) ? Math.Max(DefaultSidePanelWidth, available - MinVideoWidth) : DefaultSidePanelWidth;
+        return Math.Clamp(wanted, DefaultSidePanelWidth, widest);
+    }
+
+    /// <summary>
+    /// Switches the adjustable layout on or off and remembers it. Switching it off puts the border back where the
+    /// layout was designed.
+    /// </summary>
+    /// <param name="value">Whether the border can be dragged.</param>
+    public void SetLayoutResizable(bool value)
+    {
+        if (IsLayoutResizable == value)
+        {
+            return;
+        }
+
+        IsLayoutResizable = value;
+        _ = _settings.SetAsync(LayoutResizableSetting, value ? "true" : "false", CancellationToken.None);
+        if (!value)
+        {
+            ResetSidePanelWidth();
+            ResetParticipantOrder();
+        }
+    }
+
+    /// <summary>
+    /// Gets or sets a value indicating whether the top bar and the player bar stay in full screen, with the video
+    /// between them, instead of lying over the video and hiding.
+    /// </summary>
+    [ObservableProperty]
+    public partial bool AlwaysShowBars { get; set; }
+
+    /// <summary>
+    /// Keeps the bars in full screen or lets them hide, and remembers it.
+    /// </summary>
+    /// <param name="value">Whether the bars stay.</param>
+    public void SetAlwaysShowBars(bool value)
+    {
+        if (AlwaysShowBars == value)
+        {
+            return;
+        }
+
+        AlwaysShowBars = value;
+        _ = _settings.SetAsync(AlwaysShowBarsSetting, value ? "true" : "false", CancellationToken.None);
+    }
+
+    /// <summary>
+    /// Tells how many columns the participant tiles go in: one, or two when there are more participants than one
+    /// column is kept for and the panel was dragged wide enough for the tiles to stay large.
+    /// </summary>
+    /// <param name="participants">The number of participants.</param>
+    /// <param name="panelWidth">The width of the participants panel.</param>
+    /// <returns>The number of columns.</returns>
+    public static int TileColumnsFor(int participants, double panelWidth)
+        => participants > SingleColumnParticipants && panelWidth > DefaultSidePanelWidth * TwoColumnWidthFactor ? 2 : 1;
+
+    /// <summary>
+    /// Swaps the tiles of two participants. The order is only how this device shows them; nobody else sees it.
+    /// </summary>
+    /// <param name="first">A participant.</param>
+    /// <param name="second">The participant to swap with.</param>
+    public void SwapParticipants(ParticipantItemViewModel first, ParticipantItemViewModel second)
+    {
+        var from = Participants.IndexOf(first);
+        var to = Participants.IndexOf(second);
+        if (!IsLayoutResizable || from < 0 || to < 0 || from == to)
+        {
+            return;
+        }
+
+        // Two moves put each tile exactly where the other one was.
+        Participants.Move(from, to);
+        Participants.Move(from < to ? to - 1 : to + 1, from);
+        _participantsReordered = true;
+    }
+
+    /// <summary>
+    /// Puts the tiles back in the order of the session.
+    /// </summary>
+    private void ResetParticipantOrder()
+    {
+        if (!_participantsReordered)
+        {
+            return;
+        }
+
+        _participantsReordered = false;
+        var views = _session.GetSnapshot()?.Participants;
+        for (var i = 0; views is not null && i < views.Count; i++)
+        {
+            var peer = views[i].Info.PeerId;
+            var current = Participants.Select((p, index) => (p, index)).FirstOrDefault(x => x.p.PeerId == peer);
+            if (current.p is not null && current.index != i && i < Participants.Count)
+            {
+                Participants.Move(current.index, i);
+            }
+        }
+    }
+
+    /// <summary>
+    /// Whether the user changed the order of the tiles, so new participants go to the end instead of into the order
+    /// of the session.
+    /// </summary>
+    private bool _participantsReordered;
+
+    /// <summary>
+    /// Takes the width the participants panel was dragged to and remembers it.
+    /// </summary>
+    /// <param name="width">The width.</param>
+    public void StoreSidePanelWidth(double width)
+    {
+        SidePanelWidth = double.IsFinite(width) ? Math.Max(DefaultSidePanelWidth, Math.Round(width)) : DefaultSidePanelWidth;
+        _ = _settings.SetAsync(SidePanelWidthSetting, SidePanelWidth.ToString("0", CultureInfo.InvariantCulture), CancellationToken.None);
+    }
+
+    /// <summary>
+    /// Puts the border between the video and the participants back where the layout was designed.
+    /// </summary>
+    public void ResetSidePanelWidth() => StoreSidePanelWidth(DefaultSidePanelWidth);
+
+    /// <summary>
     /// Keeps the chat informed whether it can be seen.
     /// </summary>
     /// <param name="value">The new value.</param>
@@ -591,7 +779,11 @@ public sealed partial class MainWindowViewModel : ObservableObject
             DecodeOwnAvatar(),
             PickAvatarAsync,
             ApplyAvatarAsync,
-            OpenTunnelsAsync);
+            OpenTunnelsAsync,
+            IsLayoutResizable,
+            SetLayoutResizable,
+            AlwaysShowBars,
+            SetAlwaysShowBars);
 
         // Reading the device lists asks the media backend and takes a moment, so it runs while the window is already
         // on screen. Refilling the lists empties the boxes, so the choice is put back once the lists are complete.
@@ -1100,6 +1292,17 @@ public sealed partial class MainWindowViewModel : ObservableObject
 
         SideTab = await _settings.GetAsync(SideTabSetting, CancellationToken.None) == "events" ? SideTab.Events : SideTab.Chat;
         EventsExpanded = await _settings.GetAsync(EventsExpandedSetting, CancellationToken.None) != "false";
+        IsLayoutResizable = await _settings.GetAsync(LayoutResizableSetting, CancellationToken.None) == "true";
+        AlwaysShowBars = await _settings.GetAsync(AlwaysShowBarsSetting, CancellationToken.None) == "true";
+
+        // A stored width means something only while the border can be dragged; a locked layout is the designed one.
+        if (IsLayoutResizable
+            && double.TryParse(await _settings.GetAsync(SidePanelWidthSetting, CancellationToken.None), NumberStyles.Float, CultureInfo.InvariantCulture, out var sideWidth)
+            && double.IsFinite(sideWidth))
+        {
+            SidePanelWidth = Math.Max(DefaultSidePanelWidth, sideWidth);
+        }
+
         if (Volume is not null)
         {
             await Volume.LoadAsync();
@@ -1829,7 +2032,7 @@ public sealed partial class MainWindowViewModel : ObservableObject
             if (item is null)
             {
                 item = new ParticipantItemViewModel(views[i].Info.PeerId, SwitchOffParticipantDevicesAsync, ChangeVoiceVolume);
-                Participants.Insert(Math.Min(i, Participants.Count), item);
+                Participants.Insert(_participantsReordered ? Participants.Count : Math.Min(i, Participants.Count), item);
                 if (!views[i].IsLocal)
                 {
                     _ = RestoreVoiceVolumeAsync(item);

@@ -83,12 +83,21 @@ internal sealed partial class WebRtcPeer : IDisposable
     /// <summary>
     /// The pipeline of the peer.
     /// </summary>
+    /// <remarks>
+    /// The sources state their formats themselves instead of taking them from the first frame. webrtcbin creates an
+    /// offer only when every input has a format, so a camera or a microphone that is off, or failed, when the
+    /// participant connects would otherwise keep the whole connection, the other device included, from being
+    /// negotiated until it produces a frame.
+    /// </remarks>
     private const string Description =
         "webrtcbin name=webrtc bundle-policy=max-bundle latency=300 " +
-        "appsrc name=vsrc is-live=true do-timestamp=true format=time ! valve name=vgate drop=true drop-mode=forward-sticky-events ! " +
+        "appsrc name=vsrc is-live=true do-timestamp=true format=time caps=\"video/x-vp8\" ! " +
+        "valve name=vgate drop=true drop-mode=forward-sticky-events ! " +
         "queue max-size-buffers=30 leaky=downstream ! " +
         "rtpvp8pay pt=96 mtu=1200 picture-id-mode=15-bit ! application/x-rtp,media=video,encoding-name=VP8,payload=96 ! webrtc. " +
-        "appsrc name=asrc is-live=true do-timestamp=true format=time ! valve name=agate drop=true drop-mode=forward-sticky-events ! " +
+        "appsrc name=asrc is-live=true do-timestamp=true format=time " +
+        "caps=\"audio/x-opus,rate=48000,channels=1,channel-mapping-family=0,stream-count=1,coupled-count=0\" ! " +
+        "valve name=agate drop=true drop-mode=forward-sticky-events ! " +
         "queue max-size-buffers=50 leaky=downstream ! " +
         "rtpopuspay pt=97 ! application/x-rtp,media=audio,encoding-name=OPUS,payload=97 ! webrtc.";
 
@@ -137,16 +146,6 @@ internal sealed partial class WebRtcPeer : IDisposable
     /// Serializes signaling operations.
     /// </summary>
     private readonly SemaphoreSlim _signaling = new(1, 1);
-
-    /// <summary>
-    /// Whether the caps of the video appsrc were set.
-    /// </summary>
-    private nint _videoCaps;
-
-    /// <summary>
-    /// Whether the caps of the audio appsrc were set.
-    /// </summary>
-    private nint _audioCaps;
 
     /// <summary>
     /// Whether the peer is disposed.
@@ -399,15 +398,13 @@ internal sealed partial class WebRtcPeer : IDisposable
     /// Sends an encoded video frame.
     /// </summary>
     /// <param name="data">The VP8 frame.</param>
-    /// <param name="caps">The caps of the encoder output.</param>
-    public void PushVideo(ReadOnlySpan<byte> data, nint caps) => PushEncoded("vsrc", data, caps, ref _videoCaps);
+    public void PushVideo(ReadOnlySpan<byte> data) => PushEncoded("vsrc", data);
 
     /// <summary>
     /// Sends an encoded audio frame.
     /// </summary>
     /// <param name="data">The Opus frame.</param>
-    /// <param name="caps">The caps of the encoder output.</param>
-    public void PushAudio(ReadOnlySpan<byte> data, nint caps) => PushEncoded("asrc", data, caps, ref _audioCaps);
+    public void PushAudio(ReadOnlySpan<byte> data) => PushEncoded("asrc", data);
 
     /// <summary>
     /// Applies signaling data from the peer.
@@ -871,13 +868,11 @@ internal sealed partial class WebRtcPeer : IDisposable
     }
 
     /// <summary>
-    /// Pushes an encoded frame, setting the appsrc caps on the first frame.
+    /// Pushes an encoded frame.
     /// </summary>
     /// <param name="source">The appsrc name.</param>
     /// <param name="data">The frame.</param>
-    /// <param name="caps">The encoder caps.</param>
-    /// <param name="applied">The caps already applied.</param>
-    private void PushEncoded(string source, ReadOnlySpan<byte> data, nint caps, ref nint applied)
+    private void PushEncoded(string source, ReadOnlySpan<byte> data)
     {
         // The frames come from the capture threads while the peer may be leaving on another one. Without the gate
         // a frame could be pushed into a pipeline that Dispose has just released, which is freed native memory.
@@ -888,14 +883,7 @@ internal sealed partial class WebRtcPeer : IDisposable
                 return;
             }
 
-            var element = _pipeline.Element(source);
-            if (caps != 0 && caps != applied)
-            {
-                Gst.AppSrcSetCaps(element, caps);
-                applied = caps;
-            }
-
-            Samples.Push(element, data);
+            Samples.Push(_pipeline.Element(source), data);
         }
 
         // Counted for the diagnostic report: a frame pushed here still goes nowhere while the valve is shut.

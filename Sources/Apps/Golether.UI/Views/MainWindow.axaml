@@ -41,10 +41,15 @@
     <StreamGeometry x:Key="IconSettings">M0,0 H0.01 V0.01 Z M23.99,23.99 H24 V24 H23.99 Z M19.14,12.94 c0.04,-0.3 0.06,-0.61 0.06,-0.94 c0,-0.32 -0.02,-0.64 -0.07,-0.94 l2.03,-1.58 c0.18,-0.14 0.23,-0.41 0.12,-0.61 l-1.92,-3.32 c-0.12,-0.22 -0.37,-0.29 -0.59,-0.22 l-2.39,0.96 c-0.5,-0.38 -1.03,-0.7 -1.62,-0.94 L14.4,2.81 c-0.04,-0.24 -0.24,-0.41 -0.48,-0.41 h-3.84 c-0.24,0 -0.43,0.17 -0.47,0.41 L9.25,5.35 C8.66,5.59 8.12,5.92 7.63,6.29 L5.24,5.33 c-0.22,-0.08 -0.47,0 -0.59,0.22 L2.74,8.87 C2.62,9.08 2.66,9.34 2.86,9.48 l2.03,1.58 C4.84,11.36 4.8,11.69 4.8,12 c0,0.31 0.02,0.64 0.07,0.94 l-2.03,1.58 c-0.18,0.14 -0.23,0.41 -0.12,0.61 l1.92,3.32 c0.12,0.22 0.37,0.29 0.59,0.22 l2.39,-0.96 c0.5,0.38 1.03,0.7 1.62,0.94 l0.36,2.54 c0.05,0.24 0.24,0.41 0.48,0.41 h3.84 c0.24,0 0.44,-0.17 0.47,-0.41 l0.36,-2.54 c0.59,-0.24 1.13,-0.56 1.62,-0.94 l2.39,0.96 c0.22,0.08 0.47,0 0.59,-0.22 l1.92,-3.32 c0.12,-0.22 0.07,-0.47 -0.12,-0.61 Z M12,15.6 c-1.98,0 -3.6,-1.62 -3.6,-3.6 c0,-1.98 1.62,-3.6 3.6,-3.6 c1.98,0 3.6,1.62 3.6,3.6 c0,1.98 -1.62,3.6 -3.6,3.6 Z</StreamGeometry>
   </Window.Resources>
 
-  <Panel>
+  <Panel x:Name="RootPanel">
     <DockPanel>
-      <!-- Top bar -->
-      <Border DockPanel.Dock="Top" Classes="panel" BorderBrush="{StaticResource GoletherLine}" BorderThickness="0,0,0,1" Padding="16,10">
+      <!--
+        Top bar. It sits in this slot; in full screen the window moves it into a layer over the video, where it
+        slides away until the pointer comes to the top edge.
+      -->
+      <Decorator x:Name="TopBarSlot" DockPanel.Dock="Top">
+      <controls:SlideReveal x:Name="TopBar" SlideUp="True">
+      <Border Classes="panel" BorderBrush="{StaticResource GoletherLine}" BorderThickness="0,0,0,1" Padding="16,10">
         <Grid ColumnDefinitions="Auto,*">
           <StackPanel Orientation="Horizontal" Spacing="0" VerticalAlignment="Center" Margin="0,0,18,0">
             <Image Source="/Assets/golether-256.png" Width="22" Height="22" Margin="0,0,8,0" />
@@ -98,9 +103,11 @@
           </DockPanel>
         </Grid>
       </Border>
+      </controls:SlideReveal>
+      </Decorator>
 
-      <!-- Status bar -->
-      <Border DockPanel.Dock="Bottom" Background="{StaticResource GoletherBackground}" BorderBrush="{StaticResource GoletherLine}" BorderThickness="0,1,0,0" Padding="16,6">
+      <!-- Status bar; full screen has no use for it. -->
+      <Border x:Name="StatusBar" DockPanel.Dock="Bottom" Background="{StaticResource GoletherBackground}" BorderBrush="{StaticResource GoletherLine}" BorderThickness="0,1,0,0" Padding="16,6">
         <StackPanel Orientation="Horizontal" Spacing="22">
           <TextBlock Classes="mono muted" FontSize="11" Text="{loc:Loc Key=Main.Device, Arg={Binding DeviceFingerprint}}" />
           <TextBlock Classes="mono muted" FontSize="11" Text="{Binding ClockText}" IsVisible="{Binding IsInSession}" />
@@ -208,9 +215,18 @@
         </ScrollViewer>
 
         <!-- Session -->
-        <Grid ColumnDefinitions="*,300" IsVisible="{Binding IsInSession}">
+        <Grid x:Name="SessionGrid" IsVisible="{Binding IsInSession}">
+          <!-- The width of the participants column is set by the window: the designed one, or the one dragged to. -->
+          <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="*" />
+            <ColumnDefinition Width="Auto" />
+            <ColumnDefinition Width="300" />
+          </Grid.ColumnDefinitions>
           <DockPanel Grid.Column="0">
-            <Border DockPanel.Dock="Bottom" Classes="panel" BorderBrush="{StaticResource GoletherLine}" BorderThickness="0,1,1,0" Padding="16,10,16,12">
+            <!-- Player bar; in full screen it moves into a layer over the video like the top bar. -->
+            <Decorator x:Name="PlayerBarSlot" DockPanel.Dock="Bottom">
+            <controls:SlideReveal x:Name="PlayerBar">
+            <Border Classes="panel" BorderBrush="{StaticResource GoletherLine}" BorderThickness="0,1,1,0" Padding="16,10,16,12">
               <StackPanel Spacing="8">
                 <!-- The connection to the host broke: the session comes back by itself, with the host's approval. -->
                 <Border Classes="reconnect" IsVisible="{Binding IsReconnecting}" CornerRadius="8" Padding="12,6"
@@ -433,9 +449,30 @@
                 </Grid>
               </StackPanel>
             </Border>
+            </controls:SlideReveal>
+            </Decorator>
 
             <!-- Video -->
             <Panel x:Name="VideoArea" Background="Black">
+              <!--
+                The layers the bars move into in full screen. Nothing can be drawn over the native video window, so
+                each is a window of its own above it; the video keeps its size whether the bars are shown or not.
+              -->
+              <!--
+                The layers stay exactly where they are put. A popup is otherwise kept inside the working area of the
+                screen, which ends above the taskbar: in full screen the player bar reaches below it, and the popup
+                would be flipped to the top of the video.
+              -->
+              <Popup x:Name="TopBarPopup" PlacementTarget="{Binding #RootPanel}" Placement="AnchorAndGravity"
+                     PlacementAnchor="TopLeft" PlacementGravity="BottomRight" PlacementConstraintAdjustment="None"
+                     IsLightDismissEnabled="False">
+                <Decorator x:Name="TopBarLayer" Width="{Binding #RootPanel.Bounds.Width}" />
+              </Popup>
+              <Popup x:Name="PlayerBarPopup" PlacementTarget="{Binding #VideoArea}" Placement="AnchorAndGravity"
+                     PlacementAnchor="BottomLeft" PlacementGravity="TopRight" PlacementConstraintAdjustment="None"
+                     IsLightDismissEnabled="False">
+                <Decorator x:Name="PlayerBarLayer" Width="{Binding #VideoArea.Bounds.Width}" />
+              </Popup>
               <controls:VideoHost x:Name="Video" IsVisible="{Binding ShowVideo}" />
               <!--
                 Reactions and strokes: a separate window above the video, because nothing can be drawn over the
@@ -508,8 +545,13 @@
             </Panel>
           </DockPanel>
 
+          <!-- The border between the video and the participants, shown while the adjustable layout is on. -->
+          <GridSplitter x:Name="LayoutSplitter" Grid.Column="1" Classes="layout" Width="4" Focusable="False"
+                        ResizeDirection="Columns" ResizeBehavior="PreviousAndNext" IsVisible="{Binding IsLayoutResizable}"
+                        AutomationProperties.Name="{loc:Loc Main.Layout.SplitterName}" ToolTip.Tip="{loc:Loc Main.Layout.SplitterTip}" />
+
           <!-- Participants -->
-          <Border Grid.Column="1" Classes="panel">
+          <Border x:Name="SidePanel" Grid.Column="2" Classes="panel">
             <DockPanel>
               <Grid DockPanel.Dock="Top" ColumnDefinitions="*,Auto" Margin="14,12,14,8">
                 <TextBlock Classes="label" Text="{loc:Loc Key=Main.Participants.Header, Arg={Binding Participants.Count}}" />
@@ -604,11 +646,15 @@
                 </StackPanel>
               </StackPanel>
               <ScrollViewer>
-                <ItemsControl ItemsSource="{Binding Participants}"
- Margin="12,0">
+                <!--
+                  One column of tiles; a wide panel with many participants gets two (the window sets the number).
+                  With the adjustable layout a tile can be dragged onto another one to swap them.
+                -->
+                <ItemsControl x:Name="ParticipantList" ItemsSource="{Binding Participants}" Margin="12,0" VerticalAlignment="Top"
+                              Background="Transparent">
                   <ItemsControl.ItemsPanel>
                     <ItemsPanelTemplate>
-                      <StackPanel Spacing="10" />
+                      <UniformGrid Columns="1" RowSpacing="10" ColumnSpacing="10" />
                     </ItemsPanelTemplate>
                   </ItemsControl.ItemsPanel>
                   <ItemsControl.ItemTemplate>
@@ -648,6 +694,9 @@
                               </MenuItem.Header>
                             </MenuItem>
                             <MenuItem Header="{loc:Loc Main.Voice.Reset}" Command="{Binding ResetVoiceVolumeCommand}" />
+                            <Separator />
+                            <!-- The picture of the participant in a window of its own, to look at it larger. -->
+                            <MenuItem Header="{loc:Loc Main.Participant.PopOut}" Click="OnPopOutParticipant" />
                             <Separator IsVisible="{Binding CanModerate}" />
                             <MenuItem Header="{loc:Loc Main.Moderation.Microphone}" Command="{Binding SwitchOffMicrophoneCommand}" IsVisible="{Binding CanModerate}">
                               <MenuItem.Icon>
@@ -662,7 +711,11 @@
                           </ContextMenu>
                         </Border.ContextMenu>
                         <StackPanel>
-                          <Panel Height="120" Background="#0E1518">
+                          <!--
+                            16:9, the shape of a camera frame, so the picture is shown whole; a wider panel makes it
+                            larger in proportion.
+                          -->
+                          <controls:AspectPanel HeightPerWidth="0.5625" Background="#0E1518">
                             <Border Width="64" Height="64" CornerRadius="32" HorizontalAlignment="Center" VerticalAlignment="Center"
                                     Background="{Binding AvatarColor, Converter={x:Static controls:ColorTextBrushConverter.Instance}}">
                               <TextBlock Text="{Binding Initial}" FontSize="28" FontWeight="Bold" Foreground="#0A0F11"
@@ -673,7 +726,10 @@
                                     IsVisible="{Binding ShowAvatarImage}">
                               <Image Source="{Binding AvatarImage}" Stretch="UniformToFill" />
                             </Border>
-                            <Image Source="{Binding CameraImage}" IsVisible="{Binding HasCamera}" Stretch="UniformToFill" />
+                            <!-- The whole frame, never cropped: a camera of another shape gets black bars at its sides. -->
+                            <Panel Background="Black" IsVisible="{Binding HasCamera}">
+                              <Image Source="{Binding CameraImage}" Stretch="Uniform" />
+                            </Panel>
                             <Border Background="#8C0A0F11" IsVisible="{Binding IsBuffering}">
                               <TextBlock Text="{loc:Loc Main.Participant.Loading}" Classes="mono" Foreground="{StaticResource GoletherWarn}"
                                          HorizontalAlignment="Center" VerticalAlignment="Center" />
@@ -699,7 +755,7 @@
                                 <TextBlock Text="{Binding RoleText}" FontSize="11" Classes="muted" />
                               </StackPanel>
                             </Border>
-                          </Panel>
+                          </controls:AspectPanel>
                           <Grid ColumnDefinitions="*,*,*" Background="{StaticResource GoletherPanel2}">
                             <StackPanel Margin="8,6">
                               <TextBlock Classes="label" FontSize="9" Text="{loc:Loc Main.Participant.Ping}" />
@@ -719,6 +775,8 @@
                           </Grid>
                         </StackPanel>
                       </Border>
+                      <!-- Dims the tile while it is dragged to another place. -->
+                      <Border Classes="dragVeil" IsHitTestVisible="False" />
                       <!-- Green frame while the participant speaks; drawn over the tile so its layout does not move. -->
                       <Border Classes="speakingFrame" IsVisible="{Binding IsSpeaking}" IsHitTestVisible="False"
                               AutomationProperties.Name="{loc:Loc Main.Participant.Speaking}" />

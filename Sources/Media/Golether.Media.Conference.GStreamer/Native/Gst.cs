@@ -314,6 +314,35 @@ internal static unsafe partial class Gst
     [LibraryImport(Core, EntryPoint = "gst_element_set_state")]
     public static partial int ElementSetState(nint element, GstState state);
 
+    /// <summary><c>gst_system_clock_obtain</c>.</summary>
+    /// <returns>The system clock (a reference is returned).</returns>
+    [LibraryImport(Core, EntryPoint = "gst_system_clock_obtain")]
+    public static partial nint SystemClockObtain();
+
+    /// <summary><c>gst_clock_get_time</c>.</summary>
+    /// <param name="clock">The clock.</param>
+    /// <returns>The time of the clock in nanoseconds.</returns>
+    [LibraryImport(Core, EntryPoint = "gst_clock_get_time")]
+    public static partial ulong ClockGetTime(nint clock);
+
+    /// <summary><c>gst_pipeline_use_clock</c>.</summary>
+    /// <param name="pipeline">The pipeline.</param>
+    /// <param name="clock">The clock the pipeline must use.</param>
+    [LibraryImport(Core, EntryPoint = "gst_pipeline_use_clock")]
+    public static partial void PipelineUseClock(nint pipeline, nint clock);
+
+    /// <summary><c>gst_element_set_base_time</c>.</summary>
+    /// <param name="element">The element.</param>
+    /// <param name="time">The clock time that is running time zero.</param>
+    [LibraryImport(Core, EntryPoint = "gst_element_set_base_time")]
+    public static partial void ElementSetBaseTime(nint element, ulong time);
+
+    /// <summary><c>gst_element_set_start_time</c>.</summary>
+    /// <param name="element">The element.</param>
+    /// <param name="time">The start time; <see cref="ClockTimeNone"/> keeps the base time as it was set.</param>
+    [LibraryImport(Core, EntryPoint = "gst_element_set_start_time")]
+    public static partial void ElementSetStartTime(nint element, ulong time);
+
     /// <summary><c>gst_element_sync_state_with_parent</c>.</summary>
     /// <param name="element">The element.</param>
     /// <returns>Non-zero on success.</returns>
@@ -587,12 +616,6 @@ internal static unsafe partial class Gst
     /// <returns>The flow result (0 is OK).</returns>
     [LibraryImport(App, EntryPoint = "gst_app_src_push_buffer")]
     public static partial int AppSrcPushBuffer(nint source, nint buffer);
-
-    /// <summary><c>gst_app_src_set_caps</c>.</summary>
-    /// <param name="source">The appsrc.</param>
-    /// <param name="caps">The caps (not taken).</param>
-    [LibraryImport(App, EntryPoint = "gst_app_src_set_caps")]
-    public static partial void AppSrcSetCaps(nint source, nint caps);
 
     // ---- SDP and WebRTC ----
 

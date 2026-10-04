@@ -79,6 +79,13 @@ internal sealed class FakeConference : IConferenceMedia
     public event EventHandler? MuteChanged;
 
     /// <inheritdoc />
+    public event EventHandler? MicrophoneFailed
+    {
+        add { }
+        remove { }
+    }
+
+    /// <inheritdoc />
     public Task ConnectAsync(PeerId peer, bool isOfferer, CancellationToken cancellationToken)
     {
         Connected[peer] = isOfferer;

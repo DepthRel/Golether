@@ -81,6 +81,13 @@ public sealed class UnavailableConferenceMedia : IConferenceMedia
     public event EventHandler? MuteChanged;
 
     /// <inheritdoc />
+    public event EventHandler? MicrophoneFailed
+    {
+        add { }
+        remove { }
+    }
+
+    /// <inheritdoc />
     public Task ConnectAsync(PeerId peer, bool isOfferer, CancellationToken cancellationToken) => Task.CompletedTask;
 
     /// <inheritdoc />

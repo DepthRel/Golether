@@ -31,6 +31,16 @@ public sealed class GStreamerConferenceMedia : IConferenceMedia, IPeerHost
     public const int MaxRemotePeers = 4;
 
     /// <summary>
+    /// How many times in a row a microphone that stopped by itself is restarted.
+    /// </summary>
+    private const int MaxMicrophoneRestarts = 3;
+
+    /// <summary>
+    /// The pause before a failed microphone is started again.
+    /// </summary>
+    private static readonly TimeSpan MicrophoneRestartDelay = TimeSpan.FromSeconds(1);
+
+    /// <summary>
     /// The options.
     /// </summary>
     private readonly GStreamerConferenceOptions _options;
@@ -101,6 +111,17 @@ public sealed class GStreamerConferenceMedia : IConferenceMedia, IPeerHost
     private bool _captureRequested;
 
     /// <summary>
+    /// The moment of the system clock from which the playback and the microphone pipelines count time, so that
+    /// the echo canceller can compare their timestamps.
+    /// </summary>
+    private readonly ulong _audioOrigin;
+
+    /// <summary>
+    /// The automatic restarts of the microphone since it was last started on request. Guarded by <see cref="_gate"/>.
+    /// </summary>
+    private int _microphoneRestarts;
+
+    /// <summary>
     /// The TURN relay for new connections, or <see langword="null"/>.
     /// </summary>
     private volatile string? _turnServer;
@@ -151,6 +172,7 @@ public sealed class GStreamerConferenceMedia : IConferenceMedia, IPeerHost
             _qualityTimer = new Timer(_ => UpdateVideoQuality(), null, options.QualityInterval, options.QualityInterval);
         }
         IsAvailable = GstRuntime.TryInitialize(options.BundleRoot, options.RegistryFile, out var error);
+        _audioOrigin = IsAvailable ? GstPipeline.SystemTime() : 0;
         UnavailableReason = error;
         if (IsAvailable)
         {
@@ -166,6 +188,9 @@ public sealed class GStreamerConferenceMedia : IConferenceMedia, IPeerHost
 
     /// <inheritdoc />
     public event EventHandler? MuteChanged;
+
+    /// <inheritdoc />
+    public event EventHandler? MicrophoneFailed;
 
     /// <inheritdoc />
     public event EventHandler<VideoQualityChange>? VideoQualityChanged;
@@ -309,7 +334,7 @@ public sealed class GStreamerConferenceMedia : IConferenceMedia, IPeerHost
                 // The playback pipeline owns the echo probe the canceller of the microphone looks up on start.
                 if (_options.EnablePlayback && _playback is null)
                 {
-                    _playback = TryStart("playback", BuildPlayback(), _ => { });
+                    _playback = TryStart("playback", BuildPlayback(), pipeline => pipeline.UseTimeline(_audioOrigin));
                 }
 
                 RestartVideo();
@@ -387,6 +412,16 @@ public sealed class GStreamerConferenceMedia : IConferenceMedia, IPeerHost
     /// </summary>
     private void RestartAudio()
     {
+        _microphoneRestarts = 0;
+        StartAudio(echoCancellation: _playback is not null);
+    }
+
+    /// <summary>
+    /// Replaces the microphone pipeline, falling back to one without echo cancellation. Call under <see cref="_gate"/>.
+    /// </summary>
+    /// <param name="echoCancellation">Whether to try echo cancellation first.</param>
+    private void StartAudio(bool echoCancellation)
+    {
         _audioCapture?.Dispose();
         _audioCapture = null;
         if (_microphoneMuted)
@@ -394,20 +429,84 @@ public sealed class GStreamerConferenceMedia : IConferenceMedia, IPeerHost
             return;
         }
 
-        if (_playback is not null)
+        if (echoCancellation)
         {
-            _audioCapture = TryStart("microphone", BuildAudioCapture(_microphone, echoCancellation: true), pipeline =>
-            {
-                Connect(pipeline.Element("aenc"), Callbacks.EncodedAudio);
-                Connect(pipeline.Element("alevel"), Callbacks.MicrophoneLevel);
-            });
+            _audioCapture = TryStartMicrophone(echoCancellation: true);
         }
 
-        _audioCapture ??= TryStart("microphone (without echo cancellation)", BuildAudioCapture(_microphone, echoCancellation: false), pipeline =>
+        _audioCapture ??= TryStartMicrophone(echoCancellation: false);
+    }
+
+    /// <summary>
+    /// Starts a microphone pipeline that reports its own failure.
+    /// </summary>
+    /// <param name="echoCancellation">Whether to use echo cancellation.</param>
+    /// <returns>The pipeline, or <see langword="null"/> when it could not start.</returns>
+    private GstPipeline? TryStartMicrophone(bool echoCancellation)
+        => TryStart(echoCancellation ? "microphone" : "microphone (without echo cancellation)", BuildAudioCapture(_microphone, echoCancellation), pipeline =>
         {
             Connect(pipeline.Element("aenc"), Callbacks.EncodedAudio);
             Connect(pipeline.Element("alevel"), Callbacks.MicrophoneLevel);
+            pipeline.Failed += (_, _) => OnMicrophoneFailed(pipeline, echoCancellation);
+
+            // The echo canceller finds what was played at the moment a sound was recorded by the timestamps of the
+            // two pipelines. Each counting from its own start, the playback is always "ahead", the canceller gets
+            // silence for a reference and removes nothing: the others hear themselves.
+            pipeline.UseTimeline(_audioOrigin);
         });
+
+    /// <summary>
+    /// Restarts a microphone pipeline that stopped by itself. A pipeline may start and fail a moment later (the
+    /// formats of the device and of the echo canceller are agreed on only when sound flows); without this the
+    /// microphone would stay shown as on while nothing is sent.
+    /// </summary>
+    /// <param name="failed">The pipeline that failed.</param>
+    /// <param name="echoCancellation">Whether it used echo cancellation.</param>
+    private void OnMicrophoneFailed(GstPipeline failed, bool echoCancellation)
+        => _ = Task.Run(async () =>
+        {
+            // The echo canceller is the first suspect and is dropped at once; a device needs a moment.
+            if (!echoCancellation)
+            {
+                await Task.Delay(MicrophoneRestartDelay).ConfigureAwait(false);
+            }
+
+            lock (_gate)
+            {
+                // The pipeline is still the current one: it was not replaced or stopped in the meantime.
+                if (!_captureRequested || !ReferenceEquals(_audioCapture, failed))
+                {
+                    return;
+                }
+
+                if (_microphoneRestarts < MaxMicrophoneRestarts)
+                {
+                    _microphoneRestarts++;
+                    _logger.LogWarning("The microphone stopped; restarting it without echo cancellation ({Attempt} of {Limit})", _microphoneRestarts, MaxMicrophoneRestarts);
+                    StartAudio(echoCancellation: false);
+                    return;
+                }
+
+                // A microphone that cannot be used is off, and says so: to its owner and to the other participants.
+                _logger.LogWarning("The microphone keeps failing and is switched off");
+                failed.Dispose();
+                _audioCapture = null;
+                _microphoneMuted = true;
+            }
+
+            MuteChanged?.Invoke(this, EventArgs.Empty);
+            MicrophoneFailed?.Invoke(this, EventArgs.Empty);
+        });
+
+    /// <summary>
+    /// Stops the microphone pipeline as a failing device would (tests).
+    /// </summary>
+    internal void BreakMicrophone()
+    {
+        lock (_gate)
+        {
+            _audioCapture?.Break("The microphone was broken by a test.");
+        }
     }
 
     /// <inheritdoc />
@@ -608,7 +707,7 @@ public sealed class GStreamerConferenceMedia : IConferenceMedia, IPeerHost
     {
         if (From(data) is { } media)
         {
-            Samples.Pull(sink, (frame, caps) =>
+            Samples.Pull(sink, (frame, _) =>
             {
                 if (media._cameraOff)
                 {
@@ -617,7 +716,7 @@ public sealed class GStreamerConferenceMedia : IConferenceMedia, IPeerHost
 
                 foreach (var peer in media._peers.Values)
                 {
-                    peer.PushVideo(frame, caps, VideoQuality.High);
+                    peer.PushVideo(frame, VideoQuality.High);
                 }
             });
         }
@@ -636,7 +735,7 @@ public sealed class GStreamerConferenceMedia : IConferenceMedia, IPeerHost
     {
         if (From(data) is { } media)
         {
-            Samples.Pull(sink, (frame, caps) =>
+            Samples.Pull(sink, (frame, _) =>
             {
                 if (media._cameraOff)
                 {
@@ -645,7 +744,7 @@ public sealed class GStreamerConferenceMedia : IConferenceMedia, IPeerHost
 
                 foreach (var peer in media._peers.Values)
                 {
-                    peer.PushVideo(frame, caps, VideoQuality.Low);
+                    peer.PushVideo(frame, VideoQuality.Low);
                 }
             });
         }
@@ -754,7 +853,7 @@ public sealed class GStreamerConferenceMedia : IConferenceMedia, IPeerHost
     {
         if (From(data) is { } media)
         {
-            Samples.Pull(sink, (frame, caps) =>
+            Samples.Pull(sink, (frame, _) =>
             {
                 if (media._microphoneMuted)
                 {
@@ -763,7 +862,7 @@ public sealed class GStreamerConferenceMedia : IConferenceMedia, IPeerHost
 
                 foreach (var peer in media._peers.Values)
                 {
-                    peer.PushAudio(frame, caps);
+                    peer.PushAudio(frame);
                 }
             });
         }

@@ -1,0 +1,33 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="using:Golether.UI.ViewModels"
+        xmlns:controls="using:Golether.UI.Controls"
+        x:Class="Golether.UI.Views.ParticipantVideoWindow"
+        x:DataType="vm:ParticipantItemViewModel"
+        Title="{Binding Name}" Icon="/Assets/golether.ico"
+        Width="640" Height="480" MinWidth="240" MinHeight="180"
+        WindowStartupLocation="CenterScreen">
+  <!-- The camera of one participant, as large as the window; the same picture the tile shows. -->
+  <Panel Background="#0E1518">
+    <Border Width="120" Height="120" CornerRadius="60" HorizontalAlignment="Center" VerticalAlignment="Center"
+            Background="{Binding AvatarColor, Converter={x:Static controls:ColorTextBrushConverter.Instance}}">
+      <TextBlock Text="{Binding Initial}" FontSize="52" FontWeight="Bold" Foreground="#0A0F11"
+                 HorizontalAlignment="Center" VerticalAlignment="Center" />
+    </Border>
+    <!-- The chosen avatar covers the coloured initial while the camera is off. -->
+    <Border Width="120" Height="120" CornerRadius="60" ClipToBounds="True" HorizontalAlignment="Center" VerticalAlignment="Center"
+            IsVisible="{Binding ShowAvatarImage}">
+      <Image Source="{Binding AvatarImage}" Stretch="UniformToFill" />
+    </Border>
+    <!-- The whole frame, not cropped: the window is for looking at details. -->
+    <Panel Background="Black" IsVisible="{Binding HasCamera}">
+      <Image Source="{Binding CameraImage}" Stretch="Uniform" RenderOptions.BitmapInterpolationMode="HighQuality" />
+    </Panel>
+    <Border Background="#99000000" CornerRadius="5" Padding="8,3" Margin="10" HorizontalAlignment="Left" VerticalAlignment="Bottom">
+      <StackPanel Orientation="Horizontal" Spacing="6">
+        <TextBlock Text="{Binding Name}" FontSize="13" FontWeight="SemiBold" />
+        <TextBlock Text="{Binding RoleText}" FontSize="12" Classes="muted" />
+      </StackPanel>
+    </Border>
+  </Panel>
+</Window>

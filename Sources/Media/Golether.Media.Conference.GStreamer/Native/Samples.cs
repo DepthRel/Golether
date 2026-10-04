@@ -57,12 +57,13 @@ internal static unsafe class Samples
     }
 
     /// <summary>
-    /// Pushes a copy of data into an appsrc; the copy has no timestamps, so the appsrc stamps it.
+    /// Pushes a copy of data into an appsrc; without a timestamp the appsrc stamps the copy itself.
     /// </summary>
     /// <param name="appSource">The appsrc.</param>
     /// <param name="data">The data.</param>
+    /// <param name="timestamp">The presentation time in nanoseconds, or <see cref="Gst.ClockTimeNone"/> to leave it to the appsrc.</param>
     /// <returns><see langword="true"/> when the appsrc accepted the buffer.</returns>
-    public static bool Push(nint appSource, ReadOnlySpan<byte> data)
+    public static bool Push(nint appSource, ReadOnlySpan<byte> data, ulong timestamp = Gst.ClockTimeNone)
     {
         var buffer = Gst.BufferNewAllocate(0, (nuint)data.Length, 0);
         if (buffer == 0)
@@ -75,8 +76,8 @@ internal static unsafe class Samples
             Gst.BufferFill(buffer, 0, source, (nuint)data.Length);
         }
 
-        // A fresh buffer has no timestamps (GST_CLOCK_TIME_NONE); do-timestamp on the appsrc stamps it.
-        Marshal.WriteInt64(buffer, Gst.BufferPtsOffset, unchecked((long)Gst.ClockTimeNone));
+        // Without a timestamp (GST_CLOCK_TIME_NONE) do-timestamp on the appsrc stamps the buffer.
+        Marshal.WriteInt64(buffer, Gst.BufferPtsOffset, unchecked((long)timestamp));
         Marshal.WriteInt64(buffer, Gst.BufferPtsOffset + 8, unchecked((long)Gst.ClockTimeNone));
         return Gst.AppSrcPushBuffer(appSource, buffer) == FlowOk;
     }

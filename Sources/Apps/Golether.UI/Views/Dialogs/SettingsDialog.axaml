@@ -76,6 +76,19 @@
 
       <Border Height="1" Background="{StaticResource GoletherLine}" Margin="0,4" />
 
+      <!-- Display -->
+      <TextBlock Classes="title" Text="{loc:Loc Settings.Display}" />
+      <StackPanel Spacing="6">
+        <CheckBox IsChecked="{Binding LayoutResizable}" Content="{loc:Loc Settings.Display.Resizable}"
+                  AutomationProperties.Name="{loc:Loc Settings.Display.Resizable}" />
+        <TextBlock Classes="muted" FontSize="12" TextWrapping="Wrap" Text="{loc:Loc Settings.Display.ResizableNote}" Margin="0,0,0,6" />
+        <CheckBox IsChecked="{Binding AlwaysShowBars}" Content="{loc:Loc Settings.Display.AlwaysShowBars}"
+                  AutomationProperties.Name="{loc:Loc Settings.Display.AlwaysShowBars}" />
+        <TextBlock Classes="muted" FontSize="12" TextWrapping="Wrap" Text="{loc:Loc Settings.Display.AlwaysShowBarsNote}" />
+      </StackPanel>
+
+      <Border Height="1" Background="{StaticResource GoletherLine}" Margin="0,4" />
+
       <!-- AmneziaWG tunnels -->
       <TextBlock Classes="title" Text="{loc:Loc Settings.Tunnels}" />
       <StackPanel Spacing="6">

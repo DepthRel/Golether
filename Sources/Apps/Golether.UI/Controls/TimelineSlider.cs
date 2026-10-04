@@ -1,7 +1,10 @@
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.Primitives;
+using Avalonia.Input;
+using Avalonia.Interactivity;
 using Avalonia.Layout;
+using Avalonia.VisualTree;
 
 namespace Golether.UI.Controls;
 
@@ -27,6 +30,27 @@ public sealed class TimelineSlider : Slider
     private readonly RangeBar _bar = new() { IsHitTestVisible = false, VerticalAlignment = VerticalAlignment.Center, Height = TrackHeight };
 
     /// <summary>
+    /// The track of the slider, or <see langword="null"/> before the template is applied.
+    /// </summary>
+    private Track? _track;
+
+    /// <summary>
+    /// Whether a press beside the track is being dragged along the timeline.
+    /// </summary>
+    private bool _draggingBeside;
+
+    /// <summary>
+    /// Initializes a new instance of the <see cref="TimelineSlider"/> class.
+    /// </summary>
+    public TimelineSlider()
+    {
+        AddHandler(PointerPressedEvent, OnPressedBeside, RoutingStrategies.Tunnel);
+        AddHandler(PointerMovedEvent, OnMovedBeside, RoutingStrategies.Tunnel);
+        AddHandler(PointerReleasedEvent, (_, _) => _draggingBeside = false, RoutingStrategies.Tunnel, handledEventsToo: true);
+        AddHandler(PointerCaptureLostEvent, (_, _) => _draggingBeside = false, RoutingStrategies.Tunnel | RoutingStrategies.Bubble, handledEventsToo: true);
+    }
+
+    /// <summary>
     /// Gets or sets the parts that can be played without waiting.
     /// </summary>
     public IReadOnlyList<FractionRange>? BufferedRanges
@@ -49,6 +73,7 @@ public sealed class TimelineSlider : Slider
         base.OnApplyTemplate(e);
         (_bar.Parent as Panel)?.Children.Remove(_bar);
         var track = e.NameScope.Find<Track>("PART_Track");
+        _track = track;
         _bar.Track = track;
         if (track?.Parent is not Panel panel)
         {
@@ -63,6 +88,63 @@ public sealed class TimelineSlider : Slider
         _bar.Margin = track.Margin;
         panel.Children.Insert(panel.Children.IndexOf(track), _bar);
         _bar.Ranges = BufferedRanges;
+    }
+
+    /// <summary>
+    /// A press a little above or below the track counts as a press on the track: the slider itself moves only for
+    /// presses inside the track row and merely looks pressed for the rest of its height, so the user would have to
+    /// aim at a thin line.
+    /// </summary>
+    /// <param name="sender">The slider.</param>
+    /// <param name="e">The event data.</param>
+    private void OnPressedBeside(object? sender, PointerPressedEventArgs e)
+    {
+        if (_track is not { } track
+            || !e.GetCurrentPoint(this).Properties.IsLeftButtonPressed
+            || (e.Source as Visual)?.GetSelfAndVisualAncestors().Contains(track) == true)
+        {
+            return;
+        }
+
+        _draggingBeside = true;
+        e.Pointer.Capture(this);
+        MoveTo(e.GetPosition(track).X);
+    }
+
+    /// <summary>
+    /// Keeps the thumb under the pointer while a press beside the track is dragged.
+    /// </summary>
+    /// <param name="sender">The slider.</param>
+    /// <param name="e">The event data.</param>
+    private void OnMovedBeside(object? sender, PointerEventArgs e)
+    {
+        if (_draggingBeside && _track is { } track)
+        {
+            MoveTo(e.GetPosition(track).X);
+        }
+    }
+
+    /// <summary>
+    /// Puts the middle of the thumb at a horizontal position on the track, the way the slider does for a press on
+    /// the track itself.
+    /// </summary>
+    /// <param name="x">The position on the track.</param>
+    private void MoveTo(double x)
+    {
+        if (_track is not { } track)
+        {
+            return;
+        }
+
+        var thumb = track.Thumb?.Bounds.Width ?? 0;
+        var length = track.Bounds.Width - thumb;
+        if (length <= 0)
+        {
+            return;
+        }
+
+        var fraction = Math.Clamp((x - (thumb / 2)) / length, 0, 1);
+        SetCurrentValue(ValueProperty, Minimum + (fraction * (Maximum - Minimum)));
     }
 
     /// <inheritdoc />

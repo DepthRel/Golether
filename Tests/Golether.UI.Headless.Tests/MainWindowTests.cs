@@ -41,7 +41,11 @@ public sealed class MainWindowTests
     /// Initializes static members of the <see cref="MainWindowTests"/> class. The toolbar folds without its
     /// animation, so the tests see the settled row instead of a frame in the middle of it.
     /// </summary>
-    static MainWindowTests() => OverflowPanel.FoldDuration = TimeSpan.Zero;
+    static MainWindowTests()
+    {
+        OverflowPanel.FoldDuration = TimeSpan.Zero;
+        SlideReveal.Duration = TimeSpan.Zero;
+    }
 
     /// <summary>
     /// This device, the host.
@@ -73,11 +77,11 @@ public sealed class MainWindowTests
         await fixture.Settle();
         var items = menu.Items.OfType<MenuItem>().ToArray();
         var texts = items.Select(i => i.Header as string).ToArray();
-        Assert.Equal([null, "Обычная громкость (100 %)", "Выключить микрофон", "Выключить камеру"], texts);
+        Assert.Equal([null, "Обычная громкость (100 %)", "Вывести в отдельное окно", "Выключить микрофон", "Выключить камеру"], texts);
         Assert.All(items, i => Assert.True(i.IsVisible));
         Assert.DoesNotContain(texts, t => t?.Contains("Включить", StringComparison.Ordinal) == true);
 
-        items[2].Command!.Execute(null);
+        items[3].Command!.Execute(null);
         await fixture.Settle();
         await fixture.Sessions.Received(1).SwitchOffParticipantDevicesAsync(Guest, true, false);
 
@@ -112,17 +116,428 @@ public sealed class MainWindowTests
         fixture.GuestMicrophoneOff = true;
         fixture.ViewModel.Refresh();
         await fixture.Settle();
-        Assert.False(items[2].Command!.CanExecute(null));
+        Assert.False(items[3].Command!.CanExecute(null));
 
-        // A participant (not the host) gets only the volume.
+        // A participant (not the host) gets the volume and the separate window, but no switch-off commands.
         fixture.IsHost = false;
         fixture.ViewModel.Refresh();
         await fixture.Settle();
         fixture.Click(guestTile, MouseButton.Right);
         await fixture.Settle();
         Assert.True(menu.IsOpen);
-        Assert.Equal([true, true, false, false], items.Select(i => i.IsVisible));
+        Assert.Equal([true, true, true, false, false], items.Select(i => i.IsVisible));
         menu.Close();
+    });
+
+    /// <summary>
+    /// The menu of a participant opens their camera in a window of its own, once; closing it changes nothing, and
+    /// the window goes away with the participant.
+    /// </summary>
+    /// <returns>A task that completes when the test is done.</returns>
+    [Fact]
+    public Task ParticipantMenu_OpensTheCameraInASeparateWindow() => RunAsync(async fixture =>
+    {
+        var tile = fixture.Tile("Марина");
+        fixture.Click(tile, MouseButton.Right);
+        await fixture.Settle();
+        var entry = tile.ContextMenu!.Items.OfType<MenuItem>().Single(i => i.Header as string == "Вывести в отдельное окно");
+
+        entry.RaiseEvent(new Avalonia.Interactivity.RoutedEventArgs(MenuItem.ClickEvent));
+        await fixture.Settle();
+        var window = Assert.Single(fixture.Window.ParticipantWindows);
+        Assert.True(window.IsVisible);
+        Assert.Equal("Марина", window.Title);
+        Assert.Same(fixture.ViewModel.Participants.Single(p => p.PeerId == Guest), window.DataContext);
+        Assert.True(window.CanResize);
+
+        // Asking again brings the same window forward instead of opening another one.
+        entry.RaiseEvent(new Avalonia.Interactivity.RoutedEventArgs(MenuItem.ClickEvent));
+        await fixture.Settle();
+        Assert.Same(window, Assert.Single(fixture.Window.ParticipantWindows));
+
+        // Closing it is not an action of the session.
+        window.Close();
+        await fixture.Settle();
+        Assert.Empty(fixture.Window.ParticipantWindows);
+        Assert.Equal(2, fixture.ViewModel.Participants.Count);
+        fixture.Conference.DidNotReceiveWithAnyArgs().SetMuted(default, default);
+
+        // A window that is open when the participant leaves closes by itself.
+        entry.RaiseEvent(new Avalonia.Interactivity.RoutedEventArgs(MenuItem.ClickEvent));
+        await fixture.Settle();
+        var second = Assert.Single(fixture.Window.ParticipantWindows);
+        fixture.GuestPresent = false;
+        fixture.ViewModel.Refresh();
+        await fixture.Settle();
+        Assert.False(second.IsVisible);
+        Assert.Empty(fixture.Window.ParticipantWindows);
+    });
+
+    /// <summary>
+    /// The border between the video and the participants shows only with the adjustable layout; a wider panel makes
+    /// the camera tiles larger; a double click on the border and switching the layout off both restore the designed
+    /// width.
+    /// </summary>
+    /// <returns>A task that completes when the test is done.</returns>
+    [Fact]
+    public Task LayoutSplitter_ResizesThePanelAndResets() => RunAsync(async fixture =>
+    {
+        var splitter = fixture.Window.FindControl<GridSplitter>("LayoutSplitter")!;
+        var grid = fixture.Window.FindControl<Grid>("SessionGrid")!;
+        var picture = fixture.Tile("Марина").GetVisualDescendants().OfType<AspectPanel>().Single();
+        double PanelWidth() => grid.ColumnDefinitions[2].ActualWidth;
+
+        Assert.False(splitter.IsVisible);
+        Assert.Equal(300, PanelWidth());
+        Assert.Equal(154, picture.Bounds.Height, 0);
+
+        fixture.ViewModel.SetLayoutResizable(true);
+        await fixture.Settle();
+        Assert.True(splitter.IsVisible);
+        Assert.Equal(300, PanelWidth());
+
+        fixture.ViewModel.StoreSidePanelWidth(450);
+        await fixture.Settle();
+        Assert.Equal(450, PanelWidth());
+        Assert.InRange(picture.Bounds.Height, 234, 242);
+
+        // More than the window has room for: the video keeps its minimum.
+        fixture.ViewModel.StoreSidePanelWidth(5000);
+        await fixture.Settle();
+        Assert.Equal(fixture.Window.Bounds.Width - splitter.Bounds.Width - MainWindowViewModel.MinVideoWidth, PanelWidth(), 0);
+
+        var point = fixture.PointOf(splitter);
+        fixture.Window.MouseDown(point, MouseButton.Left);
+        fixture.Window.MouseUp(point, MouseButton.Left);
+        fixture.Window.MouseDown(point, MouseButton.Left);
+        fixture.Window.MouseUp(point, MouseButton.Left);
+        await fixture.Settle();
+        Assert.Equal(300, fixture.ViewModel.SidePanelWidth);
+        Assert.Equal(300, PanelWidth());
+
+        fixture.ViewModel.StoreSidePanelWidth(450);
+        fixture.ViewModel.SetLayoutResizable(false);
+        await fixture.Settle();
+        Assert.False(splitter.IsVisible);
+        Assert.Equal(300, PanelWidth());
+        Assert.Equal(154, picture.Bounds.Height, 0);
+    });
+
+    /// <summary>
+    /// A double click on the video area toggles full screen also while no video is loaded there.
+    /// </summary>
+    /// <returns>A task that completes when the test is done.</returns>
+    [Fact]
+    public Task DoubleClick_TogglesFullScreenWithoutVideo() => RunAsync(async fixture =>
+    {
+        var area = fixture.Window.FindControl<Panel>("VideoArea")!;
+        Assert.False(fixture.ViewModel.ShowVideo, "The test needs the placeholder, not the video.");
+
+        void DoubleClick()
+        {
+            var point = area.TranslatePoint(new Point(30, 30), fixture.Window)!.Value;
+            fixture.Window.MouseDown(point, MouseButton.Left);
+            fixture.Window.MouseUp(point, MouseButton.Left);
+            fixture.Window.MouseDown(point, MouseButton.Left);
+            fixture.Window.MouseUp(point, MouseButton.Left);
+        }
+
+        DoubleClick();
+        await fixture.Settle();
+        Assert.Equal(WindowState.FullScreen, fixture.Window.WindowState);
+
+        DoubleClick();
+        await fixture.Settle();
+        Assert.NotEqual(WindowState.FullScreen, fixture.Window.WindowState);
+    });
+
+    /// <summary>
+    /// The cursor disappears over the resting video in any window state. Full screen hides the status bar and moves
+    /// the top bar and the player bar into layers over the video: they leave after the pointer left them, come back
+    /// at the top or bottom edge and stay while the pointer is on them — and the video never changes its size for
+    /// it. "Always show the timeline" puts the bars back into the layout, with the video between them.
+    /// </summary>
+    /// <returns>A task that completes when the test is done.</returns>
+    [Fact]
+    public async Task FullScreen_LaysTheBarsOverTheVideoAndHidesThem()
+    {
+        var delay = MainWindow.ChromeDelay;
+        MainWindow.ChromeDelay = TimeSpan.FromMilliseconds(400);
+        try
+        {
+            await RunAsync(async fixture =>
+            {
+                var top = fixture.Window.FindControl<SlideReveal>("TopBar")!;
+                var player = fixture.Window.FindControl<SlideReveal>("PlayerBar")!;
+                var topLayer = fixture.Window.FindControl<Popup>("TopBarPopup")!;
+                var playerLayer = fixture.Window.FindControl<Popup>("PlayerBarPopup")!;
+                var topSlot = fixture.Window.FindControl<Decorator>("TopBarSlot")!;
+                var status = fixture.Window.FindControl<Border>("StatusBar")!;
+                var area = fixture.Window.FindControl<Panel>("VideoArea")!;
+                var wait = MainWindow.ChromeDelay + TimeSpan.FromMilliseconds(700);
+                Assert.True(status.IsVisible);
+                Assert.Same(top, topSlot.Child);
+                Assert.True(top.Bounds.Height > 20);
+                Assert.True(player.Bounds.Height > 20);
+                var windowed = area.Bounds.Height;
+
+                // In a plain window the cursor hides over the resting video, and the bars stay where they are.
+                fixture.Window.MouseMove(fixture.PointOf(area));
+                await fixture.SettleFor(wait);
+                Assert.NotNull(area.Cursor);
+                Assert.True(top.IsExpanded);
+                Assert.False(topLayer.IsOpen);
+                Assert.Equal(windowed, area.Bounds.Height);
+                fixture.Window.MouseMove(fixture.PointOf(area) + new Vector(5, 5));
+                await fixture.Settle();
+                Assert.Null(area.Cursor);
+
+                // Full screen: the bars leave the layout, the video takes the whole height and keeps it.
+                fixture.Window.WindowState = WindowState.FullScreen;
+                await fixture.Settle();
+                Assert.False(status.IsVisible);
+                Assert.Null(topSlot.Child);
+                Assert.True(topLayer.IsOpen);
+                Assert.True(playerLayer.IsOpen);
+                var full = area.Bounds.Height;
+                Assert.True(full > windowed + 40, "The video takes the room of the bars.");
+                Assert.Equal(fixture.Window.Bounds.Height, full);
+
+                fixture.Window.MouseMove(fixture.PointOf(area) + new Vector(3, 3));
+                await fixture.SettleFor(wait);
+                Assert.False(top.IsExpanded);
+                Assert.False(topLayer.IsOpen);
+                Assert.False(playerLayer.IsOpen);
+                Assert.NotNull(area.Cursor);
+                Assert.Equal(full, area.Bounds.Height);
+
+                // A movement over the video shows the cursor and leaves the bars hidden.
+                fixture.Window.MouseMove(fixture.PointOf(area) + new Vector(9, 9));
+                await fixture.Settle();
+                Assert.Null(area.Cursor);
+                Assert.False(topLayer.IsOpen);
+
+                // Over the participants the cursor stays, and the bars stay hidden.
+                fixture.Window.MouseMove(fixture.PointOf(fixture.Tile("Марина")));
+                await fixture.SettleFor(wait);
+                Assert.Null(area.Cursor);
+                Assert.False(topLayer.IsOpen);
+
+                // The top edge brings both bars back over the video, which keeps its size.
+                fixture.Window.MouseMove(new Point(200, 2));
+                await fixture.Settle();
+                Assert.True(topLayer.IsOpen);
+                Assert.True(playerLayer.IsOpen);
+                Assert.True(top.IsExpanded);
+                Assert.True(top.Bounds.Height > 20);
+                Assert.Equal(fixture.Window.Bounds.Width, top.Bounds.Width);
+                Assert.Equal(area.Bounds.Width, player.Bounds.Width);
+
+                // The top bar lies at the top of the window, the player bar at the bottom of the video; neither
+                // layer may be moved to keep it inside the working area of the screen.
+                var layer = TopLevel.GetTopLevel(player)!;
+                Assert.Equal(0, top.TranslatePoint(default, TopLevel.GetTopLevel(top)!)!.Value.Y, 0);
+                Assert.Equal(fixture.Window.Bounds.Height, player.TranslatePoint(new Point(0, player.Bounds.Height), layer)!.Value.Y, 0);
+                Assert.Equal(Avalonia.Controls.Primitives.PopupPositioning.PopupPositionerConstraintAdjustment.None, topLayer.PlacementConstraintAdjustment);
+                Assert.Equal(Avalonia.Controls.Primitives.PopupPositioning.PopupPositionerConstraintAdjustment.None, playerLayer.PlacementConstraintAdjustment);
+                Assert.Equal(full, area.Bounds.Height);
+
+                // They stay while the pointer is on them. On a desktop the layer is a window of its own, so the
+                // pointer is sent to whatever hosts the bar.
+                var layerRoot = TopLevel.GetTopLevel(top)!;
+                layerRoot.MouseMove(top.TranslatePoint(new Point(120, 10), layerRoot)!.Value);
+                await fixture.SettleFor(wait);
+                Assert.True(topLayer.IsOpen);
+
+                // So does the bottom edge under the video, after they left again.
+                fixture.Window.MouseMove(fixture.PointOf(area));
+                await fixture.SettleFor(wait);
+                Assert.False(playerLayer.IsOpen);
+                fixture.Window.MouseMove(new Point(200, fixture.Window.Bounds.Height - 2));
+                await fixture.Settle();
+                Assert.True(playerLayer.IsOpen);
+
+                // An open menu of the bar keeps them.
+                var reactions = fixture.Window.FindControl<Button>("ReactionsButton")!;
+                reactions.Flyout!.ShowAt(reactions);
+                fixture.Window.MouseMove(fixture.PointOf(area));
+                await fixture.SettleFor(wait);
+                Assert.True(playerLayer.IsOpen);
+                reactions.Flyout.Hide();
+                await fixture.SettleFor(wait);
+                Assert.False(playerLayer.IsOpen);
+
+                // The shortcuts of the window work whatever the bars do.
+                fixture.Window.KeyPress(Key.Space, RawInputModifiers.None, PhysicalKey.Space, " ");
+                fixture.Window.KeyRelease(Key.Space, RawInputModifiers.None, PhysicalKey.Space, " ");
+                await fixture.Settle();
+                await fixture.Sessions.Received(1).RequestAsync(Arg.Is<PlaybackRequest>(r => r.Kind == PlaybackRequestKind.Play), Arg.Any<CancellationToken>());
+
+                // "Always show the timeline": the bars are back in the layout and do not leave.
+                fixture.ViewModel.SetAlwaysShowBars(true);
+                await fixture.SettleFor(wait);
+                Assert.Same(top, topSlot.Child);
+                Assert.False(topLayer.IsOpen);
+                Assert.False(playerLayer.IsOpen);
+                Assert.True(top.IsExpanded);
+                Assert.Equal(1, top.Shown);
+                Assert.True(player.Bounds.Height > 20);
+                Assert.True(area.Bounds.Height < full - 40, "The video fits between the bars.");
+                Assert.False(status.IsVisible);
+
+                fixture.ViewModel.SetAlwaysShowBars(false);
+                fixture.Window.WindowState = WindowState.Normal;
+                await fixture.Settle();
+                Assert.True(status.IsVisible);
+                Assert.Same(top, topSlot.Child);
+                Assert.True(top.IsExpanded);
+                Assert.True(player.IsExpanded);
+                Assert.Equal(windowed, area.Bounds.Height);
+            });
+        }
+        finally
+        {
+            MainWindow.ChromeDelay = delay;
+        }
+    }
+
+    /// <summary>
+    /// Up to three participants keep one column of tiles however wide the panel is; more of them go in two columns
+    /// once the panel is more than three times as wide as designed.
+    /// </summary>
+    /// <returns>A task that completes when the test is done.</returns>
+    [Fact]
+    public Task Tiles_GoInTwoColumnsWhenManyAndWide() => RunAsync(async fixture =>
+    {
+        var tiles = fixture.Window.FindControl<ItemsControl>("ParticipantList")!;
+        UniformGrid Grid() => (UniformGrid)tiles.ItemsPanelRoot!;
+        fixture.Window.Width = 1700;
+        fixture.ViewModel.SetLayoutResizable(true);
+        fixture.ViewModel.StoreSidePanelWidth(1000);
+        await fixture.Settle();
+        Assert.Equal(1, Grid().Columns);
+        var single = fixture.Tile("Марина").Bounds.Width;
+
+        fixture.ExtraGuests = 2;
+        fixture.ViewModel.Refresh();
+        await fixture.Settle();
+        Assert.Equal(4, fixture.ViewModel.Participants.Count);
+        Assert.Equal(2, Grid().Columns);
+        var first = fixture.Tile("Вы");
+        var second = fixture.Tile("Марина");
+        Assert.Equal(fixture.PointOf(first).Y, fixture.PointOf(second).Y, 0);
+        Assert.True(fixture.PointOf(second).X > fixture.PointOf(first).X + 100);
+        Assert.InRange(second.Bounds.Width, (single / 2) - 10, single / 2);
+        fixture.Shot("tiles-two-columns");
+
+        // A panel that is not wide enough keeps the single column.
+        fixture.ViewModel.StoreSidePanelWidth(600);
+        await fixture.Settle();
+        Assert.Equal(1, Grid().Columns);
+    });
+
+    /// <summary>
+    /// With the adjustable layout a tile dragged onto another one swaps with it; a locked layout leaves the tiles
+    /// alone, and a plain click on a tile moves nothing.
+    /// </summary>
+    /// <returns>A task that completes when the test is done.</returns>
+    [Fact]
+    public Task Tiles_SwapByDragging() => RunAsync(async fixture =>
+    {
+        string[] Order() => [.. fixture.ViewModel.Participants.Select(p => p.Name)];
+        Border Veil(string name) => ((Visual)fixture.Tile(name).Parent!).GetVisualChildren().OfType<Border>().Single(b => b.Classes.Contains("dragVeil"));
+        void Drag(string from, string to, bool drop = true)
+        {
+            var start = fixture.PointOf(fixture.Tile(from));
+            var end = fixture.PointOf(fixture.Tile(to));
+            fixture.Window.MouseMove(start);
+            fixture.Window.MouseDown(start, MouseButton.Left);
+            fixture.Window.MouseMove(start + new Vector(0, 12));
+            fixture.Window.MouseMove(end);
+            if (drop)
+            {
+                fixture.Window.MouseUp(end, MouseButton.Left);
+            }
+        }
+
+        // The layout is locked: nothing moves.
+        Drag("Вы", "Марина");
+        await fixture.Settle();
+        Assert.Equal(["Вы", "Марина"], Order());
+
+        fixture.ViewModel.SetLayoutResizable(true);
+        await fixture.Settle();
+        fixture.Click(fixture.Tile("Вы"), MouseButton.Left);
+        await fixture.Settle();
+        Assert.Equal(["Вы", "Марина"], Order());
+
+        // While the tile is carried, it and the tile under the pointer are marked.
+        Drag("Вы", "Марина", drop: false);
+        await fixture.Settle();
+        Assert.True(Veil("Вы").IsVisible, "The carried tile is dimmed.");
+        Assert.False(Veil("Марина").IsVisible);
+        Assert.Equal(1, fixture.Tile("Вы").Opacity);
+        Assert.Contains("dropTarget", fixture.Tile("Марина").Classes);
+        fixture.Window.MouseUp(fixture.PointOf(fixture.Tile("Марина")), MouseButton.Left);
+        await fixture.Settle();
+        Assert.Equal(["Марина", "Вы"], Order());
+        Assert.False(Veil("Вы").IsVisible);
+        Assert.DoesNotContain("dropTarget", fixture.Tile("Марина").Classes);
+        Assert.True(fixture.PointOf(fixture.Tile("Марина")).Y < fixture.PointOf(fixture.Tile("Вы")).Y);
+
+        // Switching the adjustable layout off restores the order of the session.
+        fixture.ViewModel.SetLayoutResizable(false);
+        await fixture.Settle();
+        Assert.Equal(["Вы", "Марина"], Order());
+    });
+
+    /// <summary>
+    /// A press a little above or below the line of the timeline seeks exactly like a press on the line, and a drag
+    /// from there moves the thumb along; the user does not have to aim at the line.
+    /// </summary>
+    /// <returns>A task that completes when the test is done.</returns>
+    [Fact]
+    public Task Timeline_SeeksFromAboveAndBelowTheLine() => RunAsync(async fixture =>
+    {
+        var timeline = fixture.Window.FindControl<TimelineSlider>("Timeline")!;
+        await fixture.SettleFor(TimeSpan.FromMilliseconds(400));
+        var origin = timeline.TranslatePoint(default, fixture.Window)!.Value;
+        var x = timeline.Bounds.Width * 0.4;
+
+        async Task<double> SeekAt(double y)
+        {
+            fixture.Sessions.ClearReceivedCalls();
+            var point = origin + new Vector(x, y);
+            fixture.Window.MouseMove(point);
+            fixture.Window.MouseDown(point, MouseButton.Left);
+            await fixture.Settle();
+            Assert.True(fixture.ViewModel.IsScrubbing);
+            var value = timeline.Value;
+            fixture.Window.MouseUp(point, MouseButton.Left);
+            await fixture.Settle();
+            await fixture.Sessions.Received(1).RequestAsync(
+                Arg.Is<PlaybackRequest>(r => r.Kind == PlaybackRequestKind.Seek && Math.Abs(r.Position!.Value.TotalSeconds - value) < 1),
+                Arg.Any<CancellationToken>());
+            return value;
+        }
+
+        // The line itself is in the middle of the slider; its top and bottom strips used to do nothing.
+        var onLine = await SeekAt(timeline.Bounds.Height / 2);
+        Assert.InRange(onLine, 7200 * 0.38, 7200 * 0.42);
+        Assert.Equal(onLine, await SeekAt(3), 3);
+        Assert.Equal(onLine, await SeekAt(timeline.Bounds.Height - 3), 3);
+
+        // A drag that starts above the line carries the thumb.
+        fixture.Sessions.ClearReceivedCalls();
+        var start = origin + new Vector(x, 3);
+        fixture.Window.MouseDown(start, MouseButton.Left);
+        fixture.Window.MouseMove(start + new Vector(timeline.Bounds.Width * 0.3, 0));
+        await fixture.Settle();
+        Assert.InRange(timeline.Value, 7200 * 0.68, 7200 * 0.72);
+        fixture.Window.MouseUp(start + new Vector(timeline.Bounds.Width * 0.3, 0), MouseButton.Left);
+        await fixture.Settle();
+        Assert.False(fixture.ViewModel.IsScrubbing);
+        await fixture.Sessions.Received(1).RequestAsync(Arg.Is<PlaybackRequest>(r => r.Kind == PlaybackRequestKind.Seek), Arg.Any<CancellationToken>());
     });
 
     /// <summary>
@@ -1021,6 +1436,16 @@ public sealed class MainWindowTests
         public bool GuestMicrophoneOff { get; set; }
 
         /// <summary>
+        /// Gets or sets a value indicating whether the participant is in the session.
+        /// </summary>
+        public bool GuestPresent { get; set; } = true;
+
+        /// <summary>
+        /// Gets or sets how many more participants are in the session.
+        /// </summary>
+        public int ExtraGuests { get; set; }
+
+        /// <summary>
         /// Gets or sets a value indicating whether the film has ended.
         /// </summary>
         public bool Ended { get; set; }
@@ -1170,7 +1595,14 @@ public sealed class MainWindowTests
                 Participants =
                 [
                     new ParticipantView(new ParticipantInfo(Host, "Вы", true), new ParticipantStatus { PeerId = Host, Position = Position }, true),
-                    new ParticipantView(new ParticipantInfo(Guest, "Марина", false), new ParticipantStatus { PeerId = Guest, MicrophoneOff = GuestMicrophoneOff }, false),
+                    .. GuestPresent
+                        ? [new ParticipantView(new ParticipantInfo(Guest, "Марина", false), new ParticipantStatus { PeerId = Guest, MicrophoneOff = GuestMicrophoneOff }, false)]
+                        : Array.Empty<ParticipantView>(),
+                    .. Enumerable.Range(0, ExtraGuests).Select(i =>
+                    {
+                        var peer = PeerId.Parse(new string((char)('d' + i), 64));
+                        return new ParticipantView(new ParticipantInfo(peer, $"Гость {i + 1}", false), new ParticipantStatus { PeerId = peer }, false);
+                    }),
                 ],
                 Playback = PlaybackState.Initial(Host, 0) with
                 {
