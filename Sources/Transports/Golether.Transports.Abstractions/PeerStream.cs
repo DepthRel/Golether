@@ -52,6 +52,18 @@ public sealed class PeerStream : IAsyncDisposable
     public string? RemoteAddress { get; }
 
     /// <summary>
+    /// Gets the address of this device on the underlying connection, or <see langword="null"/> when the transport
+    /// does not know it.
+    /// </summary>
+    public System.Net.IPEndPoint? LocalEndPoint { get; init; }
+
+    /// <summary>
+    /// Gets the address of the peer on the underlying connection, or <see langword="null"/> when the transport does
+    /// not know it.
+    /// </summary>
+    public System.Net.IPEndPoint? RemoteEndPoint { get; init; }
+
+    /// <summary>
     /// Closes the stream.
     /// </summary>
     /// <returns>A task that completes when the stream is closed.</returns>

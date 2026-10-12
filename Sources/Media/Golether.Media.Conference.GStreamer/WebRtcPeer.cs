@@ -31,6 +31,16 @@ internal sealed partial class WebRtcPeer : IDisposable
     private const int DataChannelOpen = 2;
 
     /// <summary>
+    /// <c>GST_WEBRTC_ICE_CONNECTION_STATE_FAILED</c>.
+    /// </summary>
+    private const int IceFailed = 4;
+
+    /// <summary>
+    /// The names of <c>GstWebRTCICEConnectionState</c> by value, for the journal.
+    /// </summary>
+    private static readonly string[] IceConnectionStates = ["new", "checking", "connected", "completed", "failed", "disconnected", "closed"];
+
+    /// <summary>
     /// The largest amount of unsent data before sends are refused.
     /// </summary>
     private const ulong MaxBufferedData = 1024 * 1024;
@@ -190,6 +200,7 @@ internal sealed partial class WebRtcPeer : IDisposable
         var data = GCHandle.ToIntPtr(_self);
         Gst.SignalConnectData(webrtc, "on-negotiation-needed", (nint)(delegate* unmanaged[Cdecl]<nint, nint, void>)&OnNegotiationNeeded, data, 0, 0);
         Gst.SignalConnectData(webrtc, "on-ice-candidate", (nint)(delegate* unmanaged[Cdecl]<nint, uint, nint, nint, void>)&OnIceCandidate, data, 0, 0);
+        Gst.SignalConnectData(webrtc, "notify::ice-connection-state", (nint)(delegate* unmanaged[Cdecl]<nint, nint, nint, void>)&OnIceConnectionState, data, 0, 0);
         Gst.SignalConnectData(webrtc, "pad-added", (nint)(delegate* unmanaged[Cdecl]<nint, nint, nint, void>)&OnPadAdded, data, 0, 0);
         Gst.SignalConnectData(webrtc, "on-data-channel", (nint)(delegate* unmanaged[Cdecl]<nint, nint, nint, void>)&OnDataChannel, data, 0, 0);
     }
@@ -547,6 +558,42 @@ internal sealed partial class WebRtcPeer : IDisposable
                 // An exception must not leave a native callback: it would end the process.
                 peer._logger.LogWarning(ex, "A candidate for {Peer} was not sent", peer.Peer.ToShortString());
             }
+        }
+    }
+
+    /// <summary>
+    /// Handles <c>notify::ice-connection-state</c>: writes to the journal how the search for a network path goes.
+    /// </summary>
+    /// <param name="element">The webrtcbin.</param>
+    /// <param name="property">The description of the changed property.</param>
+    /// <param name="data">The peer handle.</param>
+    [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
+    private static void OnIceConnectionState(nint element, nint property, nint data)
+    {
+        if (From(data) is not { _disposed: false } peer)
+        {
+            return;
+        }
+
+        try
+        {
+            // A connection that never leaves "checking" or ends in "failed" found no path between the devices; the
+            // journal must show that without a debug build.
+            var state = Signals.GetEnum(element, "ice-connection-state");
+            var name = state >= 0 && state < IceConnectionStates.Length ? IceConnectionStates[state] : state.ToString(System.Globalization.CultureInfo.InvariantCulture);
+            if (state == IceFailed)
+            {
+                peer._logger.LogWarning("No network path to {Peer}: ICE {State}", peer.Peer.ToShortString(), name);
+            }
+            else
+            {
+                peer._logger.LogInformation("ICE to {Peer}: {State}", peer.Peer.ToShortString(), name);
+            }
+        }
+        catch (Exception ex) when (ex is not OutOfMemoryException)
+        {
+            // An exception must not cross into native code.
+            peer._logger.LogDebug("ICE state of {Peer} was not read: {Error}", peer.Peer.ToShortString(), ex.Message);
         }
     }
 

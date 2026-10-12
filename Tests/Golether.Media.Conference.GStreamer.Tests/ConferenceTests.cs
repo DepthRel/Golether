@@ -286,6 +286,61 @@ public sealed class ConferenceTests
         Assert.True(sessionRelay.AllocationCount >= 2, $"Both sides allocate a relay ({sessionRelay.AllocationCount}).");
         await a.DisconnectAsync(Bob);
         await b.DisconnectAsync(Alice);
+
+        // The route of the session: this relay listens nowhere, the cameras reach it only through local tunnels
+        // whose far ends are handed to it as streams.
+        await using var streamRelay = new TurnServer(new TurnServerOptions { Credentials = RelayCredentials.CreateRandom(0), ListenAddress = System.Net.IPAddress.Loopback });
+        await using var tunnelA = StartTunnel(streamRelay, token);
+        await using var tunnelB = StartTunnel(streamRelay, token);
+        framesAtA.Clear();
+        framesAtB.Clear();
+        a.SetRelay((streamRelay.Credentials with { Port = tunnelA.Port }).ToTurnUri("127.0.0.1"));
+        b.SetRelay((streamRelay.Credentials with { Port = tunnelB.Port }).ToTurnUri("127.0.0.1"));
+        await a.ConnectAsync(Bob, isOfferer: true, token);
+
+        deadline = DateTime.UtcNow.AddSeconds(40);
+        while (!(framesAtA.ContainsKey(Bob) && framesAtB.ContainsKey(Alice)) && DateTime.UtcNow < deadline)
+        {
+            await Task.Delay(200, token);
+        }
+
+        Assert.Empty(errors);
+        Assert.True(framesAtA.ContainsKey(Bob), "Alice receives Bob's camera through the tunnel.");
+        Assert.True(framesAtB.ContainsKey(Alice), "Bob receives Alice's camera through the tunnel.");
+        Assert.True(streamRelay.AllocationCount >= 2, $"Both sides allocate a relay through the tunnel ({streamRelay.AllocationCount}).");
+        await a.DisconnectAsync(Bob);
+        await b.DisconnectAsync(Alice);
+    }
+
+    /// <summary>
+    /// Starts a local entrance to a relay, as a participant has it: every connection becomes a stream that is handed
+    /// to the relay, as the host does with the relay streams of the session.
+    /// </summary>
+    /// <param name="relay">The relay.</param>
+    /// <param name="cancellationToken">The cancellation token.</param>
+    /// <returns>The running tunnel.</returns>
+    private static RelayTunnel StartTunnel(TurnServer relay, CancellationToken cancellationToken)
+    {
+        var tunnel = new RelayTunnel(async token =>
+        {
+            using var pipe = new System.Net.Sockets.TcpListener(System.Net.IPAddress.Loopback, 0);
+            pipe.Start();
+            var near = new System.Net.Sockets.TcpClient();
+            await near.ConnectAsync(System.Net.IPAddress.Loopback, ((System.Net.IPEndPoint)pipe.LocalEndpoint).Port, token);
+            var far = await pipe.AcceptTcpClientAsync(token);
+            _ = Task.Run(
+                async () =>
+                {
+                    using (far)
+                    {
+                        await relay.ServeAsync(far.GetStream(), (System.Net.IPEndPoint)far.Client.RemoteEndPoint!, System.Net.IPAddress.Loopback, cancellationToken);
+                    }
+                },
+                CancellationToken.None);
+            return near.GetStream();
+        });
+        tunnel.Start();
+        return tunnel;
     }
 
     /// <summary>

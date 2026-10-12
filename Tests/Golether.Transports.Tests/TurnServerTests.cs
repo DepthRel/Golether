@@ -131,6 +131,41 @@ public sealed class TurnServerTests : IAsyncLifetime
     }
 
     /// <summary>
+    /// A stream that reached the host by another route (the connection of the session) is served like a TCP client:
+    /// the relay is created at the address the caller names, and it goes away with the stream.
+    /// </summary>
+    /// <returns>A task that completes when the test is done.</returns>
+    [Fact]
+    public async Task Relay_ServesStreamHandedToIt()
+    {
+        var token = TestContext.Current.CancellationToken;
+        using var pipe = new TcpListener(IPAddress.Loopback, 0);
+        pipe.Start();
+        var accepting = pipe.AcceptTcpClientAsync(token).AsTask();
+        var client = await TurnClient.ConnectAsync(((IPEndPoint)pipe.LocalEndpoint).Port, token);
+        using var accepted = await accepting;
+        var remote = new IPEndPoint(IPAddress.Parse("198.51.100.7"), 4000);
+
+        var serving = _server.ServeAsync(accepted.GetStream(), remote, IPAddress.Loopback, token);
+
+        var challenge = await client.RequestAsync(new StunMessage(Stun.Allocate, Stun.ClassRequest, RandomNumberGenerator.GetBytes(12))
+            .Add(Stun.AttrRequestedTransport, [17, 0, 0, 0]), null, token);
+        var realm = challenge.GetText(Stun.AttrRealm)!;
+        var nonce = challenge.GetText(Stun.AttrNonce)!;
+        var key = Stun.LongTermKey(_credentials.Username, realm, _credentials.Password);
+        var allocated = await client.RequestAsync(Signed(Stun.Allocate, realm, nonce).Add(Stun.AttrRequestedTransport, [17, 0, 0, 0]), key, token);
+
+        Assert.Equal(Stun.ClassSuccess, allocated.Class);
+        Assert.Equal(IPAddress.Loopback, allocated.GetXorAddress(Stun.AttrXorRelayedAddress)!.Address);
+        Assert.Equal(remote, allocated.GetXorAddress(Stun.AttrXorMappedAddress));
+        Assert.Equal(1, _server.AllocationCount);
+
+        await client.DisposeAsync();
+        await serving.WaitAsync(TimeSpan.FromSeconds(10), token);
+        Assert.Equal(0, _server.AllocationCount);
+    }
+
+    /// <summary>
     /// The TURN address carries escaped credentials and TCP transport.
     /// </summary>
     [Fact]

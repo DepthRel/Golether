@@ -172,7 +172,11 @@ public sealed class TlsPeerConnector : IPeerConnector
                 throw new IOException(Texts.Format("Net.Error.PeerRefused", remote));
             }
 
-            var stream = new PeerStream(expectedPeer, purpose, ssl, remote);
+            var stream = new PeerStream(expectedPeer, purpose, ssl, remote)
+            {
+                LocalEndPoint = TlsProtocol.GetEndPoint(socket.LocalEndPoint),
+                RemoteEndPoint = TlsProtocol.GetEndPoint(socket.RemoteEndPoint),
+            };
             ssl = null;
             return stream;
         }

@@ -27,6 +27,14 @@ public sealed record WelcomeMessage(
     public RelayCredentials? Relay { get; init; }
 
     /// <summary>
+    /// Gets a value indicating whether the host serves its relay over streams of the session
+    /// (<see cref="Core.Data.Enums.StreamPurpose.Relay"/>). The participant then reaches the relay by the route the
+    /// session took and needs no other port of the host; the port in <see cref="Relay"/> remains for participants
+    /// of earlier versions.
+    /// </summary>
+    public bool RelayOverSession { get; init; }
+
+    /// <summary>
     /// Gets the ticket that lets this participant come back to the same session without a new invitation, or
     /// <see langword="null"/>. It is valid while the session runs and only for this device.
     /// </summary>

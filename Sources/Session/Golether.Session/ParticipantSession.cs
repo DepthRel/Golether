@@ -164,6 +164,12 @@ public sealed class ParticipantSession : IAsyncDisposable
     private PeerEndpoint? _hostEndpoint;
 
     /// <summary>
+    /// The local entrance to the relay of the host, or <see langword="null"/> when the relay is reached directly or
+    /// not at all.
+    /// </summary>
+    private Transports.Relay.RelayTunnel? _relayTunnel;
+
+    /// <summary>
     /// The number of parallel media streams allowed by the host.
     /// </summary>
     private int _mediaStreams = 1;
@@ -450,10 +456,19 @@ public sealed class ParticipantSession : IAsyncDisposable
         _loops.Add(Task.Run(() => ReceiveLoopAsync(token)));
         _loops.Add(Task.Run(() => ClockLoopAsync(token)));
         _loops.Add(Task.Run(() => TickLoopAsync(token)));
-        if (welcome.GetValidRelay() is { } relay && _hostEndpoint is { } hostEndpoint)
+        if (_conference is not null && welcome.GetValidRelay() is { } relay)
         {
-            // The relay runs on the host, so it is reached at the address that answered.
-            _conference?.SetRelay(relay.ToTurnUri(hostEndpoint.Host));
+            if (welcome.RelayOverSession && StartRelayTunnel() is { } tunnel)
+            {
+                // The relay is reached by the route of the session, whichever it was: the cameras and voices are
+                // pointed at the local end of the tunnel.
+                _conference.SetRelay((relay with { Port = tunnel.Port }).ToTurnUri(System.Net.IPAddress.Loopback.ToString()));
+            }
+            else if (_hostEndpoint is { } hostEndpoint)
+            {
+                // A host of an earlier version: its relay is reached at the address that answered.
+                _conference.SetRelay(relay.ToTurnUri(hostEndpoint.Host));
+            }
         }
 
         // The STUN port of the host's rendezvous server tells the cameras and voices their public addresses, so they
@@ -640,6 +655,12 @@ public sealed class ParticipantSession : IAsyncDisposable
         {
             await _conference.DisposeAsync().ConfigureAwait(false);
         }
+
+        if (_relayTunnel is not null)
+        {
+            await _relayTunnel.DisposeAsync().ConfigureAwait(false);
+        }
+
         await ReleaseRemoteMediaAsync().ConfigureAwait(false);
         SetState(SessionState.Ended);
         _stopping.Dispose();
@@ -790,6 +811,30 @@ public sealed class ParticipantSession : IAsyncDisposable
             errors.Enqueue(ex.Message);
             return null;
         }
+    }
+
+    /// <summary>
+    /// Opens the local entrance to the relay of the host; every connection made to it travels over a relay stream
+    /// of the session.
+    /// </summary>
+    /// <returns>The tunnel, or <see langword="null"/> when no local port could be opened.</returns>
+    private Transports.Relay.RelayTunnel? StartRelayTunnel()
+    {
+        var tunnel = new Transports.Relay.RelayTunnel(
+            async token => (await OpenStreamAsync(StreamPurpose.Relay, token).ConfigureAwait(false)).Stream,
+            _loggerFactory.CreateLogger<Transports.Relay.RelayTunnel>());
+        try
+        {
+            tunnel.Start();
+        }
+        catch (System.Net.Sockets.SocketException ex)
+        {
+            _logger.LogWarning("The local entrance to the relay of the host was not opened: {Error}", ex.SocketErrorCode);
+            return null;
+        }
+
+        _relayTunnel = tunnel;
+        return tunnel;
     }
 
     /// <summary>

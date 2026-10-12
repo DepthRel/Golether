@@ -42,6 +42,7 @@ public static class Program
         });
         builder.Services.AddWindowsService(service => service.ServiceName = ServiceName);
         builder.Services.AddSystemd();
+        builder.Services.AddLogTimestamps();
         var options = builder.Configuration.GetSection(RendezvousServerOptions.Section).Get<RendezvousServerOptions>() ?? new RendezvousServerOptions();
         if (options.Validate() is { Count: > 0 } problems)
         {

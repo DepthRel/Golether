@@ -18,7 +18,7 @@ namespace Golether.Transports.Relay;
 /// <item>The server does not see the media: WebRTC encrypts it end to end with DTLS-SRTP.</item>
 /// </list>
 /// </remarks>
-public sealed class TurnServer : IAsyncDisposable
+public sealed class TurnServer : IRelayStreamServer, IAsyncDisposable
 {
     /// <summary>
     /// The lifetime of a permission (RFC 5766).
@@ -160,8 +160,31 @@ public sealed class TurnServer : IAsyncDisposable
         }
     }
 
+    /// <inheritdoc />
+    public async Task ServeAsync(Stream stream, IPEndPoint remote, IPAddress local, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(stream);
+        ArgumentNullException.ThrowIfNull(remote);
+        ArgumentNullException.ThrowIfNull(local);
+        CancellationTokenSource stopping;
+        try
+        {
+            stopping = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, _stop.Token);
+        }
+        catch (ObjectDisposedException)
+        {
+            // The relay was stopped already.
+            return;
+        }
+
+        using (stopping)
+        {
+            await ServeClientAsync(stream, Normalize(remote), Normalize(local), stopping.Token).ConfigureAwait(false);
+        }
+    }
+
     /// <summary>
-    /// Serves one TCP client: one allocation at most (RFC 6062 style five-tuple).
+    /// Serves one TCP client of the listener.
     /// </summary>
     /// <param name="client">The client.</param>
     /// <returns>A task that completes when the client leaves.</returns>
@@ -170,38 +193,55 @@ public sealed class TurnServer : IAsyncDisposable
         using (client)
         {
             client.NoDelay = true;
-            var stream = client.GetStream();
-            var session = new ClientSession(this, client, stream, RandomNumberGenerator.GetHexString(24, lowercase: true));
-            try
+            await ServeClientAsync(
+                client.GetStream(),
+                Normalize((IPEndPoint)client.Client.RemoteEndPoint!),
+                Normalize((IPEndPoint)client.Client.LocalEndPoint!).Address,
+                _stop.Token).ConfigureAwait(false);
+        }
+    }
+
+    /// <summary>
+    /// Serves one client: one allocation at most (RFC 6062 style five-tuple).
+    /// </summary>
+    /// <param name="stream">The stream of the client.</param>
+    /// <param name="remote">The address of the client.</param>
+    /// <param name="local">The address of this device the client reached; its relay is created there.</param>
+    /// <param name="cancellationToken">Stops serving.</param>
+    /// <returns>A task that completes when the client leaves.</returns>
+    private async Task ServeClientAsync(Stream stream, IPEndPoint remote, IPAddress local, CancellationToken cancellationToken)
+    {
+        var session = new ClientSession(this, stream, remote, local, RandomNumberGenerator.GetHexString(24, lowercase: true));
+        try
+        {
+            await session.RunAsync(cancellationToken).ConfigureAwait(false);
+        }
+        catch (Exception ex) when (ex is IOException or InvalidDataException or OperationCanceledException or ObjectDisposedException or SocketException)
+        {
+            _logger.LogDebug("TURN client {Client} left: {Reason}", remote, ex.Message);
+        }
+        finally
+        {
+            if (session.Allocation is { } allocation)
             {
-                await session.RunAsync(_stop.Token).ConfigureAwait(false);
-            }
-            catch (Exception ex) when (ex is IOException or InvalidDataException or OperationCanceledException or ObjectDisposedException or SocketException)
-            {
-                _logger.LogDebug("TURN client {Client} left: {Reason}", client.Client.RemoteEndPoint, ex.Message);
-            }
-            finally
-            {
-                if (session.Allocation is { } allocation)
-                {
-                    _allocations.TryRemove(allocation, out _);
-                    allocation.Dispose();
-                }
+                _allocations.TryRemove(allocation, out _);
+                allocation.Dispose();
             }
         }
     }
 
     /// <summary>
-    /// The state of one TCP client.
+    /// The state of one client.
     /// </summary>
     /// <param name="server">The server.</param>
-    /// <param name="client">The TCP client.</param>
-    /// <param name="stream">The TCP stream.</param>
+    /// <param name="stream">The stream of the client.</param>
+    /// <param name="remote">The address of the client.</param>
+    /// <param name="local">The address of this device the client reached.</param>
     /// <param name="nonce">The nonce of this connection.</param>
-    private sealed class ClientSession(TurnServer server, TcpClient client, NetworkStream stream, string nonce)
+    private sealed class ClientSession(TurnServer server, Stream stream, IPEndPoint remote, IPAddress local, string nonce)
     {
         /// <summary>
-        /// Serializes writes to the TCP stream.
+        /// Serializes writes to the stream.
         /// </summary>
         private readonly SemaphoreSlim _writeGate = new(1, 1);
 
@@ -330,7 +370,7 @@ public sealed class TurnServer : IAsyncDisposable
         /// <summary>
         /// Gets the address of the client.
         /// </summary>
-        private IPEndPoint Remote => Normalize((IPEndPoint)client.Client.RemoteEndPoint!);
+        private IPEndPoint Remote => remote;
 
         /// <summary>
         /// Checks the long-term credentials; answers 401 with the realm and nonce otherwise.
@@ -389,8 +429,7 @@ public sealed class TurnServer : IAsyncDisposable
                 return Error(message, 486, "Allocation Quota Reached", signed: true);
             }
 
-            var local = Normalize((IPEndPoint)client.Client.LocalEndPoint!);
-            var allocation = new Allocation(this, local.Address, server._timeProvider, server._logger);
+            var allocation = new Allocation(this, local, server._timeProvider, server._logger);
             allocation.Refresh(Lifetime(message));
             Allocation = allocation;
             server._allocations[allocation] = 0;

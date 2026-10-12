@@ -247,6 +247,13 @@ public sealed class HostSession : IAsyncDisposable
     public Transports.Relay.RelayCredentials? Relay { get; set; }
 
     /// <summary>
+    /// Gets or sets the relay that serves the relay streams of admitted participants, or <see langword="null"/>.
+    /// With it the cameras and voices of a participant reach the relay by the route of the session, so they work
+    /// wherever the session does: no other port of the host has to be reachable.
+    /// </summary>
+    public Transports.Relay.IRelayStreamServer? RelayServer { get; set; }
+
+    /// <summary>
     /// Gets or sets the rendezvous server and the room this host holds on it, or <see langword="null"/>. Set before
     /// <see cref="Start"/>: invitations then carry it, and the cameras and voices ask its STUN port for their
     /// public addresses.
@@ -570,8 +577,47 @@ public sealed class HostSession : IAsyncDisposable
             _ = stream.Purpose switch
             {
                 StreamPurpose.Control => Task.Run(() => HandleControlAsync(stream, cancellationToken), CancellationToken.None),
+                StreamPurpose.Relay => Task.Run(() => HandleRelayAsync(stream, cancellationToken), CancellationToken.None),
                 _ => Task.Run(() => HandleMediaAsync(stream, cancellationToken), CancellationToken.None),
             };
+        }
+    }
+
+    /// <summary>
+    /// Hands a relay stream of an admitted participant to the relay: the TURN traffic of its cameras and voices.
+    /// </summary>
+    /// <param name="stream">The stream.</param>
+    /// <param name="cancellationToken">Stops the session.</param>
+    /// <returns>A task that completes when the stream ends.</returns>
+    private async Task HandleRelayAsync(PeerStream stream, CancellationToken cancellationToken)
+    {
+        await using (stream.ConfigureAwait(false))
+        {
+            if (!_participants.TryGetValue(stream.RemotePeer, out var owner))
+            {
+                _logger.LogWarning("Relay stream from {Peer} refused: not admitted", stream.RemotePeer.ToShortString());
+                return;
+            }
+
+            if (RelayServer is not { } relay || stream.LocalEndPoint is not { } local || stream.RemoteEndPoint is not { } remote)
+            {
+                _logger.LogWarning("Relay stream from {Peer} refused: no relay for it", stream.RemotePeer.ToShortString());
+                return;
+            }
+
+            // The stream lives only as long as the admission: leaving, removal or a new connection closes it.
+            using var linked = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, owner.Lifetime);
+            using var closeOnEnd = linked.Token.Register(() => stream.Stream.Dispose());
+            _logger.LogInformation("Relay stream of {Peer} opened", stream.RemotePeer.ToShortString());
+            try
+            {
+                // The relay is created at the address the participant reached, as for a client of the relay port.
+                await relay.ServeAsync(stream.Stream, remote, local.Address, linked.Token).ConfigureAwait(false);
+            }
+            catch (Exception ex) when (ex is IOException or InvalidDataException or OperationCanceledException or ObjectDisposedException)
+            {
+                _logger.LogDebug("Relay stream of {Peer} ended: {Reason}", stream.RemotePeer.ToShortString(), ex.Message);
+            }
         }
     }
 
@@ -732,7 +778,7 @@ public sealed class HostSession : IAsyncDisposable
         _participants[peer] = connection;
         var participants = GetSnapshot().Participants.Select(p => p.Info).ToArray();
         await channel.SendAsync(
-            new WelcomeMessage(SessionName, participants, _authority.Current, _media.Descriptor, _options.MediaDataStreams) { Relay = Relay, ReconnectTicket = reconnectTicket },
+            new WelcomeMessage(SessionName, participants, _authority.Current, _media.Descriptor, _options.MediaDataStreams) { Relay = Relay, RelayOverSession = Relay is not null && RelayServer is not null, ReconnectTicket = reconnectTicket },
             cancellationToken).ConfigureAwait(false);
         Raise(peer, Texts.Format("Session.Event.ParticipantJoined", name));
 

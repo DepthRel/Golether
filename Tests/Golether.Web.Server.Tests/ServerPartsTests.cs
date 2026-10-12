@@ -7,7 +7,10 @@ using Golether.Web.Server.Infrastructure;
 using Golether.Web.Server.Options;
 using Golether.Web.Server.Rendezvous;
 using Golether.Web.Server.Stun;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
+using Microsoft.Extensions.Logging.Console;
+using Microsoft.Extensions.Options;
 using Microsoft.Extensions.Time.Testing;
 
 namespace Golether.Web.Server.Tests;
@@ -17,6 +20,25 @@ namespace Golether.Web.Server.Tests;
 /// </summary>
 public sealed class ServerPartsTests
 {
+    /// <summary>
+    /// Every line of the console log starts with the date, the time and the offset from UTC, unless the
+    /// administrator set a format of their own.
+    /// </summary>
+    [Fact]
+    public void Log_StampsLinesWithDateAndTime()
+    {
+        var moment = new DateTimeOffset(2026, 10, 11, 16, 14, 12, 250, TimeSpan.FromHours(7));
+
+        using var defaults = new ServiceCollection().AddLogTimestamps().BuildServiceProvider();
+        var format = defaults.GetRequiredService<IOptions<SimpleConsoleFormatterOptions>>().Value.TimestampFormat;
+        Assert.Equal("2026-10-11 16:14:12.250 +07:00 ", moment.ToString(format, System.Globalization.CultureInfo.InvariantCulture));
+
+        var configured = new ServiceCollection();
+        configured.Configure<SimpleConsoleFormatterOptions>(options => options.TimestampFormat = "HH:mm ");
+        using var custom = configured.AddLogTimestamps().BuildServiceProvider();
+        Assert.Equal("HH:mm ", custom.GetRequiredService<IOptions<SimpleConsoleFormatterOptions>>().Value.TimestampFormat);
+    }
+
     /// <summary>
     /// The defaults are valid; every broken setting is named in the language of the application.
     /// </summary>

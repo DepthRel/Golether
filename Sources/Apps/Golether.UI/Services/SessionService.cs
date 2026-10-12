@@ -240,6 +240,7 @@ public sealed class SessionService : ISessionService, IAsyncDisposable
             _conference);
         _relay = StartRelay(listener.Port);
         host.Relay = _relay?.Credentials;
+        host.RelayServer = _relay;
         host.Rendezvous = rendezvous;
         Attach(host);
         _host = host;

@@ -244,7 +244,11 @@ public sealed class TlsPeerListener : IPeerListener
             await ssl.WriteAsync(new[] { TlsProtocol.Accepted }, timeout.Token).ConfigureAwait(false);
             await ssl.FlushAsync(timeout.Token).ConfigureAwait(false);
 
-            var stream = new PeerStream(peer, purpose, ssl, remote);
+            var stream = new PeerStream(peer, purpose, ssl, remote)
+            {
+                LocalEndPoint = TlsProtocol.GetEndPoint(socket.LocalEndPoint),
+                RemoteEndPoint = TlsProtocol.GetEndPoint(socket.RemoteEndPoint),
+            };
             await _accepted.Writer.WriteAsync(stream, cancellationToken).ConfigureAwait(false);
             ssl = null;
             _logger.LogDebug("Accepted {Purpose} stream from {Peer} ({Remote})", purpose, peer.ToShortString(), remote);

@@ -667,6 +667,91 @@ public sealed class SessionIntegrationTests : IAsyncLifetime
     }
 
     /// <summary>
+    /// When the host serves relay streams, the cameras and voices of a participant reach its relay by the route of
+    /// the session: they are pointed at a local port, and what is sent there arrives at the relay of the host over
+    /// a stream of its own. No other port of the host has to be reachable.
+    /// </summary>
+    /// <returns>A task that completes when the test is done.</returns>
+    [Fact]
+    public async Task Conference_ReachesRelayByTheSessionRoute()
+    {
+        var token = TestContext.Current.CancellationToken;
+        var relay = new EchoRelay();
+        _host.Relay = new Transports.Relay.RelayCredentials(47999, "golether-x", "secret_1");
+        _host.RelayServer = relay;
+        _host.Rendezvous = new RendezvousPoint(PeerEndpoint.Parse("203.0.113.7:47900"), RendezvousPoint.CreateRoom());
+        var rendezvous = new LoopbackRendezvous(_guestIdentity, _host.Port);
+        await using var guest = CreateGuest(rendezvous);
+
+        await guest.JoinAsync(_host.CreateInvite([new PeerEndpoint("127.0.0.1", ClosedPort())]), token);
+
+        var match = System.Text.RegularExpressions.Regex.Match(_guestConference.Relay ?? string.Empty, @"^turn://golether-x:secret_1@127\.0\.0\.1:(\d+)\?transport=tcp$");
+        Assert.True(match.Success, $"The cameras are pointed at a local port ({_guestConference.Relay}).");
+        var port = int.Parse(match.Groups[1].Value, System.Globalization.CultureInfo.InvariantCulture);
+        Assert.NotEqual(47999, port);
+
+        using var camera = new System.Net.Sockets.TcpClient();
+        await camera.ConnectAsync(System.Net.IPAddress.Loopback, port, token);
+        await camera.GetStream().WriteAsync(new byte[] { 1, 2, 3 }, token);
+        var echoed = new byte[3];
+        using (var limit = CancellationTokenSource.CreateLinkedTokenSource(token))
+        {
+            limit.CancelAfter(TimeSpan.FromSeconds(15));
+            await camera.GetStream().ReadExactlyAsync(echoed, limit.Token);
+        }
+
+        Assert.Equal([1, 2, 3], echoed);
+        Assert.Contains(StreamPurpose.Relay, rendezvous.Purposes);
+        Assert.Equal(System.Net.IPAddress.Loopback, Assert.Single(relay.Served).Local);
+    }
+
+    /// <summary>
+    /// A device with a valid TLS key but without admission cannot reach the relay: the host closes its relay stream
+    /// without handing it over.
+    /// </summary>
+    /// <returns>A task that completes when the test is done.</returns>
+    [Fact]
+    public async Task RelayStream_OfStranger_IsClosed()
+    {
+        var token = TestContext.Current.CancellationToken;
+        var relay = new EchoRelay();
+        _host.Relay = new Transports.Relay.RelayCredentials(47999, "golether-x", "secret_1");
+        _host.RelayServer = relay;
+        using var stranger = DeviceIdentity.CreateNew(TimeProvider.System);
+        var connector = new TlsPeerConnector(stranger, Transport);
+
+        await using var stream = await connector.ConnectAsync(
+            new PeerEndpoint("127.0.0.1", _host.Port), _hostIdentity.PeerId, StreamPurpose.Relay, token);
+
+        Assert.Equal(0, await ReadUntilClosedAsync(stream.Stream, token).WaitAsync(TimeSpan.FromSeconds(10), token));
+        Assert.Empty(relay.Served);
+    }
+
+    /// <summary>
+    /// A relay that sends back what it receives and remembers whom it served.
+    /// </summary>
+    private sealed class EchoRelay : Transports.Relay.IRelayStreamServer
+    {
+        /// <summary>
+        /// Gets the addresses of the served clients.
+        /// </summary>
+        public ConcurrentBag<(System.Net.IPEndPoint Remote, System.Net.IPAddress Local)> Served { get; } = [];
+
+        /// <inheritdoc />
+        public async Task ServeAsync(Stream stream, System.Net.IPEndPoint remote, System.Net.IPAddress local, CancellationToken cancellationToken)
+        {
+            Served.Add((remote, local));
+            var buffer = new byte[1024];
+            int read;
+            while ((read = await stream.ReadAsync(buffer, cancellationToken)) > 0)
+            {
+                await stream.WriteAsync(buffer.AsMemory(0, read), cancellationToken);
+                await stream.FlushAsync(cancellationToken);
+            }
+        }
+    }
+
+    /// <summary>
     /// When an address of the invitation answers, the rendezvous server is not bothered.
     /// </summary>
     [Fact]

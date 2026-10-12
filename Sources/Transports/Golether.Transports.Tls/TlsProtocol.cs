@@ -90,6 +90,16 @@ internal static class TlsProtocol
     }
 
     /// <summary>
+    /// Reads an address of a connection; an IPv4 address seen through a dual socket is returned as plain IPv4.
+    /// </summary>
+    /// <param name="endPoint">The address of the socket.</param>
+    /// <returns>The address, or <see langword="null"/> when it is not an IP address.</returns>
+    public static System.Net.IPEndPoint? GetEndPoint(System.Net.EndPoint? endPoint)
+        => endPoint is System.Net.IPEndPoint ip
+            ? ip.Address.IsIPv4MappedToIPv6 ? new System.Net.IPEndPoint(ip.Address.MapToIPv4(), ip.Port) : ip
+            : null;
+
+    /// <summary>
     /// Applies socket options for the stream purpose.
     /// </summary>
     /// <param name="socket">The socket.</param>
@@ -97,7 +107,8 @@ internal static class TlsProtocol
     /// <param name="options">The transport options.</param>
     public static void ConfigureSocket(Socket socket, StreamPurpose purpose, TlsTransportOptions options)
     {
-        socket.NoDelay = purpose == StreamPurpose.Control;
+        // Voice packets inside a relay stream must not wait for more data either.
+        socket.NoDelay = purpose is StreamPurpose.Control or StreamPurpose.Relay;
         socket.SetSocketOption(SocketOptionLevel.Socket, SocketOptionName.KeepAlive, true);
         if (purpose == StreamPurpose.MediaData)
         {

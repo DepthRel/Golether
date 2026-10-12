@@ -85,6 +85,30 @@ public sealed class TransportTests
     }
 
     /// <summary>
+    /// A relay stream is accepted like the others, and the listener tells at which addresses the connection ends:
+    /// the relay of the host needs them.
+    /// </summary>
+    /// <returns>A task that completes when the test is done.</returns>
+    [Fact]
+    public async Task Tls_AcceptsRelayStreamWithItsAddresses()
+    {
+        using var server = DeviceIdentity.CreateNew(TimeProvider.System);
+        using var client = DeviceIdentity.CreateNew(TimeProvider.System);
+        await using var listener = new TlsPeerListener(server, Options);
+        listener.Start();
+        var connector = new TlsPeerConnector(client, Options);
+        var token = TestContext.Current.CancellationToken;
+
+        var accepting = listener.AcceptAsync(token).AsTask();
+        await using var outgoing = await connector.ConnectAsync(new PeerEndpoint("127.0.0.1", listener.Port), server.PeerId, StreamPurpose.Relay, token);
+        await using var incoming = await accepting.WaitAsync(TimeSpan.FromSeconds(15), token);
+
+        Assert.Equal(StreamPurpose.Relay, incoming.Purpose);
+        Assert.Equal(new System.Net.IPEndPoint(System.Net.IPAddress.Loopback, listener.Port), incoming.LocalEndPoint);
+        Assert.Equal(System.Net.IPAddress.Loopback, incoming.RemoteEndPoint!.Address);
+    }
+
+    /// <summary>
     /// A connector that expects another key refuses the connection.
     /// </summary>
     [Fact]
