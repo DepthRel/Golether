@@ -51,7 +51,7 @@ Golether — программа для совместного просмотра
 | `bin/` | сама программа, среда .NET и библиотеки; туда заглядывать не нужно |
 | `config/appsettings.json` | настройки: адрес, порт, лимиты (см. [раздел 5](#5-настройки)) |
 | `docs/ADMIN-GUIDE.md` | это руководство |
-| `docs/README.txt` | краткая памятка к конкретному пакету |
+| `docs/README.txt`, `docs/README.ru.txt` | краткая памятка к конкретному пакету: на английском и на русском (в пакете для Windows; в остальных — только `README.txt` на русском) |
 | `service/install-service.sh` | Linux и macOS: установка, обновление и удаление службы |
 | `service/golether-server.service` | Linux: юнит systemd (его ставит `install-service.sh`) |
 | `service/org.golether.server.plist` | macOS: задание launchd (его ставит `install-service.sh`) |

@@ -1342,6 +1342,47 @@ public sealed class MainWindowTests
     });
 
     /// <summary>
+    /// The buttons of the settings window sit in a bar under the scrolling part: they are in sight without scrolling
+    /// to the end, however little room the window has.
+    /// </summary>
+    /// <returns>A task that completes when the test is done.</returns>
+    [Fact]
+    public Task SettingsDialog_KeepsItsButtonsInSight() => RunAsync(async fixture =>
+    {
+        var viewModel = new Golether.UI.ViewModels.Dialogs.SettingsViewModel(
+            language: null,
+            devices: null,
+            conferenceAvailable: false,
+            conferenceNotice: "Камеры недоступны",
+            canChooseAvatar: true,
+            canConfigureTunnels: true,
+            avatarPreview: null,
+            pickAvatar: () => Task.FromResult<AvatarSelection?>(null),
+            applyAvatar: _ => Task.CompletedTask,
+            openTunnels: () => Task.CompletedTask,
+            canChooseUpdates: true);
+        var dialog = new Golether.UI.Views.Dialogs.SettingsDialog { DataContext = viewModel, SizeToContent = SizeToContent.Manual, Height = 360 };
+        dialog.Show();
+        try
+        {
+            await fixture.Settle();
+            var scroll = dialog.GetVisualDescendants().OfType<ScrollViewer>().First();
+            var buttons = dialog.GetVisualDescendants().OfType<Button>().Where(button => button.IsCancel || button.IsDefault).ToArray();
+
+            // The settings do not fit into this height, so the list scrolls, and the buttons are not part of it.
+            Assert.True(scroll.Extent.Height > scroll.Viewport.Height);
+            Assert.Equal(2, buttons.Length);
+            Assert.All(buttons, button => Assert.True(IsInside(button, dialog)));
+            Assert.All(buttons, button => Assert.DoesNotContain(scroll, button.GetVisualAncestors()));
+            SaveFrame(dialog, "settings-dialog-short");
+        }
+        finally
+        {
+            dialog.Close();
+        }
+    });
+
+    /// <summary>
     /// Saves the rendered window for a visual check when <c>GOLETHER_TEST_SCREENSHOTS</c> names a folder.
     /// </summary>
     /// <param name="window">The window.</param>

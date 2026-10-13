@@ -112,6 +112,7 @@ dotnet run --project Sources/Database/Golether.Dbs.SQLite.DbMigrator -- --databa
 | `Scripts/publish-macos.sh [osx-arm64] ...` | `Golether.app` (Info.plist, иконка, ad-hoc подпись) в архиве |
 | `Scripts/publish-linux.ps1 [-Runtime linux-x64]` | тот же Linux-архив, собранный с Windows внутри WSL (см. ниже) |
 | `Scripts/update-site-screenshot.ps1` | картинка страницы проекта из `Docs/images/screenshot.png` |
+| `Scripts/generate-installer-art.ps1` | картинки мастера установки (тёмная панель с логотипом и логотип для шапки) в `artifacts/installer-art`; оба скрипта сборки установщиков вызывают его сами |
 | `Scripts/generate-icon.ps1` | `golether.ico`, PNG 256/512 из геометрии `golether.svg` |
 | `Scripts/build-installer.ps1 [-SkipPublish]` (архив собирается тем же запуском) | `artifacts/publish/Golether-<версия>-setup.exe` (нужен Inno Setup 6 или новее; проверено на 7.1) и готовая запись для файла обновлений |
 

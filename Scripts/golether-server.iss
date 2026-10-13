@@ -14,6 +14,11 @@
   #define ServerOutputDir "..\artifacts\publish"
 #endif
 
+; The pictures of the wizard, drawn by Scripts/generate-installer-art.ps1 (build-server-installer.ps1 runs it).
+#ifndef InstallerArt
+  #define InstallerArt SourcePath + "..\artifacts\installer-art"
+#endif
+
 #define ServiceName "GoletherServer"
 #define FirewallRule "Golether rendezvous server"
 
@@ -35,18 +40,59 @@ SolidCompression=yes
 WizardStyle=modern
 SetupIconFile={#SourcePath}\..\Sources\Apps\Golether.Web.Server\Assets\golether-server.ico
 UninstallDisplayIcon={app}\golether-server.exe
+; The logo instead of the stock box; without the pictures (the script was not run) the stock ones are used.
+#if FileExists(InstallerArt + "\server-wizard.bmp")
+WizardImageFile={#InstallerArt}\server-wizard.bmp
+WizardSmallImageFile={#InstallerArt}\server-wizard-small.bmp
+#endif
+; The wizard opens with a greeting that shows the logo, not with the choice of a folder.
+DisableWelcomePage=no
+; The language is asked first. English is offered whatever the language of Windows is: it is the first in [Languages].
+ShowLanguageDialog=yes
+LanguageDetectionMethod=none
 ; The root keeps only the launcher and the folders.
 UninstallFilesDir={app}\uninstall
 OutputDir={#ServerOutputDir}
 OutputBaseFilename=GoletherServer-{#ServerVersion}-setup
-InfoAfterFile={#ServerSource}\docs\README.txt
 
 [Languages]
-Name: "russian"; MessagesFile: "compiler:Languages\Russian.isl"
+; The first language is the one offered by default. A new language is one more line here and one more block in
+; [Messages] and [CustomMessages].
+; The note shown after the installation comes in the language of the wizard (publish-server-win.ps1 writes both).
+Name: "english"; MessagesFile: "compiler:Default.isl"; InfoAfterFile: "{#ServerSource}\docs\README.txt"
+Name: "russian"; MessagesFile: "compiler:Languages\Russian.isl"; InfoAfterFile: "{#ServerSource}\docs\README.ru.txt"
+
+[Messages]
+; The greeting of the first page; [name] and [name/ver] are filled in by Inno Setup.
+english.WelcomeLabel1=Welcome to the [name] setup
+english.WelcomeLabel2=The rendezvous server introduces Golether hosts and their guests behind routers. The sessions themselves go directly between them and never pass through the server.%n%nThis wizard installs [name/ver] on your computer.
+russian.WelcomeLabel1=Добро пожаловать в установку [name]
+russian.WelcomeLabel2=Сервер рукопожатий знакомит ведущих Golether с гостями, которые сидят за роутерами. Сами сеансы идут напрямую между ними и через сервер не проходят.%n%nМастер установит [name/ver] на ваш компьютер.
+
+[CustomMessages]
+; Everything the wizard says beyond the standard messages of Inno Setup.
+english.TaskService=Run as a Windows service that starts with the computer
+english.TaskServiceGroup=Service:
+english.TaskFirewall=Allow incoming connections in the Windows firewall
+english.TaskFirewallGroup=Network:
+english.IconSettings=Server settings (appsettings.json)
+english.IconGuide=Administrator guide
+english.IconHealth=Server status
+english.RunGuide=Open the administrator guide
+english.RunHealth=Open the server status page
+russian.TaskService=Запускать как службу Windows вместе с компьютером
+russian.TaskServiceGroup=Служба:
+russian.TaskFirewall=Разрешить входящие подключения в брандмауэре Windows
+russian.TaskFirewallGroup=Сеть:
+russian.IconSettings=Настройки сервера (appsettings.json)
+russian.IconGuide=Руководство администратора
+russian.IconHealth=Состояние сервера
+russian.RunGuide=Открыть руководство администратора
+russian.RunHealth=Открыть страницу состояния сервера
 
 [Tasks]
-Name: "service"; Description: "Запускать как службу Windows вместе с компьютером"; GroupDescription: "Служба:"
-Name: "firewall"; Description: "Разрешить входящие подключения в брандмауэре Windows"; GroupDescription: "Сеть:"
+Name: "service"; Description: "{cm:TaskService}"; GroupDescription: "{cm:TaskServiceGroup}"
+Name: "firewall"; Description: "{cm:TaskFirewall}"; GroupDescription: "{cm:TaskFirewallGroup}"
 
 [Files]
 Source: "{#ServerSource}\*"; DestDir: "{app}"; Excludes: "\config\appsettings.json"; Flags: recursesubdirs createallsubdirs ignoreversion
@@ -54,18 +100,26 @@ Source: "{#ServerSource}\*"; DestDir: "{app}"; Excludes: "\config\appsettings.js
 Source: "{#ServerSource}\config\appsettings.json"; DestDir: "{app}\config"; Flags: onlyifdoesntexist
 
 [Icons]
-Name: "{autoprograms}\Golether Server\Настройки сервера (appsettings.json)"; Filename: "{sys}\notepad.exe"; Parameters: """{app}\config\appsettings.json"""
-Name: "{autoprograms}\Golether Server\Руководство администратора"; Filename: "{sys}\notepad.exe"; Parameters: """{app}\docs\ADMIN-GUIDE.md"""
-Name: "{autoprograms}\Golether Server\Состояние сервера"; Filename: "http://127.0.0.1:47980/health"
+Name: "{autoprograms}\Golether Server\{cm:IconSettings}"; Filename: "{sys}\notepad.exe"; Parameters: """{app}\config\appsettings.json"""
+Name: "{autoprograms}\Golether Server\{cm:IconGuide}"; Filename: "{sys}\notepad.exe"; Parameters: """{app}\docs\ADMIN-GUIDE.md"""
+Name: "{autoprograms}\Golether Server\{cm:IconHealth}"; Filename: "http://127.0.0.1:47980/health"
 
 [Run]
-Filename: "{sys}\notepad.exe"; Parameters: """{app}\docs\ADMIN-GUIDE.md"""; Description: "Открыть руководство администратора"; Flags: nowait postinstall skipifsilent
-Filename: "http://127.0.0.1:47980/health"; Description: "Открыть страницу состояния сервера"; Flags: shellexec postinstall skipifsilent unchecked; Tasks: service
+Filename: "{sys}\notepad.exe"; Parameters: """{app}\docs\ADMIN-GUIDE.md"""; Description: "{cm:RunGuide}"; Flags: nowait postinstall skipifsilent
+Filename: "http://127.0.0.1:47980/health"; Description: "{cm:RunHealth}"; Flags: shellexec postinstall skipifsilent unchecked; Tasks: service
 
 [Code]
 const
   ServiceName = '{#ServiceName}';
   FirewallRule = '{#FirewallRule}';
+
+procedure InitializeWizard();
+begin
+  { On screens scaled above 100% the boxes of the lists are drawn larger while their distance from the edge stays
+    the same, so the left side of a box is cut off. The distance is scaled with the rest of the wizard. }
+  WizardForm.TasksList.Offset := ScaleX(8);
+  WizardForm.RunList.Offset := ScaleX(8);
+end;
 
 { Runs a system tool hidden and returns its exit code. }
 function RunTool(const Tool, Parameters: string): Integer;

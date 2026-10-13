@@ -78,11 +78,16 @@ Inno Setup не найден. Установите его (бесплатно, h
 '@
 }
 
+# The pictures of the wizard (the logo instead of the stock box) are drawn right before compiling.
+$art = Join-Path $root 'artifacts\installer-art'
+& (Join-Path $scriptDir 'generate-installer-art.ps1') -OutputDirectory $art
+
 Write-Host "==> Inno Setup: $iscc"
 & $iscc `
     "/DGoletherVersion=$version" `
     "/DGoletherSource=$stage" `
     "/DGoletherOutputDir=$output" `
+    "/DInstallerArt=$art" `
     (Join-Path $scriptDir 'golether.iss')
 if ($LASTEXITCODE -ne 0) {
     throw "Inno Setup failed with exit code $LASTEXITCODE."

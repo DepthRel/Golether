@@ -8,7 +8,7 @@
         golether-server.exe   the launcher with the server icon (console program and Windows service in one)
         bin/                  the program, the .NET runtime and the libraries
         config/               appsettings.json: listening address, port, limits
-        docs/                 ADMIN-GUIDE.md (the administrator guide for every system) and README.txt
+        docs/                 ADMIN-GUIDE.md (the administrator guide for every system), README.txt and README.ru.txt
 
     The project makes the layout (target GoletherServerPackageLayout); this script adds README.txt and the archive.
 
@@ -80,6 +80,23 @@ foreach ($expected in 'golether-server.exe', 'bin\golether-server.dll', 'config\
     }
 }
 
+# The note of the package in two languages: README.txt in English (the default one) and README.ru.txt in Russian.
+# The installer shows the one of the chosen language after the installation.
+$readmeEnglish = @(
+    "Golether rendezvous server $version ($Runtime)",
+    '',
+    'The full administrator guide (Windows, Linux, macOS): ADMIN-GUIDE.md next to this file (in Russian).',
+    '',
+    'In short:',
+    '  - Windows service: the installer GoletherServer-<version>-setup.exe or the commands of section 4 of the guide.',
+    '  - Without a service: run golether-server.exe in the root of the server folder (Ctrl+C stops it).',
+    '  - Settings: config\appsettings.json; restart the service after changing them.',
+    '  - Folders: bin - the program and its libraries, config - the settings, docs - the documentation.',
+    '  - Open TCP and UDP 47900 to the outside. Check on this machine: http://127.0.0.1:47980/health',
+    '  - Give the hosts the public address of the server and the port, for example 203.0.113.7:47900.'
+)
+[System.IO.File]::WriteAllLines((Join-Path $stage 'docs\README.txt'), $readmeEnglish, (New-Object System.Text.UTF8Encoding $true))
+
 $readme = @(
     "Сервер рукопожатий Golether $version ($Runtime)",
     '',
@@ -93,7 +110,7 @@ $readme = @(
     '  - Снаружи откройте TCP и UDP 47900. Проверка на этой машине: http://127.0.0.1:47980/health',
     '  - Ведущим сообщите внешний адрес сервера и порт, например 203.0.113.7:47900.'
 )
-[System.IO.File]::WriteAllLines((Join-Path $stage 'docs\README.txt'), $readme, (New-Object System.Text.UTF8Encoding $true))
+[System.IO.File]::WriteAllLines((Join-Path $stage 'docs\README.ru.txt'), $readme, (New-Object System.Text.UTF8Encoding $true))
 
 Add-Type -AssemblyName System.IO.Compression, System.IO.Compression.FileSystem
 $package = Join-Path (Resolve-Path $Output).Path "GoletherServer-$version-$Runtime.zip"
