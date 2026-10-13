@@ -27,6 +27,12 @@ GitHub Pages из этой папки (`.github/workflows/pages.yml`) при к�
 
 `Scripts/build-installer.ps1` печатает готовую запись для Windows.
 
+## Новая картинка
+
+Страница показывает `assets/screenshot.jpg` — облегчённую копию `Docs/images/screenshot.png` (не шире 1600 пикселей).
+После замены снимка запустите `Scripts/update-site-screenshot.ps1` и закоммитьте оба файла. Если изменились пропорции,
+поправьте `width` и `height` картинки в `index.html`: скрипт печатает новые размеры.
+
 ## Адрес сервера рукопожатий
 
 `config.json` выглядит так: `{ "rendezvous": "g1.…" }`. Строку делает утилита владельца `Golether.AdminSettings`
