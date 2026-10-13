@@ -105,7 +105,7 @@ a:hover { color: var(--accent-light); text-decoration: underline; }
 /* Sections */
 section { padding: 64px 0; }
 section.alt { background: var(--panel); border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); }
-.eyebrow { font: 600 11px/1 var(--mono); letter-spacing: 1.5px; color: var(--secure); text-transform: uppercase; margin: 0 0 12px; }
+.eyebrow { font: 700 15px/1.2 var(--mono); letter-spacing: 2px; color: var(--secure); text-transform: uppercase; margin: 0 0 14px; }
 h2 { font-size: clamp(26px, 3.4vw, 36px); line-height: 1.2; margin: 0 0 12px; letter-spacing: -0.3px; }
 .sub { color: var(--muted); max-width: 700px; margin: 0 0 34px; }
 
