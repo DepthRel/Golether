@@ -19,8 +19,9 @@ GitHub Pages из этой папки (`.github/workflows/pages.yml`) при к�
 
 ## Новый выпуск
 
-1. Создайте выпуск на GitHub с тегом-версией (`0.3.0`) и приложите файлы:
-   `Golether-0.3.0-setup.exe`, `Golether-0.3.0-linux-x64.tar.gz`, `Golether-0.3.0-osx-arm64.tar.gz`.
+1. Отправьте тег версии: `git tag 0.3.0; git push origin 0.3.0`. Workflow **Packages** соберёт
+   `Golether-0.3.0-linux-x64.tar.gz` и `Golether-0.3.0-osx-arm64.tar.gz` и приложит их к черновику выпуска.
+   Соберите `Golether-0.3.0-setup.exe` (`Scripts/build-installer.ps1`), добавьте его в тот же выпуск и опубликуйте.
 2. В `updates.json` замените номер версии в `version` и в `url` у каждой системы. Необязательное поле `notes` —
    строка «что нового», её покажет приложение.
 3. Закоммитьте. Страница обновится сама, а приложения прежних версий при запуске покажут «Доступна новая версия».

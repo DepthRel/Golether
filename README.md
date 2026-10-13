@@ -165,10 +165,13 @@ Linux and macOS (bash). Build on the target OS, so that executable permissions s
 ./Scripts/publish-macos.sh [osx-arm64|osx-x64]       # Golether.app with an ad-hoc signature
 ```
 
-The `.sh` scripts are bash scripts, PowerShell cannot run them. On Windows use WSL and keep the repository in the
-WSL file system (not under `/mnt/c`), for example `wsl bash Scripts/publish-linux.sh`. A macOS package must be built
-on macOS (or a macOS CI runner): the icon and the ad-hoc signature come from `sips`, `iconutil` and `codesign`, which
-exist only there, and without the signature an arm64 build will not start on Apple Silicon.
+The `.sh` scripts are bash scripts, PowerShell cannot run them. On Windows, `./Scripts/publish-linux.ps1` builds the
+Linux package inside WSL for you: it copies the sources into the WSL file system (a build under `/mnt/c` would lose
+the executable permissions) and brings the archive back to `artifacts/publish`. A macOS package must be built on
+macOS: the icon and the ad-hoc signature come from `sips`, `iconutil` and `codesign`, which exist only there, and
+without the signature an arm64 build will not start on Apple Silicon. Without a Mac, use the **Packages** workflow
+(`.github/workflows/packages.yml`): run it by hand or push a version tag, and it builds the Linux and macOS packages
+on GitHub runners and attaches them to the release of that tag.
 
 ## License
 

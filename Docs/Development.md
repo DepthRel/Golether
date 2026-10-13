@@ -110,6 +110,8 @@ dotnet run --project Sources/Database/Golether.Dbs.SQLite.DbMigrator -- --databa
 | `Scripts/publish-win.ps1 [-Runtime win-x64]` | `artifacts/publish/Golether-<версия>-win-x64.zip` |
 | `Scripts/publish-linux.sh [linux-x64] [Release] [out]` | `.tar.gz` и `.zip` (если есть `zip`), `install-desktop-entry.sh` |
 | `Scripts/publish-macos.sh [osx-arm64] ...` | `Golether.app` (Info.plist, иконка, ad-hoc подпись) в архиве |
+| `Scripts/publish-linux.ps1 [-Runtime linux-x64]` | тот же Linux-архив, собранный с Windows внутри WSL (см. ниже) |
+| `Scripts/update-site-screenshot.ps1` | картинка страницы проекта из `Docs/images/screenshot.png` |
 | `Scripts/generate-icon.ps1` | `golether.ico`, PNG 256/512 из геометрии `golether.svg` |
 | `Scripts/build-installer.ps1 [-SkipPublish]` (архив собирается тем же запуском) | `artifacts/publish/Golether-<версия>-setup.exe` (нужен Inno Setup 6 или новее; проверено на 7.1) и готовая запись для файла обновлений |
 
@@ -117,7 +119,18 @@ dotnet run --project Sources/Database/Golether.Dbs.SQLite.DbMigrator -- --databa
 `app/native`. В корне Windows-пакета лежит `Golether.exe` с иконкой приложения: это тот же хост .NET (цель
 `GoletherRootLauncher` в `Golether.UI.csproj`, задача SDK `CreateAppHost`), только с относительным путём
 `app\Golether.dll`. Поэтому пакет запускается двойным щелчком из любого места, а на `Golether.exe` можно сделать ярлык
-или закрепить его на панели задач. Linux- и macOS-пакеты лучше собирать на целевой ОС: только там в архиве сохранятся права на исполнение.
+или закрепить его на панели задач. Linux- и macOS-пакеты собираются на целевой ОС: только там в архиве сохранятся права на исполнение.
+
+Как собрать их, не имея под рукой Linux и Mac:
+
+- **Linux с Windows.** `./Scripts/publish-linux.ps1` запускает сборку в WSL: исходники копируются в файловую систему
+  Linux, там же собираются, а готовый `Golether-<версия>-linux-x64.tar.gz` возвращается в `artifacts/publish`. При
+  первом запуске в `~/.dotnet` дистрибутива ставится .NET SDK (официальным скриптом, без `sudo`).
+- **macOS и Linux на GitHub.** Workflow **Packages** (`.github/workflows/packages.yml`) собирает оба пакета на
+  раннерах GitHub: macOS-пакету нужны `sips`, `iconutil` и `codesign`, которых нет нигде, кроме macOS. Запуск вручную
+  (Actions → Packages → Run workflow) отдаёт архивы как артефакты запуска. Запуск тегом версии
+  (`git tag 0.3.0; git push origin 0.3.0`) ещё и прикладывает их к выпуску этого тега; если выпуска нет, создаётся
+  черновик. Установщик Windows собирается локально (`build-installer.ps1`) и добавляется в тот же выпуск.
 
 ## Отладка сети
 

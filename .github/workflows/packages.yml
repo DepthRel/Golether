@@ -1,0 +1,71 @@
+# Builds the Linux and macOS packages of Golether on the systems they are meant for.
+#
+# Two ways to start it:
+#   - by hand: Actions -> Packages -> Run workflow. The archives appear as "Artifacts" of the run.
+#   - by a version tag (git tag 0.3.0 && git push origin 0.3.0). The archives are also attached to the release of
+#     that tag; a release that does not exist yet is created as a draft, so nothing is published by itself.
+#
+# The Windows installer is built on the developer's machine (Scripts/build-installer.ps1) and added to the same release.
+name: Packages
+
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - '[0-9]+.[0-9]+.[0-9]+'
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: ${{ matrix.runtime }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            runtime: linux-x64
+            script: publish-linux.sh
+          # macos-latest is Apple silicon: the icon and the ad-hoc signature need the tools of macOS itself.
+          - os: macos-latest
+            runtime: osx-arm64
+            script: publish-macos.sh
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: global.json
+      - name: Build the package
+        run: bash "Scripts/${{ matrix.script }}" "${{ matrix.runtime }}"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Golether-${{ matrix.runtime }}
+          path: artifacts/publish/Golether-*-${{ matrix.runtime }}.tar.gz
+          if-no-files-found: error
+
+  release:
+    name: Attach to the release
+    if: startsWith(github.ref, 'refs/tags/')
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+      TAG: ${{ github.ref_name }}
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: packages
+          merge-multiple: true
+      - name: Upload the archives
+        run: |
+          ls -l packages
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release upload "$TAG" packages/*.tar.gz --clobber
+          else
+            gh release create "$TAG" packages/*.tar.gz --draft --title "Golether $TAG" --notes "Linux and macOS packages. Add the Windows installer and the notes, then publish."
+          fi
