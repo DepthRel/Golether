@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <!--
+    The invitation page: turns https://…/join/#<invitation> into golether://join/v1/<invitation> and hands it to the
+    application. The invitation is after the "#", so the browser never sends it to the server. The page loads nothing
+    from other servers, sends nothing anywhere and runs no inline script: it is exactly the files of this folder.
+  -->
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src 'self'; style-src 'self'; script-src 'self'; base-uri 'none'; form-action 'none'">
+  <meta name="referrer" content="no-referrer">
+  <meta name="robots" content="noindex, nofollow">
+  <title>Golether invitation</title>
+  <link rel="icon" href="../assets/golether.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="../assets/site.css">
+</head>
+<body>
+  <header class="top">
+    <div class="wrap">
+      <a class="brand" href="../"><img src="../assets/golether.svg" alt=""><span>gole<b>ther</b></span></a>
+      <nav>
+        <span class="lang" role="group" aria-label="Language">
+          <button type="button" data-lang="en" aria-pressed="true">EN</button>
+          <button type="button" data-lang="ru" aria-pressed="false">RU</button>
+        </span>
+      </nav>
+    </div>
+  </header>
+
+  <main class="gate">
+    <div class="box">
+      <img class="logo" src="../assets/golether.svg" alt="">
+
+      <!-- A valid invitation. -->
+      <div id="invited" hidden>
+        <h1 data-t="invited.title">You are invited to watch together</h1>
+        <p data-t="invited.text">Open the invitation in Golether. The app will ask you once more before joining.</p>
+        <div class="invite">
+          <div><span data-t="invited.session">Session</span><span id="session"></span></div>
+          <div><span data-t="invited.host">Host</span><span id="host"></span></div>
+        </div>
+        <a class="btn accent" id="open" href="#" data-t="invited.open">Open in Golether</a>
+        <a class="btn" href="../#download" data-t="invited.download">I do not have Golether yet</a>
+        <hr>
+        <p class="small" data-t="invited.fallback">Nothing happened? Copy the key and paste it into the “Invitation” field of Golether.</p>
+        <button class="btn" type="button" id="copy" data-t="invited.copy">Copy the key</button>
+        <ol>
+          <li data-t="invited.step1">Agree to open Golether when the browser asks.</li>
+          <li data-t="invited.step2">Press “Join” in the app.</li>
+          <li data-t="invited.step3">Compare the code with the host by voice.</li>
+        </ol>
+      </div>
+
+      <!-- An invitation whose time is over. -->
+      <div id="expired" hidden>
+        <h1 data-t="expired.title">This invitation has expired</h1>
+        <p data-t="expired.text">Invitations live for a short time on purpose. Ask the host to send you a new one.</p>
+        <a class="btn" href="../" data-t="common.about">What is Golether?</a>
+      </div>
+
+      <!-- No invitation, or not one of ours. -->
+      <div id="broken">
+        <h1 data-t="broken.title">There is no invitation here</h1>
+        <p data-t="broken.text">The link is incomplete. Copy it again in full, or ask the host for a new one.</p>
+        <a class="btn" href="../" data-t="common.about">What is Golether?</a>
+      </div>
+    </div>
+  </main>
+
+  <script src="../assets/join.js"></script>
+</body>
+</html>

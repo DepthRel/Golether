@@ -42,6 +42,21 @@ public sealed partial class SettingsViewModel : ObservableObject
     private readonly Action<bool>? _applyAlwaysShowBars;
 
     /// <summary>
+    /// Stores the choices about updates, or <see langword="null"/>.
+    /// </summary>
+    private readonly Action<bool, string>? _applyUpdates;
+
+    /// <summary>
+    /// Whether new versions were looked for when the window opened.
+    /// </summary>
+    private readonly bool _initialCheckUpdates;
+
+    /// <summary>
+    /// The update source when the window opened.
+    /// </summary>
+    private readonly string _initialUpdateUrl;
+
+    /// <summary>
     /// The avatar waiting to be applied, or <see langword="null"/> when it was not changed.
     /// </summary>
     private AvatarSelection? _pendingAvatar;
@@ -88,6 +103,10 @@ public sealed partial class SettingsViewModel : ObservableObject
     /// <param name="applyLayoutResizable">Switches the adjustable layout on or off.</param>
     /// <param name="alwaysShowBars">Whether the bars stay in full screen now.</param>
     /// <param name="applyAlwaysShowBars">Keeps the bars in full screen or lets them hide.</param>
+    /// <param name="canChooseUpdates">Whether the application looks for new versions at all.</param>
+    /// <param name="checkUpdates">Whether new versions are looked for now.</param>
+    /// <param name="updateUrl">The update source typed by the user, or an empty string for the project page.</param>
+    /// <param name="applyUpdates">Stores the choices about updates.</param>
     public SettingsViewModel(
         LanguageViewModel? language,
         DevicesViewModel? devices,
@@ -102,8 +121,18 @@ public sealed partial class SettingsViewModel : ObservableObject
         bool layoutResizable = false,
         Action<bool>? applyLayoutResizable = null,
         bool alwaysShowBars = false,
-        Action<bool>? applyAlwaysShowBars = null)
+        Action<bool>? applyAlwaysShowBars = null,
+        bool canChooseUpdates = false,
+        bool checkUpdates = true,
+        string updateUrl = "",
+        Action<bool, string>? applyUpdates = null)
     {
+        CanChooseUpdates = canChooseUpdates;
+        CheckUpdates = checkUpdates;
+        UpdateUrl = updateUrl;
+        _initialCheckUpdates = checkUpdates;
+        _initialUpdateUrl = updateUrl;
+        _applyUpdates = applyUpdates;
         AlwaysShowBars = alwaysShowBars;
         _applyAlwaysShowBars = applyAlwaysShowBars;
         LayoutResizable = layoutResizable;
@@ -188,6 +217,28 @@ public sealed partial class SettingsViewModel : ObservableObject
     /// </summary>
     [ObservableProperty]
     public partial bool AlwaysShowBars { get; set; }
+
+    /// <summary>
+    /// Gets a value indicating whether the choices about updates are offered.
+    /// </summary>
+    public bool CanChooseUpdates { get; }
+
+    /// <summary>
+    /// Gets or sets a value indicating whether the application tells about new versions when it starts.
+    /// </summary>
+    [ObservableProperty]
+    public partial bool CheckUpdates { get; set; }
+
+    /// <summary>
+    /// Gets or sets the address of the update source; an empty address means the project page.
+    /// </summary>
+    [ObservableProperty]
+    public partial string UpdateUrl { get; set; }
+
+    /// <summary>
+    /// Gets the update source used when none is typed, shown as the hint of the field.
+    /// </summary>
+    public string DefaultUpdateUrl => UpdateService.DefaultManifestUrl;
 
     /// <summary>
     /// Gets or sets the avatar shown in the window: the one waiting to be applied, or the current one.
@@ -359,6 +410,13 @@ public sealed partial class SettingsViewModel : ObservableObject
 
         _applyLayoutResizable?.Invoke(LayoutResizable);
         _applyAlwaysShowBars?.Invoke(AlwaysShowBars);
+
+        // Untouched choices are not stored again: applying them would only start another check.
+        var updateUrl = (UpdateUrl ?? string.Empty).Trim();
+        if (CheckUpdates != _initialCheckUpdates || updateUrl != _initialUpdateUrl)
+        {
+            _applyUpdates?.Invoke(CheckUpdates, updateUrl);
+        }
 
         if (Language is { } language && SelectedLanguage is { } option && option.Code != language.Selected.Code)
         {

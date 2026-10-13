@@ -444,6 +444,46 @@ public sealed class SessionIntegrationTests : IAsyncLifetime
     }
 
     /// <summary>
+    /// The lifetime of an invitation limits only the moment of joining: a participant who was admitted stays in the
+    /// session after the invitation expired, keeps exchanging messages with the host, and nobody else gets in with it.
+    /// </summary>
+    [Fact]
+    public async Task Participant_StaysAfterTheInvitationExpired()
+    {
+        var token = TestContext.Current.CancellationToken;
+        var lifetime = TimeSpan.FromSeconds(1);
+        var invite = _host.CreateInvite([new PeerEndpoint("127.0.0.1", _host.Port)], lifetime);
+        await using var guest = CreateGuest();
+        await guest.JoinAsync(invite, token);
+        await WaitUntilAsync(() => _host.GetSnapshot().Participants.Count == 2, token);
+
+        await Task.Delay(lifetime + TimeSpan.FromSeconds(1), token);
+        Assert.True(invite.ExpiresAt < DateTimeOffset.UtcNow);
+
+        // The session goes on in both directions after the expiry.
+        var received = new TaskCompletionSource<ChatEntry>(TaskCreationOptions.RunContinuationsAsynchronously);
+        _host.ChatReceived += (_, entry) => received.TrySetResult(entry);
+        await guest.SendChatAsync(ChatKind.Text, "всё ещё здесь", token);
+        Assert.Equal("всё ещё здесь", (await received.Task.WaitAsync(TimeSpan.FromSeconds(10), token)).Text);
+        Assert.Equal(SessionState.Active, guest.GetSnapshot().State);
+        Assert.Equal(2, _host.GetSnapshot().Participants.Count);
+
+        // The expired invitation itself lets nobody in any more.
+        using var lateIdentity = DeviceIdentity.CreateNew(TimeProvider.System);
+        await using var late = new ParticipantSession(
+            lateIdentity,
+            new TlsPeerConnector(lateIdentity, Transport),
+            new SimulatedPlayer(StopwatchMonotonicClock.Instance, TimeSpan.FromHours(2)),
+            new CapturingRegistry(),
+            StopwatchMonotonicClock.Instance,
+            TimeProvider.System,
+            "Опоздавший",
+            Options);
+        await Assert.ThrowsAsync<SessionJoinException>(() => late.JoinAsync(invite, token));
+        Assert.Equal(2, _host.GetSnapshot().Participants.Count);
+    }
+
+    /// <summary>
     /// A participant joins after approval, receives the media, starts together with the host, and its pause stops the
     /// host on the same frame.
     /// </summary>

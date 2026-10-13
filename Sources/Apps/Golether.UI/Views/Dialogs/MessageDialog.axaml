@@ -4,10 +4,13 @@
         x:Class="Golether.UI.Views.Dialogs.MessageDialog"
         Width="460" SizeToContent="Height" CanResize="False"
         WindowStartupLocation="CenterOwner" Icon="/Assets/golether.ico">
-  <!-- A simple message with an OK button. -->
+  <!-- A simple message with an OK button, or a question with two answers. -->
   <StackPanel Margin="22" Spacing="14">
     <TextBlock x:Name="TitleText" Classes="title" TextWrapping="Wrap" />
     <TextBlock x:Name="MessageText" TextWrapping="Wrap" Classes="muted" />
-    <Button Classes="accent" HorizontalAlignment="Right" Content="{loc:Loc Common.Understood}" Click="OnOk" IsDefault="True" />
+    <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Spacing="8">
+      <Button x:Name="CancelButton" Classes="ghost" Content="{loc:Loc Common.Cancel}" Click="OnCancel" IsCancel="True" IsVisible="False" />
+      <Button x:Name="OkButton" Classes="accent" Content="{loc:Loc Common.Understood}" Click="OnOk" IsDefault="True" />
+    </StackPanel>
   </StackPanel>
 </Window>

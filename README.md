@@ -44,7 +44,9 @@ transcode or install a server.
 - **AmneziaWG tunnel, built in.** When the direct path is blocked, raise a tunnel between participants right from the
   app: no server of your own, no separate VPN client to set up.
 - **Secure by default.** Device keys are pinned, the host admits every participant, and both sides compare a
-  verification code aloud before anyone is let in. Invitations are single-use.
+  verification code aloud before anyone is let in. Invitations are single-use and live for an hour at most.
+- **One click to join.** An invitation is an ordinary link: the guest clicks it, the app opens and asks whether to
+  join. The same invitation as a key to paste is always there as the fallback.
 - **Instant start.** Open a video with "Open with → Golether", and a session is created for it. UPnP / NAT-PMP can
   open the port on your router automatically.
 - **Resume where you stopped**, and a UI in English and Russian (a new language is one JSON file).

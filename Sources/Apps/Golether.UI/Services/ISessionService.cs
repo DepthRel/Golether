@@ -59,7 +59,14 @@ public interface ISessionService
     bool OpenRouterPort { get; set; }
 
     /// <summary>
-    /// Gets or sets the rendezvous server a hosted session holds a room on, as <c>host:port</c>, or an empty string
+    /// Gets or sets how a hosted session finds its rendezvous server: by itself, not at all, or from
+    /// <see cref="RendezvousServer"/>.
+    /// </summary>
+    RendezvousMode RendezvousMode { get; set; }
+
+    /// <summary>
+    /// Gets or sets the rendezvous server typed by the user, used in <see cref="RendezvousMode.Manual"/> and held a
+    /// room on by the hosted session, as <c>host:port</c>, or an empty string
     /// for none. Participants from other networks meet the host through it when neither side has an open port.
     /// </summary>
     string RendezvousServer { get; set; }

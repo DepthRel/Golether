@@ -65,6 +65,26 @@ public sealed class AvaloniaDialogService : IDialogService
         => new MessageDialog(title, message).ShowDialog(_owner);
 
     /// <inheritdoc />
+    public async Task<bool> ConfirmAsync(string title, string message, string acceptText)
+        => await new MessageDialog(title, message, acceptText).ShowDialog<bool?>(ActiveOwner) == true;
+
+    /// <inheritdoc />
+    public async Task<bool> OpenLinkAsync(string url)
+        => Uri.TryCreate(url, UriKind.Absolute, out var uri) && uri.Scheme == Uri.UriSchemeHttps
+            && await _owner.Launcher.LaunchUriAsync(uri);
+
+    /// <inheritdoc />
+    public void BringToFront()
+    {
+        if (_owner.WindowState == WindowState.Minimized)
+        {
+            _owner.WindowState = WindowState.Normal;
+        }
+
+        _owner.Activate();
+    }
+
+    /// <inheritdoc />
     public async Task<string?> PickMediaFileAsync()
     {
         var files = await _owner.StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions

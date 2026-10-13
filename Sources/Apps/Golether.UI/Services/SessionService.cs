@@ -65,6 +65,11 @@ public sealed class SessionService : ISessionService, IAsyncDisposable
     private readonly PortMapper? _portMapper;
 
     /// <summary>
+    /// Finds the rendezvous server of the project, or <see langword="null"/> when it is never looked up.
+    /// </summary>
+    private readonly IRendezvousDirectory? _rendezvousDirectory;
+
+    /// <summary>
     /// The router mapping of the hosted session.
     /// </summary>
     private PortMappingLease? _portLease;
@@ -143,6 +148,7 @@ public sealed class SessionService : ISessionService, IAsyncDisposable
     /// <param name="loggerFactory">The logger factory.</param>
     /// <param name="conference">Cameras and voices.</param>
     /// <param name="portMapper">Opens the listening port on the router, or <see langword="null"/>.</param>
+    /// <param name="rendezvousDirectory">Finds the rendezvous server of the project, or <see langword="null"/>.</param>
     public SessionService(
         DeviceIdentity identity,
         PlayerHost player,
@@ -151,9 +157,11 @@ public sealed class SessionService : ISessionService, IAsyncDisposable
         TimeProvider timeProvider,
         ILoggerFactory loggerFactory,
         IConferenceMedia conference,
-        PortMapper? portMapper = null)
+        PortMapper? portMapper = null,
+        IRendezvousDirectory? rendezvousDirectory = null)
     {
         _portMapper = portMapper;
+        _rendezvousDirectory = rendezvousDirectory;
         _conference = conference;
         _identity = identity;
         _player = player;
@@ -197,6 +205,9 @@ public sealed class SessionService : ISessionService, IAsyncDisposable
     public bool OpenRouterPort { get; set; } = true;
 
     /// <inheritdoc />
+    public RendezvousMode RendezvousMode { get; set; } = RendezvousMode.Manual;
+
+    /// <inheritdoc />
     public string RendezvousServer { get; set; } = string.Empty;
 
     /// <inheritdoc />
@@ -204,14 +215,11 @@ public sealed class SessionService : ISessionService, IAsyncDisposable
     {
         await ReleaseEndedAsync().ConfigureAwait(false);
         EnsureIdle();
-        RendezvousPoint? rendezvous = null;
-        if (!string.IsNullOrWhiteSpace(RendezvousServer))
-        {
-            // A fresh room for every session: an old invitation does not lead to a new session.
-            rendezvous = PeerEndpoint.TryParse(RendezvousServer.Trim(), out var server)
-                ? new RendezvousPoint(server, RendezvousPoint.CreateRoom())
-                : throw new InvalidOperationException(Texts.Get("Session.Error.BadRendezvousServer"));
-        }
+        var mode = RendezvousMode;
+        var server = await FindRendezvousServerAsync(mode, cancellationToken).ConfigureAwait(false);
+
+        // A fresh room for every session: an old invitation does not lead to a new session.
+        var rendezvous = server is { } found ? new RendezvousPoint(found, RendezvousPoint.CreateRoom()) : null;
 
         var listener = new TlsPeerListener(_identity, new TlsTransportOptions { Port = port }, _loggerFactory.CreateLogger<TlsPeerListener>());
         try
@@ -249,12 +257,42 @@ public sealed class SessionService : ISessionService, IAsyncDisposable
         {
             _rendezvousHost = StartRendezvous(host, listener, rendezvous);
         }
+        else if (mode == RendezvousMode.Automatic)
+        {
+            // The session works without the server; the host learns why guests from other networks may not get in.
+            EventRaised?.Invoke(this, new SessionEvent(_timeProvider.GetLocalNow(), null, Texts.Get("Session.Rendezvous.NotFound")));
+        }
+
         if (_portMapper is not null && OpenRouterPort)
         {
             _ = OpenPortAsync(host, host.Port, _relay?.Port);
         }
 
         ReportFirewall();
+    }
+
+    /// <summary>
+    /// Finds the rendezvous server of a new session according to the chosen mode.
+    /// </summary>
+    /// <param name="mode">The mode.</param>
+    /// <param name="cancellationToken">The cancellation token.</param>
+    /// <returns>The server, or <see langword="null"/> when the session runs without one.</returns>
+    /// <exception cref="InvalidOperationException">The address typed by the user is not an address.</exception>
+    private async Task<PeerEndpoint?> FindRendezvousServerAsync(RendezvousMode mode, CancellationToken cancellationToken)
+    {
+        switch (mode)
+        {
+            case RendezvousMode.Automatic:
+                return _rendezvousDirectory is { } directory
+                    ? await directory.FindAsync(cancellationToken).ConfigureAwait(false)
+                    : null;
+            case RendezvousMode.Manual when !string.IsNullOrWhiteSpace(RendezvousServer):
+                return PeerEndpoint.TryParse(RendezvousServer.Trim(), out var typed)
+                    ? typed
+                    : throw new InvalidOperationException(Texts.Get("Session.Error.BadRendezvousServer"));
+            default:
+                return null;
+        }
     }
 
     /// <inheritdoc />

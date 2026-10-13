@@ -1,6 +1,7 @@
 using Avalonia;
 using Golether.Transports.PortMapping;
 using Golether.Tunnels.AmneziaWG.Control;
+using Golether.UI.Services;
 
 namespace Golether.UI;
 
@@ -30,7 +31,51 @@ public static class Program
             return WindowsFirewall.Run(args);
         }
 
+        // One copy per user: a later start (an invitation link clicked in the browser, a file opened with Golether)
+        // hands its arguments over to the running copy and ends.
+        using var instance = BecomeTheOnlyInstance(args, out var handedOver);
+        if (handedOver)
+        {
+            return 0;
+        }
+
+        Instance = instance;
         return BuildAvaloniaApp().StartWithClassicDesktopLifetime(args);
+    }
+
+    /// <summary>
+    /// Gets the object that receives the arguments of later starts, or <see langword="null"/> when this copy could
+    /// not become the only one and runs on its own.
+    /// </summary>
+    public static SingleInstance? Instance { get; private set; }
+
+    /// <summary>
+    /// Becomes the running copy or, when there is one already, gives it the arguments of this start.
+    /// </summary>
+    /// <param name="args">The command-line arguments.</param>
+    /// <param name="handedOver"><see langword="true"/> when the running copy took the arguments and this one must end.</param>
+    /// <returns>The running copy, or <see langword="null"/>.</returns>
+    private static SingleInstance? BecomeTheOnlyInstance(string[] args, out bool handedOver)
+    {
+        handedOver = false;
+        try
+        {
+            var name = SingleInstance.GetName(Core.Configuration.AppDataPaths.Resolve().Root);
+            if (SingleInstance.TryAcquire(name) is { } instance)
+            {
+                return instance;
+            }
+
+            // A running copy that does not answer (it hangs or is closing) must not keep the user out: this copy
+            // then starts as usual.
+            handedOver = SingleInstance.Forward(name, args);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or WaitHandleCannotBeOpenedException or PlatformNotSupportedException)
+        {
+            System.Diagnostics.Debug.WriteLine($"Golether: the single-instance check failed: {ex.Message}");
+        }
+
+        return null;
     }
 
     /// <summary>

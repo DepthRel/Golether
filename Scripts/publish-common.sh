@@ -56,13 +56,21 @@ cat > "$HOME/.local/share/applications/golether.desktop" <<ENTRY
 Type=Application
 Name=Golether
 Comment=Синхронный совместный просмотр видео
-Exec="$here/app/Golether"
+Exec="$here/app/Golether" %u
 Path=$here/app
 Icon=$here/golether.png
 Terminal=false
 Categories=AudioVideo;Video;Network;
+MimeType=x-scheme-handler/golether;
 ENTRY
-echo "Golether added to the application menu."
+# Invitation links (golether://join/...) clicked in a browser open Golether.
+if command -v update-desktop-database >/dev/null; then
+  update-desktop-database "$HOME/.local/share/applications" || true
+fi
+if command -v xdg-mime >/dev/null; then
+  xdg-mime default golether.desktop x-scheme-handler/golether || true
+fi
+echo "Golether added to the application menu; invitation links open it."
 DESKTOP
     chmod +x "$stage/install-desktop-entry.sh"
     notes="libmpv: установите пакет дистрибутива (libmpv2 / mpv-libs). Туннели: amneziawg-tools и модуль amneziawg (или amneziawg-go)."
@@ -95,6 +103,14 @@ DESKTOP
   <key>CFBundlePackageType</key><string>APPL</string>
   <key>LSMinimumSystemVersion</key><string>14.0</string>
   <key>NSHighResolutionCapable</key><true/>
+  <key>CFBundleURLTypes</key>
+  <array>
+    <dict>
+      <key>CFBundleURLName</key><string>org.golether.invite</string>
+      <key>CFBundleTypeRole</key><string>Viewer</string>
+      <key>CFBundleURLSchemes</key><array><string>golether</string></array>
+    </dict>
+  </array>
   <key>NSCameraUsageDescription</key><string>Golether показывает вашу камеру участникам сеанса.</string>
   <key>NSMicrophoneUsageDescription</key><string>Golether передаёт ваш голос участникам сеанса.</string>
 </dict>

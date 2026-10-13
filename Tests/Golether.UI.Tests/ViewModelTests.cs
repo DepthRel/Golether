@@ -360,11 +360,51 @@ public sealed class ViewModelTests
 
         dialog.ExtraAddress = "203.0.113.24:47800";
         dialog.Regenerate();
-        Assert.StartsWith(Invite.LinkPrefix, dialog.Link, StringComparison.Ordinal);
-        _session.Received(1).CreateInvite(Arg.Is<IReadOnlyList<PeerEndpoint>>(e => e.Single() == PeerEndpoint.Parse("203.0.113.24:47800")), TimeSpan.FromMinutes(15));
+
+        // The link and the key are two invitations: the link for a click, the key for pasting.
+        Assert.StartsWith(Invite.WebLinkPrefix, dialog.Link, StringComparison.Ordinal);
+        Assert.StartsWith(Invite.LinkPrefix, dialog.Key, StringComparison.Ordinal);
+        _session.Received(2).CreateInvite(Arg.Is<IReadOnlyList<PeerEndpoint>>(e => e.Single() == PeerEndpoint.Parse("203.0.113.24:47800")), TimeSpan.FromMinutes(15));
 
         await dialog.CopyCommand.ExecuteAsync(null);
         await _dialogs.Received(1).CopyTextAsync(dialog.Link);
+        await dialog.CopyKeyCommand.ExecuteAsync(null);
+        await _dialogs.Received(1).CopyTextAsync(dialog.Key);
+    }
+
+    /// <summary>
+    /// The key lives 15 minutes or an hour, never longer; choosing another lifetime makes a new key and leaves the
+    /// link, which may have been sent already.
+    /// </summary>
+    [Fact]
+    public void InviteDialog_RenewsOnlyTheKeyForAnotherLifetime()
+    {
+        _session.CreateInvite(Arg.Any<IReadOnlyList<PeerEndpoint>>(), Arg.Any<TimeSpan>()).Returns(call => new Invite
+        {
+            HostPeerId = Host,
+            HostName = "Вы",
+            SessionName = "Вечер",
+            Endpoints = [PeerEndpoint.Parse("192.168.1.2:47800")],
+            Token = Invite.CreateToken(),
+            ExpiresAt = DateTimeOffset.UtcNow + call.Arg<TimeSpan>(),
+        });
+        var dialog = new InviteDialogViewModel(_session, _dialogs);
+        Assert.Equal([TimeSpan.FromMinutes(15), TimeSpan.FromHours(1)], dialog.Lifetimes.Select(l => l.Lifetime));
+
+        // Before the first invitation a choice of lifetime creates nothing.
+        dialog.SelectedLifetime = dialog.Lifetimes[1];
+        _session.DidNotReceive().CreateInvite(Arg.Any<IReadOnlyList<PeerEndpoint>>(), Arg.Any<TimeSpan>());
+
+        dialog.Regenerate();
+        _session.Received(1).CreateInvite(Arg.Any<IReadOnlyList<PeerEndpoint>>(), InviteRegistry.WebLinkLifetime);
+        _session.Received(1).CreateInvite(Arg.Any<IReadOnlyList<PeerEndpoint>>(), TimeSpan.FromHours(1));
+        var (link, key) = (dialog.Link, dialog.Key);
+
+        dialog.SelectedLifetime = dialog.Lifetimes[0];
+
+        Assert.Equal(link, dialog.Link);
+        Assert.NotEqual(key, dialog.Key);
+        _session.Received(2).CreateInvite(Arg.Any<IReadOnlyList<PeerEndpoint>>(), InviteRegistry.WebLinkLifetime);
     }
 
     /// <summary>

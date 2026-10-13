@@ -47,6 +47,27 @@ public interface IDialogService
     Task ShowMessageAsync(string title, string message);
 
     /// <summary>
+    /// Asks a question with two answers.
+    /// </summary>
+    /// <param name="title">The title.</param>
+    /// <param name="message">The question.</param>
+    /// <param name="acceptText">The text of the button that agrees.</param>
+    /// <returns><see langword="true"/> when the user agreed.</returns>
+    Task<bool> ConfirmAsync(string title, string message, string acceptText);
+
+    /// <summary>
+    /// Opens an address in the browser of the user.
+    /// </summary>
+    /// <param name="url">The address.</param>
+    /// <returns><see langword="true"/> when the system took the address.</returns>
+    Task<bool> OpenLinkAsync(string url);
+
+    /// <summary>
+    /// Brings the main window in front of the other windows, for example when a link opened the application.
+    /// </summary>
+    void BringToFront();
+
+    /// <summary>
     /// Lets the user pick a video file.
     /// </summary>
     /// <returns>The local path, or <see langword="null"/> when cancelled.</returns>

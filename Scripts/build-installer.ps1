@@ -8,8 +8,10 @@
       2. ISCC compiles Scripts/golether.iss into artifacts/publish/Golether-<version>-setup.exe;
       3. the SHA-256 of the installer and a ready JSON entry for the update manifest are printed.
 
-    The installation is per-user (no administrator rights) into %LOCALAPPDATA%\Programs\Golether. All data stays in
-    the data folder inside the installation, so an update never touches keys, settings or contacts.
+    The installer asks whom to install for. "Only for me" (the default) needs no administrator rights and goes to
+    %LOCALAPPDATA%\Programs\Golether with all data in the data folder inside the installation. "For all users" goes
+    to C:\Program Files\Golether, and every user keeps the data in %LOCALAPPDATA%\Golether. Either way an update never
+    touches keys, settings or contacts. The installer also registers the golether:// links of invitations.
 
 .PARAMETER Runtime
     The runtime identifier. Default: win-x64.
@@ -32,7 +34,7 @@ param(
     [string] $Runtime = 'win-x64',
     [string] $Configuration = 'Release',
     [switch] $SkipPublish,
-    [string] $UpdateUrlPrefix = 'https://example.org/golether/'
+    [string] $UpdateUrlPrefix = ''
 )
 
 $ErrorActionPreference = 'Stop'
@@ -98,7 +100,12 @@ Write-Host "Установщик: $setup"
 Write-Host ("Размер: {0:N1} МБ" -f ($size / 1MB))
 Write-Host "SHA-256: $hash"
 Write-Host ''
-Write-Host 'Запись для файла обновлений (адрес источника задаётся в приложении на стартовом экране):'
+if (-not $UpdateUrlPrefix) {
+    # Without another address the installer is expected among the assets of the GitHub release of this version.
+    $UpdateUrlPrefix = "https://github.com/DepthRel/Golether/releases/download/$version/"
+}
+
+Write-Host 'Запись для Sources/Apps/Golether.Pages/updates.json (страница проекта и проверка обновлений читают этот файл):'
 $entry = [ordered]@{
     windows = [ordered]@{
         version = $version
@@ -106,6 +113,7 @@ $entry = [ordered]@{
         url     = ($UpdateUrlPrefix.TrimEnd('/') + '/' + (Split-Path -Leaf $setup))
         sha256  = $hash
         size    = $size
+        page    = 'https://depthrel.github.io/Golether/#download'
     }
 }
 $entry | ConvertTo-Json -Depth 4

@@ -2,6 +2,7 @@ using System.Buffers.Text;
 using System.Security.Cryptography;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using Golether.Core.Configuration;
 using Golether.Core.Identity;
 using Golether.Localization;
 using Golether.Core.Networking;
@@ -14,6 +15,11 @@ namespace Golether.Security.Invites;
 /// <remarks>
 /// The link carries the host identifier (pinned by the participant during the TLS handshake), candidate addresses and a
 /// one-time token. A token alone is not enough: the host approves every newcomer.
+/// <para>
+/// One invitation has two spellings with the same content: the key (<see cref="LinkPrefix"/>), which is pasted into
+/// the application, and the web link (<see cref="WebLinkPrefix"/>), which any messenger makes clickable and whose
+/// page hands the key over to the application.
+/// </para>
 /// </remarks>
 public sealed record Invite
 {
@@ -21,6 +27,11 @@ public sealed record Invite
     /// The link prefix.
     /// </summary>
     public const string LinkPrefix = "golether://join/v1/";
+
+    /// <summary>
+    /// The prefix of the web link: the page of the project, with the invitation after the <c>#</c>.
+    /// </summary>
+    public const string WebLinkPrefix = ProjectSite.JoinUrlPrefix;
 
     /// <summary>
     /// The maximum length of a link.
@@ -109,7 +120,31 @@ public sealed record Invite
     }
 
     /// <summary>
-    /// Parses and validates a link.
+    /// Formats the invitation as a web link that opens the application from a browser.
+    /// </summary>
+    /// <returns>The <c>https://…/join/#…</c> link with the same content as <see cref="ToLink"/>.</returns>
+    public string ToWebLink() => WebLinkPrefix + ToLink()[LinkPrefix.Length..];
+
+    /// <summary>
+    /// Tells whether a text looks like an invitation in either spelling, without checking its content.
+    /// </summary>
+    /// <param name="text">The text, for example a command-line argument.</param>
+    /// <returns><see langword="true"/> when the text begins like a key or a web link.</returns>
+    public static bool LooksLikeLink(string? text)
+        => text is not null && FindPrefix(text.AsSpan().Trim()) is not null;
+
+    /// <summary>
+    /// Finds the prefix a link begins with.
+    /// </summary>
+    /// <param name="text">The trimmed link.</param>
+    /// <returns>The prefix, or <see langword="null"/> when the text is no invitation.</returns>
+    private static string? FindPrefix(ReadOnlySpan<char> text)
+        => text.StartsWith(LinkPrefix, StringComparison.Ordinal) ? LinkPrefix
+            : text.StartsWith(WebLinkPrefix, StringComparison.Ordinal) ? WebLinkPrefix
+            : null;
+
+    /// <summary>
+    /// Parses and validates a link: the key or the web link.
     /// </summary>
     /// <param name="link">The link; surrounding whitespace is ignored.</param>
     /// <returns>The invitation.</returns>
@@ -117,7 +152,7 @@ public sealed record Invite
     public static Invite ParseLink(string link)
     {
         var text = (link ?? string.Empty).Trim();
-        if (text.Length > MaxLinkLength || !text.StartsWith(LinkPrefix, StringComparison.Ordinal))
+        if (text.Length > MaxLinkLength || FindPrefix(text) is not { } prefix)
         {
             throw new FormatException(Texts.Get("Invite.Error.NotInvite"));
         }
@@ -125,7 +160,7 @@ public sealed record Invite
         InvitePayload? payload;
         try
         {
-            var bytes = Base64Url.DecodeFromChars(text.AsSpan(LinkPrefix.Length));
+            var bytes = Base64Url.DecodeFromChars(text.AsSpan(prefix.Length));
             payload = JsonSerializer.Deserialize<InvitePayload>(bytes, JsonOptions);
         }
         catch (Exception ex) when (ex is FormatException or JsonException)

@@ -2,6 +2,7 @@ using System.Globalization;
 using System.Net.Http.Json;
 using System.Reflection;
 using System.Security.Cryptography;
+using Golether.Core.Configuration;
 using Golether.Core.Data.Stores;
 using Golether.Localization;
 using Microsoft.Extensions.Logging;
@@ -13,7 +14,8 @@ namespace Golether.UI.Services;
 /// Reads the manifest over HTTPS and verifies the downloaded file.
 /// </summary>
 /// <remarks>
-/// The address is a setting: everybody may host their own builds. Nothing is installed by itself; the user decides.
+/// The manifest of the project page is read unless the settings name another one: everybody may host their own
+/// builds. Nothing is installed by itself: the user is told about the new version and decides.
 /// </remarks>
 public sealed class UpdateService : IUpdateService
 {
@@ -21,6 +23,21 @@ public sealed class UpdateService : IUpdateService
     /// The setting with the address of the manifest.
     /// </summary>
     public const string UrlSetting = "updates.url";
+
+    /// <summary>
+    /// The setting that switches the check off when it is <c>false</c>.
+    /// </summary>
+    public const string EnabledSetting = "updates.check";
+
+    /// <summary>
+    /// The setting with the version the user chose not to be told about again.
+    /// </summary>
+    public const string IgnoredVersionSetting = "updates.ignoredVersion";
+
+    /// <summary>
+    /// The manifest read when the settings name no other.
+    /// </summary>
+    public const string DefaultManifestUrl = ProjectSite.UpdatesUrl;
 
     /// <summary>
     /// The largest manifest and package sizes accepted.
@@ -59,10 +76,18 @@ public sealed class UpdateService : IUpdateService
     public string ManifestUrl { get; set; } = string.Empty;
 
     /// <inheritdoc />
+    public bool Enabled { get; set; } = true;
+
+    /// <summary>
+    /// Gets the manifest that is really read: the one from the settings, or the one of the project page.
+    /// </summary>
+    public string EffectiveManifestUrl => string.IsNullOrWhiteSpace(ManifestUrl) ? DefaultManifestUrl : ManifestUrl.Trim();
+
+    /// <inheritdoc />
     public Version CurrentVersion { get; }
 
     /// <summary>
-    /// Loads the address of the manifest from the settings.
+    /// Loads the address of the manifest and the switch of the check from the settings.
     /// </summary>
     /// <param name="settings">The settings.</param>
     /// <returns>A task that completes when the address is loaded.</returns>
@@ -70,19 +95,21 @@ public sealed class UpdateService : IUpdateService
     {
         ArgumentNullException.ThrowIfNull(settings);
         ManifestUrl = await settings.GetAsync(UrlSetting, CancellationToken.None).ConfigureAwait(false) ?? string.Empty;
+        Enabled = await settings.GetAsync(EnabledSetting, CancellationToken.None).ConfigureAwait(false) != "false";
     }
 
     /// <inheritdoc />
     public async Task<UpdateInfo?> CheckAsync(CancellationToken cancellationToken)
     {
-        if (!IsAllowed(ManifestUrl))
+        var url = EffectiveManifestUrl;
+        if (!Enabled || !IsAllowed(url))
         {
             return null;
         }
 
         try
         {
-            var manifest = await _http.GetFromJsonAsync<UpdateManifest>(ManifestUrl, cancellationToken).ConfigureAwait(false);
+            var manifest = await _http.GetFromJsonAsync<UpdateManifest>(url, cancellationToken).ConfigureAwait(false);
             var release = OperatingSystem.IsWindows() ? manifest?.Windows
                 : OperatingSystem.IsMacOS() ? manifest?.MacOs
                 : manifest?.Linux;
@@ -101,14 +128,18 @@ public sealed class UpdateService : IUpdateService
     /// <param name="release">The release from the manifest.</param>
     /// <param name="current">The running version.</param>
     /// <returns>The release when it is newer and sane, otherwise <see langword="null"/>.</returns>
+    /// <remarks>
+    /// A hash is not required here: telling the user about a version needs none. A hash that is given must be a
+    /// hash, and <see cref="DownloadAsync"/> refuses a release without one.
+    /// </remarks>
     public static UpdateInfo? Choose(UpdateInfo? release, Version current)
     {
         if (release is null
             || !Version.TryParse(release.Version, out var version)
             || version <= current
             || !IsAllowed(release.Url)
-            || release.Sha256 is not { Length: 64 } hash
-            || !hash.All(char.IsAsciiHexDigit)
+            || (release.Page is not null && !IsAllowed(release.Page))
+            || (release.Sha256 is not null && !IsHash(release.Sha256))
             || release.Size is < 0 or > MaxPackageBytes)
         {
             return null;
@@ -117,11 +148,29 @@ public sealed class UpdateService : IUpdateService
         return release;
     }
 
+    /// <summary>
+    /// Returns the page a user is sent to for a release: its own page, or the file itself when it names none.
+    /// </summary>
+    /// <param name="release">The release.</param>
+    /// <returns>The address to open in the browser.</returns>
+    public static string GetPage(UpdateInfo release)
+    {
+        ArgumentNullException.ThrowIfNull(release);
+        return release.Page ?? release.Url;
+    }
+
+    /// <summary>
+    /// Checks that a text is a SHA-256 in hexadecimal.
+    /// </summary>
+    /// <param name="text">The text.</param>
+    /// <returns><see langword="true"/> for 64 hexadecimal digits.</returns>
+    private static bool IsHash(string? text) => text is { Length: 64 } && text.All(char.IsAsciiHexDigit);
+
     /// <inheritdoc />
     public async Task<string> DownloadAsync(UpdateInfo update, string folder, IProgress<double>? progress, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(update);
-        if (Choose(update, new Version(0, 0)) is null)
+        if (Choose(update, new Version(0, 0)) is null || !IsHash(update.Sha256))
         {
             throw new InvalidDataException(Texts.Get("Update.Error.BadManifest"));
         }

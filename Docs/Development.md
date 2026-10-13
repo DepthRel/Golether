@@ -71,7 +71,7 @@ dotnet test --project Tests/Golether.Sync.Tests/Golether.Sync.Tests.csproj  # о
 | Golether: ведущий | собирает `Golether.UI` с зависимостями и запускает с данными в `.vscode/dev/host/data` |
 | Golether: участник | то же с данными в `.vscode/dev/guest/data` |
 | Golether: ведущий + участник | два независимых устройства на одном компьютере; приглашайте по адресу `127.0.0.1` |
-| Сервер рукопожатий | собирает и запускает `Golether.Web.Server` на `127.0.0.1:47900`; впишите этот адрес ведущему в поле «Сервер рукопожатий» ([RendezvousServer.md](RendezvousServer.md)) |
+| Сервер рукопожатий | собирает и запускает `Golether.Web.Server` на `127.0.0.1:47900`; выберите у ведущего «Свой сервер» в переключателе «Гости из других сетей» и впишите этот адрес ([RendezvousServer.md](RendezvousServer.md)) |
 | DbMigrator | собирает и запускает мигратор с аргументами из запроса |
 
 Задачи сборки (`.vscode/tasks.json`) вызывают `dotnet build <csproj>`: собирается только выбранный проект и

@@ -128,9 +128,10 @@ public sealed class ParticipantSession : IAsyncDisposable
 
     /// <summary>
     /// The head start of the direct addresses before a meeting through the rendezvous server begins: in one network
-    /// they answer at once, and a meeting costs a round through the server.
+    /// they answer at once, and a meeting costs a round through the server. A reachable host answers well within
+    /// these seconds; the direct attempts keep running after them, so a slow one still wins when it gets through.
     /// </summary>
-    private static readonly TimeSpan RendezvousHeadStart = TimeSpan.FromSeconds(10);
+    private static readonly TimeSpan RendezvousHeadStart = TimeSpan.FromSeconds(4);
 
     /// <summary>
     /// Guards the mutable view fields.

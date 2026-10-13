@@ -140,12 +140,23 @@
                   <TextBox Text="{Binding NewSessionName}" MaxLength="64" />
                   <TextBlock Classes="label" Text="{loc:Loc Main.Host.Port}" />
                   <NumericUpDown Value="{Binding Port}" Minimum="1024" Maximum="65535" FormatString="0" Width="160" HorizontalAlignment="Left" />
-                  <TextBlock Classes="label" Text="{loc:Loc Main.Host.UpdateSource}" />
-                  <TextBox Text="{Binding UpdateUrl}" MaxLength="300" PlaceholderText="https://…/golether-updates.json"
-                           AutomationProperties.Name="{loc:Loc Main.Host.UpdateSourceName}"
-                           ToolTip.Tip="{loc:Loc Main.Host.UpdateSourceTip}" />
+                  <!--
+                    How guests from other networks get in. One line under the switches says what the chosen way
+                    means; the address field exists only for the way that needs it.
+                  -->
                   <TextBlock Classes="label" Text="{loc:Loc Main.Host.Rendezvous}" />
+                  <StackPanel Orientation="Horizontal" Spacing="18">
+                    <RadioButton GroupName="RendezvousMode" IsChecked="{Binding IsRendezvousAutomatic}" Content="{loc:Loc Main.Host.Route.Automatic}" />
+                    <RadioButton GroupName="RendezvousMode" IsChecked="{Binding IsRendezvousDirect}" Content="{loc:Loc Main.Host.Route.Direct}" />
+                    <RadioButton GroupName="RendezvousMode" IsChecked="{Binding IsRendezvousManual}" Content="{loc:Loc Main.Host.Route.Manual}" />
+                  </StackPanel>
+                  <Panel>
+                    <TextBlock Classes="muted" FontSize="12" TextWrapping="Wrap" Text="{loc:Loc Main.Host.Route.AutomaticNote}" IsVisible="{Binding IsRendezvousAutomatic}" />
+                    <TextBlock Classes="muted" FontSize="12" TextWrapping="Wrap" Text="{loc:Loc Main.Host.Route.DirectNote}" IsVisible="{Binding IsRendezvousDirect}" />
+                    <TextBlock Classes="muted" FontSize="12" TextWrapping="Wrap" Text="{loc:Loc Main.Host.Route.ManualNote}" IsVisible="{Binding IsRendezvousManual}" />
+                  </Panel>
                   <TextBox Text="{Binding RendezvousServer}" MaxLength="260" PlaceholderText="203.0.113.7:47900"
+                           IsVisible="{Binding IsRendezvousManual}"
                            AutomationProperties.Name="{loc:Loc Main.Host.RendezvousName}"
                            ToolTip.Tip="{loc:Loc Main.Host.RendezvousTip}" />
                   <CheckBox IsChecked="{Binding OpenRouterPort}" AutomationProperties.Name="{loc:Loc Main.Host.OpenPortName}">
@@ -810,14 +821,15 @@
                 AutomationProperties.Name="{loc:Loc Main.Update.HideName}" ToolTip.Tip="{loc:Loc Main.Update.HideTip}">
           <TextBlock Text="✕" />
         </Button>
-        <Button DockPanel.Dock="Right" Focusable="False" Classes="accent" Command="{Binding DownloadUpdateCommand}"
-                IsEnabled="{Binding !IsDownloadingUpdate}" Content="{loc:Loc Main.Update.Download}" ToolTip.Tip="{loc:Loc Main.Update.DownloadTip}" />
-        <ProgressBar DockPanel.Dock="Right" Width="120" Margin="12,0" VerticalAlignment="Center" Minimum="0" Maximum="100"
-                     Value="{Binding UpdateProgress}" IsVisible="{Binding IsDownloadingUpdate}" />
-        <StackPanel VerticalAlignment="Center">
+        <Button DockPanel.Dock="Right" Focusable="False" Classes="accent" Command="{Binding OpenUpdatePageCommand}"
+                Content="{loc:Loc Main.Update.Open}" ToolTip.Tip="{loc:Loc Main.Update.OpenTip}" />
+        <StackPanel VerticalAlignment="Center" Margin="0,0,16,0" Spacing="2">
           <TextBlock FontWeight="SemiBold" Foreground="{StaticResource GoletherAccent}" Text="{Binding UpdateText}" />
           <TextBlock Classes="muted" FontSize="12" TextTrimming="CharacterEllipsis" Text="{Binding UpdateNotes}"
-                     ToolTip.Tip="{Binding UpdateNotes}" />
+                     ToolTip.Tip="{Binding UpdateNotes}"
+                     IsVisible="{Binding UpdateNotes, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+          <CheckBox Focusable="False" MinHeight="0" Padding="6,0,0,0" FontSize="12" IsChecked="{Binding IgnoreUpdate}"
+                    Content="{loc:Loc Main.Update.Ignore}" ToolTip.Tip="{loc:Loc Main.Update.IgnoreTip}" />
         </StackPanel>
       </DockPanel>
     </Border>

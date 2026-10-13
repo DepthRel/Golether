@@ -6,9 +6,14 @@ namespace Golether.UI.Services;
 public interface IUpdateService
 {
     /// <summary>
-    /// Gets or sets the address of the update manifest; an empty address switches the check off.
+    /// Gets or sets the address of the update manifest; an empty address means the manifest of the project page.
     /// </summary>
     string ManifestUrl { get; set; }
+
+    /// <summary>
+    /// Gets or sets a value indicating whether new versions are looked for at all.
+    /// </summary>
+    bool Enabled { get; set; }
 
     /// <summary>
     /// Gets the version of this application.

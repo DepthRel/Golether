@@ -82,7 +82,8 @@ public sealed class AppServices : IAsyncDisposable
             TimeProvider.System,
             LoggerFactory,
             Conference,
-            PortMapper.CreateDefault(Http, LoggerFactory));
+            PortMapper.CreateDefault(Http, LoggerFactory),
+            new RendezvousDirectory(Http, provider.GetRequiredService<ISettingsStore>(), logger: LoggerFactory.CreateLogger<RendezvousDirectory>()));
     }
 
     /// <summary>
@@ -220,7 +221,6 @@ public sealed class AppServices : IAsyncDisposable
             Player,
             Diagnostics,
             Updates,
-            Path.Combine(Paths.Root, "updates"),
             new LanguageViewModel(Language, FlagImages.Load, dialogs),
             new AvatarStore(Paths.AvatarsDirectory));
     }

@@ -7,11 +7,14 @@ namespace Golether.Core.Configuration;
 /// </summary>
 /// <remarks>
 /// Golether is self-contained: everything it stores lives in the <c>data</c> folder of its installation, nothing goes
-/// to the user profile. Resolution order:
+/// to the user profile. The one exception is an installation shared by every user of the computer (it sits in a
+/// folder ordinary users cannot write to, such as Program Files): there each user keeps the data in the profile.
+/// Resolution order:
 /// <list type="number">
 /// <item>the <see cref="DataDirectoryVariable"/> environment variable (development and tests);</item>
 /// <item><c>data</c> next to <see cref="InstallationMarkerFileName"/>, looked up from the application directory
-/// upwards (packages keep the application in <c>app</c> or in <c>Golether.app/Contents/MacOS</c>);</item>
+/// upwards (packages keep the application in <c>app</c> or in <c>Golether.app/Contents/MacOS</c>), or the folder
+/// of the user when <see cref="SharedInstallationMarkerFileName"/> lies next to that marker;</item>
 /// <item><c>data</c> in the application directory (a build output without the marker).</item>
 /// </list>
 /// </remarks>
@@ -26,6 +29,12 @@ public sealed class AppDataPaths
     /// The file that marks the root of a packaged installation.
     /// </summary>
     public const string InstallationMarkerFileName = "golether.install";
+
+    /// <summary>
+    /// The file an installer puts next to <see cref="InstallationMarkerFileName"/> when the installation serves every
+    /// user of the computer: the data then lives in the profile of each user instead of the installation.
+    /// </summary>
+    public const string SharedInstallationMarkerFileName = "golether.shared";
 
     /// <summary>
     /// The name of the data folder inside the installation.
@@ -114,8 +123,13 @@ public sealed class AppDataPaths
     /// <see langword="null"/>.</param>
     /// <param name="getEnvironmentVariable">Reads environment variables; <see cref="Environment.GetEnvironmentVariable(string)"/>
     /// when <see langword="null"/>.</param>
+    /// <param name="getUserDirectory">Returns the folder of the user for a shared installation;
+    /// <see cref="GetUserDirectory"/> when <see langword="null"/>.</param>
     /// <returns>The paths.</returns>
-    public static AppDataPaths Resolve(string? applicationDirectory = null, Func<string, string?>? getEnvironmentVariable = null)
+    public static AppDataPaths Resolve(
+        string? applicationDirectory = null,
+        Func<string, string?>? getEnvironmentVariable = null,
+        Func<string>? getUserDirectory = null)
     {
         getEnvironmentVariable ??= Environment.GetEnvironmentVariable;
         var overridden = getEnvironmentVariable(DataDirectoryVariable);
@@ -125,7 +139,9 @@ public sealed class AppDataPaths
         }
 
         var root = FindInstallationRoot(applicationDirectory ?? AppContext.BaseDirectory);
-        return new AppDataPaths(Path.Combine(root, DataFolderName));
+        return File.Exists(Path.Combine(root, SharedInstallationMarkerFileName))
+            ? new AppDataPaths((getUserDirectory ?? GetUserDirectory)())
+            : new AppDataPaths(Path.Combine(root, DataFolderName));
     }
 
     /// <summary>
@@ -151,10 +167,17 @@ public sealed class AppDataPaths
     }
 
     /// <summary>
-    /// Returns the per-user directory where earlier versions kept the data.
+    /// Returns the per-user directory where earlier versions kept the data; the same directory serves a shared
+    /// installation, so nothing is moved there.
     /// </summary>
     /// <returns>The directory; it may not exist.</returns>
-    public static string GetLegacyUserDirectory()
+    public static string GetLegacyUserDirectory() => GetUserDirectory();
+
+    /// <summary>
+    /// Returns the directory of Golether in the profile of the current user.
+    /// </summary>
+    /// <returns>The directory; it may not exist.</returns>
+    public static string GetUserDirectory()
     {
         var baseDir = OperatingSystem.IsMacOS()
             ? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.Personal), "Library", "Application Support")

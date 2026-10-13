@@ -2,6 +2,7 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Markup.Xaml;
+using Avalonia.Threading;
 using Golether.Localization;
 using Golether.UI.Services;
 using Golether.UI.Views;
@@ -20,6 +21,17 @@ public sealed class App : Application
     /// </summary>
     private AppServices? _services;
 
+    /// <summary>
+    /// Takes links the system hands over while the application runs, or <see langword="null"/> until the main
+    /// window is ready.
+    /// </summary>
+    private Action<string[]>? _external;
+
+    /// <summary>
+    /// The links the system handed over before the main window was ready. Used on the UI thread only.
+    /// </summary>
+    private readonly List<string[]> _waiting = [];
+
     /// <inheritdoc />
     public override void Initialize() => AvaloniaXamlLoader.Load(this);
 
@@ -35,6 +47,26 @@ public sealed class App : Application
             // failure speak the language of the operating system.
             var localizer = Texts.Localizer;
             localizer.SetLanguage(localizer.Detect(System.Globalization.CultureInfo.CurrentUICulture).Code);
+            // macOS does not put a clicked link on the command line: it sends an event to the running application.
+            if (this.TryGetFeature<IActivatableLifetime>() is { } activatable)
+            {
+                activatable.Activated += (_, e) =>
+                {
+                    if (e is ProtocolActivatedEventArgs { Uri: { } uri })
+                    {
+                        string[] link = [uri.OriginalString];
+                        if (_external is { } external)
+                        {
+                            external(link);
+                        }
+                        else
+                        {
+                            _waiting.Add(link);
+                        }
+                    }
+                };
+            }
+
             var splash = new SplashWindow();
             splash.Show();
             _ = StartAsync(desktop, splash);
@@ -75,7 +107,7 @@ public sealed class App : Application
             services.SetDialogs(new AvaloniaDialogService(window));
             var viewModel = services.CreateMainViewModel();
             window.Initialize(viewModel, services.Player, services.Conference);
-            var fileToShow = desktop.Args?.FirstOrDefault(a => !a.StartsWith('-') && File.Exists(a));
+            var arguments = desktop.Args ?? [];
             window.Opened += async (_, _) =>
             {
                 // The window is drawn by now: the splash goes away without a gap.
@@ -83,11 +115,18 @@ public sealed class App : Application
                 try
                 {
                     await viewModel.LoadAsync();
-                    if (fileToShow is not null)
+
+                    // What this start was given (an invitation link, a video file), then whatever later starts and
+                    // the system hand over while the application runs.
+                    await viewModel.OpenExternalAsync(arguments);
+                    _external = later => Dispatcher.UIThread.Post(() => _ = OpenExternalAsync(viewModel, later, log));
+                    Program.Instance?.SetHandler(_external);
+                    foreach (var waiting in _waiting)
                     {
-                        // "Open with Golether": host a session and show the file right away.
-                        await viewModel.HostFileAsync(Path.GetFullPath(fileToShow));
+                        _external(waiting);
                     }
+
+                    _waiting.Clear();
                 }
                 catch (Exception ex) when (ex is not OutOfMemoryException)
                 {
@@ -106,6 +145,26 @@ public sealed class App : Application
             // Nobody waits for this method: without the message the splash would stay on the screen for ever.
             log.LogCritical("The main window could not be opened: {Exception}", ex);
             ShowStartFailure(desktop, splash, ex);
+        }
+    }
+
+    /// <summary>
+    /// Gives arguments that arrived from outside to the main window; a failure goes to the log instead of ending
+    /// the application.
+    /// </summary>
+    /// <param name="viewModel">The main view model.</param>
+    /// <param name="arguments">The arguments.</param>
+    /// <param name="log">The logger.</param>
+    /// <returns>A task that completes when the arguments were dealt with.</returns>
+    private static async Task OpenExternalAsync(ViewModels.MainWindowViewModel viewModel, string[] arguments, ILogger log)
+    {
+        try
+        {
+            await viewModel.OpenExternalAsync(arguments);
+        }
+        catch (Exception ex) when (ex is not OutOfMemoryException)
+        {
+            log.LogError(ex, "What the system handed over could not be opened");
         }
     }
 

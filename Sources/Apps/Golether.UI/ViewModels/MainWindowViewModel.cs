@@ -10,6 +10,7 @@ using Golether.Core.Playback;
 using Golether.Localization;
 using Golether.Media.Conference;
 using Golether.Media.Player;
+using Golether.Security.Invites;
 using Golether.Session;
 using Golether.Sync.Protocol;
 using Golether.Transports.Tls;
@@ -95,6 +96,11 @@ public sealed partial class MainWindowViewModel : ObservableObject
     /// The setting with the rendezvous server of hosted sessions (<c>host:port</c>, empty for none).
     /// </summary>
     public const string RendezvousServerSetting = "network.rendezvousServer";
+
+    /// <summary>
+    /// The setting with the way hosted sessions find their rendezvous server: a name of <see cref="Services.RendezvousMode"/>.
+    /// </summary>
+    public const string RendezvousModeSetting = "network.rendezvousMode";
 
     /// <summary>
     /// The maximum number of event feed entries.
@@ -187,11 +193,6 @@ public sealed partial class MainWindowViewModel : ObservableObject
     private readonly IUpdateService? _updates;
 
     /// <summary>
-    /// The folder for downloaded updates.
-    /// </summary>
-    private readonly string _updateFolder;
-
-    /// <summary>
     /// The release offered to the user, or <see langword="null"/>.
     /// </summary>
     private UpdateInfo? _update;
@@ -207,6 +208,11 @@ public sealed partial class MainWindowViewModel : ObservableObject
     private CancellationTokenSource? _joinCancellation;
 
     /// <summary>
+    /// Whether the user is being asked about an invitation that came from outside.
+    /// </summary>
+    private bool _offeringInvite;
+
+    /// <summary>
     /// Initializes a new instance of the <see cref="MainWindowViewModel"/> class.
     /// </summary>
     /// <param name="session">The session service.</param>
@@ -220,7 +226,6 @@ public sealed partial class MainWindowViewModel : ObservableObject
     /// <param name="playerControls">The volume of the player on this device, or <see langword="null"/>.</param>
     /// <param name="diagnostics">Saves diagnostic reports, or <see langword="null"/> when they are not offered.</param>
     /// <param name="updates">Looks for new versions, or <see langword="null"/> when updates are not offered.</param>
-    /// <param name="updateFolder">The folder for downloaded updates.</param>
     /// <param name="language">The language selector, or <see langword="null"/> when the language cannot be chosen.</param>
     /// <param name="avatarStore">Keeps the chosen avatar, or <see langword="null"/> when avatars are not offered.</param>
     public MainWindowViewModel(
@@ -235,7 +240,6 @@ public sealed partial class MainWindowViewModel : ObservableObject
         ILocalPlayerControls? playerControls = null,
         IDiagnosticsWriter? diagnostics = null,
         IUpdateService? updates = null,
-        string? updateFolder = null,
         LanguageViewModel? language = null,
         IAvatarStore? avatarStore = null)
     {
@@ -273,7 +277,6 @@ public sealed partial class MainWindowViewModel : ObservableObject
         _resume = new ResumeTracker(_settings);
         _diagnostics = diagnostics;
         _updates = updates;
-        _updateFolder = updateFolder ?? Path.Combine(Path.GetTempPath(), "golether-updates");
         Chat = new ChatViewModel(_session, _dispatcher);
         Drawing = new DrawingViewModel(_session, _dispatcher);
         conference.MuteChanged += (_, _) => _dispatcher.Post(() =>
@@ -783,7 +786,11 @@ public sealed partial class MainWindowViewModel : ObservableObject
             IsLayoutResizable,
             SetLayoutResizable,
             AlwaysShowBars,
-            SetAlwaysShowBars);
+            SetAlwaysShowBars,
+            canChooseUpdates: _updates is not null,
+            ChecksUpdates,
+            UpdateUrl,
+            SetUpdateSource);
 
         // Reading the device lists asks the media backend and takes a moment, so it runs while the window is already
         // on screen. Refilling the lists empties the boxes, so the choice is put back once the lists are complete.
@@ -970,7 +977,64 @@ public sealed partial class MainWindowViewModel : ObservableObject
     }
 
     /// <summary>
-    /// Gets or sets the rendezvous server of hosted sessions as <c>host:port</c>, or an empty string for none.
+    /// Gets or sets how hosted sessions find their rendezvous server.
+    /// </summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(IsRendezvousAutomatic), nameof(IsRendezvousDirect), nameof(IsRendezvousManual))]
+    public partial RendezvousMode RendezvousMode { get; set; } = RendezvousMode.Automatic;
+
+    /// <summary>
+    /// Passes the way of finding the rendezvous server to the sessions and remembers it.
+    /// </summary>
+    /// <param name="value">The new value.</param>
+    partial void OnRendezvousModeChanged(RendezvousMode value)
+    {
+        _session.RendezvousMode = value;
+        _ = _settings.SetAsync(RendezvousModeSetting, value.ToString(), CancellationToken.None);
+    }
+
+    /// <summary>
+    /// Gets or sets a value indicating whether the application finds the rendezvous server by itself.
+    /// </summary>
+    public bool IsRendezvousAutomatic
+    {
+        get => RendezvousMode == RendezvousMode.Automatic;
+        set => ChooseRendezvousMode(RendezvousMode.Automatic, value);
+    }
+
+    /// <summary>
+    /// Gets or sets a value indicating whether hosted sessions use no rendezvous server.
+    /// </summary>
+    public bool IsRendezvousDirect
+    {
+        get => RendezvousMode == RendezvousMode.Direct;
+        set => ChooseRendezvousMode(RendezvousMode.Direct, value);
+    }
+
+    /// <summary>
+    /// Gets or sets a value indicating whether hosted sessions use the rendezvous server typed by the user.
+    /// </summary>
+    public bool IsRendezvousManual
+    {
+        get => RendezvousMode == RendezvousMode.Manual;
+        set => ChooseRendezvousMode(RendezvousMode.Manual, value);
+    }
+
+    /// <summary>
+    /// Takes the choice of one of the three switches; a switch that was only released chooses nothing.
+    /// </summary>
+    /// <param name="mode">The mode of the switch.</param>
+    /// <param name="chosen">Whether the switch was turned on.</param>
+    private void ChooseRendezvousMode(RendezvousMode mode, bool chosen)
+    {
+        if (chosen)
+        {
+            RendezvousMode = mode;
+        }
+    }
+
+    /// <summary>
+    /// Gets or sets the rendezvous server typed by the user as <c>host:port</c>, or an empty string for none.
     /// </summary>
     [ObservableProperty]
     public partial string RendezvousServer { get; set; } = string.Empty;
@@ -1283,10 +1347,18 @@ public sealed partial class MainWindowViewModel : ObservableObject
 
         OpenRouterPort = await _settings.GetAsync(OpenRouterPortSetting, CancellationToken.None) != "false";
         RendezvousServer = await _settings.GetAsync(RendezvousServerSetting, CancellationToken.None) ?? string.Empty;
-        UpdateUrl = await _settings.GetAsync(UpdateService.UrlSetting, CancellationToken.None) ?? string.Empty;
+
+        // Before the choice existed, a typed address meant "use this server" and an empty one meant none; a device
+        // that has an address keeps using it, everybody else gets the automatic search.
+        RendezvousMode = Enum.TryParse<RendezvousMode>(await _settings.GetAsync(RendezvousModeSetting, CancellationToken.None), out var mode)
+            && Enum.IsDefined(mode)
+                ? mode
+                : RendezvousServer.Length > 0 ? RendezvousMode.Manual : RendezvousMode.Automatic;
+        _session.RendezvousMode = RendezvousMode;
         if (_updates is not null)
         {
-            _updates.ManifestUrl = UpdateUrl;
+            _updates.ManifestUrl = await _settings.GetAsync(UpdateService.UrlSetting, CancellationToken.None) ?? string.Empty;
+            _updates.Enabled = await _settings.GetAsync(UpdateService.EnabledSetting, CancellationToken.None) != "false";
             _ = CheckUpdatesAsync();
         }
 
@@ -1349,6 +1421,94 @@ public sealed partial class MainWindowViewModel : ObservableObject
 
             await _session.ShareMediaAsync(path, token);
         });
+    }
+
+    /// <summary>
+    /// Takes what the system handed to the application: the arguments of this start or of a later one that found
+    /// this copy running. An invitation is offered to the user, a video file is shown.
+    /// </summary>
+    /// <param name="arguments">The command-line arguments; they are not trusted.</param>
+    /// <returns>A task that completes when the arguments were dealt with.</returns>
+    public async Task OpenExternalAsync(IReadOnlyList<string> arguments)
+    {
+        ArgumentNullException.ThrowIfNull(arguments);
+        if (arguments.FirstOrDefault(Invite.LooksLikeLink) is { } link)
+        {
+            _dialogs.BringToFront();
+            await OfferInviteAsync(link);
+        }
+        else if (arguments.FirstOrDefault(a => !a.StartsWith('-') && File.Exists(a)) is { } file
+            && !IsBusy && (!_session.IsActive || _session.IsHost))
+        {
+            // "Open with Golether": host a session and show the file right away.
+            _dialogs.BringToFront();
+            await HostFileAsync(Path.GetFullPath(file));
+        }
+    }
+
+    /// <summary>
+    /// Offers to join the session of an invitation that came from outside (a link opened in the browser). Nothing
+    /// is joined without a yes: any page can open such a link. In a session the user is asked whether to leave it.
+    /// </summary>
+    /// <param name="link">The invitation: the key or the web link.</param>
+    /// <returns>A task that completes when the user declined or the join ended.</returns>
+    public async Task OfferInviteAsync(string link)
+    {
+        if (_offeringInvite)
+        {
+            // One question at a time: a second link while the first is being answered is dropped.
+            return;
+        }
+
+        _offeringInvite = true;
+        try
+        {
+            Invite invite;
+            try
+            {
+                invite = Invite.ParseLink(link);
+            }
+            catch (FormatException ex)
+            {
+                await _dialogs.ShowErrorAsync(Texts.Get("Main.Link.Bad.Title"), ex.Message);
+                return;
+            }
+
+            if (IsBusy)
+            {
+                await _dialogs.ShowMessageAsync(Texts.Get("Main.Link.Busy.Title"), Texts.Get("Main.Link.Busy.Text"));
+                return;
+            }
+
+            // The names come from the link, so they are what its author wrote; the verification code shown after
+            // joining is what proves who the host is.
+            var current = _session.IsActive ? _session.GetSnapshot()?.SessionName ?? string.Empty : null;
+            var agreed = current is null
+                ? await _dialogs.ConfirmAsync(
+                    Texts.Get("Main.Link.Join.Title"),
+                    Texts.Format("Main.Link.Join.Text", invite.SessionName, invite.HostName),
+                    Texts.Get("Main.Link.Join.Accept"))
+                : await _dialogs.ConfirmAsync(
+                    Texts.Get("Main.Link.Switch.Title"),
+                    Texts.Format("Main.Link.Switch.Text", current, invite.SessionName, invite.HostName),
+                    Texts.Get("Main.Link.Switch.Accept"));
+            if (!agreed || IsBusy)
+            {
+                return;
+            }
+
+            if (_session.IsActive)
+            {
+                await LeaveAsync();
+            }
+
+            InviteLink = link.Trim();
+            await JoinAsync();
+        }
+        finally
+        {
+            _offeringInvite = false;
+        }
     }
 
     /// <summary>
@@ -1564,12 +1724,6 @@ public sealed partial class MainWindowViewModel : ObservableObject
     public bool CanSaveReport => _diagnostics is not null;
 
     /// <summary>
-    /// Gets or sets the address of the update source; an empty address switches the check off.
-    /// </summary>
-    [ObservableProperty]
-    public partial string UpdateUrl { get; set; } = string.Empty;
-
-    /// <summary>
     /// Gets or sets the offer to update, or an empty string.
     /// </summary>
     [ObservableProperty]
@@ -1583,16 +1737,11 @@ public sealed partial class MainWindowViewModel : ObservableObject
     public partial string UpdateNotes { get; set; } = string.Empty;
 
     /// <summary>
-    /// Gets or sets the progress of the download, 0–100.
+    /// Gets or sets a value indicating whether the offered version is not to be offered again once the offer is
+    /// closed.
     /// </summary>
     [ObservableProperty]
-    public partial double UpdateProgress { get; set; }
-
-    /// <summary>
-    /// Gets or sets a value indicating whether the update is being downloaded.
-    /// </summary>
-    [ObservableProperty]
-    public partial bool IsDownloadingUpdate { get; set; }
+    public partial bool IgnoreUpdate { get; set; }
 
     /// <summary>
     /// Gets a value indicating whether a newer version is offered.
@@ -1600,23 +1749,37 @@ public sealed partial class MainWindowViewModel : ObservableObject
     public bool HasUpdate => UpdateText.Length > 0;
 
     /// <summary>
-    /// Stores the address of the update source and looks there at once.
+    /// Gets a value indicating whether new versions are looked for.
     /// </summary>
-    /// <param name="value">The new address.</param>
-    partial void OnUpdateUrlChanged(string value)
+    public bool ChecksUpdates => _updates?.Enabled == true;
+
+    /// <summary>
+    /// Gets the address of the update source typed by the user, or an empty string for the project page.
+    /// </summary>
+    public string UpdateUrl => _updates?.ManifestUrl ?? string.Empty;
+
+    /// <summary>
+    /// Stores the choices of the settings window about updates and looks for a new version at once.
+    /// </summary>
+    /// <param name="enabled">Whether new versions are looked for.</param>
+    /// <param name="url">The address of the update source, or an empty string for the project page.</param>
+    public void SetUpdateSource(bool enabled, string url)
     {
-        if (_updates is null || value == _updates.ManifestUrl)
+        ArgumentNullException.ThrowIfNull(url);
+        if (_updates is null)
         {
             return;
         }
 
-        _updates.ManifestUrl = value.Trim();
+        _updates.Enabled = enabled;
+        _updates.ManifestUrl = url.Trim();
+        _ = _settings.SetAsync(UpdateService.EnabledSetting, enabled ? "true" : "false", CancellationToken.None);
         _ = _settings.SetAsync(UpdateService.UrlSetting, _updates.ManifestUrl, CancellationToken.None);
         _ = CheckUpdatesAsync();
     }
 
     /// <summary>
-    /// Asks the update source whether a newer version exists.
+    /// Asks the update source whether a newer version exists. A version the user chose to ignore is not offered.
     /// </summary>
     /// <returns>A task that completes when the answer is shown.</returns>
     public async Task CheckUpdatesAsync()
@@ -1627,49 +1790,43 @@ public sealed partial class MainWindowViewModel : ObservableObject
         }
 
         var found = await updates.CheckAsync(CancellationToken.None);
+        if (found is not null && found.Version == await _settings.GetAsync(UpdateService.IgnoredVersionSetting, CancellationToken.None))
+        {
+            found = null;
+        }
+
         _update = found;
-        UpdateText = found is null
-            ? string.Empty
-            : Texts.Format("Main.Update.Available", found.Version) + (UpdateService.DescribeSize(found.Size) is { Length: > 0 } size ? " · " + size : string.Empty);
+        IgnoreUpdate = false;
+        UpdateText = found is null ? string.Empty : Texts.Format("Main.Update.Available", found.Version);
         UpdateNotes = found?.Notes ?? string.Empty;
     }
 
     /// <summary>
-    /// Downloads the offered version, checks its hash and shows where it is.
+    /// Opens the page with the downloads of the offered version in the browser. Nothing is installed by itself.
     /// </summary>
-    /// <returns>A task that completes when the file is downloaded.</returns>
+    /// <returns>A task that completes when the browser was asked.</returns>
     [RelayCommand]
-    private async Task DownloadUpdateAsync()
+    private async Task OpenUpdatePageAsync()
     {
-        if (_updates is not { } updates || _update is not { } update || IsDownloadingUpdate)
+        if (_update is { } update)
         {
-            return;
-        }
-
-        IsDownloadingUpdate = true;
-        UpdateProgress = 0;
-        try
-        {
-            var progress = new Progress<double>(value => _dispatcher.Post(() => UpdateProgress = value * 100));
-            var path = await updates.DownloadAsync(update, _updateFolder, progress, CancellationToken.None);
-            UpdateText = string.Empty;
-            await _dialogs.ShowMessageAsync(Texts.Get("Main.Update.Downloaded.Title"), Texts.Format("Main.Update.Downloaded.Text", path));
-        }
-        catch (Exception ex) when (ex is HttpRequestException or IOException or InvalidDataException or TaskCanceledException or UnauthorizedAccessException)
-        {
-            await _dialogs.ShowErrorAsync(Texts.Get("Main.Update.Failed.Title"), ex.Message);
-        }
-        finally
-        {
-            IsDownloadingUpdate = false;
+            await _dialogs.OpenLinkAsync(UpdateService.GetPage(update));
         }
     }
 
     /// <summary>
-    /// Hides the offer until the next check.
+    /// Hides the offer until the next start, or for good when the user chose to ignore this version.
     /// </summary>
     [RelayCommand]
-    private void DismissUpdate() => UpdateText = string.Empty;
+    private void DismissUpdate()
+    {
+        if (IgnoreUpdate && _update is { } update)
+        {
+            _ = _settings.SetAsync(UpdateService.IgnoredVersionSetting, update.Version, CancellationToken.None);
+        }
+
+        UpdateText = string.Empty;
+    }
 
     /// <summary>
     /// Saves a report about this device and the session: what is installed, how the session goes and the tail of the

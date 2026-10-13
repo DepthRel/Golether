@@ -29,6 +29,14 @@ public sealed class UpdateServiceTests
         Assert.Null(UpdateService.Choose(good with { Size = UpdateService.MaxPackageBytes + 1 }, current));
         Assert.Null(UpdateService.Choose(null, current));
         Assert.NotNull(UpdateService.Choose(good with { Url = "http://127.0.0.1:8080/x.exe" }, current));
+
+        // Telling about a version needs no hash; the page the user is sent to must be a safe address too.
+        var plain = good with { Sha256 = null, Size = 0 };
+        Assert.Equal(plain, UpdateService.Choose(plain, current));
+        Assert.Equal(plain.Url, UpdateService.GetPage(plain));
+        Assert.Equal("https://example.org/download", UpdateService.GetPage(plain with { Page = "https://example.org/download" }));
+        Assert.Null(UpdateService.Choose(plain with { Page = "javascript:alert(1)" }, current));
+        Assert.Null(UpdateService.Choose(plain with { Page = "http://example.org/download" }, current));
     }
 
     /// <summary>
@@ -56,12 +64,43 @@ public sealed class UpdateServiceTests
         Assert.NotNull(found);
         Assert.Equal(("9.9.9", "Новое"), (found.Version, found.Notes));
 
-        // An empty or broken address switches the check off; a broken answer is not an error either.
+        // Without an address of its own the service reads the manifest of the project page.
         service.ManifestUrl = string.Empty;
+        Assert.Equal(UpdateService.DefaultManifestUrl, service.EffectiveManifestUrl);
+        Assert.NotNull(await service.CheckAsync(token));
+
+        // The check can be switched off, and a broken address or a broken answer is not an error either.
+        service.Enabled = false;
+        Assert.Null(await service.CheckAsync(token));
+        service.Enabled = true;
+        service.ManifestUrl = "ftp://example.org/updates.json";
         Assert.Null(await service.CheckAsync(token));
         service.ManifestUrl = "https://example.org/updates.json";
         var broken = new UpdateService(new HttpClient(new StubHandler("<html>")), new Version(0, 1, 0)) { ManifestUrl = service.ManifestUrl };
         Assert.Null(await broken.CheckAsync(token));
+    }
+
+    /// <summary>
+    /// A release may be announced without a hash, but it is never downloaded without one: there would be nothing to
+    /// check the file against.
+    /// </summary>
+    /// <returns>A task that completes when the test is done.</returns>
+    [Fact]
+    public async Task Download_RefusesAReleaseWithoutHash()
+    {
+        var folder = Directory.CreateTempSubdirectory("golether-update-");
+        try
+        {
+            var service = new UpdateService(new HttpClient(new StubHandler("установщик")), new Version(0, 1, 0));
+            var update = new UpdateInfo("0.2.0", null, "https://example.org/golether-0.2.0.exe", null, 0);
+
+            await Assert.ThrowsAsync<InvalidDataException>(() => service.DownloadAsync(update, folder.FullName, null, TestContext.Current.CancellationToken));
+            Assert.Empty(folder.GetFiles());
+        }
+        finally
+        {
+            folder.Delete(recursive: true);
+        }
     }
 
     /// <summary>

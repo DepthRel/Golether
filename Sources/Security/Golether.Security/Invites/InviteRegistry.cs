@@ -18,9 +18,16 @@ public sealed class InviteRegistry
     public static readonly TimeSpan DefaultLifetime = TimeSpan.FromMinutes(15);
 
     /// <summary>
-    /// The maximum lifetime of an invitation: 7 days.
+    /// The lifetime of the web link of an invitation: 15 minutes. A link is clicked right away, so it has no reason
+    /// to live longer.
     /// </summary>
-    public static readonly TimeSpan MaxLifetime = TimeSpan.FromDays(7);
+    public static readonly TimeSpan WebLinkLifetime = TimeSpan.FromMinutes(15);
+
+    /// <summary>
+    /// The maximum lifetime of an invitation: 1 hour. The lifetime limits only the moment of joining: a participant
+    /// who was admitted stays in the session after the invitation expired.
+    /// </summary>
+    public static readonly TimeSpan MaxLifetime = TimeSpan.FromHours(1);
 
     /// <summary>
     /// Expiry times by token hash.
@@ -67,12 +74,15 @@ public sealed class InviteRegistry
     /// <param name="lifetime">The lifetime; <see cref="DefaultLifetime"/> when <see langword="null"/>.</param>
     /// <returns>The token and its expiry time.</returns>
     /// <exception cref="ArgumentOutOfRangeException">The lifetime is not positive or exceeds <see cref="MaxLifetime"/>.</exception>
+    /// <remarks>
+    /// The same lifetime is written into the invitation, so the host and the participant agree on the moment it ends.
+    /// </remarks>
     public (string Token, DateTimeOffset ExpiresAt) Issue(TimeSpan? lifetime = null)
     {
         var effective = lifetime ?? DefaultLifetime;
         if (effective <= TimeSpan.Zero || effective > MaxLifetime)
         {
-            throw new ArgumentOutOfRangeException(nameof(lifetime), "The invitation lifetime must be between 1 second and 7 days.");
+            throw new ArgumentOutOfRangeException(nameof(lifetime), "The invitation lifetime must be between 1 second and 1 hour.");
         }
 
         var token = Invite.CreateToken();

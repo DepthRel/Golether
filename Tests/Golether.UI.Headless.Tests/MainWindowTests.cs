@@ -1263,6 +1263,85 @@ public sealed class MainWindowTests
     }
 
     /// <summary>
+    /// The start screen offers three ways to let guests from other networks in, and the field for a server address
+    /// is there only for the way that needs it.
+    /// </summary>
+    /// <returns>A task that completes when the test is done.</returns>
+    [Fact]
+    public Task StartScreen_ShowsTheServerFieldOnlyForAnOwnServer() => RunAsync(async fixture =>
+    {
+        fixture.Sessions.GetSnapshot().Returns((SessionSnapshot?)null);
+        fixture.ViewModel.Refresh();
+        await fixture.Settle();
+        var field = fixture.Window.GetVisualDescendants().OfType<TextBox>().Single(box => box.PlaceholderText == "203.0.113.7:47900");
+        var switches = fixture.Window.GetVisualDescendants().OfType<RadioButton>().Where(button => button.GroupName == "RendezvousMode").ToArray();
+
+        Assert.Equal(3, switches.Length);
+        Assert.True(switches[0].IsChecked);
+        Assert.False(field.IsEffectivelyVisible);
+        SaveFrame(fixture.Window, "start-rendezvous-automatic");
+
+        switches[2].IsChecked = true;
+        await fixture.Settle();
+
+        Assert.Equal(RendezvousMode.Manual, fixture.ViewModel.RendezvousMode);
+        Assert.False(switches[0].IsChecked);
+        Assert.True(field.IsEffectivelyVisible);
+        Assert.True(IsInside(field, fixture.Window));
+        SaveFrame(fixture.Window, "start-rendezvous-manual");
+
+        switches[1].IsChecked = true;
+        await fixture.Settle();
+
+        Assert.Equal(RendezvousMode.Direct, fixture.ViewModel.RendezvousMode);
+        Assert.False(field.IsEffectivelyVisible);
+    });
+
+    /// <summary>
+    /// The invitation window shows the link to click and the key to paste; the rarely needed extra address is folded
+    /// away until asked for.
+    /// </summary>
+    /// <returns>A task that completes when the test is done.</returns>
+    [Fact]
+    public Task InviteDialog_ShowsTheLinkAndTheKey() => RunAsync(async fixture =>
+    {
+        fixture.Sessions.CreateInvite(default!, default).ReturnsForAnyArgs(call => new Golether.Security.Invites.Invite
+        {
+            HostPeerId = Host,
+            HostName = "Вы",
+            SessionName = "Вечер кино",
+            Endpoints = [Golether.Core.Networking.PeerEndpoint.Parse("192.168.1.2:47800")],
+            Token = Golether.Security.Invites.Invite.CreateToken(),
+            ExpiresAt = DateTimeOffset.UtcNow + call.Arg<TimeSpan>(),
+        });
+        var viewModel = new Golether.UI.ViewModels.Dialogs.InviteDialogViewModel(fixture.Sessions, Substitute.For<IDialogService>());
+        viewModel.Regenerate();
+        var dialog = new Golether.UI.Views.Dialogs.InviteDialog { DataContext = viewModel };
+        dialog.Show();
+        try
+        {
+            await fixture.Settle();
+            var boxes = dialog.GetVisualDescendants().OfType<TextBox>().Where(box => box.IsEffectivelyVisible).ToArray();
+
+            Assert.Equal(2, boxes.Length);
+            Assert.StartsWith("https://", boxes[0].Text, StringComparison.Ordinal);
+            Assert.StartsWith("golether://join/v1/", boxes[1].Text, StringComparison.Ordinal);
+            Assert.All(dialog.GetVisualDescendants().OfType<Button>().Where(button => button.IsEffectivelyVisible), button => Assert.True(IsInside(button, dialog)));
+            SaveFrame(dialog, "invite-dialog");
+
+            dialog.GetVisualDescendants().OfType<Expander>().Single().IsExpanded = true;
+            await fixture.Settle();
+
+            Assert.Equal(3, dialog.GetVisualDescendants().OfType<TextBox>().Count(box => box.IsEffectivelyVisible));
+            SaveFrame(dialog, "invite-dialog-advanced");
+        }
+        finally
+        {
+            dialog.Close();
+        }
+    });
+
+    /// <summary>
     /// Saves the rendered window for a visual check when <c>GOLETHER_TEST_SCREENSHOTS</c> names a folder.
     /// </summary>
     /// <param name="window">The window.</param>

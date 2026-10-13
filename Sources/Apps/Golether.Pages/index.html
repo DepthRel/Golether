@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <!-- Nothing is loaded from other servers and nothing inline runs: the page is exactly the files of this folder. -->
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src 'self'; style-src 'self'; script-src 'self'; connect-src 'self'; base-uri 'none'; form-action 'none'">
+  <meta name="referrer" content="no-referrer">
+  <title>Golether: watch movies together, in sync</title>
+  <meta name="description" content="Golether is a free app for watching a video file together: everyone sees the same frame at the same moment, with webcams and voice on the side.">
+  <meta property="og:title" content="Golether: watch movies together, in sync">
+  <meta property="og:description" content="One of you plays a film. Everyone sees the same frame at the same moment, with faces and voices right next to it.">
+  <meta property="og:image" content="https://depthrel.github.io/Golether/assets/screenshot.jpg">
+  <link rel="icon" href="assets/golether.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="assets/site.css">
+</head>
+<body>
+  <header class="top">
+    <div class="wrap">
+      <a class="brand" href="./"><img src="assets/golether.svg" alt=""><span>gole<b>ther</b></span></a>
+      <nav>
+        <a class="hide-small" href="#join" data-t="nav.join">How to join</a>
+        <a class="hide-small" href="#host" data-t="nav.host">How to invite</a>
+        <a href="#download" data-t="nav.download">Download</a>
+        <span class="lang" role="group" aria-label="Language">
+          <button type="button" data-lang="en" aria-pressed="true">EN</button>
+          <button type="button" data-lang="ru" aria-pressed="false">RU</button>
+        </span>
+      </nav>
+    </div>
+  </header>
+
+  <main>
+    <div class="hero">
+      <div class="wrap">
+        <h1 data-t="hero.title">Watch movies <em>together</em>, wherever you are</h1>
+        <p class="lead" data-t="hero.lead">One of you plays a film. Everyone sees the same frame at the same moment, with faces and voices right next to it.</p>
+        <div class="actions">
+          <a class="btn accent" id="hero-download" href="#download"><span data-t="hero.download">Download Golether</span></a>
+          <a class="btn" href="#join" data-t="hero.how">I have an invitation</a>
+        </div>
+        <div class="version"><span data-t="hero.free">Free and open source · Windows, Linux, macOS</span></div>
+
+        <div class="shot">
+          <img src="assets/screenshot.jpg" width="1600" height="999" alt="The Golether window: a film in the player, the participants and the chat on the right" data-t-alt="hero.shot">
+        </div>
+
+        <!-- Two viewers, one moment: the playheads run together. -->
+        <div class="sync" aria-hidden="true">
+          <div class="sync-rows">
+            <span class="who who-a">J</span>
+            <span class="who who-b">K</span>
+          </div>
+          <div class="sync-rows track-rows">
+            <span class="track"><i></i></span>
+            <span class="track"><i></i></span>
+          </div>
+          <span data-t="hero.sync">in sync</span>
+        </div>
+      </div>
+    </div>
+
+    <section id="join">
+      <div class="wrap">
+        <p class="eyebrow" data-t="join.eyebrow">You were invited</p>
+        <h2 data-t="join.title">Four steps to the film</h2>
+        <p class="sub" data-t="join.sub">All you need is Golether on your computer and the link your friend sent you.</p>
+        <ol class="steps">
+          <li>
+            <h3 data-t="join.1.title">Click the link</h3>
+            <p data-t="join.1.text">Your browser asks whether to open Golether. Say yes.</p>
+          </li>
+          <li>
+            <h3 data-t="join.2.title">Confirm</h3>
+            <p data-t="join.2.text">Golether shows the name of the session and who invites you. Press “Join”.</p>
+          </li>
+          <li>
+            <h3 data-t="join.3.title">Compare the code</h3>
+            <p data-t="join.3.text">You and the host see the same three words and a number. Say them to each other aloud.</p>
+            <div class="code" aria-hidden="true"><span>maple</span><span>river</span><span>stone</span><span>42</span></div>
+          </li>
+          <li>
+            <h3 data-t="join.4.title">Enjoy</h3>
+            <p data-t="join.4.text">The host lets you in, and the film starts for everybody at the same moment.</p>
+          </li>
+        </ol>
+        <p class="note" data-t="join.note"><b>The link did not open the app?</b> Ask the host for the <b>key</b> instead: copy it, open Golether, paste it into the “Invitation” field and press “Connect”. A link works for 15 minutes, a key for up to an hour, and each of them is for one guest.</p>
+      </div>
+    </section>
+
+    <section id="host" class="alt">
+      <div class="wrap">
+        <p class="eyebrow" data-t="host.eyebrow">You invite</p>
+        <h2 data-t="host.title">Show a film to your friends</h2>
+        <p class="sub" data-t="host.sub">The film stays on your computer and goes straight to your guests. Up to five people watch together.</p>
+        <ol class="steps three">
+          <li>
+            <h3 data-t="host.1.title">Pick the film</h3>
+            <p data-t="host.1.text">Press “Create a session” and choose a video file. Nothing is uploaded to any server.</p>
+          </li>
+          <li>
+            <h3 data-t="host.2.title">Send the invitation</h3>
+            <p data-t="host.2.text">Press “Invite”, copy the link and send it in any messenger. One link per guest.</p>
+          </li>
+          <li>
+            <h3 data-t="host.3.title">Let them in</h3>
+            <p data-t="host.3.text">Compare the code with your guest by voice, admit them and press play.</p>
+          </li>
+        </ol>
+      </div>
+    </section>
+
+    <section id="why">
+      <div class="wrap">
+        <p class="eyebrow" data-t="why.eyebrow">Why Golether</p>
+        <h2 data-t="why.title">Like sitting on the same couch</h2>
+        <p class="sub" data-t="why.sub">Everything for an evening together fits in one window.</p>
+        <div class="cards">
+          <div class="card"><div class="icon" aria-hidden="true">⏯️</div><h3 data-t="why.1.title">Perfectly in sync</h3><p data-t="why.1.text">Play, pause and rewind work for everybody at once, whoever presses the button.</p></div>
+          <div class="card"><div class="icon" aria-hidden="true">🎞️</div><h3 data-t="why.2.title">Original quality</h3><p data-t="why.2.text">The film is not re-encoded into a blurry stream: everyone watches the file as it is.</p></div>
+          <div class="card"><div class="icon" aria-hidden="true">🙂</div><h3 data-t="why.3.title">Faces and voices</h3><p data-t="why.3.text">Webcams, voice, chat and reactions that float over the film.</p></div>
+          <div class="card"><div class="icon" aria-hidden="true">🔒</div><h3 data-t="why.4.title">Private</h3><p data-t="why.4.text">The connection is encrypted and goes directly between you. Nobody joins without the host's approval.</p></div>
+          <div class="card"><div class="icon" aria-hidden="true">💬</div><h3 data-t="why.5.title">Your own subtitles</h3><p data-t="why.5.text">Each of you picks an audio track and subtitles: one watches the original, another the dub.</p></div>
+          <div class="card"><div class="icon" aria-hidden="true">🎁</div><h3 data-t="why.6.title">Free for good</h3><p data-t="why.6.text">Open source. No accounts, no ads, no subscriptions.</p></div>
+        </div>
+      </div>
+    </section>
+
+    <section id="download" class="alt">
+      <div class="wrap">
+        <p class="eyebrow" data-t="dl.eyebrow">Download</p>
+        <h2 data-t="dl.title">Get Golether</h2>
+        <p class="sub" data-t="dl.sub">The same version for everybody who watches together. Updates are offered inside the app.</p>
+        <div class="downloads">
+          <div class="download" data-os="windows">
+            <h3>Windows</h3>
+            <div class="meta"></div>
+            <p class="hint" data-t="dl.windows">An installer for Windows 10 and newer. Invitation links open the app by themselves.</p>
+            <a class="btn accent" href="https://github.com/DepthRel/Golether/releases/latest" data-t="dl.button">Download</a>
+          </div>
+          <div class="download" data-os="linux">
+            <h3>Linux</h3>
+            <div class="meta"></div>
+            <p class="hint" data-t="dl.linux">An archive for 64-bit Linux. Unpack it, run install-desktop-entry.sh once, then start Golether.sh.</p>
+            <a class="btn accent" href="https://github.com/DepthRel/Golether/releases/latest" data-t="dl.button">Download</a>
+          </div>
+          <div class="download" data-os="macos">
+            <h3>macOS</h3>
+            <div class="meta"></div>
+            <p class="hint" data-t="dl.macos">An archive for Macs with Apple silicon, macOS 14 and newer.</p>
+            <a class="btn accent" href="https://github.com/DepthRel/Golether/releases/latest" data-t="dl.button">Download</a>
+          </div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer>
+    <div class="wrap">
+      <span data-t="foot.license">Golether is free software under the GPL-3.0-or-later license.</span>
+      <span>
+        <a href="https://github.com/DepthRel/Golether" data-t="foot.source">Source code</a> ·
+        <a href="https://github.com/DepthRel/Golether/blob/main/Docs/UserGuide.md" data-t="foot.guide">User guide</a> ·
+        <a href="https://github.com/DepthRel/Golether/releases" data-t="foot.releases">All releases</a>
+      </span>
+    </div>
+  </footer>
+
+  <script src="assets/site.js"></script>
+</body>
+</html>

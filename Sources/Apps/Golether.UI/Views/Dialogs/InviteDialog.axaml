@@ -7,29 +7,43 @@
         Title="{loc:Loc Invite.WindowTitle}"
         Width="560" SizeToContent="Height" CanResize="False"
         WindowStartupLocation="CenterOwner" Icon="/Assets/golether.ico">
-  <!-- A one-time invitation link; the host still approves every newcomer. -->
+  <!-- A one-time invitation in two forms: a link to click and a key to paste. The host still approves every newcomer. -->
   <StackPanel Margin="22" Spacing="12">
     <TextBlock Classes="title" Text="{loc:Loc Invite.WindowTitle}" />
     <TextBlock Classes="muted" TextWrapping="Wrap"
                Text="{loc:Loc Invite.Dialog.Explanation}" />
+
+    <!-- The link: what most guests need. -->
     <TextBlock Classes="label" Text="{loc:Loc Invite.Dialog.LinkLabel}" />
-    <TextBox Classes="package" IsReadOnly="True" Text="{Binding Link}" />
-    <TextBlock Classes="muted" FontSize="12" TextWrapping="Wrap" Text="{Binding ExpiresText}" />
-    <TextBlock Classes="muted" FontSize="12" TextWrapping="Wrap" Text="{loc:Loc Key=Invite.Dialog.Addresses, Arg={Binding AddressesText}}" />
-    <Grid ColumnDefinitions="*,12,160">
-      <StackPanel Spacing="4">
+    <Grid ColumnDefinitions="*,8,Auto">
+      <TextBox IsReadOnly="True" Text="{Binding Link}" AutomationProperties.Name="{loc:Loc Invite.Dialog.LinkLabel}" />
+      <Button Grid.Column="2" Classes="accent" Content="{loc:Loc Invite.Dialog.CopyLink}" Command="{Binding CopyCommand}" />
+    </Grid>
+    <TextBlock Classes="muted" FontSize="12" TextWrapping="Wrap" Text="{loc:Loc Key=Invite.Dialog.LinkNote, Arg={Binding LinkExpires}}" />
+
+    <!-- The key: the same invitation for those whose link does not open the application. -->
+    <TextBlock Classes="label" Text="{loc:Loc Invite.Dialog.KeyLabel}" Margin="0,6,0,0" />
+    <Grid ColumnDefinitions="*,8,Auto,8,Auto">
+      <TextBox IsReadOnly="True" Text="{Binding Key}" AutomationProperties.Name="{loc:Loc Invite.Dialog.KeyLabel}" />
+      <ComboBox Grid.Column="2" ItemsSource="{Binding Lifetimes}" SelectedItem="{Binding SelectedLifetime}" VerticalAlignment="Stretch"
+                AutomationProperties.Name="{loc:Loc Invite.Dialog.LifetimeLabel}" ToolTip.Tip="{loc:Loc Invite.Dialog.LifetimeTip}" />
+      <Button Grid.Column="4" Classes="ghost" Content="{loc:Loc Invite.Dialog.CopyKey}" Command="{Binding CopyKeyCommand}" />
+    </Grid>
+    <TextBlock Classes="muted" FontSize="12" TextWrapping="Wrap" Text="{loc:Loc Key=Invite.Dialog.KeyNote, Arg={Binding KeyExpires}}" />
+
+    <!-- Rarely needed: kept out of the way. -->
+    <Expander Header="{loc:Loc Invite.Dialog.Advanced}" HorizontalAlignment="Stretch">
+      <StackPanel Spacing="6">
         <TextBlock Classes="label" Text="{loc:Loc Invite.Dialog.ExtraAddressLabel}" />
         <TextBox Text="{Binding ExtraAddress}" PlaceholderText="{loc:Loc Invite.Dialog.ExtraAddressHint}" />
+        <TextBlock Classes="muted" FontSize="12" TextWrapping="Wrap" Text="{loc:Loc Invite.Dialog.ExtraAddressNote}" />
+        <TextBlock Classes="muted" FontSize="12" TextWrapping="Wrap" Text="{loc:Loc Key=Invite.Dialog.Addresses, Arg={Binding AddressesText}}" />
       </StackPanel>
-      <StackPanel Grid.Column="2" Spacing="4">
-        <TextBlock Classes="label" Text="{loc:Loc Invite.Dialog.LifetimeLabel}" />
-        <ComboBox ItemsSource="{Binding Lifetimes}" SelectedItem="{Binding SelectedLifetime}" HorizontalAlignment="Stretch" />
-      </StackPanel>
-    </Grid>
+    </Expander>
+
     <TextBlock Foreground="{StaticResource GoletherSecure}" TextWrapping="Wrap" Text="{Binding Message}" />
     <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Spacing="8">
       <Button Classes="ghost" Content="{loc:Loc Invite.Dialog.NewLink}" Command="{Binding RegenerateCommand}" />
-      <Button Classes="accent" Content="{loc:Loc Common.Copy}" Command="{Binding CopyCommand}" />
       <Button Classes="ghost" Content="{loc:Loc Common.Close}" Click="OnClose" IsCancel="True" />
     </StackPanel>
   </StackPanel>
