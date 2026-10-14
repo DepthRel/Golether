@@ -81,9 +81,9 @@
       "label": "publish: zip (current OS)",
       "detail": "Self-contained Release package for this operating system",
       "type": "shell",
-      "windows": { "command": "powershell -NoProfile -ExecutionPolicy Bypass -File ${workspaceFolder}/Scripts/publish-win.ps1" },
-      "linux": { "command": "bash ${workspaceFolder}/Scripts/publish-linux.sh" },
-      "osx": { "command": "bash ${workspaceFolder}/Scripts/publish-macos.sh" },
+      "windows": { "command": "powershell -NoProfile -ExecutionPolicy Bypass -File ${workspaceFolder}/Scripts/App/publish-win.ps1" },
+      "linux": { "command": "bash ${workspaceFolder}/Scripts/App/publish-linux.sh" },
+      "osx": { "command": "bash ${workspaceFolder}/Scripts/App/publish-macos.sh" },
       "presentation": { "reveal": "always", "panel": "dedicated", "clear": true },
       "problemMatcher": []
     },
@@ -91,9 +91,9 @@
       "label": "publish: server",
       "detail": "Rendezvous server: folder and archive for this OS; on Windows also the installer (needs Inno Setup)",
       "type": "shell",
-      "windows": { "command": "powershell -NoProfile -ExecutionPolicy Bypass -File ${workspaceFolder}/Scripts/build-server-installer.ps1" },
-      "linux": { "command": "bash ${workspaceFolder}/Scripts/publish-server.sh linux-x64" },
-      "osx": { "command": "bash ${workspaceFolder}/Scripts/publish-server.sh osx-arm64" },
+      "windows": { "command": "powershell -NoProfile -ExecutionPolicy Bypass -File ${workspaceFolder}/Scripts/Server/build-server-installer.ps1" },
+      "linux": { "command": "bash ${workspaceFolder}/Scripts/Server/publish-server.sh linux-x64" },
+      "osx": { "command": "bash ${workspaceFolder}/Scripts/Server/publish-server.sh osx-arm64" },
       "presentation": { "reveal": "always", "panel": "dedicated", "clear": true },
       "problemMatcher": []
     }

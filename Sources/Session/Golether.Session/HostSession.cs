@@ -111,6 +111,20 @@ public sealed class HostSession : IAsyncDisposable
     private readonly ConcurrentDictionary<PeerId, string> _reconnectTickets = new();
 
     /// <summary>
+    /// How long the end of the session waits for the farewell to reach the participants.
+    /// </summary>
+    private static readonly TimeSpan FarewellTime = TimeSpan.FromSeconds(3);
+
+    /// <summary>
+    /// The devices the host turned away (removed from the session or declined at the door) and are not to be let in
+    /// by the invitations that existed at that moment: the number of the last invitation issued by then and the
+    /// reason they are told. An invitation is shared by the whole company and stays valid for the others, so it is
+    /// the device that is remembered, not the invitation that is cancelled. An invitation made later lets the
+    /// device in again: this is not a ban.
+    /// </summary>
+    private readonly ConcurrentDictionary<PeerId, (long Barrier, RejectReason Reason)> _turnedAway = new();
+
+    /// <summary>
     /// The latest avatar of each participant (this device included), kept so a participant who joins later is sent
     /// the avatars already chosen.
     /// </summary>
@@ -483,21 +497,25 @@ public sealed class HostSession : IAsyncDisposable
     }
 
     /// <summary>
-    /// Removes a participant.
+    /// Removes a participant. This is not a ban: the device may join again, but only with an invitation made after
+    /// this moment. The ticket that would bring it back by itself is taken away, and the invitations that exist now,
+    /// though still valid for the others, do not let it in.
     /// </summary>
     /// <param name="peerId">The participant.</param>
     /// <returns>A task that completes when the participant was notified.</returns>
     public async Task RemoveParticipantAsync(PeerId peerId)
     {
-        // The ticket goes first: with it the removed device would come back as a returning participant.
+        // The ticket goes first: with it the removed device would come back as a returning participant. The
+        // invitations that exist now stay valid for the others, so the device itself is remembered.
         _reconnectTickets.TryRemove(peerId, out _);
+        _turnedAway[peerId] = (_invites.LastSequence, RejectReason.Removed);
         if (_participants.TryRemove(peerId, out var connection))
         {
             connection.End();
             _avatars.TryRemove(peerId, out _);
             await TrySendAsync(connection, new RejectedMessage(RejectReason.Removed, nameof(RejectReason.Removed))).ConfigureAwait(false);
             await connection.Channel.DisposeAsync().ConfigureAwait(false);
-            Raise(peerId, Texts.Format("Session.Event.ParticipantLeft", connection.Info.DisplayName));
+            Raise(peerId, Texts.Format("Session.Event.ParticipantRemoved", connection.Info.DisplayName));
             await SyncConferenceAsync().ConfigureAwait(false);
             await BroadcastParticipantsAsync().ConfigureAwait(false);
         }
@@ -535,7 +553,10 @@ public sealed class HostSession : IAsyncDisposable
             return;
         }
 
-        await BroadcastAsync(new ByeMessage(null)).ConfigureAwait(false);
+        // Everybody is told that the session is over, so their screens go back to the start instead of trying to
+        // come back. The farewell is given a short time: a participant on a stuck connection must not keep the
+        // host from ending the session or closing the application.
+        await Task.WhenAny(BroadcastAsync(new ByeMessage(null)), Task.Delay(FarewellTime, _timeProvider)).ConfigureAwait(false);
         await _stopping.CancelAsync().ConfigureAwait(false);
         foreach (var connection in _participants.Values)
         {
@@ -577,7 +598,7 @@ public sealed class HostSession : IAsyncDisposable
             _ = stream.Purpose switch
             {
                 StreamPurpose.Control => Task.Run(() => HandleControlAsync(stream, cancellationToken), CancellationToken.None),
-                StreamPurpose.Relay => Task.Run(() => HandleRelayAsync(stream, cancellationToken), CancellationToken.None),
+                StreamPurpose.Relay or StreamPurpose.RelayShared => Task.Run(() => HandleRelayAsync(stream, cancellationToken), CancellationToken.None),
                 _ => Task.Run(() => HandleMediaAsync(stream, cancellationToken), CancellationToken.None),
             };
         }
@@ -585,6 +606,7 @@ public sealed class HostSession : IAsyncDisposable
 
     /// <summary>
     /// Hands a relay stream of an admitted participant to the relay: the TURN traffic of its cameras and voices.
+    /// A shared stream carries all connections of the participant; each of its channels is served as a client.
     /// </summary>
     /// <param name="stream">The stream.</param>
     /// <param name="cancellationToken">Stops the session.</param>
@@ -612,7 +634,19 @@ public sealed class HostSession : IAsyncDisposable
             try
             {
                 // The relay is created at the address the participant reached, as for a client of the relay port.
-                await relay.ServeAsync(stream.Stream, remote, local.Address, linked.Token).ConfigureAwait(false);
+                if (stream.Purpose == StreamPurpose.RelayShared)
+                {
+                    await using var shared = new Transports.Relay.RelayMultiplexer(
+                        stream.Stream,
+                        channel => relay.ServeAsync(channel, remote, local.Address, linked.Token),
+                        _logger);
+                    shared.Start();
+                    await shared.Completion.ConfigureAwait(false);
+                }
+                else
+                {
+                    await relay.ServeAsync(stream.Stream, remote, local.Address, linked.Token).ConfigureAwait(false);
+                }
             }
             catch (Exception ex) when (ex is IOException or InvalidDataException or OperationCanceledException or ObjectDisposedException)
             {
@@ -640,6 +674,7 @@ public sealed class HostSession : IAsyncDisposable
             // The stream lives only as long as the admission: leaving, removal or a new connection closes it.
             using var linked = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, owner.Lifetime);
             using var closeOnEnd = linked.Token.Register(() => stream.Stream.Dispose());
+            _logger.LogInformation("Media stream of {Peer} opened", stream.RemotePeer.ToShortString());
             try
             {
                 await _chunkServer.ServeAsync(stream.Stream, linked.Token).ConfigureAwait(false);
@@ -741,13 +776,25 @@ public sealed class HostSession : IAsyncDisposable
             && System.Security.Cryptography.CryptographicOperations.FixedTimeEquals(
                 System.Text.Encoding.UTF8.GetBytes(known), System.Text.Encoding.UTF8.GetBytes(ticket));
         var trusted = contact?.IsTrusted == true || returning;
-        if (!trusted)
+        var turnedAway = _turnedAway.TryGetValue(peer, out var barred);
+
+        // A device the host turned away needs an invitation even when it is a trusted contact: trust saves the
+        // invitation, it does not overrule the host.
+        if (!trusted || turnedAway)
         {
-            var check = _invites.TryConsume(hello.InviteToken);
+            var check = _invites.TryUse(hello.InviteToken, out var issued);
             if (check != InviteCheckResult.Accepted)
             {
                 await channel.SendAsync(new RejectedMessage(RejectReason.InvalidInvite, check.ToString()), cancellationToken).ConfigureAwait(false);
                 _logger.LogWarning("Rejected {Peer}: invite {Result}", peer.ToShortString(), check);
+                return null;
+            }
+
+            // The invitation is fine for everybody else; this device needs one made after the host turned it away.
+            if (turnedAway && issued <= barred.Barrier)
+            {
+                await channel.SendAsync(new RejectedMessage(barred.Reason, barred.Reason.ToString()), cancellationToken).ConfigureAwait(false);
+                _logger.LogInformation("Rejected {Peer}: turned away earlier, the invitation is not newer", peer.ToShortString());
                 return null;
             }
         }
@@ -759,11 +806,19 @@ public sealed class HostSession : IAsyncDisposable
         if (decision != AdmissionDecision.Approved)
         {
             var reason = decision == AdmissionDecision.TimedOut ? RejectReason.ApprovalTimedOut : RejectReason.Declined;
+            if (reason == RejectReason.Declined)
+            {
+                // "No" stays "no" for the invitations that exist: the shared link must not let the same device ask
+                // again and again. A host who did not answer in time has decided nothing.
+                _turnedAway[peer] = (_invites.LastSequence, RejectReason.Declined);
+            }
+
             await channel.SendAsync(new RejectedMessage(reason, reason.ToString()), cancellationToken).ConfigureAwait(false);
             Raise(peer, Texts.Format("Session.Event.JoinDeclined", name));
             return null;
         }
 
+        _turnedAway.TryRemove(peer, out _);
         await RememberContactAsync(peer, name, remoteAddress, cancellationToken).ConfigureAwait(false);
 
         // The ticket lets the participant come back after a broken connection; the host is asked again every time.
@@ -778,19 +833,35 @@ public sealed class HostSession : IAsyncDisposable
         _participants[peer] = connection;
         var participants = GetSnapshot().Participants.Select(p => p.Info).ToArray();
         await channel.SendAsync(
-            new WelcomeMessage(SessionName, participants, _authority.Current, _media.Descriptor, _options.MediaDataStreams) { Relay = Relay, RelayOverSession = Relay is not null && RelayServer is not null, ReconnectTicket = reconnectTicket },
+            new WelcomeMessage(SessionName, participants, _authority.Current, _media.Descriptor, _options.MediaDataStreams) { Relay = Relay, RelayOverSession = Relay is not null && RelayServer is not null, RelayShared = Relay is not null && RelayServer is not null, ReconnectTicket = reconnectTicket },
             cancellationToken).ConfigureAwait(false);
+        _logger.LogInformation("Admitted {Peer}", peer.ToShortString());
         Raise(peer, Texts.Format("Session.Event.ParticipantJoined", name));
-
-        // Bring the newcomer up to date with the avatars everybody already chose.
-        foreach (var (owner, image) in _avatars)
-        {
-            await TrySendAsync(connection, new AvatarMessage(image, owner)).ConfigureAwait(false);
-        }
-
         _ = SyncConferenceAsync();
         await BroadcastParticipantsAsync().ConfigureAwait(false);
+
+        // The avatars go last and are not waited for: they are by far the largest messages of a session, and on a
+        // slow route the newcomer would otherwise sit unanswered (no clock, no cameras) until they have all arrived.
+        _ = SendAvatarsAsync(connection);
         return connection;
+    }
+
+    /// <summary>
+    /// Brings a newcomer up to date with the avatars everybody already chose.
+    /// </summary>
+    /// <param name="connection">The newcomer.</param>
+    /// <returns>A task that completes when the avatars were sent or the newcomer was dropped.</returns>
+    private async Task SendAvatarsAsync(Connection connection)
+    {
+        foreach (var (owner, image) in _avatars)
+        {
+            if (connection.Lifetime.IsCancellationRequested)
+            {
+                return;
+            }
+
+            await TrySendAsync(connection, new AvatarMessage(image, owner)).ConfigureAwait(false);
+        }
     }
 
     /// <summary>
@@ -1113,17 +1184,18 @@ public sealed class HostSession : IAsyncDisposable
         => Task.WhenAll(_participants.Values.Select(c => TrySendAsync(c, message)));
 
     /// <summary>
-    /// Sends a message with a timeout and disconnects the participant on failure.
+    /// Sends a message with a timeout and disconnects the participant on failure. The timeout is what the writing
+    /// itself may take, longer for a larger message: a message waiting behind an avatar on a slow route is not a
+    /// reason to drop a participant whose connection works.
     /// </summary>
     /// <param name="connection">The participant.</param>
     /// <param name="message">The message.</param>
     /// <returns>A task that completes when the send finished.</returns>
     private async Task TrySendAsync(Connection connection, SessionMessage message)
     {
-        using var timeout = new CancellationTokenSource(_options.SendTimeout);
         try
         {
-            await connection.Channel.SendAsync(message, timeout.Token).ConfigureAwait(false);
+            await connection.Channel.SendAsync(message, _options.SendTimeout, CancellationToken.None).ConfigureAwait(false);
         }
         catch (Exception ex) when (ex is IOException or OperationCanceledException or ObjectDisposedException)
         {

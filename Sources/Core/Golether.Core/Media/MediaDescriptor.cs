@@ -6,9 +6,10 @@ namespace Golether.Core.Media;
 public sealed record MediaDescriptor
 {
     /// <summary>
-    /// The default chunk size: 4 MiB.
+    /// The default chunk size: 256 KiB. A piece is fetched whole before any of its bytes can be played, so on a slow
+    /// connection a small piece is what makes the film start and seek quickly.
     /// </summary>
-    public const int DefaultChunkSize = 4 * 1024 * 1024;
+    public const int DefaultChunkSize = 256 * 1024;
 
     /// <summary>
     /// The largest chunk size accepted from the network: 16 MiB.

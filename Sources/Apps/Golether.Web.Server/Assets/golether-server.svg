@@ -1,7 +1,7 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024">
   <!--
     Golether rendezvous server icon: the Golether TV, smaller, with a server rack badge in the corner.
-    Raster versions: Scripts/generate-icon.ps1 -Server
+    Raster versions: Scripts/Assets/generate-icon.ps1 -Server
   -->
   <defs>
     <linearGradient id="amber" x1="112" y1="232" x2="912" y2="812" gradientUnits="userSpaceOnUse">

@@ -1,0 +1,209 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="using:Golether.Web.Server.UI.ViewModels"
+        xmlns:views="using:Golether.Web.Server.UI.Views"
+        xmlns:loc="using:Golether.Web.Server.UI.Localization"
+        xmlns:l="using:Golether.Localization"
+        x:Class="Golether.Web.Server.UI.Views.MainWindow"
+        x:DataType="vm:MainViewModel"
+        Title="{loc:Loc Monitor.Title}" Icon="/Assets/golether-server.ico"
+        Width="1100" Height="720" MinWidth="640" MinHeight="420"
+        WindowStartupLocation="CenterScreen">
+  <DockPanel>
+    <!-- The state of the server and the actions on its service. -->
+    <!-- In a narrow window the buttons move under the title instead of covering it. -->
+    <Border DockPanel.Dock="Top" Classes="panel" Padding="18,12">
+      <WrapPanel ItemSpacing="24" LineSpacing="10">
+        <StackPanel Orientation="Horizontal" Spacing="12" VerticalAlignment="Center">
+          <Image Source="/Assets/golether-server-256.png" Width="36" Height="36" />
+          <StackPanel Spacing="2" VerticalAlignment="Center">
+            <TextBlock Classes="title" Text="Golether Server" />
+            <StackPanel Orientation="Horizontal" Spacing="8">
+              <Ellipse Width="10" Height="10" VerticalAlignment="Center"
+                       Fill="{Binding Condition, Converter={x:Static views:ConditionBrushConverter.Instance}}" />
+              <TextBlock Text="{Binding StatusText}" TextWrapping="Wrap" />
+            </StackPanel>
+          </StackPanel>
+        </StackPanel>
+        <WrapPanel Orientation="Horizontal" VerticalAlignment="Center" ItemSpacing="8" LineSpacing="8">
+          <Button Classes="accent" Content="{loc:Loc Monitor.Start}" Command="{Binding StartCommand}" ToolTip.Tip="{loc:Loc Monitor.Start.Tip}" />
+          <Button Classes="danger" Content="{loc:Loc Monitor.Stop}" Command="{Binding StopCommand}" ToolTip.Tip="{loc:Loc Monitor.Stop.Tip}" />
+          <Button Classes="ghost" Content="{loc:Loc Monitor.Export}" Command="{Binding ExportCommand}" ToolTip.Tip="{loc:Loc Monitor.Export.Tip}" />
+          <!-- The language of the monitor; it changes at once and does not restart anything. -->
+          <ComboBox ItemsSource="{Binding Languages}" SelectedItem="{Binding SelectedLanguage}" VerticalAlignment="Center" MinWidth="120"
+                    ToolTip.Tip="{loc:Loc Monitor.Language}">
+            <ComboBox.ItemTemplate>
+              <DataTemplate x:DataType="l:LanguageInfo">
+                <TextBlock Text="{Binding NativeName}" />
+              </DataTemplate>
+            </ComboBox.ItemTemplate>
+          </ComboBox>
+        </WrapPanel>
+      </WrapPanel>
+    </Border>
+
+    <!-- The numbers of the health report. -->
+    <WrapPanel DockPanel.Dock="Top" Margin="18,12,18,0" ItemSpacing="10" LineSpacing="10">
+      <Border Classes="card" Padding="14,10" MinWidth="130">
+        <StackPanel Spacing="2">
+          <TextBlock Classes="label" Text="{loc:Loc Monitor.Stat.Uptime}" />
+          <TextBlock Classes="value" Text="{Binding UptimeText}" />
+        </StackPanel>
+      </Border>
+      <Border Classes="card" Padding="14,10" MinWidth="110">
+        <StackPanel Spacing="2">
+          <TextBlock Classes="label" Text="{loc:Loc Monitor.Stat.Rooms}" />
+          <TextBlock Classes="value" Text="{Binding RoomsText}" />
+        </StackPanel>
+      </Border>
+      <Border Classes="card" Padding="14,10" MinWidth="110">
+        <StackPanel Spacing="2">
+          <TextBlock Classes="label" Text="{loc:Loc Monitor.Stat.Connections}" />
+          <TextBlock Classes="value" Text="{Binding ConnectionsText}" />
+        </StackPanel>
+      </Border>
+      <Border Classes="card" Padding="14,10" MinWidth="150">
+        <StackPanel Spacing="2">
+          <TextBlock Classes="label" Text="{loc:Loc Monitor.Stat.Meetings}" />
+          <TextBlock Classes="value" Text="{Binding MeetingsText}" />
+        </StackPanel>
+      </Border>
+      <Border Classes="card" Padding="14,10" MinWidth="110">
+        <StackPanel Spacing="2">
+          <TextBlock Classes="label" Text="{loc:Loc Monitor.Stat.Refused}" />
+          <TextBlock Classes="value" Text="{Binding RefusedText}" />
+        </StackPanel>
+      </Border>
+      <Border Classes="card" Padding="14,10" MinWidth="110">
+        <StackPanel Spacing="2">
+          <TextBlock Classes="label" Text="{loc:Loc Monitor.Stat.Version}" />
+          <TextBlock Classes="value" Text="{Binding VersionText}" />
+        </StackPanel>
+      </Border>
+    </WrapPanel>
+
+    <!-- What the last action did. -->
+    <Border DockPanel.Dock="Bottom" Classes="panel" Padding="18,8">
+      <TextBlock Classes="muted" Text="{Binding Message}" TextWrapping="Wrap" />
+    </Border>
+
+    <TabControl Margin="12,8,12,0">
+      <TabItem Header="{loc:Loc Monitor.Tab.Journal}">
+        <DockPanel Margin="0,8,0,8">
+          <TextBox DockPanel.Dock="Top" Margin="6,0,6,8" Text="{Binding SearchText}"
+                   PlaceholderText="{loc:Loc Monitor.Search}" />
+
+          <!-- The header: its dividers set the widths of the columns of every row. -->
+          <Border DockPanel.Dock="Top" Classes="panel" Padding="8,6" CornerRadius="6,6,0,0">
+            <Grid>
+              <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="{Binding Columns.Time, Mode=TwoWay}" MinWidth="60" />
+                <ColumnDefinition Width="5" />
+                <ColumnDefinition Width="{Binding Columns.Address, Mode=TwoWay}" MinWidth="60" />
+                <ColumnDefinition Width="5" />
+                <ColumnDefinition Width="{Binding Columns.Event, Mode=TwoWay}" MinWidth="60" />
+                <ColumnDefinition Width="5" />
+                <ColumnDefinition Width="4*" MinWidth="60" />
+              </Grid.ColumnDefinitions>
+              <TextBlock Grid.Column="0" Classes="label" Text="{loc:Loc Monitor.Column.Time}" />
+              <GridSplitter Grid.Column="1" Classes="column" Margin="1,0" />
+              <TextBlock Grid.Column="2" Classes="label" Margin="6,0,0,0" Text="{loc:Loc Monitor.Column.Address}" />
+              <GridSplitter Grid.Column="3" Classes="column" Margin="1,0" />
+              <TextBlock Grid.Column="4" Classes="label" Margin="6,0,0,0" Text="{loc:Loc Monitor.Column.Event}" />
+              <GridSplitter Grid.Column="5" Classes="column" Margin="1,0" />
+              <TextBlock Grid.Column="6" Classes="label" Margin="6,0,0,0" Text="{loc:Loc Monitor.Column.Details}" />
+            </Grid>
+          </Border>
+
+          <Border BorderBrush="{StaticResource GoletherLine}" BorderThickness="1,0,1,1" CornerRadius="0,0,6,6">
+            <Panel>
+              <ListBox x:Name="Journal" Classes="journal" ItemsSource="{Binding Rows}" SelectionMode="Multiple">
+                <ListBox.ContextMenu>
+                  <ContextMenu>
+                    <MenuItem Header="{loc:Loc Monitor.Copy}" Click="OnCopy" />
+                  </ContextMenu>
+                </ListBox.ContextMenu>
+                <ListBox.ItemTemplate>
+                  <DataTemplate x:DataType="vm:JournalRowViewModel">
+                    <Grid Margin="8,3">
+                      <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="{Binding Columns.Time}" />
+                        <ColumnDefinition Width="5" />
+                        <ColumnDefinition Width="{Binding Columns.Address}" />
+                        <ColumnDefinition Width="5" />
+                        <ColumnDefinition Width="{Binding Columns.Event}" />
+                        <ColumnDefinition Width="5" />
+                        <ColumnDefinition Width="4*" />
+                      </Grid.ColumnDefinitions>
+                      <TextBlock Grid.Column="0" Classes="mono" Text="{Binding Time}" />
+                      <TextBlock Grid.Column="2" Classes="mono" Margin="6,0,0,0" Text="{Binding Address}" />
+                      <TextBlock Grid.Column="4" Margin="6,0,0,0" Text="{Binding Event}" Classes.problem="{Binding IsProblem}" ToolTip.Tip="{Binding Event}" />
+                      <TextBlock Grid.Column="6" Classes="muted" Margin="6,0,0,0" Text="{Binding Details}" ToolTip.Tip="{Binding Details}" />
+                    </Grid>
+                  </DataTemplate>
+                </ListBox.ItemTemplate>
+              </ListBox>
+              <TextBlock Classes="muted" HorizontalAlignment="Center" VerticalAlignment="Center" Margin="24"
+                         TextWrapping="Wrap" TextAlignment="Center" Text="{loc:Loc Monitor.Journal.Empty}"
+                         IsVisible="{Binding !Rows.Count}" />
+            </Panel>
+          </Border>
+        </DockPanel>
+      </TabItem>
+
+      <TabItem Header="{loc:Loc Monitor.Tab.Settings}">
+        <DockPanel Margin="0,8,0,8">
+          <Border DockPanel.Dock="Bottom" Padding="6,10,6,0">
+            <DockPanel>
+              <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" Spacing="8">
+                <Button Classes="ghost" Content="{loc:Loc Monitor.Settings.Revert}" Command="{Binding RevertSettingsCommand}" />
+                <Button Classes="accent" Content="{loc:Loc Monitor.Settings.Save}" Command="{Binding SaveSettingsCommand}" />
+              </StackPanel>
+              <TextBlock Classes="muted" VerticalAlignment="Center" TextWrapping="Wrap" Margin="0,0,12,0" Text="{Binding SettingsFile}" />
+            </DockPanel>
+          </Border>
+          <ScrollViewer>
+            <StackPanel Margin="6,0" Spacing="14" MaxWidth="860" HorizontalAlignment="Left">
+              <TextBlock Classes="muted" TextWrapping="Wrap" Text="{loc:Loc Monitor.Settings.Intro}" />
+              <TextBlock Classes="problem" TextWrapping="Wrap" Text="{Binding Settings.Problems}" IsVisible="{Binding Settings.Problems.Length}" />
+              <Grid ColumnDefinitions="300,*" RowDefinitions="Auto,Auto,Auto,Auto,Auto,Auto,Auto,Auto,Auto,Auto,Auto,Auto,Auto" ColumnSpacing="16" RowSpacing="12">
+                <StackPanel Grid.Row="0" Spacing="2"><TextBlock Text="{loc:Loc Monitor.Settings.ListenAddress}" /><TextBlock Classes="muted" FontSize="12" TextWrapping="Wrap" Text="{loc:Loc Monitor.Settings.ListenAddress.Hint}" /></StackPanel>
+                <TextBox Grid.Row="0" Grid.Column="1" VerticalAlignment="Top" MaxWidth="320" HorizontalAlignment="Left" MinWidth="200" Text="{Binding Settings.ListenAddress}" />
+                <StackPanel Grid.Row="1" Spacing="2"><TextBlock Text="{loc:Loc Monitor.Settings.Port}" /><TextBlock Classes="muted" FontSize="12" TextWrapping="Wrap" Text="{loc:Loc Monitor.Settings.Port.Hint}" /></StackPanel>
+                <TextBox Grid.Row="1" Grid.Column="1" VerticalAlignment="Top" HorizontalAlignment="Left" MinWidth="120" Text="{Binding Settings.Port}" />
+                <StackPanel Grid.Row="2" Spacing="2"><TextBlock Text="{loc:Loc Monitor.Settings.EnableStun}" /><TextBlock Classes="muted" FontSize="12" TextWrapping="Wrap" Text="{loc:Loc Monitor.Settings.EnableStun.Hint}" /></StackPanel>
+                <CheckBox Grid.Row="2" Grid.Column="1" VerticalAlignment="Top" IsChecked="{Binding Settings.EnableStun}" />
+                <StackPanel Grid.Row="3" Spacing="2"><TextBlock Text="{loc:Loc Monitor.Settings.MaxConnections}" /><TextBlock Classes="muted" FontSize="12" TextWrapping="Wrap" Text="{loc:Loc Monitor.Settings.MaxConnections.Hint}" /></StackPanel>
+                <TextBox Grid.Row="3" Grid.Column="1" VerticalAlignment="Top" HorizontalAlignment="Left" MinWidth="120" Text="{Binding Settings.MaxConnections}" />
+                <StackPanel Grid.Row="4" Spacing="2"><TextBlock Text="{loc:Loc Monitor.Settings.MaxRooms}" /><TextBlock Classes="muted" FontSize="12" TextWrapping="Wrap" Text="{loc:Loc Monitor.Settings.MaxRooms.Hint}" /></StackPanel>
+                <TextBox Grid.Row="4" Grid.Column="1" VerticalAlignment="Top" HorizontalAlignment="Left" MinWidth="120" Text="{Binding Settings.MaxRooms}" />
+                <StackPanel Grid.Row="5" Spacing="2"><TextBlock Text="{loc:Loc Monitor.Settings.MaxPendingPerRoom}" /><TextBlock Classes="muted" FontSize="12" TextWrapping="Wrap" Text="{loc:Loc Monitor.Settings.MaxPendingPerRoom.Hint}" /></StackPanel>
+                <TextBox Grid.Row="5" Grid.Column="1" VerticalAlignment="Top" HorizontalAlignment="Left" MinWidth="120" Text="{Binding Settings.MaxPendingPerRoom}" />
+                <StackPanel Grid.Row="6" Spacing="2"><TextBlock Text="{loc:Loc Monitor.Settings.MaxConnectionsPerMinute}" /><TextBlock Classes="muted" FontSize="12" TextWrapping="Wrap" Text="{loc:Loc Monitor.Settings.MaxConnectionsPerMinute.Hint}" /></StackPanel>
+                <TextBox Grid.Row="6" Grid.Column="1" VerticalAlignment="Top" HorizontalAlignment="Left" MinWidth="120" Text="{Binding Settings.MaxConnectionsPerMinute}" />
+                <StackPanel Grid.Row="7" Spacing="2"><TextBlock Text="{loc:Loc Monitor.Settings.MaxStunPerMinute}" /><TextBlock Classes="muted" FontSize="12" TextWrapping="Wrap" Text="{loc:Loc Monitor.Settings.MaxStunPerMinute.Hint}" /></StackPanel>
+                <TextBox Grid.Row="7" Grid.Column="1" VerticalAlignment="Top" HorizontalAlignment="Left" MinWidth="120" Text="{Binding Settings.MaxStunPerMinute}" />
+                <StackPanel Grid.Row="8" Spacing="2"><TextBlock Text="{loc:Loc Monitor.Settings.FirstMessageTimeout}" /><TextBlock Classes="muted" FontSize="12" TextWrapping="Wrap" Text="{loc:Loc Monitor.Settings.FirstMessageTimeout.Hint}" /></StackPanel>
+                <TextBox Grid.Row="8" Grid.Column="1" VerticalAlignment="Top" HorizontalAlignment="Left" MinWidth="120" Text="{Binding Settings.FirstMessageTimeout}" />
+                <StackPanel Grid.Row="9" Spacing="2"><TextBlock Text="{loc:Loc Monitor.Settings.AnswerTimeout}" /><TextBlock Classes="muted" FontSize="12" TextWrapping="Wrap" Text="{loc:Loc Monitor.Settings.AnswerTimeout.Hint}" /></StackPanel>
+                <TextBox Grid.Row="9" Grid.Column="1" VerticalAlignment="Top" HorizontalAlignment="Left" MinWidth="120" Text="{Binding Settings.AnswerTimeout}" />
+                <StackPanel Grid.Row="10" Spacing="2"><TextBlock Text="{loc:Loc Monitor.Settings.IdleTimeout}" /><TextBlock Classes="muted" FontSize="12" TextWrapping="Wrap" Text="{loc:Loc Monitor.Settings.IdleTimeout.Hint}" /></StackPanel>
+                <TextBox Grid.Row="10" Grid.Column="1" VerticalAlignment="Top" HorizontalAlignment="Left" MinWidth="120" Text="{Binding Settings.IdleTimeout}" />
+                <StackPanel Grid.Row="11" Spacing="2"><TextBlock Text="{loc:Loc Monitor.Settings.StatusUrls}" /><TextBlock Classes="muted" FontSize="12" TextWrapping="Wrap" Text="{loc:Loc Monitor.Settings.StatusUrls.Hint}" /></StackPanel>
+                <TextBox Grid.Row="11" Grid.Column="1" VerticalAlignment="Top" HorizontalAlignment="Left" MinWidth="260" MaxWidth="420" Text="{Binding Settings.StatusUrls}" />
+                <StackPanel Grid.Row="12" Spacing="2"><TextBlock Text="{loc:Loc Monitor.Settings.LogLevel}" /><TextBlock Classes="muted" FontSize="12" TextWrapping="Wrap" Text="{loc:Loc Monitor.Settings.LogLevel.Hint}" /></StackPanel>
+                <ComboBox Grid.Row="12" Grid.Column="1" VerticalAlignment="Top" MinWidth="260" ItemsSource="{Binding Settings.LogLevels}" SelectedItem="{Binding Settings.LogLevel}">
+                  <ComboBox.ItemTemplate>
+                    <DataTemplate x:DataType="x:String">
+                      <TextBlock Text="{Binding Converter={x:Static views:LogLevelNameConverter.Instance}}" />
+                    </DataTemplate>
+                  </ComboBox.ItemTemplate>
+                </ComboBox>
+              </Grid>
+            </StackPanel>
+          </ScrollViewer>
+        </DockPanel>
+      </TabItem>
+    </TabControl>
+  </DockPanel>
+</Window>

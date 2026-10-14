@@ -1,5 +1,6 @@
 using System.Reflection;
 using Golether.Transports.Rendezvous.Protocol;
+using Golether.Web.Server.Contracts;
 
 namespace Golether.Web.Server.Infrastructure;
 

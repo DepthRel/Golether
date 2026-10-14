@@ -39,6 +39,13 @@ public interface ISessionService
     event EventHandler<AvatarUpdate>? AvatarReceived;
 
     /// <summary>
+    /// Raised once when the host closed a joined session for this device (ended the session or removed the device),
+    /// with the reason in the words for the user. The session view is gone by then, so the reason has to be shown
+    /// on its own. Raised on a background thread.
+    /// </summary>
+    event EventHandler<string>? ClosedByHost;
+
+    /// <summary>
     /// Gets the state of an automatic reconnection, or an empty string while the connection is fine.
     /// </summary>
     string ReconnectMessage { get; }
@@ -151,6 +158,14 @@ public interface ISessionService
     /// <param name="camera">Whether to switch the camera off.</param>
     /// <returns>A task that completes when the request was sent.</returns>
     Task SwitchOffParticipantDevicesAsync(PeerId peerId, bool microphone, bool camera);
+
+    /// <summary>
+    /// Removes a participant from the session (host only). The device is not banned, but it cannot come back by
+    /// itself: its way back is closed, and joining again takes a new invitation.
+    /// </summary>
+    /// <param name="peerId">The participant.</param>
+    /// <returns>A task that completes when the participant was removed.</returns>
+    Task RemoveParticipantAsync(PeerId peerId);
 
     /// <summary>
     /// Sends a chat line or a reaction to everybody in the session.

@@ -108,6 +108,10 @@
 
       <!-- Status bar; full screen has no use for it. -->
       <Border x:Name="StatusBar" DockPanel.Dock="Bottom" Background="{StaticResource GoletherBackground}" BorderBrush="{StaticResource GoletherLine}" BorderThickness="0,1,0,0" Padding="16,6">
+        <DockPanel>
+        <!-- The version sits in the right corner, as far from the edge as the device is on the left. -->
+        <TextBlock DockPanel.Dock="Right" Classes="mono muted" FontSize="11" Margin="22,0,0,0"
+                   Text="{loc:Loc Key=Main.Version, Arg={Binding AppVersion}}" />
         <StackPanel Orientation="Horizontal" Spacing="22">
           <TextBlock Classes="mono muted" FontSize="11" Text="{loc:Loc Key=Main.Device, Arg={Binding DeviceFingerprint}}" />
           <TextBlock Classes="mono muted" FontSize="11" Text="{Binding ClockText}" IsVisible="{Binding IsInSession}" />
@@ -116,6 +120,7 @@
                      ToolTip.Tip="{loc:Loc Main.SharingTip}" />
           <TextBlock Classes="mono muted" FontSize="11" Text="{loc:Loc Main.CacheNote}" IsVisible="{Binding IsInSession}" />
         </StackPanel>
+        </DockPanel>
       </Border>
 
       <Panel>
@@ -138,13 +143,11 @@
                   <TextBlock Classes="muted" TextWrapping="Wrap" Text="{loc:Loc Main.Host.Text}" />
                   <TextBlock Classes="label" Text="{loc:Loc Main.Host.SessionName}" />
                   <TextBox Text="{Binding NewSessionName}" MaxLength="64" />
-                  <TextBlock Classes="label" Text="{loc:Loc Main.Host.Port}" />
-                  <NumericUpDown Value="{Binding Port}" Minimum="1024" Maximum="65535" FormatString="0" Width="160" HorizontalAlignment="Left" />
                   <!--
                     How guests from other networks get in. One line under the switches says what the chosen way
                     means; the address field exists only for the way that needs it.
                   -->
-                  <TextBlock Classes="label" Text="{loc:Loc Main.Host.Rendezvous}" />
+                  <TextBlock Classes="label" Text="{loc:Loc Main.Host.Rendezvous}" Margin="0,10,0,0" />
                   <StackPanel Orientation="Horizontal" Spacing="18">
                     <RadioButton GroupName="RendezvousMode" IsChecked="{Binding IsRendezvousAutomatic}" Content="{loc:Loc Main.Host.Route.Automatic}" />
                     <RadioButton GroupName="RendezvousMode" IsChecked="{Binding IsRendezvousDirect}" Content="{loc:Loc Main.Host.Route.Direct}" />
@@ -159,9 +162,18 @@
                            IsVisible="{Binding IsRendezvousManual}"
                            AutomationProperties.Name="{loc:Loc Main.Host.RendezvousName}"
                            ToolTip.Tip="{loc:Loc Main.Host.RendezvousTip}" />
-                  <CheckBox IsChecked="{Binding OpenRouterPort}" AutomationProperties.Name="{loc:Loc Main.Host.OpenPortName}">
-                    <TextBlock TextWrapping="Wrap" Text="{loc:Loc Main.Host.OpenPortText}" />
-                  </CheckBox>
+                  <!-- What an ordinary evening never needs: the port of this computer and the request to the router. -->
+                  <Expander Header="{loc:Loc Main.Host.Advanced}" HorizontalAlignment="Stretch">
+                    <StackPanel Spacing="10">
+                      <TextBlock Classes="label" Text="{loc:Loc Main.Host.Port}" />
+                      <NumericUpDown Value="{Binding Port}" Minimum="1024" Maximum="65535" FormatString="0" Width="160" HorizontalAlignment="Left"
+                                     AutomationProperties.Name="{loc:Loc Main.Host.Port}" />
+                      <TextBlock Classes="muted" FontSize="12" TextWrapping="Wrap" Text="{loc:Loc Main.Host.PortNote}" />
+                      <CheckBox IsChecked="{Binding OpenRouterPort}" AutomationProperties.Name="{loc:Loc Main.Host.OpenPortName}">
+                        <TextBlock TextWrapping="Wrap" Text="{loc:Loc Main.Host.OpenPortText}" />
+                      </CheckBox>
+                    </StackPanel>
+                  </Expander>
                   <Button Classes="accent" Content="{loc:Loc Main.Host.Start}" Command="{Binding StartHostingCommand}" />
                 </StackPanel>
               </Border>
@@ -282,11 +294,16 @@
                     </ItemsControl.Styles>
                     <ItemsControl.ItemTemplate>
                       <DataTemplate x:DataType="vm:ParticipantItemViewModel">
-                        <Border Width="18" Height="18" CornerRadius="9" Background="{Binding AvatarColor, Converter={x:Static controls:ColorTextBrushConverter.Instance}}"
-                                ToolTip.Tip="{Binding Name}">
-                          <TextBlock Text="{Binding Initial}" FontSize="9" FontWeight="Bold" Foreground="#0A0F11"
-                                     HorizontalAlignment="Center" VerticalAlignment="Center" />
-                        </Border>
+                        <!-- The mark of a participant: the chosen avatar, or the coloured initial when there is none. -->
+                        <Panel Width="18" Height="18" ToolTip.Tip="{Binding Name}">
+                          <Border CornerRadius="9" Background="{Binding AvatarColor, Converter={x:Static controls:ColorTextBrushConverter.Instance}}">
+                            <TextBlock Text="{Binding Initial}" FontSize="9" FontWeight="Bold" Foreground="#0A0F11"
+                                       HorizontalAlignment="Center" VerticalAlignment="Center" />
+                          </Border>
+                          <Border CornerRadius="9" ClipToBounds="True" IsVisible="{Binding HasAvatar}">
+                            <Image Source="{Binding AvatarImage}" Stretch="UniformToFill" />
+                          </Border>
+                        </Panel>
                       </DataTemplate>
                     </ItemsControl.ItemTemplate>
                   </ItemsControl>
@@ -719,6 +736,10 @@
                                 <PathIcon Data="{StaticResource IconCamera}" Width="14" Height="14" />
                               </MenuItem.Icon>
                             </MenuItem>
+                            <!-- The last resort, apart from the rest: the host is asked before anybody is removed. -->
+                            <Separator IsVisible="{Binding CanModerate}" />
+                            <MenuItem Header="{loc:Loc Main.Moderation.Remove}" Command="{Binding RemoveCommand}" IsVisible="{Binding CanModerate}"
+                                      Foreground="{StaticResource GoletherBad}" />
                           </ContextMenu>
                         </Border.ContextMenu>
                         <StackPanel>
@@ -812,6 +833,21 @@
         </Border>
       </Panel>
     </DockPanel>
+    <!-- Joining a session: shown over everything from the moment the user agreed until the host let the device in,
+         so it is plain that something is going on while a way to the host is being found. -->
+    <Border Background="{StaticResource GoletherBackground}" ZIndex="5" IsVisible="{Binding ShowJoinScreen}">
+      <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center" Spacing="16" MaxWidth="520" Margin="24">
+        <Image Source="/Assets/golether-256.png" Width="84" Height="84" HorizontalAlignment="Center" />
+        <TextBlock Classes="title" HorizontalAlignment="Center" TextWrapping="Wrap" TextAlignment="Center" Text="{Binding JoinTitle}" />
+        <ProgressBar IsIndeterminate="True" Width="260" HorizontalAlignment="Center" />
+        <TextBlock Classes="muted" TextWrapping="Wrap" TextAlignment="Center" Text="{Binding JoinText}" />
+        <Border Classes="code" HorizontalAlignment="Center" IsVisible="{Binding IsWaitingForHost}">
+          <TextBlock Text="{Binding VerificationText}" FontSize="20" />
+        </Border>
+        <Button Classes="ghost" HorizontalAlignment="Center" IsVisible="{Binding IsCancellable}"
+                Content="{loc:Loc Main.Approval.Cancel}" Command="{Binding CancelJoinCommand}" />
+      </StackPanel>
+    </Border>
     <!-- A newer version is offered, never installed by itself. -->
     <Border VerticalAlignment="Top" HorizontalAlignment="Center" MaxWidth="760" Margin="16,64" Padding="12,8" CornerRadius="8" ZIndex="10"
             IsVisible="{Binding HasUpdate}" Background="{StaticResource GoletherPanel2}"

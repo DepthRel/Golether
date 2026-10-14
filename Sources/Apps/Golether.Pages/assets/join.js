@@ -93,6 +93,12 @@
   var payload = (location.hash || '').slice(1);
   var invite = read(payload);
 
+  // A second invitation opened in this very tab changes only what follows the "#", and the browser does not load
+  // the page again by itself: without this the page would go on handing out the first invitation.
+  window.addEventListener('hashchange', function () {
+    if ((location.hash || '').length > 1) { location.reload(); }
+  });
+
   // The invitation leaves the address bar and the history entry of this page: it is needed in memory only.
   if (payload && history.replaceState) {
     try { history.replaceState(null, '', location.pathname); } catch (e) { /* the address stays as it was */ }

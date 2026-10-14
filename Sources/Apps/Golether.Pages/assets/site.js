@@ -11,7 +11,7 @@
       'nav.join': 'Как войти',
       'nav.host': 'Как пригласить',
       'nav.download': 'Скачать',
-      'hero.title': 'Смотрите кино <em>вместе</em>,<br>где бы вы ни были',
+      'hero.title': 'Смотрите кино <em>вместе</em><br>где бы вы ни были',
       'hero.lead': 'Один кадр на всех, даже если между вами тысячи километров.<br>Смех и голоса близких — рядом.',
       'hero.download': 'Скачать Golether',
       'hero.how': 'У меня есть приглашение',
@@ -29,14 +29,14 @@
       'join.3.text': 'У вас и у ведущего на экране одни и те же три слова и число. Назовите их друг другу вслух.',
       'join.4.title': 'Наслаждайтесь',
       'join.4.text': 'Ведущий впускает вас, и фильм начинается у всех в один момент.',
-      'join.note': '<b>Ссылка не открыла приложение?</b> Попросите у ведущего <b>ключ</b>: скопируйте его, откройте Golether, вставьте в поле «Приглашение» и нажмите «Подключиться». Ссылка действует 15 минут, ключ — до часа, и каждое приглашение срабатывает один раз: для второго гостя ведущий делает новое.',
+      'join.note': '<b>Ссылка не открыла приложение?</b> Попросите у ведущего <b>ключ</b>: скопируйте его, откройте Golether, вставьте в поле «Приглашение» и нажмите «Подключиться». Ссылка действует 15 минут, ключ — до часа; по одному приглашению может войти вся компания.',
       'host.eyebrow': 'Вы приглашаете',
       'host.title': 'Покажите фильм друзьям',
       'host.sub': 'Фильм остаётся на вашем компьютере и идёт к гостям напрямую.<br>Вместе смотрят до пяти человек.',
       'host.1.title': 'Выберите фильм',
       'host.1.text': 'Нажмите «Создать сеанс» и выберите видеофайл. На серверы ничего не загружается.',
       'host.2.title': 'Отправьте приглашение',
-      'host.2.text': 'Нажмите «Пригласить», скопируйте ссылку и отправьте её в любом мессенджере. Одна ссылка — один гость.',
+      'host.2.text': 'Нажмите «Пригласить», скопируйте ссылку и отправьте её в общий чат. По одной ссылке войдут все.',
       'host.3.title': 'Впустите гостей',
       'host.3.text': 'Сверьте код с гостем голосом, впустите его и нажмите «Пуск».',
       'why.eyebrow': 'Почему Golether',
@@ -47,11 +47,11 @@
       'why.2.title': 'Исходное качество',
       'why.2.text': 'Фильм не пережимается в мутную трансляцию: все смотрят файл таким, какой он есть.',
       'why.3.title': 'Лица и голоса',
-      'why.3.text': 'Камеры, голос, чат и реакции, всплывающие прямо поверх фильма.',
+      'why.3.text': 'Камеры, голос, чат и реакции поверх фильма. А ещё можно рисовать прямо на кадре, и это видят все.',
       'why.4.title': 'Только свои',
       'why.4.text': 'Соединение зашифровано и идёт напрямую между вами. Без одобрения ведущего никто не войдёт.',
-      'why.5.title': 'Субтитры и озвучка — у каждого свои',
-      'why.5.text': 'Звуковую дорожку и субтитры каждый выбирает независимо от остальных: вы смотрите оригинал, друг — дубляж, и никто никому не мешает.',
+      'why.5.title': 'Свои субтитры и озвучка',
+      'why.5.text': 'Субтитры и звуковую дорожку каждый выбирает сам, независимо от остальных.',
       'why.6.title': 'Бесплатно навсегда',
       'why.6.text': 'Открытый исходный код. Без регистрации, рекламы и подписок.',
       'dl.eyebrow': 'Скачать',
@@ -77,6 +77,11 @@
   var alts = document.querySelectorAll('[data-t-alt]');
   alts.forEach(function (node) { english[node.getAttribute('data-t-alt')] = node.getAttribute('alt'); });
   texts.en = english;
+
+  // The documentation is kept by language in Docs/<folder>. A language of the page that has no translated guide yet
+  // gets the English one: a new documentation language is one more entry here.
+  var docs = { en: 'En', ru: 'Ru' };
+  var docsRoot = 'https://github.com/DepthRel/Golether/blob/main/Docs/';
 
   var language = 'en';
   var release = null;
@@ -126,6 +131,7 @@
     document.title = text('page.title');
     nodes.forEach(function (node) { node.innerHTML = text(node.getAttribute('data-t')); });
     alts.forEach(function (node) { node.setAttribute('alt', text(node.getAttribute('data-t-alt'))); });
+    document.getElementById('guide-link').setAttribute('href', docsRoot + (docs[language] || docs.en) + '/UserGuide.md');
     document.querySelectorAll('.lang button').forEach(function (button) {
       button.setAttribute('aria-pressed', button.getAttribute('data-lang') === language ? 'true' : 'false');
     });

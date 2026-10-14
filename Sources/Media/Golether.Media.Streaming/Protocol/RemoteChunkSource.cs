@@ -13,7 +13,7 @@ public sealed class RemoteChunkSource : IChunkSource
     /// <summary>
     /// The number of attempts per chunk.
     /// </summary>
-    private const int Attempts = 3;
+    private const int Attempts = 5;
 
     /// <summary>
     /// Opens a new data stream to the host.
@@ -51,6 +51,11 @@ public sealed class RemoteChunkSource : IChunkSource
     private long _bytesReceived;
 
     /// <summary>
+    /// How long an answer may stand still before its stream is replaced.
+    /// </summary>
+    private readonly TimeSpan _stallTimeout;
+
+    /// <summary>
     /// Initializes a new instance of the <see cref="RemoteChunkSource"/> class.
     /// </summary>
     /// <param name="media">The media.</param>
@@ -58,7 +63,21 @@ public sealed class RemoteChunkSource : IChunkSource
     /// <param name="parallelism">The number of parallel data streams.</param>
     /// <param name="logger">The logger.</param>
     public RemoteChunkSource(MediaDescriptor media, Func<CancellationToken, Task<Stream>> openStream, int parallelism, ILogger<RemoteChunkSource>? logger = null)
+        : this(media, openStream, parallelism, ChunkClient.DefaultStallTimeout, logger)
     {
+    }
+
+    /// <summary>
+    /// Initializes a new instance of the <see cref="RemoteChunkSource"/> class with its own patience.
+    /// </summary>
+    /// <param name="media">The media.</param>
+    /// <param name="openStream">Opens a stream to the host.</param>
+    /// <param name="parallelism">The number of streams used at once.</param>
+    /// <param name="stallTimeout">How long an answer may stand still before its stream is replaced.</param>
+    /// <param name="logger">The logger.</param>
+    public RemoteChunkSource(MediaDescriptor media, Func<CancellationToken, Task<Stream>> openStream, int parallelism, TimeSpan stallTimeout, ILogger<RemoteChunkSource>? logger = null)
+    {
+        _stallTimeout = stallTimeout;
         Media = media ?? throw new ArgumentNullException(nameof(media));
         _openStream = openStream ?? throw new ArgumentNullException(nameof(openStream));
         ArgumentOutOfRangeException.ThrowIfLessThan(parallelism, 1);
@@ -69,6 +88,13 @@ public sealed class RemoteChunkSource : IChunkSource
 
     /// <inheritdoc />
     public MediaDescriptor Media { get; }
+
+    /// <summary>
+    /// Gets what takes the idle streams when the source is closed, or <see langword="null"/> to close them. The
+    /// streams serve any media of the host, and opening one may cost a whole meeting through the routers: the next
+    /// film of the session takes them over instead of opening its own.
+    /// </summary>
+    public Func<Stream, ValueTask>? KeepStream { get; init; }
 
     /// <summary>
     /// Gets the total number of bytes received.
@@ -90,7 +116,14 @@ public sealed class RemoteChunkSource : IChunkSource
         await _disposing.CancelAsync().ConfigureAwait(false);
         while (_idle.TryTake(out var client))
         {
-            await client.DisposeAsync().ConfigureAwait(false);
+            if (KeepStream is { } keep)
+            {
+                await keep(client.Detach()).ConfigureAwait(false);
+            }
+            else
+            {
+                await client.DisposeAsync().ConfigureAwait(false);
+            }
         }
     }
 
@@ -111,7 +144,7 @@ public sealed class RemoteChunkSource : IChunkSource
         ChunkClient? client = null;
         try
         {
-            client = _idle.TryTake(out var idle) ? idle : new ChunkClient(await _openStream(token).ConfigureAwait(false));
+            client = _idle.TryTake(out var idle) ? idle : new ChunkClient(await _openStream(token).ConfigureAwait(false), _stallTimeout);
             var hash = await client.FetchHashAsync(Media, index, token).ConfigureAwait(false);
             _idle.Add(client);
             client = null;
@@ -148,7 +181,7 @@ public sealed class RemoteChunkSource : IChunkSource
                 ChunkClient? client = null;
                 try
                 {
-                    client = _idle.TryTake(out var idle) ? idle : new ChunkClient(await _openStream(token).ConfigureAwait(false));
+                    client = _idle.TryTake(out var idle) ? idle : new ChunkClient(await _openStream(token).ConfigureAwait(false), _stallTimeout);
                     var data = await client.FetchAsync(Media, index, token).ConfigureAwait(false);
                     _idle.Add(client);
                     client = null;

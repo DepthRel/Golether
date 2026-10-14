@@ -20,4 +20,10 @@ public enum StreamPurpose : byte
     /// relay is reachable wherever the session is.
     /// </summary>
     Relay = 3,
+
+    /// <summary>
+    /// All TURN connections of a participant to the relay of the host in one stream: each is a channel of a
+    /// multiplexer. Saves a connection through the routers per camera and voice connection.
+    /// </summary>
+    RelayShared = 4,
 }

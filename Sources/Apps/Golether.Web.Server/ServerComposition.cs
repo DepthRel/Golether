@@ -21,6 +21,7 @@ internal static class ServerComposition
         ArgumentNullException.ThrowIfNull(options);
         services.AddSingleton(options);
         services.AddSingleton(TimeProvider.System);
+        services.AddSingleton<ServerJournal>();
         services.AddSingleton<RoomRegistry>();
         services.AddSingleton<MeetingBroker>();
         services.AddSingleton(provider =>

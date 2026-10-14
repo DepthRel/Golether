@@ -26,9 +26,15 @@ internal sealed class TestServer : IAsyncDisposable
         Statistics = new ServerStatistics(TimeProvider.System);
         Rooms = new RoomRegistry(options);
         Statistics.CountRooms = () => Rooms.Count;
-        var handler = new ConnectionHandler(options, Rooms, new MeetingBroker(options), Statistics, NullLogger<ConnectionHandler>.Instance);
-        _listener = new RendezvousListener(options, handler, Statistics, TimeProvider.System, NullLogger<RendezvousListener>.Instance);
+        Journal = new ServerJournal(TimeProvider.System);
+        var handler = new ConnectionHandler(options, Rooms, new MeetingBroker(options), Statistics, NullLogger<ConnectionHandler>.Instance, Journal);
+        _listener = new RendezvousListener(options, handler, Statistics, TimeProvider.System, NullLogger<RendezvousListener>.Instance, Journal);
     }
+
+    /// <summary>
+    /// Gets the journal of events of the server.
+    /// </summary>
+    public ServerJournal Journal { get; }
 
     /// <summary>
     /// Gets the options.

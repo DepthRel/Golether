@@ -93,7 +93,11 @@ public sealed class CachedMediaReader : IAsyncDisposable
         var count = Math.Min(buffer.Length, chunk.Length - offset);
         chunk.AsMemory(offset, count).CopyTo(buffer);
 
-        if (Interlocked.Exchange(ref _currentChunk, index) != index)
+        // Reading ahead starts when the player goes on from one piece to the next, not when it lands somewhere.
+        // A player that opens a file jumps around it (the index of an AVI is at its end or scattered through it),
+        // and each landing would start pieces nobody needs, taking the connection from the piece that is needed.
+        var previous = Interlocked.Exchange(ref _currentChunk, index);
+        if (previous >= 0 && index == previous + 1)
         {
             _wake.Release();
         }

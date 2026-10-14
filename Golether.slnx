@@ -8,28 +8,56 @@
     <File Path="README.md" />
   </Folder>
   <Folder Name="/Docs/">
-    <File Path="Docs/Architecture.md" />
-    <File Path="Docs/Development.md" />
-    <File Path="Docs/Protocol.md" />
-    <File Path="Docs/RendezvousServer.md" />
-    <File Path="Docs/UserGuide.md" />
+    <File Path="Docs/README.md" />
     <File Path="Native/README.md" />
   </Folder>
+  <Folder Name="/Docs/En/">
+    <File Path="Docs/En/Architecture.md" />
+    <File Path="Docs/En/Development.md" />
+    <File Path="Docs/En/Protocol.md" />
+    <File Path="Docs/En/RendezvousServer.md" />
+    <File Path="Docs/En/UserGuide.md" />
+  </Folder>
+  <Folder Name="/Docs/Ru/">
+    <File Path="Docs/Ru/Architecture.md" />
+    <File Path="Docs/Ru/Development.md" />
+    <File Path="Docs/Ru/Protocol.md" />
+    <File Path="Docs/Ru/RendezvousServer.md" />
+    <File Path="Docs/Ru/UserGuide.md" />
+  </Folder>
   <Folder Name="/Scripts/">
-    <File Path="Scripts/generate-icon.ps1" />
-    <File Path="Scripts/publish-common.sh" />
-    <File Path="Scripts/publish-linux.sh" />
-    <File Path="Scripts/publish-macos.sh" />
-    <File Path="Scripts/publish-win.ps1" />
-    <File Path="Scripts/publish-server-win.ps1" />
-    <File Path="Scripts/publish-server.sh" />
-    <File Path="Scripts/build-server-installer.ps1" />
-    <File Path="Scripts/golether-server.iss" />
+    <File Path="Scripts/README.md" />
+  </Folder>
+  <Folder Name="/Scripts/App/">
+    <File Path="Scripts/App/build-installer.ps1" />
+    <File Path="Scripts/App/golether.iss" />
+    <File Path="Scripts/App/publish-common.sh" />
+    <File Path="Scripts/App/publish-linux-in-wsl.sh" />
+    <File Path="Scripts/App/publish-linux.ps1" />
+    <File Path="Scripts/App/publish-linux.sh" />
+    <File Path="Scripts/App/publish-macos.sh" />
+    <File Path="Scripts/App/publish-win.ps1" />
+  </Folder>
+  <Folder Name="/Scripts/Assets/">
+    <File Path="Scripts/Assets/generate-flags.ps1" />
+    <File Path="Scripts/Assets/generate-icon.ps1" />
+    <File Path="Scripts/Assets/generate-installer-art.ps1" />
+    <File Path="Scripts/Assets/update-site-screenshot.ps1" />
+  </Folder>
+  <Folder Name="/Scripts/Server/">
+    <File Path="Scripts/Server/build-server-installer.ps1" />
+    <File Path="Scripts/Server/golether-server.iss" />
+    <File Path="Scripts/Server/publish-server-linux.ps1" />
+    <File Path="Scripts/Server/publish-server-macos.ps1" />
+    <File Path="Scripts/Server/publish-server-win.ps1" />
+    <File Path="Scripts/Server/publish-server.sh" />
   </Folder>
   <Folder Name="/Sources/" />
   <Folder Name="/Sources/Apps/">
     <Project Path="Sources/Apps/Golether.UI/Golether.UI.csproj" />
     <Project Path="Sources/Apps/Golether.Web.Server/Golether.Web.Server.csproj" />
+    <Project Path="Sources/Apps/Golether.Web.Server.Contracts/Golether.Web.Server.Contracts.csproj" />
+    <Project Path="Sources/Apps/Golether.Web.Server.UI/Golether.Web.Server.UI.csproj" />
   </Folder>
   <Folder Name="/Sources/Components/">
     <Project Path="Sources/Components/Golether.Components/Golether.Components.csproj" />
@@ -91,5 +119,6 @@
     <Project Path="Tests/Golether.UI.Headless.Tests/Golether.UI.Headless.Tests.csproj" />
     <Project Path="Tests/Golether.UI.Tests/Golether.UI.Tests.csproj" />
     <Project Path="Tests/Golether.Web.Server.Tests/Golether.Web.Server.Tests.csproj" />
+    <Project Path="Tests/Golether.Web.Server.UI.Tests/Golether.Web.Server.UI.Tests.csproj" />
   </Folder>
 </Solution>

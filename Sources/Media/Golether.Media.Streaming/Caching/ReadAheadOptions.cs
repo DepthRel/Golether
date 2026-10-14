@@ -16,6 +16,30 @@ public sealed record ReadAheadOptions
     public int BatchSize { get; init; } = 4;
 
     /// <summary>
+    /// How far ahead of the player the media is read, in bytes, whatever the size of a piece.
+    /// </summary>
+    private const long ReadAheadBytes = 128L * 1024 * 1024;
+
+    /// <summary>
+    /// Returns the settings for a source that fetches over a given number of streams. One stream is left free of
+    /// reading ahead whenever there is more than one: the piece the player waits for must never queue behind
+    /// pieces nobody needs yet. That matters most right after opening and after a seek, on a slow connection.
+    /// </summary>
+    /// <param name="streams">The number of pieces the source fetches at once.</param>
+    /// <param name="chunkSize">The size of a piece in bytes.</param>
+    /// <returns>The settings.</returns>
+    public static ReadAheadOptions For(int streams, int chunkSize)
+    {
+        ArgumentOutOfRangeException.ThrowIfLessThan(streams, 1);
+        ArgumentOutOfRangeException.ThrowIfLessThan(chunkSize, 1);
+        return new ReadAheadOptions
+        {
+            BatchSize = Math.Max(1, streams - 1),
+            ReadAheadChunks = (int)Math.Clamp(ReadAheadBytes / chunkSize, 4, 4096),
+        };
+    }
+
+    /// <summary>
     /// Validates the options.
     /// </summary>
     /// <exception cref="ArgumentOutOfRangeException">A value is out of range.</exception>

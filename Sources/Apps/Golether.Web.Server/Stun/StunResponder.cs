@@ -45,6 +45,11 @@ internal sealed class StunResponder : BackgroundService
     private readonly ILogger<StunResponder> _logger;
 
     /// <summary>
+    /// The journal of events for the monitor, or <see langword="null"/> without one.
+    /// </summary>
+    private readonly ServerJournal? _journal;
+
+    /// <summary>
     /// The UDP socket, or <see langword="null"/> before the start.
     /// </summary>
     private Socket? _socket;
@@ -56,8 +61,10 @@ internal sealed class StunResponder : BackgroundService
     /// <param name="statistics">The counters.</param>
     /// <param name="timeProvider">The time provider.</param>
     /// <param name="logger">The logger.</param>
-    public StunResponder(RendezvousServerOptions options, ServerStatistics statistics, TimeProvider timeProvider, ILogger<StunResponder> logger)
+    /// <param name="journal">The journal of events for the monitor, or <see langword="null"/> without one.</param>
+    public StunResponder(RendezvousServerOptions options, ServerStatistics statistics, TimeProvider timeProvider, ILogger<StunResponder> logger, ServerJournal? journal = null)
     {
+        _journal = journal;
         _options = options ?? throw new ArgumentNullException(nameof(options));
         _statistics = statistics ?? throw new ArgumentNullException(nameof(statistics));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
@@ -96,6 +103,7 @@ internal sealed class StunResponder : BackgroundService
 
         _socket = socket;
         _logger.LogInformation("STUN answering on udp://{Endpoint}", socket.LocalEndPoint);
+        _journal?.Record(Contracts.JournalEvent.StunListening, detail: "udp://" + socket.LocalEndPoint);
         return base.StartAsync(cancellationToken);
     }
 

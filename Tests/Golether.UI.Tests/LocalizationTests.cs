@@ -234,7 +234,7 @@ public sealed class LocalizationTests
         var state = PlaybackState.Initial(Host, 0) with { Cause = PlaybackCause.Seek, Position = TimeSpan.FromSeconds(3905) };
 
         Assert.Equal("Marina seeks to 1:05:05", SessionTexts.Describe(state, "Marina"));
-        Assert.Equal("The host declined the request.", SessionTexts.DescribeRejection(RejectReason.Declined));
+        Assert.Equal("The host declined the request. To try again, ask them for a new invitation.", SessionTexts.DescribeRejection(RejectReason.Declined));
     }
 
     /// <summary>
@@ -246,12 +246,12 @@ public sealed class LocalizationTests
     {
         using (Texts.Scope(NewLocalizer("ru")))
         {
-            Assert.Equal("Ведущий отклонил запрос.", SessionTexts.DescribeRejection(RejectReason.Declined));
+            Assert.Equal("Ведущий отклонил запрос. Чтобы попробовать ещё раз, попросите у него новое приглашение.", SessionTexts.DescribeRejection(RejectReason.Declined));
         }
 
         using (Texts.Scope(NewLocalizer("en")))
         {
-            Assert.Equal("The host declined the request.", SessionTexts.DescribeRejection(RejectReason.Declined));
+            Assert.Equal("The host declined the request. To try again, ask them for a new invitation.", SessionTexts.DescribeRejection(RejectReason.Declined));
         }
 
         using (Texts.Scope(NewLocalizer("en")))

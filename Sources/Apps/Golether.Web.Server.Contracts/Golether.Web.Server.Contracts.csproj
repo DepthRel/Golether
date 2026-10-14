@@ -1,0 +1,17 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    What the rendezvous server and its monitor (Golether.Web.Server.UI) agree on: the settings and their checks, the
+    names of the service on every system, the health report and the journal of events served on the local status
+    address. Free of ASP.NET and of Avalonia, so either side takes it without the other's framework.
+  -->
+  <PropertyGroup>
+    <RootNamespace>Golether.Web.Server.Contracts</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="../../Core/Golether.Localization/Golether.Localization.csproj" />
+    <ProjectReference Include="../../Transports/Golether.Transports.Rendezvous/Golether.Transports.Rendezvous.csproj" />
+  </ItemGroup>
+
+</Project>

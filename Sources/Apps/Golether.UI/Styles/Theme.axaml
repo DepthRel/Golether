@@ -36,6 +36,25 @@
 
       <FontFamily x:Key="GoletherMono">Cascadia Mono, Consolas, Menlo, DejaVu Sans Mono, monospace</FontFamily>
 
+      <!--
+        A folding block ("Advanced") looks like the text fields around it: the same height, the same border and
+        background, the same slightly rounded corners and the same text. Fluent draws it as a tall borderless bar.
+      -->
+      <x:Double x:Key="ExpanderMinHeight">32</x:Double>
+      <Thickness x:Key="ExpanderHeaderPadding">10,0,0,0</Thickness>
+      <Thickness x:Key="ExpanderHeaderBorderThickness">1</Thickness>
+      <Thickness x:Key="ExpanderContentPadding">12</Thickness>
+      <x:Double x:Key="ExpanderChevronButtonSize">24</x:Double>
+      <Thickness x:Key="ExpanderChevronMargin">12,0,6,0</Thickness>
+      <SolidColorBrush x:Key="ExpanderHeaderBackground" Color="#66000000" />
+      <SolidColorBrush x:Key="ExpanderHeaderBackgroundPointerOver" Color="#66000000" />
+      <SolidColorBrush x:Key="ExpanderHeaderBackgroundPressed" Color="#66000000" />
+      <SolidColorBrush x:Key="ExpanderHeaderBorderBrush" Color="#99FFFFFF" />
+      <SolidColorBrush x:Key="ExpanderHeaderBorderBrushPointerOver" Color="#CCFFFFFF" />
+      <SolidColorBrush x:Key="ExpanderHeaderBorderBrushPressed" Color="#CCFFFFFF" />
+      <SolidColorBrush x:Key="ExpanderContentBackground" Color="#33000000" />
+      <SolidColorBrush x:Key="ExpanderContentBorderBrush" Color="#99FFFFFF" />
+
       <!-- Fluent accent follows the Golether amber. -->
       <Color x:Key="SystemAccentColor">#F0A860</Color>
       <Color x:Key="SystemAccentColorLight1">#F4BC84</Color>
@@ -361,6 +380,12 @@
     <Setter Property="AcceptsReturn" Value="True" />
     <Setter Property="MinHeight" Value="72" />
     <Setter Property="MaxHeight" Value="140" />
+  </Style>
+
+  <!-- An invitation shown whole enough to see that a new one is new: three lines instead of the tall package box. -->
+  <Style Selector="TextBox.package.invite">
+    <Setter Property="MinHeight" Value="0" />
+    <Setter Property="Height" Value="72" />
   </Style>
 
   <!-- Timeline -->

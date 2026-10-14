@@ -305,6 +305,13 @@ public sealed partial class MainWindowViewModel : ObservableObject
         _session.Changed += (_, _) => QueueRefresh();
         _session.EventRaised += (_, e) => _dispatcher.Post(() => AddEvent(e));
         _session.AvatarReceived += (_, update) => _dispatcher.Post(() => ApplyAvatar(update));
+        _session.ClosedByHost += (_, reason) => _dispatcher.Post(() =>
+        {
+            // The first sentence says what happened and is the whole message when nothing follows it.
+            var cut = reason.IndexOf(". ", StringComparison.Ordinal);
+            var heading = (cut < 0 ? reason : reason[..cut]).TrimEnd('.');
+            _ = _dialogs.ShowMessageAsync(heading, cut < 0 ? string.Empty : reason[(cut + 2)..]);
+        });
         Texts.Localizer.LanguageChanged += (_, _) => _dispatcher.Post(RefreshTexts);
     }
 
@@ -336,6 +343,8 @@ public sealed partial class MainWindowViewModel : ObservableObject
         _defaultSessionName = offered;
         OnPropertyChanged(nameof(PlayButtonText));
         OnPropertyChanged(nameof(VideoPlaceholder));
+        OnPropertyChanged(nameof(JoinTitle));
+        OnPropertyChanged(nameof(JoinText));
         OnPropertyChanged(nameof(ResumeText));
         OnPropertyChanged(nameof(MicrophoneText));
         OnPropertyChanged(nameof(CameraText));
@@ -390,6 +399,11 @@ public sealed partial class MainWindowViewModel : ObservableObject
     /// Gets the fingerprint of this device.
     /// </summary>
     public string DeviceFingerprint { get; }
+
+    /// <summary>
+    /// Gets the version of the application as <c>major.minor.patch</c>, shown in the corner of the status bar.
+    /// </summary>
+    public string AppVersion { get; } = (typeof(MainWindowViewModel).Assembly.GetName().Version ?? new Version(0, 0, 0)).ToString(3);
 
     /// <summary>
     /// Gets or sets the notice about camera and voice availability.
@@ -1079,7 +1093,22 @@ public sealed partial class MainWindowViewModel : ObservableObject
     /// the host). The busy overlay and the approval screen then offer a cancel button.
     /// </summary>
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(ShowJoinScreen), nameof(JoinTitle), nameof(JoinText))]
     public partial bool IsCancellable { get; set; }
+
+    /// <summary>
+    /// Gets or sets a value indicating whether an invitation that came from outside (a link opened in the browser)
+    /// is being taken up: from the moment the application learns of it until the user is asked and the join
+    /// begins. Without a sign of it the start screen would look as if the link had done nothing.
+    /// </summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(ShowJoinScreen), nameof(JoinTitle), nameof(JoinText))]
+    public partial bool IsOpeningInvite { get; set; }
+
+    /// <summary>
+    /// Gets a value indicating whether the screen of a join in progress covers the window.
+    /// </summary>
+    public bool ShowJoinScreen => IsCancellable || IsOpeningInvite;
 
     /// <summary>
     /// Gets or sets a value indicating whether a session runs.
@@ -1147,6 +1176,26 @@ public sealed partial class MainWindowViewModel : ObservableObject
     /// </summary>
     [ObservableProperty]
     public partial bool IsAwaitingApproval { get; set; }
+
+    /// <summary>
+    /// Gets or sets a value indicating whether the host was reached and is being asked to let this device in. Before
+    /// that the join is still looking for a way to the host.
+    /// </summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(JoinTitle), nameof(JoinText))]
+    public partial bool IsWaitingForHost { get; set; }
+
+    /// <summary>
+    /// Gets the heading of the screen shown while a session is being joined: what is happening right now.
+    /// </summary>
+    public string JoinTitle
+        => Texts.Get(!IsCancellable && IsOpeningInvite ? "Main.Joining.Opening" : IsWaitingForHost ? "Main.Approval.Title" : "Main.Joining.Title");
+
+    /// <summary>
+    /// Gets the explanation under <see cref="JoinTitle"/>.
+    /// </summary>
+    public string JoinText
+        => !IsCancellable && IsOpeningInvite ? string.Empty : Texts.Get(IsWaitingForHost ? "Main.Approval.Text" : "Main.Joining.Text");
 
     /// <summary>
     /// Gets or sets the playback position in seconds.
@@ -1318,10 +1367,13 @@ public sealed partial class MainWindowViewModel : ObservableObject
     public bool ShowVideo => PlayerAvailable && HasMedia && !IsAwaitingApproval && !IsBusy;
 
     /// <summary>
-    /// Gets the hint shown instead of the video.
+    /// Gets the hint shown instead of the video. The video area is also hidden while something is in progress
+    /// (see <see cref="ShowVideo"/>): then the hint says what is being done, not that the video does not work.
     /// </summary>
     public string VideoPlaceholder
-        => Texts.Get(HasMedia ? "Main.Placeholder.NoVideo" : IsHost ? "Main.Placeholder.ChooseFile" : "Main.Placeholder.HostNotChosen");
+        => !HasMedia ? Texts.Get(IsHost ? "Main.Placeholder.ChooseFile" : "Main.Placeholder.HostNotChosen")
+            : PlayerAvailable ? BusyText
+            : Texts.Get("Main.Placeholder.NoVideo");
 
     /// <summary>
     /// Gets a value indicating whether the host can pick the first file from the placeholder.
@@ -1434,8 +1486,16 @@ public sealed partial class MainWindowViewModel : ObservableObject
         ArgumentNullException.ThrowIfNull(arguments);
         if (arguments.FirstOrDefault(Invite.LooksLikeLink) is { } link)
         {
-            _dialogs.BringToFront();
-            await OfferInviteAsync(link);
+            IsOpeningInvite = true;
+            try
+            {
+                _dialogs.BringToFront();
+                await OfferInviteAsync(link);
+            }
+            finally
+            {
+                IsOpeningInvite = false;
+            }
         }
         else if (arguments.FirstOrDefault(a => !a.StartsWith('-') && File.Exists(a)) is { } file
             && !IsBusy && (!_session.IsActive || _session.IsHost))
@@ -1528,7 +1588,8 @@ public sealed partial class MainWindowViewModel : ObservableObject
         base.OnPropertyChanged(e);
         switch (e.PropertyName)
         {
-            case nameof(PlayerAvailable) or nameof(HasMedia) or nameof(IsAwaitingApproval) or nameof(IsBusy) or nameof(IsHost) or nameof(IsInSession):
+            case nameof(PlayerAvailable) or nameof(HasMedia) or nameof(IsAwaitingApproval) or nameof(IsBusy) or nameof(BusyText) or nameof(IsHost)
+                or nameof(IsInSession):
                 base.OnPropertyChanged(new System.ComponentModel.PropertyChangedEventArgs(nameof(ShowVideo)));
                 base.OnPropertyChanged(new System.ComponentModel.PropertyChangedEventArgs(nameof(VideoPlaceholder)));
                 base.OnPropertyChanged(new System.ComponentModel.PropertyChangedEventArgs(nameof(CanPickFirstFile)));
@@ -1552,6 +1613,7 @@ public sealed partial class MainWindowViewModel : ObservableObject
             _peerAvatars.Clear();
             IsHost = false;
             IsAwaitingApproval = false;
+            IsWaitingForHost = false;
             _resumeMedia = null;
             ResumeOffer = null;
             if (Chat.HasLines || Chat.Reactions.Count > 0)
@@ -1572,6 +1634,7 @@ public sealed partial class MainWindowViewModel : ObservableObject
         IsHost = snapshot.IsHost;
         SessionTitle = snapshot.SessionName;
         IsAwaitingApproval = snapshot.State is SessionState.Connecting or SessionState.AwaitingApproval;
+        IsWaitingForHost = snapshot.State == SessionState.AwaitingApproval;
         VerificationText = snapshot.VerificationCode?.ToString() ?? string.Empty;
         HasMedia = snapshot.Media is not null;
         MediaCaption = snapshot.Media is { } media
@@ -1584,10 +1647,15 @@ public sealed partial class MainWindowViewModel : ObservableObject
         DurationText = DisplayFormat.Position(duration);
         var position = local?.Snapshot.Position ?? local?.Expected;
         var seeking = local?.Snapshot is { IsLoaded: true, IsBuffering: true };
-        if (!IsScrubbing && !seeking)
+        if (!IsScrubbing)
         {
-            // While the player seeks or waits for data its position is stale: the timeline would jump back.
-            PositionSeconds = Math.Clamp(position?.TotalSeconds ?? 0, 0, DurationSeconds);
+            // While the player seeks or waits for data its own position is stale: the handle shows where the
+            // session is instead. Left where it was, it would disagree with the mark of this participant on the
+            // same timeline for as long as the data takes to arrive, which on a slow connection is a long time.
+            // Until the film is opened its length is unknown: the handle stays at the start instead of being
+            // pushed to the end of an empty timeline, which looks as if the film were over.
+            var shown = seeking ? local?.Expected ?? position : position;
+            PositionSeconds = duration is { Ticks: > 0 } ? Math.Clamp(shown?.TotalSeconds ?? 0, 0, DurationSeconds) : 0;
         }
 
         PositionText = DisplayFormat.Position(position);
@@ -2188,7 +2256,7 @@ public sealed partial class MainWindowViewModel : ObservableObject
             var item = Participants.FirstOrDefault(p => p.PeerId == views[i].Info.PeerId);
             if (item is null)
             {
-                item = new ParticipantItemViewModel(views[i].Info.PeerId, SwitchOffParticipantDevicesAsync, ChangeVoiceVolume);
+                item = new ParticipantItemViewModel(views[i].Info.PeerId, SwitchOffParticipantDevicesAsync, ChangeVoiceVolume, RemoveParticipantAsync);
                 Participants.Insert(_participantsReordered ? Participants.Count : Math.Min(i, Participants.Count), item);
                 if (!views[i].IsLocal)
                 {
@@ -2257,6 +2325,33 @@ public sealed partial class MainWindowViewModel : ObservableObject
         if (tile is not null)
         {
             tile.IsSpeaking = change.IsSpeaking && !(tile.IsLocal ? MicrophoneMuted : tile.MicrophoneOff);
+        }
+    }
+
+    /// <summary>
+    /// Removes a participant from the session (host only): asks the host first, since the participant will need a
+    /// new invitation to come back, and reports failures.
+    /// </summary>
+    /// <param name="peerId">The participant.</param>
+    /// <returns>A task that completes when the participant was removed or the host changed their mind.</returns>
+    private async Task RemoveParticipantAsync(Core.Identity.PeerId peerId)
+    {
+        var name = Participants.FirstOrDefault(p => p.PeerId == peerId)?.Name ?? string.Empty;
+        if (!await _dialogs.ConfirmAsync(
+            Texts.Get("Main.Moderation.Remove.Title"),
+            Texts.Format("Main.Moderation.Remove.Text", name),
+            Texts.Get("Main.Moderation.Remove.Accept")))
+        {
+            return;
+        }
+
+        try
+        {
+            await _session.RemoveParticipantAsync(peerId);
+        }
+        catch (Exception ex) when (ex is InvalidOperationException or IOException)
+        {
+            await _dialogs.ShowErrorAsync(Texts.Get("Main.Error.RemoveFailed"), ex.Message);
         }
     }
 

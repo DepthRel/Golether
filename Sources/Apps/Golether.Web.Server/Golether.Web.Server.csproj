@@ -3,7 +3,7 @@
   <!--
     The Golether rendezvous server: introduces a host and a participant that sit behind routers without open ports
     and tells both where to knock, so they punch a direct TCP connection; answers STUN for the cameras and voices.
-    It never carries the session itself. Runs on one machine with a public address; see Docs/RendezvousServer.md.
+    It never carries the session itself. Runs on one machine with a public address; see Docs/En/RendezvousServer.md.
   -->
   <PropertyGroup>
     <RootNamespace>Golether.Web.Server</RootNamespace>
@@ -20,9 +20,17 @@
     <InternalsVisibleTo Include="Golether.Web.Server.Tests" />
   </ItemGroup>
 
-  <!-- The administrator guide travels with the program in every package, whatever the system. -->
+  <!-- The default settings are also built into the program: a missing settings file is written again from them. -->
   <ItemGroup>
-    <None Update="ADMIN-GUIDE.md" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+    <EmbeddedResource Include="appsettings.json" LogicalName="Golether.Web.Server.appsettings.default.json" />
+  </ItemGroup>
+
+  <!--
+    The administrator guide travels with the program in every package, whatever the system: ADMIN-GUIDE.md in English
+    (the main one) and ADMIN-GUIDE.<language>.md for the other languages.
+  -->
+  <ItemGroup>
+    <None Update="ADMIN-GUIDE*.md" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
   </ItemGroup>
 
   <!-- Lets the same program run as a Windows service (the installer registers it) and as a systemd unit. -->
@@ -34,6 +42,7 @@
   <ItemGroup>
     <ProjectReference Include="../../Transports/Golether.Transports.Rendezvous/Golether.Transports.Rendezvous.csproj" />
     <ProjectReference Include="../../Transports/Golether.Transports.Relay/Golether.Transports.Relay.csproj" />
+    <ProjectReference Include="../Golether.Web.Server.Contracts/Golether.Web.Server.Contracts.csproj" />
   </ItemGroup>
 
   <!--
@@ -42,7 +51,7 @@
       <folder>/golether-server(.exe)   the launcher: the same .NET host with the server icon, pointing at bin/
       <folder>/bin/                    the program, the runtime and the libraries
       <folder>/config/appsettings.json the settings (PackageLayout finds them from bin/)
-      <folder>/docs/ADMIN-GUIDE.md     the administrator guide
+      <folder>/docs/ADMIN-GUIDE*.md    the administrator guide: English, and one file per other language
   -->
   <Target Name="GoletherServerPackageLayout" AfterTargets="Publish" DependsOnTargets="_GetAppHostPaths"
           Condition="'$(GoletherServerPackageRoot)' != ''">
@@ -67,9 +76,12 @@
                    RetryDelayMilliseconds="$(CopyRetryDelayMilliseconds)" />
 
     <Copy SourceFiles="$(PublishDir)appsettings.json" DestinationFolder="$(_ServerPackageRoot)config" />
-    <Copy SourceFiles="$(PublishDir)ADMIN-GUIDE.md" DestinationFolder="$(_ServerPackageRoot)docs" />
+    <ItemGroup>
+      <_ServerGuide Include="$(PublishDir)ADMIN-GUIDE*.md" />
+    </ItemGroup>
+    <Copy SourceFiles="@(_ServerGuide)" DestinationFolder="$(_ServerPackageRoot)docs" />
     <!-- web.config is written for IIS, which the server does not use. -->
-    <Delete Files="$(PublishDir)appsettings.json;$(PublishDir)ADMIN-GUIDE.md;$(PublishDir)web.config" />
+    <Delete Files="$(PublishDir)appsettings.json;@(_ServerGuide);$(PublishDir)web.config" />
   </Target>
 
 </Project>

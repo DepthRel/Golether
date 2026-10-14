@@ -141,6 +141,194 @@ public sealed class StreamingTests : IAsyncLifetime
     }
 
     /// <summary>
+    /// A connection that opens and then never answers does not hang the film: after a short wait the piece is asked
+    /// for again over a new connection. Connections made through two routers sometimes behave like this, carrying
+    /// small messages and stopping dead on a large answer, with no error on either side.
+    /// </summary>
+    /// <returns>A task that completes when the test is done.</returns>
+    [Fact]
+    public async Task DeadConnection_IsReplacedInsteadOfWaitedFor()
+    {
+        var media = await DescribeAsync();
+        var shared = new LocalSharedMedia();
+        shared.Share(_path, media);
+        var token = TestContext.Current.CancellationToken;
+        var server = new ChunkServer(shared);
+        var opened = 0;
+        var dead = new List<Stream>();
+
+        async Task<Stream> OpenAsync(CancellationToken ct)
+        {
+            var (client, serverSide) = await ConnectedPairAsync();
+            if (Interlocked.Increment(ref opened) == 1)
+            {
+                // The first connection is open, takes the request and never answers.
+                dead.Add(serverSide);
+            }
+            else
+            {
+                _ = server.ServeAsync(serverSide, CancellationToken.None);
+            }
+
+            return client;
+        }
+
+        await using var source = new RemoteChunkSource(media, OpenAsync, parallelism: 2, stallTimeout: TimeSpan.FromMilliseconds(300));
+
+        var chunk = await source.GetChunkAsync(1, token).AsTask().WaitAsync(TimeSpan.FromSeconds(10), token);
+
+        Assert.Equal(_content.AsSpan(ChunkSize, ChunkSize).ToArray(), chunk);
+        Assert.Equal(2, opened);
+        foreach (var stream in dead)
+        {
+            await stream.DisposeAsync();
+        }
+    }
+
+    /// <summary>
+    /// What the player needs now is not held up by what is read ahead. A player that opens a file jumps around it
+    /// (an AVI keeps its index at the end); if reading ahead took every stream to the host, the piece the player
+    /// waits for would queue behind pieces nobody needs yet, which on a slow connection takes minutes.
+    /// </summary>
+    /// <returns>A task that completes when the test is done.</returns>
+    [Fact]
+    public async Task ReadAhead_LeavesAStreamForWhatThePlayerNeedsNow()
+    {
+        var token = TestContext.Current.CancellationToken;
+        const int Streams = 3;
+        var media = new MediaDescriptor { FileName = "film.avi", Length = 20 * 1024, ChunkSize = 1024, QuickId = new string('a', 64) };
+        await using var source = new SlowSource(media, Streams, immediate: [0, 1, 19]);
+        await using var reader = new CachedMediaReader(source, new ChunkCache(), ReadAheadOptions.For(Streams, media.ChunkSize));
+        var buffer = new byte[16];
+
+        Assert.Equal(16, await reader.ReadAsync(0, buffer, token));
+        Assert.Equal(16, await reader.ReadAsync(1024, buffer, token));
+
+        // The player reads on, so reading ahead has started, and its pieces are stuck on the slow connection.
+        var deadline = DateTime.UtcNow.AddSeconds(10);
+        while (source.Stuck < Streams - 1 && DateTime.UtcNow < deadline)
+        {
+            await Task.Delay(20, token);
+        }
+
+        Assert.Equal(Streams - 1, source.Stuck);
+
+        // The player jumps to the end of the file: that piece comes at once.
+        var read = await reader.ReadAsync(19 * 1024, buffer, token).AsTask().WaitAsync(TimeSpan.FromSeconds(5), token);
+        Assert.Equal(16, read);
+        source.Release();
+    }
+
+    /// <summary>
+    /// Landing somewhere in the file does not start reading ahead: a player that opens a file jumps around it, and
+    /// only going on from one piece to the next shows that it plays from there.
+    /// </summary>
+    /// <returns>A task that completes when the test is done.</returns>
+    [Fact]
+    public async Task ReadAhead_WaitsUntilThePlayerReadsOn()
+    {
+        var token = TestContext.Current.CancellationToken;
+        var media = new MediaDescriptor { FileName = "film.avi", Length = 20 * 1024, ChunkSize = 1024, QuickId = new string('a', 64) };
+        await using var source = new SlowSource(media, streams: 3, immediate: [0, 5, 6, 19]);
+        await using var reader = new CachedMediaReader(source, new ChunkCache(), ReadAheadOptions.For(3, media.ChunkSize));
+        var buffer = new byte[16];
+
+        await reader.ReadAsync(0, buffer, token);
+        await reader.ReadAsync(19 * 1024, buffer, token);
+        await reader.ReadAsync(5 * 1024, buffer, token);
+        await Task.Delay(300, token);
+        Assert.Equal(0, source.Stuck);
+
+        await reader.ReadAsync(6 * 1024, buffer, token);
+        var deadline = DateTime.UtcNow.AddSeconds(10);
+        while (source.Stuck < 2 && DateTime.UtcNow < deadline)
+        {
+            await Task.Delay(20, token);
+        }
+
+        Assert.Equal(2, source.Stuck);
+        source.Release();
+    }
+
+    /// <summary>
+    /// The settings for a number of streams: one stream is always kept free, and the distance read ahead is the
+    /// same in bytes whatever the size of a piece.
+    /// </summary>
+    [Fact]
+    public void ReadAheadOptions_FollowTheStreamsAndThePieceSize()
+    {
+        Assert.Equal(3, ReadAheadOptions.For(4, 1024 * 1024).BatchSize);
+        Assert.Equal(1, ReadAheadOptions.For(1, 1024 * 1024).BatchSize);
+        Assert.Equal(128, ReadAheadOptions.For(4, 1024 * 1024).ReadAheadChunks);
+        Assert.Equal(32, ReadAheadOptions.For(4, 4 * 1024 * 1024).ReadAheadChunks);
+        Assert.Equal(8, ReadAheadOptions.For(4, 16 * 1024 * 1024).ReadAheadChunks);
+    }
+
+    /// <summary>
+    /// A source with a limited number of streams where every piece but a few never arrives until released.
+    /// </summary>
+    /// <param name="media">The media.</param>
+    /// <param name="streams">How many pieces can be fetched at once.</param>
+    /// <param name="immediate">The pieces that arrive at once.</param>
+    private sealed class SlowSource(MediaDescriptor media, int streams, long[] immediate) : IChunkSource
+    {
+        /// <summary>
+        /// The streams to the host.
+        /// </summary>
+        private readonly SemaphoreSlim _slots = new(streams, streams);
+
+        /// <summary>
+        /// Completed when the stuck pieces may arrive.
+        /// </summary>
+        private readonly TaskCompletionSource _released = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        /// <summary>
+        /// The number of pieces that hold a stream and do not arrive.
+        /// </summary>
+        private int _stuck;
+
+        /// <inheritdoc />
+        public MediaDescriptor Media => media;
+
+        /// <summary>
+        /// Gets the number of pieces that hold a stream and do not arrive.
+        /// </summary>
+        public int Stuck => Volatile.Read(ref _stuck);
+
+        /// <summary>
+        /// Lets the stuck pieces arrive.
+        /// </summary>
+        public void Release() => _released.TrySetResult();
+
+        /// <inheritdoc />
+        public async ValueTask<byte[]> GetChunkAsync(long index, CancellationToken cancellationToken)
+        {
+            await _slots.WaitAsync(cancellationToken);
+            try
+            {
+                if (!immediate.Contains(index))
+                {
+                    Interlocked.Increment(ref _stuck);
+                    await _released.Task.WaitAsync(cancellationToken);
+                }
+
+                return new byte[media.GetChunkLength(index)];
+            }
+            finally
+            {
+                _slots.Release();
+            }
+        }
+
+        /// <inheritdoc />
+        public ValueTask DisposeAsync()
+        {
+            Release();
+            return ValueTask.CompletedTask;
+        }
+    }
+
+    /// <summary>
     /// The stream seeks and reads synchronously like the player does.
     /// </summary>
     [Fact]

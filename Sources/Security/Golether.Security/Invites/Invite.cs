@@ -227,6 +227,11 @@ public sealed record Invite
     /// <summary>
     /// The JSON payload of a link with short property names.
     /// </summary>
+    /// <remarks>
+    /// The token and the expiry time are written first. Everything else is the same in every invitation of a session,
+    /// so with them in front a new invitation looks new from its first characters, which is all a narrow field
+    /// shows. The order means nothing to a reader: old and new versions read each other's links.
+    /// </remarks>
     /// <param name="Host">The host identifier.</param>
     /// <param name="Name">The host display name.</param>
     /// <param name="Session">The session name.</param>
@@ -240,8 +245,8 @@ public sealed record Invite
         string? Name,
         string? Session,
         string[]? Endpoints,
-        string? Token,
-        long Expires,
+        [property: JsonPropertyOrder(-2)] string? Token,
+        [property: JsonPropertyOrder(-1)] long Expires,
         [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? Meet = null,
         [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? Room = null);
 }

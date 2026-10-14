@@ -17,8 +17,14 @@ public sealed partial class ParticipantItemViewModel : ObservableObject
     /// <param name="peerId">The participant.</param>
     /// <param name="switchOff">Switches devices of the participant off (microphone, camera); used by the host.</param>
     /// <param name="voiceVolumeChanged">Applies and stores the local volume of the participant's voice (percent).</param>
-    public ParticipantItemViewModel(PeerId peerId, Func<PeerId, bool, bool, Task>? switchOff = null, Action<PeerId, double>? voiceVolumeChanged = null)
+    /// <param name="remove">Removes the participant from the session after asking the host; used by the host.</param>
+    public ParticipantItemViewModel(
+        PeerId peerId,
+        Func<PeerId, bool, bool, Task>? switchOff = null,
+        Action<PeerId, double>? voiceVolumeChanged = null,
+        Func<PeerId, Task>? remove = null)
     {
+        _remove = remove;
         _switchOff = switchOff;
         _voiceVolumeChanged = voiceVolumeChanged;
         PeerId = peerId;
@@ -29,6 +35,11 @@ public sealed partial class ParticipantItemViewModel : ObservableObject
     /// Switches devices of the participant off, or <see langword="null"/>.
     /// </summary>
     private readonly Func<PeerId, bool, bool, Task>? _switchOff;
+
+    /// <summary>
+    /// Removes the participant from the session, or <see langword="null"/>.
+    /// </summary>
+    private readonly Func<PeerId, Task>? _remove;
 
     /// <summary>
     /// Applies the voice volume, or <see langword="null"/>.
@@ -178,6 +189,19 @@ public sealed partial class ParticipantItemViewModel : ObservableObject
     public partial bool CameraOff { get; set; }
 
     /// <summary>
+    /// Takes the last camera image away when the camera goes off. A camera that is switched off sends nothing more,
+    /// so without this its last frame would stay in the tile as if the camera were still on.
+    /// </summary>
+    /// <param name="value">Whether the camera is off.</param>
+    partial void OnCameraOffChanged(bool value)
+    {
+        if (value)
+        {
+            CameraImage = null;
+        }
+    }
+
+    /// <summary>
     /// Gets the avatar color.
     /// </summary>
     public string AvatarColor { get; }
@@ -303,6 +327,14 @@ public sealed partial class ParticipantItemViewModel : ObservableObject
     /// <returns>A task that completes when the request was sent.</returns>
     [RelayCommand(CanExecute = nameof(CanSwitchOffCamera))]
     private Task SwitchOffCameraAsync() => _switchOff?.Invoke(PeerId, false, true) ?? Task.CompletedTask;
+
+    /// <summary>
+    /// Removes the participant from the session; the host is asked first. To come back the participant needs a new
+    /// invitation.
+    /// </summary>
+    /// <returns>A task that completes when the participant was removed or the host changed their mind.</returns>
+    [RelayCommand]
+    private Task RemoveAsync() => _remove?.Invoke(PeerId) ?? Task.CompletedTask;
 
     /// <summary>
     /// Checks whether the microphone can be switched off.

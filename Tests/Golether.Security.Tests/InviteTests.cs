@@ -98,16 +98,63 @@ public sealed class InviteTests
     public void Link_RejectsGarbage(string link) => Assert.Throws<FormatException>(() => Invite.ParseLink(link));
 
     /// <summary>
-    /// A token is accepted once and then unknown.
+    /// One invitation serves the whole company: the token is accepted again and again until its lifetime ends.
     /// </summary>
     [Fact]
-    public void Registry_TokenIsSingleUse()
+    public void Registry_TokenServesTheWholeCompany()
+    {
+        var time = new FakeTimeProvider();
+        var registry = new InviteRegistry(time);
+        var (token, _) = registry.Issue(TimeSpan.FromMinutes(15));
+
+        for (var guest = 0; guest < 4; guest++)
+        {
+            Assert.Equal(InviteCheckResult.Accepted, registry.TryUse(token, out _));
+        }
+
+        time.Advance(TimeSpan.FromMinutes(16));
+        Assert.Equal(InviteCheckResult.Expired, registry.TryUse(token, out _));
+        Assert.Equal(InviteCheckResult.Unknown, registry.TryUse(token, out _));
+    }
+
+    /// <summary>
+    /// A leaked link cannot pester the host for ever: an invitation brings a limited number of requests.
+    /// </summary>
+    [Fact]
+    public void Registry_LimitsTheRequestsOfOneInvitation()
     {
         var registry = new InviteRegistry(new FakeTimeProvider());
         var (token, _) = registry.Issue();
 
-        Assert.Equal(InviteCheckResult.Accepted, registry.TryConsume(token));
-        Assert.Equal(InviteCheckResult.Unknown, registry.TryConsume(token));
+        for (var attempt = 0; attempt < InviteRegistry.MaxUses; attempt++)
+        {
+            Assert.Equal(InviteCheckResult.Accepted, registry.TryUse(token, out _));
+        }
+
+        Assert.Equal(InviteCheckResult.Expired, registry.TryUse(token, out _));
+        Assert.Equal(InviteCheckResult.Unknown, registry.TryUse(token, out _));
+    }
+
+    /// <summary>
+    /// Invitations are numbered in the order they are made, which is how "made after a guest was removed" is told.
+    /// </summary>
+    [Fact]
+    public void Registry_NumbersInvitationsInOrder()
+    {
+        var registry = new InviteRegistry(new FakeTimeProvider());
+        Assert.Equal(0, registry.LastSequence);
+
+        var (first, _) = registry.Issue();
+        var barrier = registry.LastSequence;
+        var (second, _) = registry.Issue();
+
+        Assert.Equal(InviteCheckResult.Accepted, registry.TryUse(first, out var firstNumber));
+        Assert.Equal(InviteCheckResult.Accepted, registry.TryUse(second, out var secondNumber));
+        Assert.True(firstNumber <= barrier);
+        Assert.True(secondNumber > barrier);
+        Assert.Equal(secondNumber, registry.LastSequence);
+        Assert.Equal(InviteCheckResult.Unknown, registry.TryUse(Invite.CreateToken(), out var unknown));
+        Assert.Equal(0, unknown);
     }
 
     /// <summary>
@@ -123,7 +170,7 @@ public sealed class InviteTests
         time.Advance(TimeSpan.FromMinutes(2));
 
         Assert.Equal(0, registry.ActiveCount);
-        Assert.Equal(InviteCheckResult.Unknown, registry.TryConsume(token));
+        Assert.Equal(InviteCheckResult.Unknown, registry.TryUse(token, out _));
     }
 
     /// <summary>
@@ -138,7 +185,7 @@ public sealed class InviteTests
 
         time.Advance(TimeSpan.FromMinutes(2));
 
-        Assert.Equal(InviteCheckResult.Expired, registry.TryConsume(token));
+        Assert.Equal(InviteCheckResult.Expired, registry.TryUse(token, out _));
     }
 
     /// <summary>
@@ -151,10 +198,10 @@ public sealed class InviteTests
         var (token, _) = registry.Issue();
 
         Assert.True(registry.Revoke(token));
-        Assert.Equal(InviteCheckResult.Unknown, registry.TryConsume(token));
-        Assert.Equal(InviteCheckResult.Unknown, registry.TryConsume(null));
-        Assert.Equal(InviteCheckResult.Unknown, registry.TryConsume("short"));
-        Assert.Equal(InviteCheckResult.Unknown, registry.TryConsume(Invite.CreateToken()));
+        Assert.Equal(InviteCheckResult.Unknown, registry.TryUse(token, out _));
+        Assert.Equal(InviteCheckResult.Unknown, registry.TryUse(null, out _));
+        Assert.Equal(InviteCheckResult.Unknown, registry.TryUse("short", out _));
+        Assert.Equal(InviteCheckResult.Unknown, registry.TryUse(Invite.CreateToken(), out _));
         Assert.Throws<ArgumentOutOfRangeException>(() => registry.Issue(TimeSpan.Zero));
         Assert.Throws<ArgumentOutOfRangeException>(() => registry.Issue(TimeSpan.FromDays(8)));
     }

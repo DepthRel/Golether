@@ -2,6 +2,7 @@ using System.Net;
 using System.Net.Sockets;
 using Golether.Core.Networking;
 using Golether.Transports.Rendezvous.Protocol;
+using Golether.Web.Server.Contracts;
 using Golether.Web.Server.Infrastructure;
 using Golether.Web.Server.Options;
 
@@ -39,6 +40,11 @@ internal sealed class ConnectionHandler
     private readonly ILogger<ConnectionHandler> _logger;
 
     /// <summary>
+    /// The journal of events for the monitor, or <see langword="null"/> without one.
+    /// </summary>
+    private readonly ServerJournal? _journal;
+
+    /// <summary>
     /// Initializes a new instance of the <see cref="ConnectionHandler"/> class.
     /// </summary>
     /// <param name="options">The options.</param>
@@ -46,8 +52,10 @@ internal sealed class ConnectionHandler
     /// <param name="meetings">The waiting meetings.</param>
     /// <param name="statistics">The counters.</param>
     /// <param name="logger">The logger.</param>
-    public ConnectionHandler(RendezvousServerOptions options, RoomRegistry rooms, MeetingBroker meetings, ServerStatistics statistics, ILogger<ConnectionHandler> logger)
+    /// <param name="journal">The journal of events for the monitor, or <see langword="null"/> without one.</param>
+    public ConnectionHandler(RendezvousServerOptions options, RoomRegistry rooms, MeetingBroker meetings, ServerStatistics statistics, ILogger<ConnectionHandler> logger, ServerJournal? journal = null)
     {
+        _journal = journal;
         _options = options ?? throw new ArgumentNullException(nameof(options));
         _rooms = rooms ?? throw new ArgumentNullException(nameof(rooms));
         _meetings = meetings ?? throw new ArgumentNullException(nameof(meetings));
@@ -97,6 +105,7 @@ internal sealed class ConnectionHandler
         catch (InvalidDataException ex)
         {
             _logger.LogDebug("{Remote} sent an invalid message: {Error}", observed, ex.Message);
+            _journal?.Record(JournalEvent.BadRequest, observed, detail: ex.Message);
             await RefuseAsync(channel, RendezvousError.BadRequest, cancellationToken).ConfigureAwait(false);
         }
         catch (Exception ex) when (ex is IOException or SocketException or OperationCanceledException or ObjectDisposedException)
@@ -120,6 +129,7 @@ internal sealed class ConnectionHandler
             || !RendezvousSignature.TryDecode(register.Certificate, RendezvousSignature.MaxCertificateSize, out var certificate)
             || !RendezvousSignature.TryDecode(register.Signature, RendezvousSignature.MaxSignatureSize, out var signature))
         {
+            _journal?.Record(JournalEvent.HostRefused, observed, reason: RendezvousError.BadRequest);
             await RefuseAsync(channel, RendezvousError.BadRequest, cancellationToken).ConfigureAwait(false);
             return;
         }
@@ -127,6 +137,7 @@ internal sealed class ConnectionHandler
         if (!RendezvousSignature.TryVerify(certificate, RendezvousSignature.BuildPayload(nonce, register.Room), signature, out var owner))
         {
             _logger.LogInformation("{Remote} presented a bad signature", observed);
+            _journal?.Record(JournalEvent.HostRefused, observed, reason: RendezvousError.BadSignature);
             await RefuseAsync(channel, RendezvousError.BadSignature, cancellationToken).ConfigureAwait(false);
             return;
         }
@@ -135,16 +146,19 @@ internal sealed class ConnectionHandler
         switch (_rooms.Claim(link, out var replaced))
         {
             case RoomClaim.Taken:
+                _journal?.Record(JournalEvent.HostRefused, observed, owner, register.Room, RendezvousError.RoomTaken);
                 await RefuseAsync(channel, RendezvousError.RoomTaken, cancellationToken).ConfigureAwait(false);
                 return;
             case RoomClaim.Full:
                 _statistics.Refused();
+                _journal?.Record(JournalEvent.HostRefused, observed, owner, register.Room, RendezvousError.ServerFull);
                 await RefuseAsync(channel, RendezvousError.ServerFull, cancellationToken).ConfigureAwait(false);
                 return;
         }
 
         replaced?.Close();
         _logger.LogInformation("Host {Owner} at {Remote} holds a room", owner.ToShortString(), observed);
+        _journal?.Record(JournalEvent.HostRegistered, observed, owner, register.Room);
         try
         {
             await channel.SendAsync(new RegisteredMessage(RendezvousProtocol.Format(observed)), cancellationToken).ConfigureAwait(false);
@@ -181,6 +195,7 @@ internal sealed class ConnectionHandler
             _rooms.Release(link);
             link.Close();
             _logger.LogInformation("Host {Owner} at {Remote} left its room", owner.ToShortString(), observed);
+            _journal?.Record(JournalEvent.HostLeft, observed, owner, register.Room);
         }
     }
 
@@ -201,8 +216,10 @@ internal sealed class ConnectionHandler
         }
 
         _statistics.MeetingRequested();
+        _journal?.Record(JournalEvent.MeetingRequested, observed, room: connect.Room);
         if (_rooms.Find(connect.Room) is not { } host)
         {
+            _journal?.Record(JournalEvent.MeetingFailed, observed, room: connect.Room, reason: RendezvousError.RoomNotFound);
             await RefuseAsync(channel, RendezvousError.RoomNotFound, cancellationToken).ConfigureAwait(false);
             return;
         }
@@ -210,10 +227,17 @@ internal sealed class ConnectionHandler
         if (_meetings.Open(host, observed, RendezvousProtocol.ParseLocals(connect.Locals)) is not { } meeting)
         {
             _statistics.Refused();
+            _journal?.Record(JournalEvent.MeetingFailed, observed, host.Owner, connect.Room, RendezvousError.Busy);
             await RefuseAsync(channel, RendezvousError.Busy, cancellationToken).ConfigureAwait(false);
             return;
         }
 
+        // The participant says nothing more after its request, so a read that ends means it closed the connection:
+        // it gave up the meeting (it reached the host directly, for example). The read is started once and serves
+        // both the wait for the host and the linger after the answer.
+        using var lingering = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        var participantGone = channel.ReceiveAsync(lingering.Token).AsTask();
+        _ = participantGone.ContinueWith(t => _ = t.Exception, CancellationToken.None, TaskContinuationOptions.OnlyOnFaulted, TaskScheduler.Default);
         try
         {
             (IPEndPoint Observed, IReadOnlyList<IPEndPoint> Locals) answer;
@@ -223,11 +247,19 @@ internal sealed class ConnectionHandler
                 try
                 {
                     await host.SendAsync(new IncomingMessage(meeting.Id), wait.Token).ConfigureAwait(false);
-                    answer = await meeting.Answer.Task.WaitAsync(wait.Token).ConfigureAwait(false);
+                    var answered = meeting.Answer.Task.WaitAsync(wait.Token);
+                    if (await Task.WhenAny(answered, participantGone).ConfigureAwait(false) != answered)
+                    {
+                        _journal?.Record(JournalEvent.MeetingCancelled, observed, host.Owner, connect.Room);
+                        return;
+                    }
+
+                    answer = await answered.ConfigureAwait(false);
                 }
                 catch (Exception ex) when (ex is OperationCanceledException or IOException or ObjectDisposedException && !cancellationToken.IsCancellationRequested)
                 {
                     var error = host.Closed.IsCancellationRequested || ex is not OperationCanceledException ? RendezvousError.RoomNotFound : RendezvousError.Timeout;
+                    _journal?.Record(JournalEvent.MeetingFailed, observed, host.Owner, connect.Room, error);
                     await RefuseAsync(channel, error, cancellationToken).ConfigureAwait(false);
                     return;
                 }
@@ -237,13 +269,13 @@ internal sealed class ConnectionHandler
             await channel.SendAsync(new PunchMessage(RendezvousProtocol.Format(answer.Observed), sameRouter ? Format(answer.Locals) : []), cancellationToken).ConfigureAwait(false);
 
             // The connection stays open until the participant closes it: it keeps the router mapping of its port.
-            using var linger = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-            linger.CancelAfter(_options.AnswerTimeout);
-            await channel.ReceiveAsync(linger.Token).ConfigureAwait(false);
+            lingering.CancelAfter(_options.AnswerTimeout);
+            await participantGone.ConfigureAwait(false);
         }
         finally
         {
             _meetings.Close(meeting);
+            await lingering.CancelAsync().ConfigureAwait(false);
         }
     }
 
@@ -273,6 +305,7 @@ internal sealed class ConnectionHandler
         var locals = RendezvousProtocol.ParseLocals(accept.Locals);
         meeting.Answer.TrySetResult((observed, locals));
         _statistics.MeetingIntroduced();
+        _journal?.Record(JournalEvent.MeetingIntroduced, meeting.Participant, meeting.Host.Owner, meeting.Host.Room, detail: RendezvousProtocol.Format(observed));
         var sameRouter = meeting.Participant.Address.Equals(observed.Address);
         await channel.SendAsync(new PunchMessage(RendezvousProtocol.Format(meeting.Participant), sameRouter ? Format(meeting.ParticipantLocals) : []), cancellationToken).ConfigureAwait(false);
 

@@ -27,6 +27,9 @@ public sealed partial class MessageDialog : Window
         Title = title;
         TitleText.Text = title;
         MessageText.Text = message;
+
+        // A message that is said in full by its heading has nothing underneath.
+        MessageText.IsVisible = message.Length > 0;
     }
 
     /// <summary>

@@ -147,6 +147,81 @@ public sealed class MeetingTests
     }
 
     /// <summary>
+    /// A participant with cameras opens many streams the moment it is admitted: the media streams and one stream per
+    /// connection to the relay of the host. More of them than the host answers at once must still all arrive: the
+    /// participant asks for a few at a time instead of all together, so the host ignores none.
+    /// </summary>
+    [Fact]
+    public async Task Meeting_ServesMoreStreamsThanTheHostAnswersAtOnce()
+    {
+        var token = TestContext.Current.CancellationToken;
+        await using var server = await TestServer.StartAsync();
+        using var hostIdentity = DeviceIdentity.CreateNew(TimeProvider.System);
+        using var guestIdentity = DeviceIdentity.CreateNew(TimeProvider.System);
+        await using var listener = new TlsPeerListener(hostIdentity, TlsOptions);
+        listener.Start();
+        var point = server.NewPoint();
+        var hostOptions = ClientOptions with { MaxConcurrentAnswers = 4 };
+        await using var host = new RendezvousHost(point, Owner(hostIdentity), socket => listener.Adopt(socket), hostOptions);
+        await StartAndWaitAsync(host, token);
+        var connector = new RendezvousPeerConnector(new TlsPeerConnector(guestIdentity, TlsOptions), new RendezvousDialer(ClientOptions));
+
+        const int Wanted = 12;
+        var accepting = Task.Run(async () =>
+        {
+            for (var i = 0; i < Wanted; i++)
+            {
+                await using var accepted = await listener.AcceptAsync(token).AsTask().WaitAsync(TimeSpan.FromSeconds(30), token);
+            }
+        }, token);
+        var streams = await Task.WhenAll(Enumerable.Range(0, Wanted).Select(_ => connector.ConnectAsync(point, hostIdentity.PeerId, StreamPurpose.MediaData, token)));
+        await accepting;
+
+        foreach (var stream in streams)
+        {
+            await stream.DisposeAsync();
+        }
+
+        Assert.Equal(Wanted, server.Statistics.Snapshot().MeetingsIntroduced);
+    }
+
+    /// <summary>
+    /// The journal of events tells the story of a meeting in words a person reads: the server listens, the host takes
+    /// a room, a participant asks for it and both are introduced. The room appears as a tag, never by its name.
+    /// </summary>
+    /// <returns>A task that completes when the test is done.</returns>
+    [Fact]
+    public async Task Journal_TellsTheStoryOfAMeeting()
+    {
+        var token = TestContext.Current.CancellationToken;
+        await using var server = await TestServer.StartAsync();
+        using var identity = DeviceIdentity.CreateNew(TimeProvider.System);
+        var point = server.NewPoint();
+        var punched = Channel.CreateUnbounded<Socket>();
+        await using var host = new RendezvousHost(point, Owner(identity), socket => punched.Writer.TryWrite(socket), ClientOptions);
+        await StartAndWaitAsync(host, token);
+
+        using var outgoing = await new RendezvousDialer(ClientOptions).DialAsync(point, token);
+        await outgoing.SendAsync("hello"u8.ToArray(), SocketFlags.None, token);
+        using var incoming = await punched.Reader.ReadAsync(token).AsTask().WaitAsync(TimeSpan.FromSeconds(20), token);
+        var unknown = server.NewPoint();
+        await Assert.ThrowsAsync<RendezvousException>(() => new RendezvousDialer(ClientOptions).DialAsync(unknown, token));
+
+        var events = server.Journal.Read(0).Entries;
+        var tag = Golether.Web.Server.Infrastructure.ServerJournal.TagOf(point.Room);
+        var registered = Assert.Single(events, e => e.Event == Golether.Web.Server.Contracts.JournalEvent.HostRegistered);
+        Assert.Equal(identity.PeerId.ToShortString(), registered.Host);
+        Assert.Equal(tag, registered.Room);
+        Assert.StartsWith("127.0.0.1:", registered.Address, StringComparison.Ordinal);
+        Assert.Contains(events, e => e.Event == Golether.Web.Server.Contracts.JournalEvent.MeetingRequested && e.Room == tag);
+        Assert.Contains(events, e => e.Event == Golether.Web.Server.Contracts.JournalEvent.MeetingIntroduced && e.Room == tag && e.Host == registered.Host);
+        var failed = Assert.Single(events, e => e.Event == Golether.Web.Server.Contracts.JournalEvent.MeetingFailed);
+        Assert.Equal(RendezvousError.RoomNotFound, failed.Reason);
+        Assert.DoesNotContain(events, e => (e.Room ?? string.Empty).Contains(point.Room, StringComparison.Ordinal) || (e.Detail ?? string.Empty).Contains(point.Room, StringComparison.Ordinal));
+        Assert.Equal(events.Select(e => e.Sequence), events.Select(e => e.Sequence).Order());
+    }
+
+    /// <summary>
     /// Asking for a room nobody holds ends with <see cref="RendezvousError.RoomNotFound"/>.
     /// </summary>
     [Fact]
@@ -238,6 +313,36 @@ public sealed class MeetingTests
 
         Assert.Equal(RendezvousError.Busy, refused.Error);
         Assert.Equal(RendezvousError.Timeout, timedOut.Error);
+    }
+
+    /// <summary>
+    /// A participant that gives up a meeting before the host answered (it reached the host directly, for example)
+    /// closes its connection; the journal tells so at once instead of reporting, when the wait runs out, that the host
+    /// did not answer.
+    /// </summary>
+    /// <returns>A task that completes when the test is done.</returns>
+    [Fact]
+    public async Task Participant_GivingUp_IsNotAFailedMeeting()
+    {
+        var token = TestContext.Current.CancellationToken;
+        await using var server = await TestServer.StartAsync(new RendezvousServerOptions { AnswerTimeout = TimeSpan.FromSeconds(30) });
+        using var identity = DeviceIdentity.CreateNew(TimeProvider.System);
+        var point = server.NewPoint();
+        await using var silent = await SilentHost.RegisterAsync(point, identity, token);
+        using var giveUp = CancellationTokenSource.CreateLinkedTokenSource(token);
+        giveUp.CancelAfter(TimeSpan.FromMilliseconds(500));
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => new RendezvousDialer(ClientOptions).DialAsync(point, giveUp.Token));
+
+        var deadline = DateTime.UtcNow.AddSeconds(5);
+        while (!server.Journal.Read(0).Entries.Any(e => e.Event == Golether.Web.Server.Contracts.JournalEvent.MeetingCancelled) && DateTime.UtcNow < deadline)
+        {
+            await Task.Delay(50, token);
+        }
+
+        var events = server.Journal.Read(0).Entries;
+        Assert.Contains(events, e => e.Event == Golether.Web.Server.Contracts.JournalEvent.MeetingCancelled);
+        Assert.DoesNotContain(events, e => e.Event == Golether.Web.Server.Contracts.JournalEvent.MeetingFailed);
     }
 
     /// <summary>

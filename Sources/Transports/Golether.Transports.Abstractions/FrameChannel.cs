@@ -31,6 +31,11 @@ public sealed class FrameChannel : IAsyncDisposable
     private readonly SemaphoreSlim _sendGate = new(1, 1);
 
     /// <summary>
+    /// Cancelled when the channel is closed, so the writers waiting for their turn do not wait for ever.
+    /// </summary>
+    private readonly CancellationTokenSource _closing = new();
+
+    /// <summary>
     /// Initializes a new instance of the <see cref="FrameChannel"/> class.
     /// </summary>
     /// <param name="stream">The stream; ownership is transferred.</param>
@@ -49,7 +54,22 @@ public sealed class FrameChannel : IAsyncDisposable
     /// <param name="cancellationToken">The cancellation token.</param>
     /// <returns>A task that completes when the frame is flushed.</returns>
     /// <exception cref="ArgumentException">The payload exceeds the maximum frame size.</exception>
-    public async ValueTask SendAsync(ReadOnlyMemory<byte> payload, CancellationToken cancellationToken)
+    public ValueTask SendAsync(ReadOnlyMemory<byte> payload, CancellationToken cancellationToken)
+        => SendAsync(payload, Timeout.InfiniteTimeSpan, cancellationToken);
+
+    /// <summary>
+    /// Sends a frame that may take a limited time to be written. The limit covers the writing alone: the wait behind
+    /// the frames queued earlier is not counted, so a small frame is not given up on because a large one in front of
+    /// it travels slowly. Each of those frames has its own limit, which bounds the wait.
+    /// </summary>
+    /// <param name="payload">The payload.</param>
+    /// <param name="writeTimeout">The time the write may take, or <see cref="Timeout.InfiniteTimeSpan"/>.</param>
+    /// <param name="cancellationToken">The cancellation token.</param>
+    /// <returns>A task that completes when the frame is flushed.</returns>
+    /// <exception cref="ArgumentException">The payload exceeds the maximum frame size.</exception>
+    /// <exception cref="OperationCanceledException">The write took longer than allowed or was cancelled.</exception>
+    /// <exception cref="ObjectDisposedException">The channel was closed.</exception>
+    public async ValueTask SendAsync(ReadOnlyMemory<byte> payload, TimeSpan writeTimeout, CancellationToken cancellationToken)
     {
         if (payload.Length > _maxFrameSize)
         {
@@ -58,16 +78,27 @@ public sealed class FrameChannel : IAsyncDisposable
 
         var header = new byte[4];
         BinaryPrimitives.WriteInt32BigEndian(header, payload.Length);
-        await _sendGate.WaitAsync(cancellationToken).ConfigureAwait(false);
+        ObjectDisposedException.ThrowIf(_closing.IsCancellationRequested, this);
+        using var limit = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, _closing.Token);
         try
         {
-            await _stream.WriteAsync(header, cancellationToken).ConfigureAwait(false);
-            await _stream.WriteAsync(payload, cancellationToken).ConfigureAwait(false);
-            await _stream.FlushAsync(cancellationToken).ConfigureAwait(false);
+            await _sendGate.WaitAsync(limit.Token).ConfigureAwait(false);
+            try
+            {
+                // The time starts when the turn comes, not when the frame joined the queue.
+                limit.CancelAfter(writeTimeout);
+                await _stream.WriteAsync(header, limit.Token).ConfigureAwait(false);
+                await _stream.WriteAsync(payload, limit.Token).ConfigureAwait(false);
+                await _stream.FlushAsync(limit.Token).ConfigureAwait(false);
+            }
+            finally
+            {
+                _sendGate.Release();
+            }
         }
-        finally
+        catch (OperationCanceledException) when (_closing.IsCancellationRequested && !cancellationToken.IsCancellationRequested)
         {
-            _sendGate.Release();
+            throw new ObjectDisposedException(nameof(FrameChannel));
         }
     }
 
@@ -112,8 +143,10 @@ public sealed class FrameChannel : IAsyncDisposable
     /// <returns>A task that completes when the stream is closed.</returns>
     public async ValueTask DisposeAsync()
     {
+        // The gate and the signal are not disposed: writers that wait for their turn or have just finished still
+        // touch them, and neither holds anything that needs releasing.
+        await _closing.CancelAsync().ConfigureAwait(false);
         await _stream.DisposeAsync().ConfigureAwait(false);
-        _sendGate.Dispose();
     }
 
     /// <summary>

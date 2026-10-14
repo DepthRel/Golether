@@ -40,9 +40,20 @@ public sealed record RendezvousClientOptions
     ];
 
     /// <summary>
-    /// Gets the number of meetings the host answers at once (default 8; a participant opens up to five streams).
+    /// Gets the number of meetings the host answers at once (default 8). A meeting that finds no free place is
+    /// ignored, so a participant must not ask for more at once than <see cref="MaxConcurrentDials"/>.
     /// </summary>
     public int MaxConcurrentAnswers { get; init; } = 8;
+
+    /// <summary>
+    /// Gets the number of meetings a participant asks for at once (default 3); the rest wait for their turn. A
+    /// participant with cameras opens more than a dozen streams the moment it is admitted (the media streams and one
+    /// per connection to the relay of the host). Asked for all together, they would not fit into
+    /// <see cref="MaxConcurrentAnswers"/> of the host, and both routers would see a burst of connection attempts to
+    /// ports they do not know yet, which home routers take for an attack and answer by dropping everything between
+    /// the two addresses for a while, the session itself included.
+    /// </summary>
+    public int MaxConcurrentDials { get; init; } = 3;
 
     /// <summary>
     /// Validates the options.
@@ -70,5 +81,6 @@ public sealed record RendezvousClientOptions
         }
 
         ArgumentOutOfRangeException.ThrowIfLessThan(MaxConcurrentAnswers, 1);
+        ArgumentOutOfRangeException.ThrowIfLessThan(MaxConcurrentDials, 1);
     }
 }

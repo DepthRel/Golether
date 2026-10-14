@@ -1,0 +1,16 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    Tests of the monitor of the rendezvous server: reading the answers of the system tools, the commands it runs with
+    administrator rights, the settings file, the view models over stubs, and the window in the Avalonia headless
+    platform.
+  -->
+  <ItemGroup>
+    <PackageReference Include="Avalonia.Headless" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="../../Sources/Apps/Golether.Web.Server.UI/Golether.Web.Server.UI.csproj" />
+  </ItemGroup>
+
+</Project>

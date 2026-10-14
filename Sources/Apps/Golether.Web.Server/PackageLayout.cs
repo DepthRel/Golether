@@ -31,11 +31,20 @@ internal static class PackageLayout
         var program = Path.GetFullPath(programDirectory).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
         if (string.Equals(Path.GetFileName(program), ProgramFolder, StringComparison.OrdinalIgnoreCase)
             && Path.GetDirectoryName(program) is { } root
-            && Directory.Exists(Path.Combine(root, ConfigFolder)))
+            && (Directory.Exists(Path.Combine(root, ConfigFolder)) || IsPackageRoot(root)))
         {
+            // In a package the settings belong in config even when the folder was deleted: it is made again there.
             return Path.Combine(root, ConfigFolder);
         }
 
         return program;
     }
+
+    /// <summary>
+    /// Tells whether a folder is the root of a server package: the launcher lies there.
+    /// </summary>
+    /// <param name="folder">The folder.</param>
+    /// <returns><see langword="true"/> when it is.</returns>
+    private static bool IsPackageRoot(string folder)
+        => File.Exists(Path.Combine(folder, "golether-server")) || File.Exists(Path.Combine(folder, "golether-server.exe"));
 }

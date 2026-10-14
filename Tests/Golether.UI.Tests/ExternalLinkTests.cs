@@ -57,6 +57,33 @@ public sealed class ExternalLinkTests
     }
 
     /// <summary>
+    /// From the moment a link arrives the window shows that the invitation is being taken up, and stops showing it
+    /// when the matter is settled. Without it the start screen looks as if the link had done nothing.
+    /// </summary>
+    /// <returns>A task that completes when the test is done.</returns>
+    [Fact]
+    public async Task Link_ShowsThatTheInvitationIsBeingOpened()
+    {
+        var asked = new TaskCompletionSource<bool>();
+        _dialogs.ConfirmAsync(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<string>()).Returns(asked.Task);
+        var viewModel = CreateViewModel();
+        Assert.False(viewModel.ShowJoinScreen);
+
+        var opening = viewModel.OpenExternalAsync([Sample().ToWebLink()]);
+
+        Assert.True(viewModel.IsOpeningInvite);
+        Assert.True(viewModel.ShowJoinScreen);
+        Assert.Equal(Golether.Localization.Texts.Get("Main.Joining.Opening"), viewModel.JoinTitle);
+        Assert.Empty(viewModel.JoinText);
+
+        asked.SetResult(false);
+        await opening;
+
+        Assert.False(viewModel.IsOpeningInvite);
+        Assert.False(viewModel.ShowJoinScreen);
+    }
+
+    /// <summary>
     /// A declined invitation changes nothing.
     /// </summary>
     /// <returns>A task that completes when the test is done.</returns>
@@ -250,6 +277,33 @@ public sealed class ExternalLinkTests
         Assert.Equal("https://example.org/updates.json", _updates.ManifestUrl);
         Assert.Equal("false", _settings.Values[UpdateService.EnabledSetting]);
         Assert.Equal("https://example.org/updates.json", _settings.Values[UpdateService.UrlSetting]);
+    }
+
+    /// <summary>
+    /// When the host ends the session or removes this device, the session view disappears at once; the reason is
+    /// shown on its own, or the user would just find themselves on the start screen.
+    /// </summary>
+    /// <returns>A task that completes when the test is done.</returns>
+    [Fact]
+    public async Task ClosedByHost_IsToldToTheUser()
+    {
+        var viewModel = CreateViewModel();
+
+        _session.ClosedByHost += Raise.Event<EventHandler<string>>(_session, "Ведущий завершил сеанс.");
+        _session.ClosedByHost += Raise.Event<EventHandler<string>>(_session, "Ведущий исключил вас из сеанса. Попросите новое приглашение.");
+
+        await _dialogs.Received(1).ShowMessageAsync("Ведущий завершил сеанс", string.Empty);
+        await _dialogs.Received(1).ShowMessageAsync("Ведущий исключил вас из сеанса", "Попросите новое приглашение.");
+        Assert.False(viewModel.IsInSession);
+    }
+
+    /// <summary>
+    /// The status bar shows the version as three numbers.
+    /// </summary>
+    [Fact]
+    public void Version_IsShownAsThreeNumbers()
+    {
+        Assert.Matches(@"^\d+\.\d+\.\d+$", CreateViewModel().AppVersion);
     }
 
     /// <summary>

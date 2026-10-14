@@ -14,6 +14,13 @@ public sealed class SessionMessageChannel : IAsyncDisposable
     public const int MaxMessageSize = 256 * 1024;
 
     /// <summary>
+    /// The slowest connection a message is still waited for, in bytes per second. A message is allowed the time it
+    /// needs at this speed on top of the limit of the sender, so an avatar of a hundred kilobytes is not taken for a
+    /// dead connection on a slow or lossy route.
+    /// </summary>
+    public const int SlowestLinkBytesPerSecond = 4 * 1024;
+
+    /// <summary>
     /// The JSON options of the protocol.
     /// </summary>
     public static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web)
@@ -76,6 +83,31 @@ public sealed class SessionMessageChannel : IAsyncDisposable
         ArgumentNullException.ThrowIfNull(message);
         return _frames.SendAsync(Serialize(message), cancellationToken);
     }
+
+    /// <summary>
+    /// Sends a message that may take a limited time to be written: <paramref name="timeout"/> plus the time its bytes
+    /// need at <see cref="SlowestLinkBytesPerSecond"/>. The wait behind the messages queued earlier is not counted.
+    /// </summary>
+    /// <param name="message">The message.</param>
+    /// <param name="timeout">The time any message may take.</param>
+    /// <param name="cancellationToken">The cancellation token.</param>
+    /// <returns>A task that completes when the message is flushed.</returns>
+    /// <exception cref="OperationCanceledException">The write took longer than allowed or was cancelled.</exception>
+    public ValueTask SendAsync(SessionMessage message, TimeSpan timeout, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(message);
+        var payload = Serialize(message);
+        return _frames.SendAsync(payload, WriteTimeout(timeout, payload.Length), cancellationToken);
+    }
+
+    /// <summary>
+    /// Returns the time a message of a given size may take to be written.
+    /// </summary>
+    /// <param name="timeout">The time any message may take.</param>
+    /// <param name="bytes">The size of the message.</param>
+    /// <returns>The limit for this message.</returns>
+    public static TimeSpan WriteTimeout(TimeSpan timeout, int bytes)
+        => timeout + TimeSpan.FromSeconds((double)bytes / SlowestLinkBytesPerSecond);
 
     /// <summary>
     /// Receives the next message.

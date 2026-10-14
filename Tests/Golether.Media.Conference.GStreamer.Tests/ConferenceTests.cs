@@ -366,7 +366,7 @@ public sealed class ConferenceTests
         }
 
         var content = System.Security.Cryptography.RandomNumberGenerator.GetBytes(4 * 1024 * 1024);
-        var media = new MediaDescriptor { FileName = "chunk.bin", Length = content.Length, QuickId = new string('d', 64) };
+        var media = new MediaDescriptor { FileName = "chunk.bin", Length = content.Length, ChunkSize = content.Length, QuickId = new string('d', 64) };
         var cache = new ChunkCache();
         cache.Add(0, content);
         using var erinTransport = new Transport(a);

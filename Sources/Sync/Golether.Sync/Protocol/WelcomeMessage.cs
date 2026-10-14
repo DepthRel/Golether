@@ -35,6 +35,13 @@ public sealed record WelcomeMessage(
     public bool RelayOverSession { get; init; }
 
     /// <summary>
+    /// Gets a value indicating whether the host also takes all relay connections of a participant in one stream
+    /// (<see cref="Core.Data.Enums.StreamPurpose.RelayShared"/>). A host of an earlier version does not say so, and
+    /// the participant opens a stream per connection as before.
+    /// </summary>
+    public bool RelayShared { get; init; }
+
+    /// <summary>
     /// Gets the ticket that lets this participant come back to the same session without a new invitation, or
     /// <see langword="null"/>. It is valid while the session runs and only for this device.
     /// </summary>

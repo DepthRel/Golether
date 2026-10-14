@@ -107,8 +107,9 @@ public sealed class CameraRenderer : IDisposable
             var tile = peer.IsEmpty
                 ? _viewModel.Participants.FirstOrDefault(p => p.IsLocal)
                 : _viewModel.Participants.FirstOrDefault(p => p.PeerId == peer);
-            if (tile is null || (peer.IsEmpty && _viewModel.CameraOff))
+            if (tile is null || (peer.IsEmpty && _viewModel.CameraOff) || tile.CameraOff)
             {
+                // A frame that was on its way when the camera went off must not bring the picture back.
                 continue;
             }
 

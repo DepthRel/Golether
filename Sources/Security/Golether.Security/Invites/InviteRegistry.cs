@@ -5,9 +5,14 @@ using Golether.Core.Data.Enums;
 namespace Golether.Security.Invites;
 
 /// <summary>
-/// Tokens issued by the host: each token admits at most one connection attempt and expires after its lifetime.
+/// Tokens issued by the host. One token lets in everybody the host sent it to until its lifetime ends: an invitation
+/// is one link for the whole company, not a ticket per guest.
 /// </summary>
 /// <remarks>
+/// A token alone admits nobody: the host approves every newcomer. What the registry bounds is how long an invitation
+/// lives and how many requests it may bring (<see cref="MaxUses"/>), so a link that leaked cannot be used to pester
+/// the host for ever. Every token also carries the number it was issued under; the host uses it to tell invitations
+/// made before a device was removed from those made after (see <see cref="LastSequence"/>).
 /// Only SHA-256 hashes of tokens are kept in memory. The registry is thread-safe.
 /// </remarks>
 public sealed class InviteRegistry
@@ -30,12 +35,18 @@ public sealed class InviteRegistry
     public static readonly TimeSpan MaxLifetime = TimeSpan.FromHours(1);
 
     /// <summary>
-    /// Expiry times by token hash.
+    /// How many join requests one invitation may bring. A session holds five people, so an honest company never
+    /// comes near it; a leaked link stops working after this many attempts.
     /// </summary>
-    private readonly Dictionary<string, DateTimeOffset> _tokens = new(StringComparer.Ordinal);
+    public const int MaxUses = 16;
 
     /// <summary>
-    /// Guards <see cref="_tokens"/>.
+    /// The issued tokens by token hash.
+    /// </summary>
+    private readonly Dictionary<string, Entry> _tokens = new(StringComparer.Ordinal);
+
+    /// <summary>
+    /// Guards <see cref="_tokens"/> and <see cref="_sequence"/>.
     /// </summary>
     private readonly Lock _gate = new();
 
@@ -43,6 +54,11 @@ public sealed class InviteRegistry
     /// The time provider.
     /// </summary>
     private readonly TimeProvider _timeProvider;
+
+    /// <summary>
+    /// The number of the token issued last.
+    /// </summary>
+    private long _sequence;
 
     /// <summary>
     /// Initializes a new instance of the <see cref="InviteRegistry"/> class.
@@ -69,6 +85,21 @@ public sealed class InviteRegistry
     }
 
     /// <summary>
+    /// Gets the number of the token issued last, or 0 before the first one. Tokens are numbered in the order they are
+    /// issued, so "issued after this moment" is "has a larger number".
+    /// </summary>
+    public long LastSequence
+    {
+        get
+        {
+            lock (_gate)
+            {
+                return _sequence;
+            }
+        }
+    }
+
+    /// <summary>
     /// Issues a new token.
     /// </summary>
     /// <param name="lifetime">The lifetime; <see cref="DefaultLifetime"/> when <see langword="null"/>.</param>
@@ -89,19 +120,22 @@ public sealed class InviteRegistry
         var expires = _timeProvider.GetUtcNow() + effective;
         lock (_gate)
         {
-            _tokens[Hash(token)] = expires;
+            _tokens[Hash(token)] = new Entry(expires, ++_sequence);
         }
 
         return (token, expires);
     }
 
     /// <summary>
-    /// Checks a token presented by a connecting peer and consumes it when valid.
+    /// Checks a token presented by a connecting peer. A valid token stays valid for the next guest: it ends with its
+    /// lifetime or after <see cref="MaxUses"/> requests, whichever comes first.
     /// </summary>
     /// <param name="token">The token.</param>
+    /// <param name="sequence">The number the token was issued under, or 0 when the token is not accepted.</param>
     /// <returns>The check result.</returns>
-    public InviteCheckResult TryConsume(string? token)
+    public InviteCheckResult TryUse(string? token, out long sequence)
     {
+        sequence = 0;
         if (!Invite.IsValidToken(token))
         {
             return InviteCheckResult.Unknown;
@@ -111,12 +145,21 @@ public sealed class InviteRegistry
         var now = _timeProvider.GetUtcNow();
         lock (_gate)
         {
-            if (!_tokens.Remove(key, out var expires))
+            if (!_tokens.TryGetValue(key, out var entry))
             {
                 return InviteCheckResult.Unknown;
             }
 
-            return expires <= now ? InviteCheckResult.Expired : InviteCheckResult.Accepted;
+            if (entry.ExpiresAt <= now || entry.Uses >= MaxUses)
+            {
+                // Spent or out of time: forgotten, so the next attempt finds nothing at all.
+                _tokens.Remove(key);
+                return InviteCheckResult.Expired;
+            }
+
+            entry.Uses++;
+            sequence = entry.Sequence;
+            return InviteCheckResult.Accepted;
         }
     }
 
@@ -146,9 +189,32 @@ public sealed class InviteRegistry
     /// <param name="now">The current time.</param>
     private void RemoveExpired(DateTimeOffset now)
     {
-        foreach (var key in _tokens.Where(pair => pair.Value <= now).Select(pair => pair.Key).ToArray())
+        foreach (var key in _tokens.Where(pair => pair.Value.ExpiresAt <= now).Select(pair => pair.Key).ToArray())
         {
             _tokens.Remove(key);
         }
+    }
+
+    /// <summary>
+    /// What the registry keeps about an issued token.
+    /// </summary>
+    /// <param name="expiresAt">The moment the token stops working.</param>
+    /// <param name="sequence">The number the token was issued under.</param>
+    private sealed class Entry(DateTimeOffset expiresAt, long sequence)
+    {
+        /// <summary>
+        /// Gets the moment the token stops working.
+        /// </summary>
+        public DateTimeOffset ExpiresAt { get; } = expiresAt;
+
+        /// <summary>
+        /// Gets the number the token was issued under.
+        /// </summary>
+        public long Sequence { get; } = sequence;
+
+        /// <summary>
+        /// Gets or sets how many join requests the token has brought.
+        /// </summary>
+        public int Uses { get; set; }
     }
 }

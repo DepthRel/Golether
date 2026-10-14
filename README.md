@@ -39,12 +39,12 @@ transcode or install a server.
 - **Works behind grey IPs.** A tiny rendezvous server of your own (any machine with a public IP) introduces the
   host and the guests, and they punch a direct connection through their routers: no port forwarding on either side,
   and nothing of the session passes through the server. See the
-  [administrator guide](Sources/Apps/Golether.Web.Server/ADMIN-GUIDE.md) (Windows, Linux, macOS) and
-  [how it works](Docs/RendezvousServer.md).
+  [administrator guide](Sources/Apps/Golether.Web.Server/ADMIN-GUIDE.md) (Windows, Linux, macOS; [in Russian](Sources/Apps/Golether.Web.Server/ADMIN-GUIDE.ru.md)) and
+  [how it works](Docs/En/RendezvousServer.md).
 - **AmneziaWG tunnel, built in.** When the direct path is blocked, raise a tunnel between participants right from the
   app: no server of your own, no separate VPN client to set up.
 - **Secure by default.** Device keys are pinned, the host admits every participant, and both sides compare a
-  verification code aloud before anyone is let in. Invitations are single-use and live for an hour at most.
+  verification code aloud before anyone is let in. Invitations live for an hour at most, and a guest the host removed needs a new one.
 - **One click to join.** An invitation is an ordinary link: the guest clicks it, the app opens and asks whether to
   join. The same invitation as a key to paste is always there as the fallback.
 - **Instant start.** Open a video with "Open with → Golether", and a session is created for it. UPnP / NAT-PMP can
@@ -135,37 +135,41 @@ Sources/
   Transports/    TLS, relay, port mapping
   Tunnels/       AmneziaWG tunnels
 Tests/           one test project per module
-Docs/            documentation
-Scripts/         packaging scripts
+Docs/            documentation: En (the main set), Ru (the same set in Russian), images
+Scripts/         packaging: App (the application), Server (the server and its monitor), Assets (pictures)
 ```
 
 ## Documentation
 
-| Document | Audience |
-|---|---|
-| [Docs/UserGuide.md](Docs/UserGuide.md) | users: how to show a movie, invite people, raise a tunnel |
-| [Docs/Architecture.md](Docs/Architecture.md) | design documentation: modules, synchronization, security, roadmap |
-| [Docs/Protocol.md](Docs/Protocol.md) | network protocol and packet formats |
-| [Docs/Development.md](Docs/Development.md) | developers: build, tests, debugging, packaging |
-| [AGENTS.md](AGENTS.md) | code rules |
+The documentation is kept by language: [English](Docs/En) is the main set, [Russian](Docs/Ru) is the same set
+translated.
+
+| Document | Audience | На русском |
+|---|---|---|
+| [User guide](Docs/En/UserGuide.md) | users: how to show a movie, invite people, raise a tunnel | [Руководство](Docs/Ru/UserGuide.md) |
+| [Architecture](Docs/En/Architecture.md) | design documentation: modules, synchronization, security, roadmap | [Архитектура](Docs/Ru/Architecture.md) |
+| [Protocol](Docs/En/Protocol.md) | network protocol and packet formats | [Протокол](Docs/Ru/Protocol.md) |
+| [Rendezvous server](Docs/En/RendezvousServer.md) | how the rendezvous server works and how to build it | [Сервер рукопожатий](Docs/Ru/RendezvousServer.md) |
+| [Development](Docs/En/Development.md) | developers: build, tests, debugging, packaging | [Разработка](Docs/Ru/Development.md) |
+| [AGENTS.md](AGENTS.md) | code rules (in Russian) | |
 
 ## Packaging
 
 Output goes to `artifacts/publish/`. Windows (PowerShell):
 
 ```powershell
-./Scripts/publish-win.ps1            # Golether-<version>-win-x64.zip, native components included
-./Scripts/build-installer.ps1        # the same archive plus a Windows installer (needs Inno Setup 6+)
+./Scripts/App/publish-win.ps1            # Golether-<version>-win-x64.zip, native components included
+./Scripts/App/build-installer.ps1        # the same archive plus a Windows installer (needs Inno Setup 6+)
 ```
 
 Linux and macOS (bash). Build on the target OS, so that executable permissions survive in the archive:
 
 ```bash
-./Scripts/publish-linux.sh [linux-x64|linux-arm64]   # .tar.gz (+ .zip if zip is installed)
-./Scripts/publish-macos.sh [osx-arm64|osx-x64]       # Golether.app with an ad-hoc signature
+./Scripts/App/publish-linux.sh [linux-x64|linux-arm64]   # .tar.gz (+ .zip if zip is installed)
+./Scripts/App/publish-macos.sh [osx-arm64|osx-x64]       # Golether.app with an ad-hoc signature
 ```
 
-The `.sh` scripts are bash scripts, PowerShell cannot run them. On Windows, `./Scripts/publish-linux.ps1` builds the
+The `.sh` scripts are bash scripts, PowerShell cannot run them. On Windows, `./Scripts/App/publish-linux.ps1` builds the
 Linux package inside WSL for you: it copies the sources into the WSL file system (a build under `/mnt/c` would lose
 the executable permissions) and brings the archive back to `artifacts/publish`. A macOS package must be built on
 macOS: the icon and the ad-hoc signature come from `sips`, `iconutil` and `codesign`, which exist only there, and

@@ -114,6 +114,9 @@ public sealed class App : Application
                 splash.Close();
                 try
                 {
+                    // Started by an invitation link: the window says so from its first moment, before the settings
+                    // are loaded and the question is asked, instead of showing the start screen as if nothing came.
+                    viewModel.IsOpeningInvite = arguments.Any(Golether.Security.Invites.Invite.LooksLikeLink);
                     await viewModel.LoadAsync();
 
                     // What this start was given (an invitation link, a video file), then whatever later starts and
@@ -132,6 +135,7 @@ public sealed class App : Application
                 {
                     // The handler returns nothing, so an exception here would end the application. The window is
                     // open and works with the settings it has; what failed goes to the log.
+                    viewModel.IsOpeningInvite = false;
                     log.LogError(ex, "The stored settings were not applied");
                 }
             };

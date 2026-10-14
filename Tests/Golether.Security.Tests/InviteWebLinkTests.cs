@@ -48,6 +48,41 @@ public sealed class InviteWebLinkTests
     }
 
     /// <summary>
+    /// Two invitations of one session differ from their first characters: the one-time part is written first, so a
+    /// new invitation looks new even in a field that shows only its beginning. The rest stays readable as before.
+    /// </summary>
+    [Fact]
+    public void Link_ShowsItsNewPartFirst()
+    {
+        var first = Sample();
+        var second = first with { Token = Invite.CreateToken() };
+
+        var one = first.ToLink()[Invite.LinkPrefix.Length..];
+        var other = second.ToLink()[Invite.LinkPrefix.Length..];
+
+        Assert.NotEqual(one[..40], other[..40]);
+        Assert.StartsWith("{\"token\":\"" + first.Token, System.Text.Encoding.UTF8.GetString(System.Buffers.Text.Base64Url.DecodeFromChars(one)), StringComparison.Ordinal);
+        Assert.Equal(second.Token, Invite.ParseLink(second.ToLink()).Token);
+        Assert.Equal(first.Endpoints, Invite.ParseLink(first.ToLink()).Endpoints);
+    }
+
+    /// <summary>
+    /// A link written by an earlier version, with the token in the middle, is still read.
+    /// </summary>
+    [Fact]
+    public void Link_OfAnEarlierVersionIsStillRead()
+    {
+        var token = Invite.CreateToken();
+        var json = $$"""{"host":"{{new string('c', 64)}}","name":"Вы","session":"Вечер кино","endpoints":["192.168.1.10:47800"],"token":"{{token}}","expires":2000000000}""";
+        var link = Invite.LinkPrefix + System.Buffers.Text.Base64Url.EncodeToString(System.Text.Encoding.UTF8.GetBytes(json));
+
+        var parsed = Invite.ParseLink(link);
+
+        Assert.Equal(token, parsed.Token);
+        Assert.Equal("Вечер кино", parsed.SessionName);
+    }
+
+    /// <summary>
     /// Only the two spellings look like an invitation; a look-alike on another site or scheme does not.
     /// </summary>
     /// <param name="text">The text.</param>

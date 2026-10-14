@@ -77,7 +77,7 @@ public sealed class MainWindowTests
         await fixture.Settle();
         var items = menu.Items.OfType<MenuItem>().ToArray();
         var texts = items.Select(i => i.Header as string).ToArray();
-        Assert.Equal([null, "Обычная громкость (100 %)", "Вывести в отдельное окно", "Выключить микрофон", "Выключить камеру"], texts);
+        Assert.Equal([null, "Обычная громкость (100 %)", "Вывести в отдельное окно", "Выключить микрофон", "Выключить камеру", "Исключить из сеанса"], texts);
         Assert.All(items, i => Assert.True(i.IsVisible));
         Assert.DoesNotContain(texts, t => t?.Contains("Включить", StringComparison.Ordinal) == true);
 
@@ -118,14 +118,15 @@ public sealed class MainWindowTests
         await fixture.Settle();
         Assert.False(items[3].Command!.CanExecute(null));
 
-        // A participant (not the host) gets the volume and the separate window, but no switch-off commands.
+        // A participant (not the host) gets the volume and the separate window, but neither the switch-off commands
+        // nor the removal.
         fixture.IsHost = false;
         fixture.ViewModel.Refresh();
         await fixture.Settle();
         fixture.Click(guestTile, MouseButton.Right);
         await fixture.Settle();
         Assert.True(menu.IsOpen);
-        Assert.Equal([true, true, true, false, false], items.Select(i => i.IsVisible));
+        Assert.Equal([true, true, true, false, false, false], items.Select(i => i.IsVisible));
         menu.Close();
     });
 
@@ -915,6 +916,14 @@ public sealed class MainWindowTests
         var markerCenter = marker.TranslatePoint(new Point(marker.Bounds.Width / 2, 0), fixture.Window)!.Value.X;
         Assert.InRange(markerCenter - thumbCenter, -1.5, 1.5);
 
+        // The mark is the chosen avatar when there is one, and the coloured initial otherwise.
+        var you = (ParticipantItemViewModel)marker.DataContext!;
+        Assert.DoesNotContain(marker.GetVisualDescendants().OfType<Image>(), image => image.IsEffectivelyVisible);
+        var avatar = new Avalonia.Media.Imaging.WriteableBitmap(new PixelSize(8, 8), new Vector(96, 96), Avalonia.Platform.PixelFormat.Bgra8888, Avalonia.Platform.AlphaFormat.Opaque);
+        you.AvatarImage = avatar;
+        await fixture.Settle();
+        Assert.Contains(marker.GetVisualDescendants().OfType<Image>(), image => image.IsEffectivelyVisible && ReferenceEquals(image.Source, avatar));
+
         var folder = Environment.GetEnvironmentVariable("GOLETHER_TEST_SCREENSHOTS");
         if (!string.IsNullOrEmpty(folder))
         {
@@ -1263,6 +1272,47 @@ public sealed class MainWindowTests
     }
 
     /// <summary>
+    /// While a session is being joined, a screen of its own says what is going on, shows that the application is
+    /// busy and lets the user give up: first the way to the host is looked for, then the host is asked.
+    /// </summary>
+    /// <returns>A task that completes when the test is done.</returns>
+    [Fact]
+    public Task Joining_ShowsWhatIsGoingOnUntilTheHostLetsIn() => RunAsync(async fixture =>
+    {
+        // The user agreed to join (by a link or by the button) and the way to the host is being looked for.
+        fixture.Sessions.GetSnapshot().Returns((SessionSnapshot?)null);
+        var joining = new TaskCompletionSource();
+        fixture.Sessions.JoinAsync(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<CancellationToken>()).Returns(joining.Task);
+        fixture.ViewModel.Refresh();
+        fixture.ViewModel.InviteLink = "golether://join/v1/test";
+        var join = fixture.ViewModel.JoinCommand.ExecuteAsync(null);
+        await fixture.Settle();
+
+        var progress = fixture.Window.GetVisualDescendants().OfType<ProgressBar>().Where(bar => bar.IsEffectivelyVisible).ToArray();
+        Assert.NotEmpty(progress);
+        var shown = fixture.Window.GetVisualDescendants().OfType<TextBlock>().Where(text => text.IsEffectivelyVisible).Select(text => text.Text).ToArray();
+        Assert.Contains(fixture.ViewModel.JoinTitle, shown);
+        Assert.Contains(Golether.Localization.Texts.Get("Main.Joining.Title"), shown);
+        Assert.Contains(fixture.Window.GetVisualDescendants().OfType<Button>(), button => button.IsEffectivelyVisible && button.Command == fixture.ViewModel.CancelJoinCommand);
+        SaveFrame(fixture.Window, "joining-connecting");
+
+        // The host was reached: the code to read out appears on the same screen.
+        fixture.ViewModel.IsWaitingForHost = true;
+        fixture.ViewModel.VerificationText = "клён · река · камень";
+        await fixture.Settle();
+        shown = fixture.Window.GetVisualDescendants().OfType<TextBlock>().Where(text => text.IsEffectivelyVisible).Select(text => text.Text).ToArray();
+        Assert.Contains(Golether.Localization.Texts.Get("Main.Approval.Title"), shown);
+        Assert.Contains("клён · река · камень", shown);
+        SaveFrame(fixture.Window, "joining-approval");
+
+        // Joined: the screen goes away.
+        joining.SetResult();
+        await join;
+        await fixture.Settle();
+        Assert.DoesNotContain(fixture.Window.GetVisualDescendants().OfType<Button>(), button => button.IsEffectivelyVisible && button.Command == fixture.ViewModel.CancelJoinCommand);
+    });
+
+    /// <summary>
     /// The start screen offers three ways to let guests from other networks in, and the field for a server address
     /// is there only for the way that needs it.
     /// </summary>
@@ -1295,6 +1345,21 @@ public sealed class MainWindowTests
 
         Assert.Equal(RendezvousMode.Direct, fixture.ViewModel.RendezvousMode);
         Assert.False(field.IsEffectivelyVisible);
+
+        // The folded "Advanced" block is one more field of the card, not a bar of another kind: its header is as
+        // tall as the text field above it and has the same rounded corners. The port waits inside until asked for.
+        var name = fixture.Window.GetVisualDescendants().OfType<TextBox>().First(box => box.MaxLength == 64 && box.Width is double.NaN && box.IsEffectivelyVisible);
+        var advanced = fixture.Window.GetVisualDescendants().OfType<Expander>().First(expander => expander.IsEffectivelyVisible);
+        var header = advanced.GetVisualDescendants().OfType<Avalonia.Controls.Primitives.ToggleButton>().First();
+        Assert.Equal(name.Bounds.Height, header.Bounds.Height, 1.0);
+        Assert.Equal(name.CornerRadius, advanced.CornerRadius);
+        Assert.DoesNotContain(fixture.Window.GetVisualDescendants().OfType<NumericUpDown>(), port => port.IsEffectivelyVisible);
+
+        advanced.IsExpanded = true;
+        await fixture.SettleFor(TimeSpan.FromMilliseconds(400));
+
+        Assert.Contains(fixture.Window.GetVisualDescendants().OfType<NumericUpDown>(), port => port.IsEffectivelyVisible);
+        SaveFrame(fixture.Window, "start-advanced");
     });
 
     /// <summary>

@@ -108,7 +108,7 @@ internal static class TlsProtocol
     public static void ConfigureSocket(Socket socket, StreamPurpose purpose, TlsTransportOptions options)
     {
         // Voice packets inside a relay stream must not wait for more data either.
-        socket.NoDelay = purpose is StreamPurpose.Control or StreamPurpose.Relay;
+        socket.NoDelay = purpose is StreamPurpose.Control or StreamPurpose.Relay or StreamPurpose.RelayShared;
         socket.SetSocketOption(SocketOptionLevel.Socket, SocketOptionName.KeepAlive, true);
         if (purpose == StreamPurpose.MediaData)
         {

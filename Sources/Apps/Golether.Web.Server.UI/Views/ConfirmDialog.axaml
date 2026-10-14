@@ -1,0 +1,16 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:loc="using:Golether.Web.Server.UI.Localization"
+        x:Class="Golether.Web.Server.UI.Views.ConfirmDialog"
+        Width="440" SizeToContent="Height" CanResize="False" ShowInTaskbar="False"
+        WindowStartupLocation="CenterOwner" Icon="/Assets/golether-server.ico">
+  <!-- A question before an action that is hard to undo: the safe answer is the default one. -->
+  <StackPanel Margin="22" Spacing="14">
+    <TextBlock x:Name="TitleText" Classes="title" TextWrapping="Wrap" />
+    <TextBlock x:Name="MessageText" Classes="muted" TextWrapping="Wrap" />
+    <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Spacing="8" Margin="0,6,0,0">
+      <Button x:Name="CancelButton" Classes="ghost" Content="{loc:Loc Monitor.Cancel}" Click="OnCancel" IsCancel="True" IsDefault="True" />
+      <Button x:Name="AcceptButton" Classes="danger" Click="OnAccept" />
+    </StackPanel>
+  </StackPanel>
+</Window>

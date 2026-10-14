@@ -1,0 +1,162 @@
+<Styles xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+  <!--
+    The Golether dark theme for the monitor: ink ground, tungsten-amber accent, the same colours and text roles as the
+    application, so the two look like one family.
+  -->
+  <Styles.Resources>
+    <ResourceDictionary>
+      <Color x:Key="GoletherBackgroundColor">#0A0F11</Color>
+      <Color x:Key="GoletherPanelColor">#10181B</Color>
+      <Color x:Key="GoletherPanel2Color">#162226</Color>
+      <Color x:Key="GoletherLineColor">#223036</Color>
+      <Color x:Key="GoletherTextColor">#DDE7E5</Color>
+      <Color x:Key="GoletherMutedColor">#7F9491</Color>
+      <Color x:Key="GoletherAccentColor">#F0A860</Color>
+      <Color x:Key="GoletherAccentInkColor">#1A1208</Color>
+      <Color x:Key="GoletherWarnColor">#E6C34A</Color>
+      <Color x:Key="GoletherBadColor">#E0685A</Color>
+
+      <SolidColorBrush x:Key="GoletherBackground" Color="{StaticResource GoletherBackgroundColor}" />
+      <SolidColorBrush x:Key="GoletherPanel" Color="{StaticResource GoletherPanelColor}" />
+      <SolidColorBrush x:Key="GoletherPanel2" Color="{StaticResource GoletherPanel2Color}" />
+      <SolidColorBrush x:Key="GoletherLine" Color="{StaticResource GoletherLineColor}" />
+      <SolidColorBrush x:Key="GoletherText" Color="{StaticResource GoletherTextColor}" />
+      <SolidColorBrush x:Key="GoletherMuted" Color="{StaticResource GoletherMutedColor}" />
+      <SolidColorBrush x:Key="GoletherAccent" Color="{StaticResource GoletherAccentColor}" />
+      <SolidColorBrush x:Key="GoletherAccentInk" Color="{StaticResource GoletherAccentInkColor}" />
+      <SolidColorBrush x:Key="GoletherWarn" Color="{StaticResource GoletherWarnColor}" />
+      <SolidColorBrush x:Key="GoletherBad" Color="{StaticResource GoletherBadColor}" />
+
+      <FontFamily x:Key="GoletherMono">Cascadia Mono, Consolas, Menlo, DejaVu Sans Mono, monospace</FontFamily>
+
+      <!-- Fluent accent follows the Golether amber. -->
+      <Color x:Key="SystemAccentColor">#F0A860</Color>
+      <Color x:Key="SystemAccentColorLight1">#F4BC84</Color>
+      <Color x:Key="SystemAccentColorDark1">#D98E45</Color>
+    </ResourceDictionary>
+  </Styles.Resources>
+
+  <Style Selector="Window">
+    <Setter Property="Background" Value="{StaticResource GoletherBackground}" />
+    <Setter Property="Foreground" Value="{StaticResource GoletherText}" />
+  </Style>
+
+  <!-- Text roles -->
+  <Style Selector="TextBlock.muted">
+    <Setter Property="Foreground" Value="{StaticResource GoletherMuted}" />
+  </Style>
+  <Style Selector="TextBlock.label">
+    <Setter Property="FontFamily" Value="{StaticResource GoletherMono}" />
+    <Setter Property="FontSize" Value="11" />
+    <Setter Property="FontWeight" Value="SemiBold" />
+    <Setter Property="LetterSpacing" Value="1" />
+    <Setter Property="Foreground" Value="{StaticResource GoletherMuted}" />
+  </Style>
+  <Style Selector="TextBlock.mono">
+    <Setter Property="FontFamily" Value="{StaticResource GoletherMono}" />
+  </Style>
+  <Style Selector="TextBlock.title">
+    <Setter Property="FontSize" Value="20" />
+    <Setter Property="FontWeight" Value="SemiBold" />
+  </Style>
+  <Style Selector="TextBlock.value">
+    <Setter Property="FontFamily" Value="{StaticResource GoletherMono}" />
+    <Setter Property="FontSize" Value="15" />
+    <Setter Property="FontWeight" Value="SemiBold" />
+  </Style>
+  <Style Selector="TextBlock.problem">
+    <Setter Property="Foreground" Value="{StaticResource GoletherWarn}" />
+  </Style>
+
+  <!-- Surfaces -->
+  <Style Selector="Border.panel">
+    <Setter Property="Background" Value="{StaticResource GoletherPanel}" />
+  </Style>
+  <Style Selector="Border.card">
+    <Setter Property="Background" Value="{StaticResource GoletherPanel}" />
+    <Setter Property="BorderBrush" Value="{StaticResource GoletherLine}" />
+    <Setter Property="BorderThickness" Value="1" />
+    <Setter Property="CornerRadius" Value="12" />
+    <Setter Property="Padding" Value="16" />
+  </Style>
+  <Style Selector="GridSplitter.column">
+    <Setter Property="Background" Value="{StaticResource GoletherLine}" />
+    <Setter Property="MinWidth" Value="3" />
+    <Setter Property="ResizeDirection" Value="Columns" />
+  </Style>
+  <Style Selector="GridSplitter.column:pointerover">
+    <Setter Property="Background" Value="{StaticResource GoletherAccent}" />
+  </Style>
+
+  <!-- Buttons -->
+  <Style Selector="Button">
+    <Setter Property="CornerRadius" Value="7" />
+    <Setter Property="Padding" Value="14,7" />
+  </Style>
+  <Style Selector="Button.accent">
+    <Setter Property="Background" Value="{StaticResource GoletherAccent}" />
+    <Setter Property="Foreground" Value="{StaticResource GoletherAccentInk}" />
+    <Setter Property="FontWeight" Value="SemiBold" />
+  </Style>
+  <Style Selector="Button.accent /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="{StaticResource GoletherAccent}" />
+    <Setter Property="Foreground" Value="{StaticResource GoletherAccentInk}" />
+  </Style>
+  <Style Selector="Button.accent:disabled /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="#5A4632" />
+    <Setter Property="Foreground" Value="#1A1208" />
+  </Style>
+  <Style Selector="Button.accent:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="#F4BC84" />
+    <Setter Property="Foreground" Value="{StaticResource GoletherAccentInk}" />
+  </Style>
+  <Style Selector="Button.ghost">
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="BorderBrush" Value="{StaticResource GoletherLine}" />
+    <Setter Property="BorderThickness" Value="1" />
+  </Style>
+
+  <!--
+    An action that stops something: a muted red, as in the application (the "danger" buttons there), so it stands
+    out without shouting. While it cannot be pressed it looks like any other disabled button.
+  -->
+  <Style Selector="Button.danger">
+    <Setter Property="Background" Value="#24E0685A" />
+    <Setter Property="Foreground" Value="{StaticResource GoletherBad}" />
+    <Setter Property="BorderBrush" Value="#66E0685A" />
+    <Setter Property="BorderThickness" Value="1" />
+  </Style>
+  <Style Selector="Button.danger /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="#24E0685A" />
+    <Setter Property="Foreground" Value="{StaticResource GoletherBad}" />
+    <Setter Property="BorderBrush" Value="#66E0685A" />
+  </Style>
+  <Style Selector="Button.danger:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="#40E0685A" />
+    <Setter Property="Foreground" Value="#EE8A7E" />
+    <Setter Property="BorderBrush" Value="#99E0685A" />
+  </Style>
+  <Style Selector="Button.danger:pressed /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="#55E0685A" />
+  </Style>
+  <Style Selector="Button.danger:disabled /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="Foreground" Value="{StaticResource GoletherMuted}" />
+    <Setter Property="BorderBrush" Value="{StaticResource GoletherLine}" />
+  </Style>
+
+  <!-- The rows of the journal -->
+  <Style Selector="ListBox.journal">
+    <Setter Property="Background" Value="Transparent" />
+  </Style>
+  <Style Selector="ListBox.journal ListBoxItem">
+    <Setter Property="Padding" Value="0" />
+    <Setter Property="MinHeight" Value="0" />
+  </Style>
+  <Style Selector="ListBox.journal TextBlock">
+    <Setter Property="FontSize" Value="12.5" />
+    <Setter Property="TextTrimming" Value="CharacterEllipsis" />
+    <Setter Property="VerticalAlignment" Value="Center" />
+  </Style>
+</Styles>

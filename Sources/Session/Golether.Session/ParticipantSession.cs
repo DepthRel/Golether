@@ -171,6 +171,18 @@ public sealed class ParticipantSession : IAsyncDisposable
     private Transports.Relay.RelayTunnel? _relayTunnel;
 
     /// <summary>
+    /// The shared stream that carries the connections of <see cref="_relayTunnel"/>, or <see langword="null"/> when
+    /// each connection has a stream of its own.
+    /// </summary>
+    private Transports.Relay.SharedRelayRoute? _relayRoute;
+
+    /// <summary>
+    /// The media streams left idle by a film that was closed. The host serves any film over them, so the next film
+    /// starts on them at once instead of opening new streams (through a rendezvous server, new meetings).
+    /// </summary>
+    private readonly System.Collections.Concurrent.ConcurrentBag<Stream> _spareMediaStreams = [];
+
+    /// <summary>
     /// The number of parallel media streams allowed by the host.
     /// </summary>
     private int _mediaStreams = 1;
@@ -335,6 +347,13 @@ public sealed class ParticipantSession : IAsyncDisposable
     public bool ClosedByHost { get; private set; }
 
     /// <summary>
+    /// Gets why a session this device had been admitted to ended, in the words for the user, or
+    /// <see langword="null"/> while it runs, after this device left by itself, and when joining never succeeded
+    /// (that failure is reported by <see cref="JoinAsync"/>).
+    /// </summary>
+    public string? EndReason { get; private set; }
+
+    /// <summary>
     /// Comes back to a session this device was admitted to, using the ticket instead of an invitation. The host is
     /// asked again.
     /// </summary>
@@ -459,7 +478,7 @@ public sealed class ParticipantSession : IAsyncDisposable
         _loops.Add(Task.Run(() => TickLoopAsync(token)));
         if (_conference is not null && welcome.GetValidRelay() is { } relay)
         {
-            if (welcome.RelayOverSession && StartRelayTunnel() is { } tunnel)
+            if (welcome.RelayOverSession && StartRelayTunnel(welcome.RelayShared) is { } tunnel)
             {
                 // The relay is reached by the route of the session, whichever it was: the cameras and voices are
                 // pointed at the local end of the tunnel.
@@ -662,7 +681,17 @@ public sealed class ParticipantSession : IAsyncDisposable
             await _relayTunnel.DisposeAsync().ConfigureAwait(false);
         }
 
+        if (_relayRoute is not null)
+        {
+            await _relayRoute.DisposeAsync().ConfigureAwait(false);
+        }
+
         await ReleaseRemoteMediaAsync().ConfigureAwait(false);
+        while (_spareMediaStreams.TryTake(out var spare))
+        {
+            await spare.DisposeAsync().ConfigureAwait(false);
+        }
+
         SetState(SessionState.Ended);
         _stopping.Dispose();
     }
@@ -730,7 +759,10 @@ public sealed class ParticipantSession : IAsyncDisposable
             return won.Stream;
         }
 
-        throw spoofing ?? new SessionJoinException(Texts.Get("Session.Error.HostUnreachable") + "\n" + string.Join("\n", errors));
+        // The addresses tried and why each failed go to the log, not to the screen: an address is nobody else's
+        // business, and the screen may be shared.
+        _logger.LogWarning("The host was not reached: {Errors}", string.Join("; ", errors));
+        throw spoofing ?? new SessionJoinException(Texts.Get("Session.Error.HostUnreachable"));
     }
 
     /// <summary>
@@ -815,15 +847,30 @@ public sealed class ParticipantSession : IAsyncDisposable
     }
 
     /// <summary>
-    /// Opens the local entrance to the relay of the host; every connection made to it travels over a relay stream
-    /// of the session.
+    /// Opens the local entrance to the relay of the host. The connections made to it travel over the route of the
+    /// session: all in one shared stream when the host takes such, each in a stream of its own otherwise.
     /// </summary>
+    /// <param name="shared">Whether the host takes one shared stream for all connections.</param>
     /// <returns>The tunnel, or <see langword="null"/> when no local port could be opened.</returns>
-    private Transports.Relay.RelayTunnel? StartRelayTunnel()
+    private Transports.Relay.RelayTunnel? StartRelayTunnel(bool shared)
     {
-        var tunnel = new Transports.Relay.RelayTunnel(
-            async token => (await OpenStreamAsync(StreamPurpose.Relay, token).ConfigureAwait(false)).Stream,
-            _loggerFactory.CreateLogger<Transports.Relay.RelayTunnel>());
+        var log = _loggerFactory.CreateLogger<Transports.Relay.RelayTunnel>();
+        Func<CancellationToken, Task<Stream>> open;
+        if (shared)
+        {
+            var route = new Transports.Relay.SharedRelayRoute(
+                async token => (await OpenStreamAsync(StreamPurpose.RelayShared, token).ConfigureAwait(false)).Stream,
+                _timeProvider,
+                log);
+            _relayRoute = route;
+            open = route.OpenAsync;
+        }
+        else
+        {
+            open = async token => (await OpenStreamAsync(StreamPurpose.Relay, token).ConfigureAwait(false)).Stream;
+        }
+
+        var tunnel = new Transports.Relay.RelayTunnel(open, log);
         try
         {
             tunnel.Start();
@@ -848,6 +895,20 @@ public sealed class ParticipantSession : IAsyncDisposable
     private Task<PeerStream> OpenStreamAsync(StreamPurpose purpose, CancellationToken cancellationToken)
     {
         var invite = _invite ?? throw new InvalidOperationException("The session was not joined.");
+        bool ended;
+        lock (_gate)
+        {
+            ended = _state == SessionState.Ended;
+        }
+
+        if (ended || _disposed != 0)
+        {
+            // The player and the cameras do not know that the session is over and keep asking for streams. Each
+            // would be one more connection attempt (through the rendezvous server, a whole meeting) made next to
+            // the attempts to come back.
+            return Task.FromException<PeerStream>(new IOException(Texts.Get("Session.Error.ConnectionLost")));
+        }
+
         return _hostEndpoint is { } endpoint
             ? _connector.ConnectAsync(endpoint, invite.HostPeerId, purpose, cancellationToken)
             : _rendezvous is { } rendezvous && invite.Rendezvous is { } point
@@ -933,6 +994,8 @@ public sealed class ParticipantSession : IAsyncDisposable
         {
             if (_disposed == 0)
             {
+                // The reason is in place before anybody is told that the session ended.
+                EndReason = reason;
                 SetState(SessionState.Ended);
                 Raise(null, reason);
             }
@@ -1161,9 +1224,14 @@ public sealed class ParticipantSession : IAsyncDisposable
         await ReleaseRemoteMediaAsync().ConfigureAwait(false);
         var source = new RemoteChunkSource(
             media,
-            async token => (await OpenStreamAsync(StreamPurpose.MediaData, token).ConfigureAwait(false)).Stream,
+            async token => _spareMediaStreams.TryTake(out var spare)
+                ? spare
+                : (await OpenStreamAsync(StreamPurpose.MediaData, token).ConfigureAwait(false)).Stream,
             _mediaStreams,
-            _loggerFactory.CreateLogger<RemoteChunkSource>());
+            _loggerFactory.CreateLogger<RemoteChunkSource>())
+        {
+            KeepStream = KeepMediaStreamAsync,
+        };
         var cache = new ChunkCache();
         IChunkSource chunks = source;
         if (_conferenceMedia is { IsAvailable: true } conference)
@@ -1180,7 +1248,7 @@ public sealed class ParticipantSession : IAsyncDisposable
             chunks = swarm;
         }
 
-        var reader = new CachedMediaReader(chunks, cache, new ReadAheadOptions(), _loggerFactory.CreateLogger<CachedMediaReader>());
+        var reader = new CachedMediaReader(chunks, cache, ReadAheadOptions.For(_mediaStreams, media.ChunkSize), _loggerFactory.CreateLogger<CachedMediaReader>());
         var uri = _uriRegistry.Register(() => new MediaReadStream(reader));
         lock (_gate)
         {
@@ -1212,6 +1280,28 @@ public sealed class ParticipantSession : IAsyncDisposable
         {
             _playerGate.Release();
         }
+    }
+
+    /// <summary>
+    /// Takes an idle media stream of a film that is being closed, for the next film of the session.
+    /// </summary>
+    /// <param name="stream">The stream.</param>
+    /// <returns>A task that completes when the stream is kept or closed.</returns>
+    private ValueTask KeepMediaStreamAsync(Stream stream)
+    {
+        bool ended;
+        lock (_gate)
+        {
+            ended = _state == SessionState.Ended;
+        }
+
+        if (ended || _disposed != 0)
+        {
+            return stream.DisposeAsync();
+        }
+
+        _spareMediaStreams.Add(stream);
+        return ValueTask.CompletedTask;
     }
 
     /// <summary>

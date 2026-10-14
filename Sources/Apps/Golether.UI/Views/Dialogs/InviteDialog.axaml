@@ -7,29 +7,34 @@
         Title="{loc:Loc Invite.WindowTitle}"
         Width="560" SizeToContent="Height" CanResize="False"
         WindowStartupLocation="CenterOwner" Icon="/Assets/golether.ico">
-  <!-- A one-time invitation in two forms: a link to click and a key to paste. The host still approves every newcomer. -->
+  <!-- An invitation for the whole company in two forms: a link to click and a key to paste. The host approves every newcomer. -->
   <StackPanel Margin="22" Spacing="12">
     <TextBlock Classes="title" Text="{loc:Loc Invite.WindowTitle}" />
     <TextBlock Classes="muted" TextWrapping="Wrap"
                Text="{loc:Loc Invite.Dialog.Explanation}" />
 
-    <!-- The link: what most guests need. -->
+    <!--
+      The link: what most guests need. The field shows several lines on purpose: every link of a session begins the
+      same (the address of the page), and what makes a new link new comes only after that.
+    -->
     <TextBlock Classes="label" Text="{loc:Loc Invite.Dialog.LinkLabel}" />
-    <Grid ColumnDefinitions="*,8,Auto">
-      <TextBox IsReadOnly="True" Text="{Binding Link}" AutomationProperties.Name="{loc:Loc Invite.Dialog.LinkLabel}" />
-      <Button Grid.Column="2" Classes="accent" Content="{loc:Loc Invite.Dialog.CopyLink}" Command="{Binding CopyCommand}" />
+    <TextBox Classes="package invite" IsReadOnly="True" Text="{Binding Link}" AutomationProperties.Name="{loc:Loc Invite.Dialog.LinkLabel}" />
+    <Grid ColumnDefinitions="*,12,Auto">
+      <TextBlock Classes="muted" FontSize="12" TextWrapping="Wrap" VerticalAlignment="Center"
+                 Text="{loc:Loc Key=Invite.Dialog.LinkNote, Arg={Binding LinkExpires}}" />
+      <Button Grid.Column="2" Classes="accent" VerticalAlignment="Top" Content="{loc:Loc Invite.Dialog.CopyLink}" Command="{Binding CopyCommand}" />
     </Grid>
-    <TextBlock Classes="muted" FontSize="12" TextWrapping="Wrap" Text="{loc:Loc Key=Invite.Dialog.LinkNote, Arg={Binding LinkExpires}}" />
 
     <!-- The key: the same invitation for those whose link does not open the application. -->
     <TextBlock Classes="label" Text="{loc:Loc Invite.Dialog.KeyLabel}" Margin="0,6,0,0" />
-    <Grid ColumnDefinitions="*,8,Auto,8,Auto">
-      <TextBox IsReadOnly="True" Text="{Binding Key}" AutomationProperties.Name="{loc:Loc Invite.Dialog.KeyLabel}" />
-      <ComboBox Grid.Column="2" ItemsSource="{Binding Lifetimes}" SelectedItem="{Binding SelectedLifetime}" VerticalAlignment="Stretch"
+    <TextBox Classes="package invite" IsReadOnly="True" Text="{Binding Key}" AutomationProperties.Name="{loc:Loc Invite.Dialog.KeyLabel}" />
+    <Grid ColumnDefinitions="*,12,Auto,8,Auto">
+      <TextBlock Classes="muted" FontSize="12" TextWrapping="Wrap" VerticalAlignment="Center"
+                 Text="{loc:Loc Key=Invite.Dialog.KeyNote, Arg={Binding KeyExpires}}" />
+      <ComboBox Grid.Column="2" ItemsSource="{Binding Lifetimes}" SelectedItem="{Binding SelectedLifetime}" VerticalAlignment="Top"
                 AutomationProperties.Name="{loc:Loc Invite.Dialog.LifetimeLabel}" ToolTip.Tip="{loc:Loc Invite.Dialog.LifetimeTip}" />
-      <Button Grid.Column="4" Classes="ghost" Content="{loc:Loc Invite.Dialog.CopyKey}" Command="{Binding CopyKeyCommand}" />
+      <Button Grid.Column="4" Classes="ghost" VerticalAlignment="Top" Content="{loc:Loc Invite.Dialog.CopyKey}" Command="{Binding CopyKeyCommand}" />
     </Grid>
-    <TextBlock Classes="muted" FontSize="12" TextWrapping="Wrap" Text="{loc:Loc Key=Invite.Dialog.KeyNote, Arg={Binding KeyExpires}}" />
 
     <!-- Rarely needed: kept out of the way. -->
     <Expander Header="{loc:Loc Invite.Dialog.Advanced}" HorizontalAlignment="Stretch">

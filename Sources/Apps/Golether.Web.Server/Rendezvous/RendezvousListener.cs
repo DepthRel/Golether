@@ -53,6 +53,11 @@ internal sealed class RendezvousListener : BackgroundService
     private readonly ILogger<RendezvousListener> _logger;
 
     /// <summary>
+    /// The journal of events for the monitor, or <see langword="null"/> without one.
+    /// </summary>
+    private readonly ServerJournal? _journal;
+
+    /// <summary>
     /// The listening socket, or <see langword="null"/> before the start.
     /// </summary>
     private TcpListener? _listener;
@@ -65,8 +70,10 @@ internal sealed class RendezvousListener : BackgroundService
     /// <param name="statistics">The counters.</param>
     /// <param name="timeProvider">The time provider.</param>
     /// <param name="logger">The logger.</param>
-    public RendezvousListener(RendezvousServerOptions options, ConnectionHandler handler, ServerStatistics statistics, TimeProvider timeProvider, ILogger<RendezvousListener> logger)
+    /// <param name="journal">The journal of events for the monitor, or <see langword="null"/> without one.</param>
+    public RendezvousListener(RendezvousServerOptions options, ConnectionHandler handler, ServerStatistics statistics, TimeProvider timeProvider, ILogger<RendezvousListener> logger, ServerJournal? journal = null)
     {
+        _journal = journal;
         _options = options ?? throw new ArgumentNullException(nameof(options));
         _handler = handler ?? throw new ArgumentNullException(nameof(handler));
         _statistics = statistics ?? throw new ArgumentNullException(nameof(statistics));
@@ -108,6 +115,7 @@ internal sealed class RendezvousListener : BackgroundService
 
         _listener = listener;
         _logger.LogInformation("Rendezvous server listening on tcp://{Endpoint}", listener.LocalEndpoint);
+        _journal?.Record(Contracts.JournalEvent.Listening, detail: "tcp://" + listener.LocalEndpoint);
         return base.StartAsync(cancellationToken);
     }
 
@@ -145,6 +153,7 @@ internal sealed class RendezvousListener : BackgroundService
             catch (SocketException ex)
             {
                 _logger.LogWarning("Accepting a connection failed: {Error}", ex.SocketErrorCode);
+                _journal?.Record(Contracts.JournalEvent.AcceptFailed, detail: ex.SocketErrorCode.ToString());
 
                 // A lasting failure (no free descriptors, for example) must not turn the loop into a busy one.
                 try
@@ -163,6 +172,11 @@ internal sealed class RendezvousListener : BackgroundService
             if (remote is null || !_limiter.TryAcquire(remote.IsIPv4MappedToIPv6 ? remote.MapToIPv4() : remote) || !_slots.Wait(0))
             {
                 _statistics.Refused();
+                if (socket.RemoteEndPoint is IPEndPoint refused)
+                {
+                    _journal?.Record(Contracts.JournalEvent.ConnectionRefused, Golether.Transports.Rendezvous.Protocol.RendezvousProtocol.Normalize(refused));
+                }
+
                 socket.Dispose();
                 continue;
             }
@@ -188,6 +202,7 @@ internal sealed class RendezvousListener : BackgroundService
         catch (Exception ex) when (ex is not OutOfMemoryException)
         {
             _logger.LogWarning(ex, "A connection failed unexpectedly");
+            _journal?.Record(Contracts.JournalEvent.ConnectionFailed, detail: ex.GetType().Name + ": " + ex.Message);
             socket.Dispose();
         }
         finally

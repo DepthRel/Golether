@@ -319,6 +319,38 @@ public sealed class ViewModelTests
     }
 
     /// <summary>
+    /// While something is in progress the video area is hidden, and the hint in its place says what is being done.
+    /// "The video is unavailable" is said only when the player really does not work.
+    /// </summary>
+    /// <returns>A task that completes when the test is done.</returns>
+    [Fact]
+    public async Task Placeholder_SaysWhatIsBeingDoneNotThatVideoIsBroken()
+    {
+        _session.IsActive.Returns(true);
+        _session.IsHost.Returns(true);
+        _session.GetSnapshot().Returns(Snapshot(PlayState.Paused, TimeSpan.Zero));
+        _dialogs.PickMediaFileAsync().Returns("movie.mkv");
+        var sharing = new TaskCompletionSource();
+        _session.ShareMediaAsync("movie.mkv", Arg.Any<CancellationToken>()).Returns(sharing.Task);
+        var viewModel = CreateViewModel();
+        viewModel.Refresh();
+
+        viewModel.SetPlayerState(false, "libmpv is missing");
+        Assert.Equal(Golether.Localization.Texts.Get("Main.Placeholder.NoVideo"), viewModel.VideoPlaceholder);
+
+        viewModel.SetPlayerState(true, null);
+        var picking = viewModel.PickFileCommand.ExecuteAsync(null);
+        Assert.True(viewModel.IsBusy);
+        Assert.False(viewModel.ShowVideo);
+        Assert.Equal(viewModel.BusyText, viewModel.VideoPlaceholder);
+        Assert.NotEmpty(viewModel.VideoPlaceholder);
+
+        sharing.SetResult();
+        await picking;
+        Assert.True(viewModel.ShowVideo);
+    }
+
+    /// <summary>
     /// A shared file is passed to the session; a participant file that differs is reported.
     /// </summary>
     [Fact]
@@ -335,6 +367,49 @@ public sealed class ViewModelTests
         _session.UseLocalCopyAsync("movie.mkv", Arg.Any<CancellationToken>()).Returns(false);
         await viewModel.PickFileCommand.ExecuteAsync(null);
         await _dialogs.Received(1).ShowErrorAsync("Другой файл", Arg.Any<string>());
+    }
+
+    /// <summary>
+    /// Removing a participant is the host's decision twice over: the menu command asks first, and only a yes
+    /// reaches the session.
+    /// </summary>
+    /// <param name="agreed">Whether the host confirms.</param>
+    /// <returns>A task that completes when the test is done.</returns>
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task Remove_AsksTheHostFirst(bool agreed)
+    {
+        _session.GetSnapshot().Returns(Snapshot(PlayState.Paused, TimeSpan.Zero));
+        _dialogs.ConfirmAsync(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<string>()).Returns(agreed);
+        var viewModel = CreateViewModel();
+        viewModel.Refresh();
+        var guest = viewModel.Participants.Single(p => p.PeerId == Guest);
+        Assert.True(guest.CanModerate);
+        Assert.False(viewModel.Participants.Single(p => p.PeerId == Host).CanModerate);
+
+        await guest.RemoveCommand.ExecuteAsync(null);
+
+        await _dialogs.Received(1).ConfirmAsync(Arg.Any<string>(), Arg.Is<string>(text => text.Contains("Марина")), Arg.Any<string>());
+        await _session.Received(agreed ? 1 : 0).RemoveParticipantAsync(Guest);
+    }
+
+    /// <summary>
+    /// A removal that fails (the session ended meanwhile) is reported instead of ending the application.
+    /// </summary>
+    /// <returns>A task that completes when the test is done.</returns>
+    [Fact]
+    public async Task Remove_ReportsFailures()
+    {
+        _session.GetSnapshot().Returns(Snapshot(PlayState.Paused, TimeSpan.Zero));
+        _dialogs.ConfirmAsync(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<string>()).Returns(true);
+        _session.RemoveParticipantAsync(Guest).ThrowsAsync(new InvalidOperationException("Сеанс уже завершён."));
+        var viewModel = CreateViewModel();
+        viewModel.Refresh();
+
+        await viewModel.Participants.Single(p => p.PeerId == Guest).RemoveCommand.ExecuteAsync(null);
+
+        await _dialogs.Received(1).ShowErrorAsync(Arg.Any<string>(), "Сеанс уже завершён.");
     }
 
     /// <summary>
@@ -405,6 +480,14 @@ public sealed class ViewModelTests
         Assert.Equal(link, dialog.Link);
         Assert.NotEqual(key, dialog.Key);
         _session.Received(2).CreateInvite(Arg.Any<IReadOnlyList<PeerEndpoint>>(), InviteRegistry.WebLinkLifetime);
+
+        // "New invitation" replaces both: a guest who was removed, or a second guest, gets a link that works.
+        (link, key) = (dialog.Link, dialog.Key);
+        dialog.Regenerate();
+
+        Assert.NotEqual(link, dialog.Link);
+        Assert.NotEqual(key, dialog.Key);
+        Assert.NotEqual(Invite.ParseLink(link).Token, Invite.ParseLink(dialog.Link).Token);
     }
 
     /// <summary>

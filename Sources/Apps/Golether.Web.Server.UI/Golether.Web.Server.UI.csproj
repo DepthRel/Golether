@@ -1,0 +1,69 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    Golether Server Monitor: a window next to the rendezvous server that shows what the server is doing (its state and
+    the journal of events in columns), starts and stops its service, exports the journal and edits its settings.
+    It reads the server over the local status address and controls the service of the system it runs on: a Windows
+    service, a systemd unit or a launchd job.
+  -->
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <RootNamespace>Golether.Web.Server.UI</RootNamespace>
+    <AssemblyName>golether-server-monitor</AssemblyName>
+    <AvaloniaUseCompiledBindingsByDefault>true</AvaloniaUseCompiledBindingsByDefault>
+    <!-- The state of the Windows service is read through the service control manager (LibraryImport). -->
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <ApplicationIcon>..\Golether.Web.Server\Assets\golether-server.ico</ApplicationIcon>
+    <!-- The published monitor needs no XML documentation next to it. -->
+    <PublishDocumentationFile>false</PublishDocumentationFile>
+    <PublishReferencesDocumentationFiles>false</PublishReferencesDocumentationFiles>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <AvaloniaResource Include="..\Golether.Web.Server\Assets\golether-server-256.png" Link="Assets\golether-server-256.png" />
+    <AvaloniaResource Include="..\Golether.Web.Server\Assets\golether-server.ico" Link="Assets\golether-server.ico" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="Golether.Web.Server.UI.Tests" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Avalonia" />
+    <PackageReference Include="Avalonia.Desktop" />
+    <PackageReference Include="Avalonia.Themes.Fluent" />
+    <PackageReference Include="Avalonia.Fonts.Inter" />
+    <PackageReference Include="CommunityToolkit.Mvvm" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="../Golether.Web.Server.Contracts/Golether.Web.Server.Contracts.csproj" />
+  </ItemGroup>
+
+  <!--
+    The launcher in the root of the server folder, next to golether-server(.exe): the same application host (with
+    the server icon) pointing at monitor/golether-server-monitor.dll, so the monitor is found without looking into
+    the inner folder. The publish scripts pass -p:GoletherMonitorLauncherPath=<server folder>/golether-server-monitor
+    (with .exe on Windows) and publish the monitor itself into <server folder>/monitor.
+  -->
+  <Target Name="GoletherMonitorLauncher" AfterTargets="Publish" DependsOnTargets="_GetAppHostPaths"
+          Condition="'$(GoletherMonitorLauncherPath)' != ''">
+    <Error Condition="'$(AppHostSourcePath)' == ''" Text="The launcher of the monitor needs an application host: publish with a runtime identifier (-r)." />
+    <PropertyGroup>
+      <_MonitorBinary Condition="$(RuntimeIdentifier.StartsWith('win'))">monitor\$(AssemblyName)$(TargetExt)</_MonitorBinary>
+      <_MonitorBinary Condition="!$(RuntimeIdentifier.StartsWith('win'))">monitor/$(AssemblyName)$(TargetExt)</_MonitorBinary>
+      <!-- Only a Windows launcher is a PE file whose window subsystem can be set; on Linux and macOS there is none. -->
+      <_MonitorGui>$(RuntimeIdentifier.StartsWith('win'))</_MonitorGui>
+    </PropertyGroup>
+    <!-- The settings of the monitor start empty (the language of the system) in config/ of the server folder. -->
+    <Copy SourceFiles="monitor.json" DestinationFolder="$([System.IO.Path]::GetDirectoryName('$(GoletherMonitorLauncherPath)'))/config" />
+    <CreateAppHost AppHostSourcePath="$(AppHostSourcePath)"
+                   AppHostDestinationPath="$(GoletherMonitorLauncherPath)"
+                   AppBinaryName="$(_MonitorBinary)"
+                   IntermediateAssembly="@(IntermediateAssembly->'%(FullPath)')"
+                   WindowsGraphicalUserInterface="$(_MonitorGui)"
+                   Retries="$(CopyRetryCount)"
+                   RetryDelayMilliseconds="$(CopyRetryDelayMilliseconds)" />
+  </Target>
+
+</Project>

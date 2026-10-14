@@ -128,6 +128,12 @@ public sealed class SessionService : ISessionService, IAsyncDisposable
     private string _joinName = string.Empty;
 
     /// <summary>
+    /// The avatar this device showed last, or <see langword="null"/> without one. The host forgets the avatar of a
+    /// participant whose connection broke, so it is sent again when the session is restored.
+    /// </summary>
+    private byte[]? _avatar;
+
+    /// <summary>
     /// The invitation with the ticket that brings this device back, or <see langword="null"/>.
     /// </summary>
     private Invite? _reconnectInvite;
@@ -185,6 +191,9 @@ public sealed class SessionService : ISessionService, IAsyncDisposable
 
     /// <inheritdoc />
     public event EventHandler<AvatarUpdate>? AvatarReceived;
+
+    /// <inheritdoc />
+    public event EventHandler<string>? ClosedByHost;
 
     /// <inheritdoc />
     /// <remarks>
@@ -368,6 +377,11 @@ public sealed class SessionService : ISessionService, IAsyncDisposable
             .SwitchOffParticipantDevicesAsync(peerId, microphone, camera);
 
     /// <inheritdoc />
+    public Task RemoveParticipantAsync(PeerId peerId)
+        => (_host ?? throw new InvalidOperationException(Texts.Get("Session.Error.OnlyHostModerates")))
+            .RemoveParticipantAsync(peerId);
+
+    /// <inheritdoc />
     public Task SendChatAsync(ChatKind kind, string text, CancellationToken cancellationToken)
         => _host is not null ? _host.SendChatAsync(kind, text)
             : _participant is not null ? _participant.SendChatAsync(kind, text, cancellationToken)
@@ -381,9 +395,12 @@ public sealed class SessionService : ISessionService, IAsyncDisposable
 
     /// <inheritdoc />
     public Task SetAvatarAsync(byte[]? image, CancellationToken cancellationToken)
-        => _host is not null ? _host.SetAvatarAsync(image)
+    {
+        _avatar = image;
+        return _host is not null ? _host.SetAvatarAsync(image)
             : _participant is not null ? _participant.SendAvatarAsync(image, cancellationToken)
             : Task.CompletedTask;
+    }
 
     /// <inheritdoc />
     /// <remarks>
@@ -663,8 +680,8 @@ public sealed class SessionService : ISessionService, IAsyncDisposable
             }
 
             var text = agent.IsRegistered
-                ? Texts.Format("Session.Rendezvous.Registered", point.Server)
-                : agent.LastError is { } error ? Texts.Format("Session.Rendezvous.Lost", point.Server, RendezvousException.Describe(error)) : null;
+                ? Texts.Get("Session.Rendezvous.Registered")
+                : agent.LastError is { } error ? Texts.Format("Session.Rendezvous.Lost", RendezvousException.Describe(error)) : null;
             if (text is not null)
             {
                 EventRaised?.Invoke(this, new SessionEvent(_timeProvider.GetLocalNow(), null, text));
@@ -755,6 +772,18 @@ public sealed class SessionService : ISessionService, IAsyncDisposable
                 }
 
                 _reconnectInvite = session.ReconnectInvite ?? ticket;
+                if (_avatar is { Length: > 0 } avatar)
+                {
+                    try
+                    {
+                        await session.SendAvatarAsync(avatar, token).ConfigureAwait(false);
+                    }
+                    catch (Exception ex) when (ex is IOException or ObjectDisposedException or InvalidOperationException)
+                    {
+                        // The connection broke again: the next restoring sends the picture.
+                    }
+                }
+
                 Report(Texts.Get("Session.Reconnect.Restored"));
                 ReconnectMessage = string.Empty;
                 Changed?.Invoke(this, EventArgs.Empty);
@@ -862,11 +891,19 @@ public sealed class SessionService : ISessionService, IAsyncDisposable
     /// <param name="session">The session.</param>
     private void Attach(ParticipantSession session)
     {
+        var told = 0;
         session.Changed += (_, _) =>
         {
             if (session.GetSnapshot().State == SessionState.Ended)
             {
                 StartReconnecting(session);
+
+                // The host ended the session or removed this device: nothing will be restored, and the event feed
+                // disappears together with the session view, so the reason is told once on its own.
+                if (session is { ClosedByHost: true, EndReason: { } reason } && Interlocked.Exchange(ref told, 1) == 0)
+                {
+                    ClosedByHost?.Invoke(this, reason);
+                }
             }
 
             Changed?.Invoke(this, EventArgs.Empty);

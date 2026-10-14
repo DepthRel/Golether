@@ -117,6 +117,25 @@ public sealed class VolumeAndModerationTests
     }
 
     /// <summary>
+    /// When a participant switches the camera off, its last frame leaves the tile: the avatar is shown again, not a
+    /// frozen picture that looks like a working camera.
+    /// </summary>
+    [Fact]
+    public void Tile_DropsTheLastFrameWhenTheCameraGoesOff()
+    {
+        var peer = PeerId.Parse(new string('a', 64));
+        var tile = new ParticipantItemViewModel(peer);
+        tile.Update(View(peer, microphoneOff: false, cameraOff: false), null);
+        tile.CameraImage = new object();
+        Assert.True(tile.HasCamera);
+
+        tile.Update(View(peer, microphoneOff: false, cameraOff: true), null);
+
+        Assert.False(tile.HasCamera);
+        Assert.Null(tile.CameraImage);
+    }
+
+    /// <summary>
     /// The voice volume of a tile is clamped, muted and restored locally; a stored value is shown without being
     /// applied or stored again.
     /// </summary>

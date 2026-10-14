@@ -382,7 +382,8 @@ public sealed class SessionIntegrationTests : IAsyncLifetime
         await using var first = CreateGuest();
         await first.JoinAsync(_host.CreateInvite([new PeerEndpoint("127.0.0.1", _host.Port)]), token);
         Assert.Equal(_content, await ReadAllAsync(_registry, token));
-        Assert.Equal(2, _host.ChunksServed);
+        var chunks = (int)(((_content.Length - 1) / Golether.Core.Media.MediaDescriptor.DefaultChunkSize) + 1);
+        Assert.Equal(chunks, _host.ChunksServed);
 
         await using var second = new ParticipantSession(
             secondIdentity,
@@ -400,11 +401,15 @@ public sealed class SessionIntegrationTests : IAsyncLifetime
         await Task.Delay(TimeSpan.FromSeconds(2.5), token);
         Assert.Equal(_content, await ReadAllAsync(secondRegistry, token));
 
-        Assert.Equal(2, _host.ChunksServed);
-        Assert.True(_host.HashesServed >= 2, $"The host answered {_host.HashesServed} hashes.");
+        // A participant uploads two pieces at a time to another one; what is asked for beyond that at the same
+        // moment comes from the host. So the host may serve a few more pieces, but most come from the participant,
+        // and what the first participant sent is what the second one got from it.
+        var fromHost = (int)(_host.ChunksServed - chunks);
+        Assert.InRange(fromHost, 0, chunks / 2);
+        Assert.True(_host.HashesServed >= chunks - fromHost, $"The host answered {_host.HashesServed} hashes.");
         var local = second.GetSnapshot().Participants.Single(p => p.IsLocal).Status!;
-        Assert.Equal(_content.Length, local.BytesFromPeers);
-        await WaitUntilAsync(() => first.GetSnapshot().Participants.Single(p => p.IsLocal).Status!.BytesToPeers == _content.Length, token);
+        Assert.InRange(local.BytesFromPeers, _content.Length / 2, _content.Length);
+        await WaitUntilAsync(() => first.GetSnapshot().Participants.Single(p => p.IsLocal).Status!.BytesToPeers == local.BytesFromPeers, token);
     }
 
     /// <summary>
@@ -441,6 +446,119 @@ public sealed class SessionIntegrationTests : IAsyncLifetime
         _hostIdentity.Dispose();
         _guestIdentity.Dispose();
         File.Delete(_mediaPath);
+    }
+
+    /// <summary>
+    /// One invitation is for the whole company: several guests join with the same link. Removing one of them does
+    /// not cancel the link for the others; it is the removed device that the link no longer lets in.
+    /// </summary>
+    [Fact]
+    public async Task SharedInvitation_LetsTheCompanyInButNotTheRemovedGuest()
+    {
+        var token = TestContext.Current.CancellationToken;
+        var invite = _host.CreateInvite([new PeerEndpoint("127.0.0.1", _host.Port)]);
+        using var secondIdentity = DeviceIdentity.CreateNew(TimeProvider.System);
+        using var thirdIdentity = DeviceIdentity.CreateNew(TimeProvider.System);
+        await using var first = CreateGuest();
+        await using var second = CreateGuest(secondIdentity, "Олег");
+
+        await first.JoinAsync(invite, token);
+        await second.JoinAsync(invite, token);
+        await WaitUntilAsync(() => _host.GetSnapshot().Participants.Count == 3, token);
+
+        await _host.RemoveParticipantAsync(_guestIdentity.PeerId);
+        await WaitUntilAsync(() => _host.GetSnapshot().Participants.Count == 2, token);
+
+        // The same link: refused to the removed device, with the reason it was removed for...
+        await using (var again = CreateGuest())
+        {
+            var refusal = await Assert.ThrowsAsync<SessionJoinException>(() => again.JoinAsync(invite, token));
+            Assert.Equal(SessionTexts.DescribeRejection(RejectReason.Removed), refusal.Message);
+        }
+
+        // ...and still good for a friend who comes late.
+        await using var third = CreateGuest(thirdIdentity, "Вера");
+        await third.JoinAsync(invite, token);
+        await WaitUntilAsync(() => _host.GetSnapshot().Participants.Count == 3, token);
+        Assert.Equal(SessionState.Active, second.GetSnapshot().State);
+
+        // A link made after the removal lets the removed device in again.
+        await using var forgiven = CreateGuest();
+        await forgiven.JoinAsync(_host.CreateInvite([new PeerEndpoint("127.0.0.1", _host.Port)]), token);
+        await WaitUntilAsync(() => _host.GetSnapshot().Participants.Count == 4, token);
+    }
+
+    /// <summary>
+    /// A guest the host declined cannot keep asking with the shared link: the host is not asked again until the
+    /// guest has a newer invitation. A host who simply did not answer has declined nobody.
+    /// </summary>
+    [Fact]
+    public async Task DeclinedGuest_NeedsANewInvitation()
+    {
+        var token = TestContext.Current.CancellationToken;
+        var invite = _host.CreateInvite([new PeerEndpoint("127.0.0.1", _host.Port)]);
+        _prompt.AskAsync(Arg.Any<AdmissionRequest>(), Arg.Any<CancellationToken>()).Returns(false);
+        await using (var declined = CreateGuest())
+        {
+            await Assert.ThrowsAsync<SessionJoinException>(() => declined.JoinAsync(invite, token));
+        }
+
+        _prompt.ClearReceivedCalls();
+        _prompt.AskAsync(Arg.Any<AdmissionRequest>(), Arg.Any<CancellationToken>()).Returns(true);
+        await using (var again = CreateGuest())
+        {
+            var refusal = await Assert.ThrowsAsync<SessionJoinException>(() => again.JoinAsync(invite, token));
+            Assert.Equal(SessionTexts.DescribeRejection(RejectReason.Declined), refusal.Message);
+        }
+
+        await _prompt.DidNotReceive().AskAsync(Arg.Any<AdmissionRequest>(), Arg.Any<CancellationToken>());
+
+        await using var invited = CreateGuest();
+        await invited.JoinAsync(_host.CreateInvite([new PeerEndpoint("127.0.0.1", _host.Port)]), token);
+        await WaitUntilAsync(() => _host.GetSnapshot().Participants.Count == 2, token);
+    }
+
+    /// <summary>
+    /// A participant removed by the host is told so and cannot come back by itself: neither the ticket of the session
+    /// nor the invitation it joined with lets it in. It is not banned either: a new invitation works.
+    /// </summary>
+    [Fact]
+    public async Task RemovedParticipant_NeedsANewInvitation()
+    {
+        var token = TestContext.Current.CancellationToken;
+        var invite = _host.CreateInvite([new PeerEndpoint("127.0.0.1", _host.Port)]);
+        await using var guest = CreateGuest();
+        await guest.JoinAsync(invite, token);
+        await WaitUntilAsync(() => _host.GetSnapshot().Participants.Count == 2, token);
+        var ticket = guest.ReconnectInvite;
+        Assert.NotNull(ticket);
+
+        await _host.RemoveParticipantAsync(_guestIdentity.PeerId);
+
+        await WaitUntilAsync(() => guest.GetSnapshot().State == SessionState.Ended, token);
+        Assert.True(guest.ClosedByHost);
+        Assert.Equal(SessionTexts.DescribeRejection(RejectReason.Removed), guest.EndReason);
+        Assert.Single(_host.GetSnapshot().Participants);
+
+        // The ticket that would have brought the device back after a broken connection is gone.
+        await using (var returning = CreateGuest())
+        {
+            await Assert.ThrowsAsync<SessionJoinException>(() => returning.RejoinAsync(ticket, token));
+        }
+
+        // The invitation it came with still exists, but the host remembers whom it turned away.
+        await using (var again = CreateGuest())
+        {
+            await Assert.ThrowsAsync<SessionJoinException>(() => again.JoinAsync(invite, token));
+        }
+
+        Assert.Single(_host.GetSnapshot().Participants);
+
+        // A new invitation from the host lets the same device in again.
+        await using var invited = CreateGuest();
+        await invited.JoinAsync(_host.CreateInvite([new PeerEndpoint("127.0.0.1", _host.Port)]), token);
+        await WaitUntilAsync(() => _host.GetSnapshot().Participants.Count == 2, token);
+        Assert.Equal(SessionState.Active, invited.GetSnapshot().State);
     }
 
     /// <summary>
@@ -535,10 +653,11 @@ public sealed class SessionIntegrationTests : IAsyncLifetime
     }
 
     /// <summary>
-    /// A used invitation cannot be used again and a rejected participant gets the reason.
+    /// An invitation the host never made is refused, a guest who left may come back with the invitation of the
+    /// company, and a rejected participant gets the reason.
     /// </summary>
     [Fact]
-    public async Task Admission_RejectsReusedInviteAndDeclinedPeer()
+    public async Task Admission_RejectsForeignInviteAndDeclinedPeer()
     {
         var token = TestContext.Current.CancellationToken;
         var invite = _host.CreateInvite([new PeerEndpoint("127.0.0.1", _host.Port)]);
@@ -547,9 +666,15 @@ public sealed class SessionIntegrationTests : IAsyncLifetime
             await first.JoinAsync(invite, token);
         }
 
+        // Leaving by oneself is not being turned away: the same invitation lets the guest in again while it lives.
+        await using (var back = CreateGuest())
+        {
+            await back.JoinAsync(invite, token);
+        }
+
         await using var second = CreateGuest();
-        var reused = await Assert.ThrowsAsync<SessionJoinException>(() => second.JoinAsync(invite, token));
-        Assert.Contains("недействительно", reused.Message, StringComparison.Ordinal);
+        var forged = await Assert.ThrowsAsync<SessionJoinException>(() => second.JoinAsync(invite with { Token = Invite.CreateToken() }, token));
+        Assert.Contains("недействительно", forged.Message, StringComparison.Ordinal);
 
         _prompt.AskAsync(Arg.Any<AdmissionRequest>(), Arg.Any<CancellationToken>()).Returns(false);
         await using var declined = CreateGuest();
@@ -573,7 +698,7 @@ public sealed class SessionIntegrationTests : IAsyncLifetime
         await using var declined = CreateGuest();
         var error = await Assert.ThrowsAsync<SessionJoinException>(() => declined.JoinAsync(invite, token));
 
-        Assert.Equal("The host declined the request.", error.Message);
+        Assert.Equal("The host declined the request. To try again, ask them for a new invitation.", error.Message);
     }
 
     /// <summary>
@@ -659,6 +784,23 @@ public sealed class SessionIntegrationTests : IAsyncLifetime
     }
 
     /// <summary>
+    /// Creates a participant session of another device, without a player of its own.
+    /// </summary>
+    /// <param name="identity">The device.</param>
+    /// <param name="name">The name of the participant.</param>
+    /// <returns>The session.</returns>
+    private static ParticipantSession CreateGuest(DeviceIdentity identity, string name)
+        => new(
+            identity,
+            new TlsPeerConnector(identity, Transport),
+            new SimulatedPlayer(StopwatchMonotonicClock.Instance, TimeSpan.FromHours(2)),
+            new CapturingRegistry(),
+            StopwatchMonotonicClock.Instance,
+            TimeProvider.System,
+            name,
+            Options);
+
+    /// <summary>
     /// Creates a participant session.
     /// </summary>
     /// <returns>The session.</returns>
@@ -707,6 +849,43 @@ public sealed class SessionIntegrationTests : IAsyncLifetime
     }
 
     /// <summary>
+    /// When the host shows another film, the participant goes on over the media streams it already has. Opening a
+    /// stream through a rendezvous server is a whole meeting and can take many seconds, so the next film must not
+    /// start by opening its own.
+    /// </summary>
+    /// <returns>A task that completes when the test is done.</returns>
+    [Fact]
+    public async Task NextFilm_UsesTheMediaStreamsOfThePreviousOne()
+    {
+        var token = TestContext.Current.CancellationToken;
+        await _host.ShareMediaAsync(_mediaPath, token);
+        _host.Rendezvous = new RendezvousPoint(PeerEndpoint.Parse("203.0.113.7:47900"), RendezvousPoint.CreateRoom());
+        var rendezvous = new LoopbackRendezvous(_guestIdentity, _host.Port);
+        await using var guest = CreateGuest(rendezvous);
+        await guest.JoinAsync(_host.CreateInvite([new PeerEndpoint("127.0.0.1", ClosedPort())]), token);
+        Assert.Equal(_content, await ReadAllAsync(_registry, token));
+        var opened = rendezvous.Purposes.Count(purpose => purpose == StreamPurpose.MediaData);
+        Assert.InRange(opened, 1, Options.MediaDataStreams);
+
+        var second = Path.Combine(Path.GetTempPath(), $"golether-session-{Guid.NewGuid():N}.mkv");
+        var other = RandomNumberGenerator.GetBytes(700_000);
+        await File.WriteAllBytesAsync(second, other, token);
+        try
+        {
+            await _host.ShareMediaAsync(second, token);
+            await WaitUntilAsync(() => guest.GetSnapshot().Media?.Length == other.Length, token);
+
+            Assert.Equal(other, await ReadAllAsync(_registry, token));
+            Assert.Equal(opened, rendezvous.Purposes.Count(purpose => purpose == StreamPurpose.MediaData));
+        }
+        finally
+        {
+            await _host.ShareMediaAsync(_mediaPath, token);
+            File.Delete(second);
+        }
+    }
+
+    /// <summary>
     /// When the host serves relay streams, the cameras and voices of a participant reach its relay by the route of
     /// the session: they are pointed at a local port, and what is sent there arrives at the relay of the host over
     /// a stream of its own. No other port of the host has to be reachable.
@@ -741,8 +920,108 @@ public sealed class SessionIntegrationTests : IAsyncLifetime
         }
 
         Assert.Equal([1, 2, 3], echoed);
-        Assert.Contains(StreamPurpose.Relay, rendezvous.Purposes);
+        Assert.Contains(StreamPurpose.RelayShared, rendezvous.Purposes);
         Assert.Equal(System.Net.IPAddress.Loopback, Assert.Single(relay.Served).Local);
+    }
+
+    /// <summary>
+    /// The cameras and voices make many connections to the relay at once. They all travel in one stream of the
+    /// session: one meeting through the rendezvous server instead of one per connection, and the relay still
+    /// serves each connection as a client of its own.
+    /// </summary>
+    /// <returns>A task that completes when the test is done.</returns>
+    [Fact]
+    public async Task Conference_SharesOneStreamForAllRelayConnections()
+    {
+        var token = TestContext.Current.CancellationToken;
+        var relay = new EchoRelay();
+        _host.Relay = new Transports.Relay.RelayCredentials(47999, "golether-x", "secret_1");
+        _host.RelayServer = relay;
+        _host.Rendezvous = new RendezvousPoint(PeerEndpoint.Parse("203.0.113.7:47900"), RendezvousPoint.CreateRoom());
+        var rendezvous = new LoopbackRendezvous(_guestIdentity, _host.Port);
+        await using var guest = CreateGuest(rendezvous);
+        await guest.JoinAsync(_host.CreateInvite([new PeerEndpoint("127.0.0.1", ClosedPort())]), token);
+        var port = new Uri(_guestConference.Relay!).Port;
+
+        const int Connections = 12;
+        var cameras = new List<System.Net.Sockets.TcpClient>();
+        try
+        {
+            await Task.WhenAll(Enumerable.Range(0, Connections).Select(async index =>
+            {
+                var camera = new System.Net.Sockets.TcpClient();
+                lock (cameras)
+                {
+                    cameras.Add(camera);
+                }
+
+                await camera.ConnectAsync(System.Net.IPAddress.Loopback, port, token);
+                await camera.GetStream().WriteAsync(new[] { (byte)index, (byte)(index + 1) }, token);
+                var echoed = new byte[2];
+                using var limit = CancellationTokenSource.CreateLinkedTokenSource(token);
+                limit.CancelAfter(TimeSpan.FromSeconds(15));
+                await camera.GetStream().ReadExactlyAsync(echoed, limit.Token);
+                Assert.Equal([(byte)index, (byte)(index + 1)], echoed);
+            }));
+
+            Assert.Equal(Connections, relay.Served.Count);
+            Assert.Single(rendezvous.Purposes, purpose => purpose == StreamPurpose.RelayShared);
+            Assert.DoesNotContain(StreamPurpose.Relay, rendezvous.Purposes);
+        }
+        finally
+        {
+            foreach (var camera in cameras)
+            {
+                camera.Dispose();
+            }
+        }
+    }
+
+    /// <summary>
+    /// When the host ends the session (or closes the application, which ends it), every participant is told so:
+    /// the session ends for it with that reason and is not restored.
+    /// </summary>
+    /// <returns>A task that completes when the test is done.</returns>
+    [Fact]
+    public async Task HostEndingTheSession_IsToldToParticipants()
+    {
+        var token = TestContext.Current.CancellationToken;
+        await using var guest = CreateGuest();
+        await guest.JoinAsync(_host.CreateInvite([new PeerEndpoint("127.0.0.1", _host.Port)]), token);
+
+        await _host.DisposeAsync();
+
+        await WaitUntilAsync(() => guest.GetSnapshot().State == SessionState.Ended, token);
+        Assert.True(guest.ClosedByHost);
+        Assert.Equal(Golether.Localization.Texts.Get("Session.Error.HostEnded"), guest.EndReason);
+    }
+
+    /// <summary>
+    /// A session that has ended opens no more streams to the host. The cameras and the player do not know that the
+    /// session is over and keep asking; left alone, every request would become one more meeting through the
+    /// rendezvous server while the device is already trying to come back.
+    /// </summary>
+    /// <returns>A task that completes when the test is done.</returns>
+    [Fact]
+    public async Task EndedSession_OpensNoMoreStreams()
+    {
+        var token = TestContext.Current.CancellationToken;
+        _host.Relay = new Transports.Relay.RelayCredentials(47999, "golether-x", "secret_1");
+        _host.RelayServer = new EchoRelay();
+        _host.Rendezvous = new RendezvousPoint(PeerEndpoint.Parse("203.0.113.7:47900"), RendezvousPoint.CreateRoom());
+        var rendezvous = new LoopbackRendezvous(_guestIdentity, _host.Port);
+        await using var guest = CreateGuest(rendezvous);
+        await guest.JoinAsync(_host.CreateInvite([new PeerEndpoint("127.0.0.1", ClosedPort())]), token);
+        var port = new Uri(_guestConference.Relay!).Port;
+
+        await _host.RemoveParticipantAsync(PeerIdOf(_guestIdentity));
+        await WaitUntilAsync(() => guest.GetSnapshot().State == SessionState.Ended, token);
+        var asked = rendezvous.Purposes.Count;
+
+        using var camera = new System.Net.Sockets.TcpClient();
+        await camera.ConnectAsync(System.Net.IPAddress.Loopback, port, token);
+        Assert.Equal(0, await ReadUntilClosedAsync(camera.GetStream(), token).WaitAsync(TimeSpan.FromSeconds(10), token));
+        Assert.Equal(asked, rendezvous.Purposes.Count);
     }
 
     /// <summary>
