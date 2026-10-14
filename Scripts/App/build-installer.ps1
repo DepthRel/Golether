@@ -58,6 +58,11 @@ if ($LASTEXITCODE -ne 0 -or -not $version) {
     throw 'Cannot read the version from the project.'
 }
 
+$projectUrl = (& dotnet msbuild $ui -nologo -getProperty:PackageProjectUrl).Trim()
+if ($LASTEXITCODE -ne 0 -or -not $projectUrl) {
+    throw 'Cannot read the address of the project page (PackageProjectUrl) from the project.'
+}
+
 $iscc = (Get-Command 'ISCC.exe' -ErrorAction SilentlyContinue).Source
 if (-not $iscc) {
     # Любая установленная версия Inno Setup (6, 7 и новее), включая установку в профиль пользователя.
@@ -85,6 +90,7 @@ $art = Join-Path $root 'artifacts\installer-art'
 Write-Host "==> Inno Setup: $iscc"
 & $iscc `
     "/DGoletherVersion=$version" `
+    "/DGoletherUrl=$projectUrl" `
     "/DGoletherSource=$stage" `
     "/DGoletherOutputDir=$output" `
     "/DInstallerArt=$art" `

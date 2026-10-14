@@ -128,7 +128,7 @@ dotnet run --project Sources/Database/Golether.Dbs.SQLite.DbMigrator -- --databa
 |---|---|
 | `Scripts/App/publish-win.ps1 [-Runtime win-x64]` | `artifacts/publish/Golether-<версия>-win-x64.zip` |
 | `Scripts/App/publish-linux.sh [linux-x64] [Release] [out]` | `.tar.gz` и `.zip` (если есть `zip`), `install-desktop-entry.sh` |
-| `Scripts/App/publish-macos.sh [osx-arm64] ...` | `Golether.app` (Info.plist, иконка, ad-hoc подпись) в архиве |
+| `Scripts/App/publish-macos.sh [osx-arm64\|osx-x64] ...` | `Golether.app` (Info.plist, иконка, ad-hoc подпись) в архиве |
 | `Scripts/App/publish-linux.ps1 [-Runtime linux-x64]` | тот же Linux-архив, собранный с Windows внутри WSL (см. ниже) |
 | `Scripts/Assets/update-site-screenshot.ps1` | картинка страницы проекта из `Docs/images/screenshot.png` |
 | `Scripts/Assets/generate-installer-art.ps1` | картинки мастера установки (тёмная панель с логотипом и логотип для шапки) в `artifacts/installer-art`; оба скрипта сборки установщиков вызывают его сами |
@@ -146,11 +146,13 @@ dotnet run --project Sources/Database/Golether.Dbs.SQLite.DbMigrator -- --databa
 - **Linux с Windows.** `./Scripts/App/publish-linux.ps1` запускает сборку в WSL: исходники копируются в файловую систему
   Linux, там же собираются, а готовый `Golether-<версия>-linux-x64.tar.gz` возвращается в `artifacts/publish`. При
   первом запуске в `~/.dotnet` дистрибутива ставится .NET SDK (официальным скриптом, без `sudo`).
-- **macOS и Linux на GitHub.** Workflow **Packages** (`.github/workflows/packages.yml`) собирает оба пакета на
-  раннерах GitHub: macOS-пакету нужны `sips`, `iconutil` и `codesign`, которых нет нигде, кроме macOS. Запуск вручную
+- **macOS и Linux на GitHub.** Workflow **Packages** (`.github/workflows/packages.yml`) собирает Linux-пакет и
+  macOS-пакеты для Apple silicon (`osx-arm64`) и Intel (`osx-x64`) на раннерах GitHub: macOS-пакету нужны `sips`,
+  `iconutil` и `codesign`, которых нет нигде, кроме macOS. Запуск вручную
   (Actions → Packages → Run workflow) отдаёт архивы как артефакты запуска. Запуск тегом версии
   (`git tag 0.3.0; git push origin 0.3.0`) ещё и прикладывает их к выпуску этого тега; если выпуска нет, создаётся
   черновик. Установщик Windows собирается локально (`build-installer.ps1`) и добавляется в тот же выпуск.
+  Workflow заменяет в выпуске только файлы с именами своих архивов, остальные остаются как были.
 
 ## Отладка сети
 

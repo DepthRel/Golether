@@ -9,6 +9,11 @@
 #ifndef ServerVersion
   #define ServerVersion "0.1.0"
 #endif
+; The page of the project (PackageProjectUrl of Directory.Build.props): the link of the program in the list of
+; installed apps.
+#ifndef ServerUrl
+  #define ServerUrl "https://depthrel.github.io/Golether"
+#endif
 #ifndef ServerSource
   #define ServerSource "..\..\artifacts\publish\win-x64\GoletherServer"
 #endif
@@ -29,6 +34,9 @@ AppId={{E3A9D4F1-6B2C-4F7E-8C41-2D5B9A7C3E62}
 AppName=Golether Server
 AppVersion={#ServerVersion}
 AppPublisher=Golether
+AppPublisherURL={#ServerUrl}
+AppSupportURL={#ServerUrl}
+AppUpdatesURL={#ServerUrl}
 AppCopyright=GPL-3.0-or-later
 VersionInfoVersion={#ServerVersion}
 DefaultDirName={autopf}\Golether Server

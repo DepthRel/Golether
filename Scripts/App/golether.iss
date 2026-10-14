@@ -12,6 +12,11 @@
 #ifndef GoletherVersion
   #define GoletherVersion "0.1.0"
 #endif
+; The page of the project (PackageProjectUrl of Directory.Build.props): the link of the program in the list of
+; installed apps.
+#ifndef GoletherUrl
+  #define GoletherUrl "https://depthrel.github.io/Golether"
+#endif
 #ifndef GoletherSource
   #define GoletherSource "..\..\artifacts\publish\win-x64\Golether"
 #endif
@@ -28,6 +33,9 @@ AppId={{7C2B1E22-2F1B-4C5E-9A0C-7C9C7E3A5B10}
 AppName=Golether
 AppVersion={#GoletherVersion}
 AppPublisher=Golether
+AppPublisherURL={#GoletherUrl}
+AppSupportURL={#GoletherUrl}
+AppUpdatesURL={#GoletherUrl}
 AppCopyright=GPL-3.0-or-later
 VersionInfoVersion={#GoletherVersion}
 ; {autopf} is %LOCALAPPDATA%\Programs for one user and C:\Program Files for all users.

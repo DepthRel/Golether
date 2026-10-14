@@ -4,6 +4,8 @@
 #   - by hand: Actions -> Packages -> Run workflow. The archives appear as "Artifacts" of the run.
 #   - by a version tag (git tag 0.3.0 && git push origin 0.3.0). The archives are also attached to the release of
 #     that tag; a release that does not exist yet is created as a draft, so nothing is published by itself.
+#     Files of the release with the same names (Golether-<version>-linux-x64.tar.gz, -osx-arm64, -osx-x64) are
+#     replaced; the others (the installers, the zip archives, the server packages) stay untouched.
 #
 # The Windows installer is built on the developer's machine (Scripts/App/build-installer.ps1) and added to the same release.
 name: Packages
@@ -31,6 +33,10 @@ jobs:
           # macos-latest is Apple silicon: the icon and the ad-hoc signature need the tools of macOS itself.
           - os: macos-latest
             runtime: osx-arm64
+            script: publish-macos.sh
+          # Intel Macs: the same Apple silicon runner builds it, .NET publishes for another processor without trouble.
+          - os: macos-latest
+            runtime: osx-x64
             script: publish-macos.sh
     steps:
       - uses: actions/checkout@v4

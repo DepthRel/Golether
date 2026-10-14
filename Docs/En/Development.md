@@ -137,7 +137,7 @@ dependencies, time through `TimeProvider`/`IMonotonicClock`, untrusted input is 
 |---|---|
 | `Scripts/App/publish-win.ps1 [-Runtime win-x64]` | `artifacts/publish/Golether-<version>-win-x64.zip` |
 | `Scripts/App/publish-linux.sh [linux-x64] [Release] [out]` | `.tar.gz` and `.zip` (when `zip` is available), `install-desktop-entry.sh` |
-| `Scripts/App/publish-macos.sh [osx-arm64] ...` | `Golether.app` (Info.plist, icon, ad-hoc signature) in an archive |
+| `Scripts/App/publish-macos.sh [osx-arm64\|osx-x64] ...` | `Golether.app` (Info.plist, icon, ad-hoc signature) in an archive |
 | `Scripts/App/publish-linux.ps1 [-Runtime linux-x64]` | the same Linux archive, built from Windows inside WSL (see below) |
 | `Scripts/Assets/update-site-screenshot.ps1` | the picture of the project page from `Docs/images/screenshot.png` |
 | `Scripts/Assets/generate-installer-art.ps1` | the pictures of the setup wizard (a dark panel with the logo and the logo for the header) in `artifacts/installer-art`; both installer build scripts call it themselves |
@@ -157,11 +157,13 @@ How to build them without a Linux machine or a Mac at hand:
   file system and built there, and the finished `Golether-<version>-linux-x64.tar.gz` comes back to
   `artifacts/publish`. The first run installs the .NET SDK into `~/.dotnet` of the distribution (with the official
   script, no `sudo`).
-- **macOS and Linux on GitHub.** The **Packages** workflow (`.github/workflows/packages.yml`) builds both packages on
-  GitHub runners: the macOS package needs `sips`, `iconutil` and `codesign`, which exist nowhere but on macOS. A run
+- **macOS and Linux on GitHub.** The **Packages** workflow (`.github/workflows/packages.yml`) builds the Linux package
+  and the macOS packages for Apple silicon (`osx-arm64`) and Intel (`osx-x64`) on GitHub runners: the macOS package
+  needs `sips`, `iconutil` and `codesign`, which exist nowhere but on macOS. A run
   by hand (Actions → Packages → Run workflow) gives the archives as artifacts of the run. A run by a version tag
   (`git tag 0.3.0; git push origin 0.3.0`) also attaches them to the release of that tag; when there is no release,
   a draft is created. The Windows installer is built locally (`build-installer.ps1`) and added to the same release.
+  The workflow replaces only the release files with the names of its own archives; the rest stays as it was.
 
 ## Debugging the network
 
