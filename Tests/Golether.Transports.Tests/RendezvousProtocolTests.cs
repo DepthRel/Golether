@@ -158,28 +158,54 @@ public sealed class RendezvousProtocolTests
     }
 
     /// <summary>
-    /// Two sockets on fixed ports connect to each other at the same time and meet in one connection, the way two
-    /// devices behind routers do.
+    /// The dialing side connects from the port it holds, so the hole its router opened for that port is the one used.
     /// </summary>
+    /// <remarks>
+    /// Whether two dials meet in one connection is up to the operating system (a TCP simultaneous open): on loopback
+    /// they meet only when they happen to cross, so that is not tested here. Each side of Golether is tested against
+    /// a listening socket instead, which answers at once.
+    /// </remarks>
     [Fact]
-    public async Task Punch_ConnectsTwoSidesThatBothDial()
+    public async Task Punch_DialsFromTheHeldPort()
     {
         var token = TestContext.Current.CancellationToken;
-        using var holdA = TcpPunch.Bind(0);
-        using var holdB = TcpPunch.Bind(0);
-        var portA = ((IPEndPoint)holdA.LocalEndPoint!).Port;
-        var portB = ((IPEndPoint)holdB.LocalEndPoint!).Port;
+        using var hold = TcpPunch.Bind(0);
+        var port = ((IPEndPoint)hold.LocalEndPoint!).Port;
+        using var listener = new TcpListener(IPAddress.Loopback, 0);
+        listener.Start();
+        var target = new IPEndPoint(IPAddress.Loopback, ((IPEndPoint)listener.LocalEndpoint).Port);
 
-        var answering = TcpPunch.AnswerAsync(portB, [new IPEndPoint(IPAddress.Loopback, portA)], TimeSpan.FromSeconds(10), token);
-        using var dialed = await TcpPunch.ConnectAsync(portA, [new IPEndPoint(IPAddress.Loopback, portB)], TimeSpan.FromSeconds(10), token);
-        await dialed.SendAsync("hi"u8.ToArray(), SocketFlags.None, token);
-        using var answered = await answering.WaitAsync(TimeSpan.FromSeconds(15), token);
+        var accepting = listener.AcceptSocketAsync(token).AsTask();
+        using var dialed = await TcpPunch.ConnectAsync(port, [target], TimeSpan.FromSeconds(10), token);
+        using var accepted = await accepting.WaitAsync(TimeSpan.FromSeconds(10), token);
+
+        Assert.Equal(port, ((IPEndPoint)dialed.LocalEndPoint!).Port);
+        Assert.Equal(port, ((IPEndPoint)accepted.RemoteEndPoint!).Port);
+    }
+
+    /// <summary>
+    /// The answering side takes the connection that brings data and leaves the data unread for the session.
+    /// </summary>
+    [Fact]
+    public async Task Punch_AnswersOnTheFirstData()
+    {
+        var token = TestContext.Current.CancellationToken;
+        using var hold = TcpPunch.Bind(0);
+        var port = ((IPEndPoint)hold.LocalEndPoint!).Port;
+        using var listener = new TcpListener(IPAddress.Loopback, 0);
+        listener.Start();
+        var target = new IPEndPoint(IPAddress.Loopback, ((IPEndPoint)listener.LocalEndpoint).Port);
+
+        var answering = TcpPunch.AnswerAsync(port, [target], TimeSpan.FromSeconds(10), token);
+        using var accepted = await listener.AcceptSocketAsync(token).AsTask().WaitAsync(TimeSpan.FromSeconds(10), token);
+        Assert.False(answering.IsCompleted);
+        await accepted.SendAsync("hi"u8.ToArray(), SocketFlags.None, token);
+        using var answered = await answering.WaitAsync(TimeSpan.FromSeconds(10), token);
 
         var buffer = new byte[2];
         Assert.Equal(2, await answered.ReceiveAsync(buffer, SocketFlags.None, token));
         Assert.Equal("hi"u8.ToArray(), buffer);
-        Assert.Equal(portB, ((IPEndPoint)answered.LocalEndPoint!).Port);
-        Assert.Equal(portA, ((IPEndPoint)answered.RemoteEndPoint!).Port);
+        Assert.Equal(port, ((IPEndPoint)answered.LocalEndPoint!).Port);
     }
 
     /// <summary>

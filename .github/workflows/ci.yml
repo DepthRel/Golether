@@ -44,4 +44,20 @@ jobs:
       - name: Build
         run: dotnet build Golether.slnx -c Release
       - name: Test
-        run: dotnet test --solution Golether.slnx -c Release --no-build
+        shell: bash
+        run: |
+          set -o pipefail
+          dotnet test --solution Golether.slnx -c Release --no-build 2>&1 | tee test-output.log
+      # A failed test becomes an annotation of the run, readable on its page (and through the public API) without the
+      # whole log; the whole output of the tests is kept as an artifact.
+      - name: Report what failed
+        if: failure()
+        shell: bash
+        run: |
+          grep -E '^failed |aborted|crashed|Unhandled exception|exit code' test-output.log | head -n 40 \
+            | sed 's/^/::error title=Test (${{ matrix.os }})::/' || true
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: test-output-${{ matrix.os }}
+          path: test-output.log
