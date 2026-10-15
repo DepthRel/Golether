@@ -2,6 +2,8 @@
   <Folder Name="/Solution Items/">
     <File Path=".editorconfig" />
     <File Path="AGENTS.md" />
+    <File Path="LICENSE.txt" />
+    <File Path="THIRD-PARTY-NOTICES.txt" />
     <File Path="Directory.Build.props" />
     <File Path="Directory.Packages.props" />
     <File Path="global.json" />
@@ -17,6 +19,7 @@
     <File Path="Docs/En/Protocol.md" />
     <File Path="Docs/En/RendezvousServer.md" />
     <File Path="Docs/En/UserGuide.md" />
+    <File Path="Docs/En/Privacy.md" />
   </Folder>
   <Folder Name="/Docs/Ru/">
     <File Path="Docs/Ru/Architecture.md" />
@@ -24,6 +27,7 @@
     <File Path="Docs/Ru/Protocol.md" />
     <File Path="Docs/Ru/RendezvousServer.md" />
     <File Path="Docs/Ru/UserGuide.md" />
+    <File Path="Docs/Ru/Privacy.md" />
   </Folder>
   <Folder Name="/Scripts/">
     <File Path="Scripts/README.md" />

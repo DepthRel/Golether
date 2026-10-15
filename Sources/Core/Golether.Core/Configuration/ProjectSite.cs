@@ -29,4 +29,42 @@ public static class ProjectSite
     /// The address of the file that describes the latest release.
     /// </summary>
     public const string UPDATES_URL = BASE_URL + "updates.json";
+
+    /// <summary>
+    /// The address of the source code.
+    /// </summary>
+    public const string SOURCE_URL = "https://github.com/DepthRel/Golether";
+
+    /// <summary>
+    /// The address of the license text of Golether.
+    /// </summary>
+    public const string LICENSE_URL = SOURCE_URL + "/blob/main/LICENSE.txt";
+
+    /// <summary>
+    /// The address of the list of components of other authors and their licenses.
+    /// </summary>
+    public const string NOTICES_URL = SOURCE_URL + "/blob/main/THIRD-PARTY-NOTICES.txt";
+
+    /// <summary>
+    /// The mail address for problems, questions and ideas.
+    /// </summary>
+    public const string FEEDBACK_EMAIL = "project.golether@gmail.com";
+
+    /// <summary>
+    /// Gives the address of a document of the documentation in a language. The folders of the documentation are
+    /// named after the code of the language with a capital first letter (<c>Docs/Ru</c>), as the project page
+    /// links them.
+    /// </summary>
+    /// <param name="languageCode">The two-letter code of the language.</param>
+    /// <param name="file">The file of the document, such as <c>Privacy.md</c>.</param>
+    /// <returns>The address of the document.</returns>
+    public static string DocumentUrl(string languageCode, string file)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(languageCode);
+        ArgumentException.ThrowIfNullOrWhiteSpace(file);
+
+        var folder = char.ToUpperInvariant(languageCode[0]) + languageCode[1..].ToLowerInvariant();
+
+        return $"{SOURCE_URL}/blob/main/Docs/{folder}/{file}";
+    }
 }

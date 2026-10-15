@@ -33,3 +33,14 @@ write_package_notes() {
       }' > "$target/$name"
   done
 }
+
+# Puts the license of Golether (LICENSE.txt) and the notices of its components (THIRD-PARTY-NOTICES.txt) from the root
+# of the repository into a package; the GPL asks for both next to the program. Line ends become LF.
+# Usage: write_package_licenses <target folder>
+write_package_licenses() {
+  local target="$1" root name
+  root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+  for name in LICENSE.txt THIRD-PARTY-NOTICES.txt; do
+    tr -d '\r' < "$root/$name" > "$target/$name"
+  done
+}

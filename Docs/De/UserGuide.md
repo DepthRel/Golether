@@ -241,6 +241,11 @@ der Komponenten, Informationen über die Sitzung (ohne den Namen des Films) und 
 Schlüssel, Token und Passwörter werden aus dem Bericht entfernt, sodass die Datei an jeden geschickt werden kann, der
 Ihnen hilft.
 
+Bei jeder Fensterbreite wird derselbe Bericht über **Einstellungen → Über Golether → Diagnosebericht…** gespeichert.
+Daneben öffnet **Problem melden** in Ihrem Mailprogramm einen Brief an die Entwickler (project.golether@gmail.com),
+Version und System sind schon eingetragen; das Fenster jedes Fehlers bietet dasselbe an. Hängen Sie den Bericht an den
+Brief: Nichts wird gesendet, bevor Sie ihn selbst abschicken.
+
 Der Bericht hat eine Zeile für jede Verbindung mit einem Teilnehmer: ob sie geprüft ist, ob der Datenkanal offen ist
 und wie viele Bilder hinaus- und hereingegangen sind (`Video 120↑/0↓`). So sieht man sofort, wo die Verbindung bricht:
 Sie ist nicht zustande gekommen, sie kam leer zustande, oder die Kamera liefert nichts.
@@ -349,6 +354,10 @@ Registry nur den Deinstallationseintrag und den Handler für Einladungslinks ein
   Installationsprogramm bringt dem System außerdem bei, Einladungslinks mit Golether zu öffnen. In einem entpackten
   Archiv öffnen sich Links nicht von selbst: Verwenden Sie den Schlüssel (unter Linux schaltet
   `install-desktop-entry.sh` die Links ein);
+- das Paket für Ubuntu und Debian (`.deb`, installiert mit `sudo apt install ./Golether-<version>-linux-x64.deb`)
+  bringt die Komponenten für Video und Kameras mit, trägt Golether ins Menü ein, lässt das System Einladungslinks mit
+  Golether öffnen und hält die Daten jedes Benutzers in seinem Profil: `~/.local/share/Golether`. Entfernt wird es mit
+  `sudo apt remove golether`;
 - verschieben, kopieren und löschen Sie den Ordner `Golether` als Ganzes: Alle Daten reisen mit;
 - um eine entpackte Kopie zu aktualisieren, entpacken Sie die neue Version und verschieben den Ordner `data` aus der
   alten hinein;

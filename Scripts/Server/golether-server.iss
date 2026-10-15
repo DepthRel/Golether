@@ -25,6 +25,11 @@
 #ifndef InstallerArt
   #define InstallerArt SourcePath + "..\..\artifacts\installer-art"
 #endif
+; The license page of every language: a short introduction and the English text of the GPL, written by
+; Write-InstallerLicenses (Scripts/Shared/package-notes.ps1, run by the build script).
+#ifndef InstallerLicense
+  #define InstallerLicense SourcePath + "..\..\artifacts\installer-license"
+#endif
 
 #define ServiceName "GoletherServer"
 #define FirewallRule "Golether rendezvous server"
@@ -71,12 +76,12 @@ OutputBaseFilename=GoletherServer-{#ServerVersion}-setup
 ; [Messages] and [CustomMessages].
 ; The note shown after the installation comes in the language of the wizard (publish-server-win.ps1 writes them all
 ; from Scripts/Server/Notes).
-Name: "english"; MessagesFile: "compiler:Default.isl"; InfoAfterFile: "{#ServerSource}\docs\README.txt"
-Name: "german"; MessagesFile: "compiler:Languages\German.isl"; InfoAfterFile: "{#ServerSource}\docs\README.de.txt"
-Name: "spanish"; MessagesFile: "compiler:Languages\Spanish.isl"; InfoAfterFile: "{#ServerSource}\docs\README.es.txt"
-Name: "french"; MessagesFile: "compiler:Languages\French.isl"; InfoAfterFile: "{#ServerSource}\docs\README.fr.txt"
-Name: "portuguese"; MessagesFile: "compiler:Languages\Portuguese.isl"; InfoAfterFile: "{#ServerSource}\docs\README.pt.txt"
-Name: "russian"; MessagesFile: "compiler:Languages\Russian.isl"; InfoAfterFile: "{#ServerSource}\docs\README.ru.txt"
+Name: "english"; MessagesFile: "compiler:Default.isl"; LicenseFile: "{#InstallerLicense}\LICENSE.en.txt"; InfoAfterFile: "{#ServerSource}\docs\README.txt"
+Name: "german"; MessagesFile: "compiler:Languages\German.isl"; LicenseFile: "{#InstallerLicense}\LICENSE.de.txt"; InfoAfterFile: "{#ServerSource}\docs\README.de.txt"
+Name: "spanish"; MessagesFile: "compiler:Languages\Spanish.isl"; LicenseFile: "{#InstallerLicense}\LICENSE.es.txt"; InfoAfterFile: "{#ServerSource}\docs\README.es.txt"
+Name: "french"; MessagesFile: "compiler:Languages\French.isl"; LicenseFile: "{#InstallerLicense}\LICENSE.fr.txt"; InfoAfterFile: "{#ServerSource}\docs\README.fr.txt"
+Name: "portuguese"; MessagesFile: "compiler:Languages\Portuguese.isl"; LicenseFile: "{#InstallerLicense}\LICENSE.pt.txt"; InfoAfterFile: "{#ServerSource}\docs\README.pt.txt"
+Name: "russian"; MessagesFile: "compiler:Languages\Russian.isl"; LicenseFile: "{#InstallerLicense}\LICENSE.ru.txt"; InfoAfterFile: "{#ServerSource}\docs\README.ru.txt"
 
 [Messages]
 ; The greeting of the first page; [name] and [name/ver] are filled in by Inno Setup.

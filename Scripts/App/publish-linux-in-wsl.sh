@@ -49,8 +49,12 @@ if [ "${#built[@]}" -ne 1 ]; then
   exit 1
 fi
 
+installers=("$work/out"/Golether-*-"$runtime".deb)
+
 mkdir -p "$source_root/artifacts/publish"
-cp -f "${built[0]}" "$source_root/artifacts/publish/"
+cp -f "${built[0]}" "${installers[@]}" "$source_root/artifacts/publish/"
 echo
 echo "Ready:"
-echo "$source_root/artifacts/publish/$(basename "${built[0]}")"
+for package in "${built[0]}" "${installers[@]}"; do
+  echo "$source_root/artifacts/publish/$(basename "$package")"
+done

@@ -5,7 +5,7 @@
 .DESCRIPTION
     Runs the build scripts of the categories in this order:
       1. AppWindows      App/build-installer.ps1             Golether-<version>-win-x64.zip and -setup.exe
-      2. AppLinux        App/publish-linux.ps1               Golether-<version>-linux-x64.tar.gz (inside WSL)
+      2. AppLinux        App/publish-linux.ps1               Golether-<version>-linux-x64.tar.gz and .deb (inside WSL)
       3. ServerWindows   Server/build-server-installer.ps1   GoletherServer-<version>-win-x64.zip and -setup.exe
       4. ServerLinux     Server/publish-server-linux.ps1     GoletherServer-<version>-linux-x64.tar.gz (Git Bash)
       5. ServerMacOS     Server/publish-server-macos.ps1     GoletherServer-<version>-osx-arm64.tar.gz (Git Bash)
@@ -109,7 +109,7 @@ $results | Format-Table -AutoSize | Out-String | Write-Host
 # The packages of this version: the archives and the installers in the root of artifacts/publish.
 $packages = @(Get-ChildItem $output -File -ErrorAction SilentlyContinue | Where-Object {
         $_.Name -like "*-$version-*" -and
-        ($_.Name.EndsWith('.zip') -or $_.Name.EndsWith('.tar.gz') -or $_.Name.EndsWith('.exe'))
+        ($_.Name.EndsWith('.zip') -or $_.Name.EndsWith('.tar.gz') -or $_.Name.EndsWith('.exe') -or $_.Name.EndsWith('.deb'))
     } | Sort-Object Name)
 
 if ($packages.Count -gt 0) {

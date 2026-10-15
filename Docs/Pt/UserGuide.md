@@ -235,6 +235,11 @@ direito quando a janela é tão estreita que os botões da barra superior já n�
 componentes, informações sobre a sessão (sem o nome do filme) e as últimas linhas do registo. As chaves, os tokens e as
 palavras-passe são retirados do relatório, por isso o ficheiro pode ser enviado a quem o estiver a ajudar.
 
+Com qualquer largura da janela, o mesmo relatório guarda-se em **Definições → Acerca do Golether → Relatório de
+diagnóstico…**. Ao lado, **Comunicar um problema** abre no seu programa de correio uma carta aos programadores
+(project.golether@gmail.com) com a versão e o sistema já preenchidos; a janela de qualquer erro oferece o mesmo. Anexe
+o relatório à carta: nada é enviado antes de a enviar.
+
 O relatório tem uma linha para cada ligação com um participante: se está verificada, se o canal de dados está aberto e
 quantas imagens saíram e entraram (`vídeo 120↑/0↓`). Mostram de imediato onde a ligação falha: a ligação não se
 estabeleceu, estabeleceu-se vazia, ou a câmara não dá nada.
@@ -339,6 +344,10 @@ entrada de desinstalação e o tratamento das ligações de convite. Por isso:
   a instalação e guarda os dados de cada utilizador no seu perfil: `%LOCALAPPDATA%\Golether`. O instalador também ensina
   o sistema a abrir as ligações de convite com o Golether. Num arquivo descompactado, as ligações não se abrem sozinhas:
   use a chave (no Linux, `install-desktop-entry.sh` ativa as ligações);
+- o pacote para Ubuntu e Debian (`.deb`, instalado com `sudo apt install ./Golether-<version>-linux-x64.deb`) traz
+  consigo os componentes de vídeo e câmaras, põe o Golether no menu, faz o sistema abrir as ligações de convite e
+  guarda os dados de cada utilizador no seu perfil: `~/.local/share/Golether`. Remove-se com
+  `sudo apt remove golether`;
 - mova, copie e apague a pasta `Golether` inteira: todos os dados viajam com ela;
 - para atualizar uma cópia descompactada, descompacte a nova versão e mova para ela a pasta `data` da antiga;
 - se os dados estavam antes em `%LOCALAPPDATA%\Golether` (compilações antigas), são movidos para `data` automaticamente

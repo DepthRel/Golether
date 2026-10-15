@@ -1,5 +1,6 @@
 using System.Reflection;
 using Avalonia;
+using Avalonia.Automation;
 using Avalonia.Controls;
 using Avalonia.Controls.Primitives;
 using Avalonia.Headless;
@@ -1274,6 +1275,43 @@ public sealed class MainWindowTests
     }
 
     /// <summary>
+    /// In every language the title of a component stays clear of its status chip: a long title wraps instead of
+    /// running under the chip.
+    /// </summary>
+    /// <returns>A task that completes when the test is done.</returns>
+    [Fact]
+    public Task Components_TitlesStayClearOfTheChipInEveryLanguage() => RunAsync(async fixture =>
+    {
+        var localizer = Golether.Localization.Texts.Localizer;
+        fixture.Sessions.GetSnapshot().Returns((SessionSnapshot?)null);
+        fixture.ViewModel.Refresh();
+        try
+        {
+            foreach (var language in localizer.Languages)
+            {
+                localizer.SetLanguage(language.Code);
+                await fixture.Settle();
+
+                var chips = fixture.Window.GetVisualDescendants().OfType<Border>().Where(border => border.Classes.Contains("chip") &&
+                    border.DataContext is ComponentItemViewModel).ToArray();
+                Assert.NotEmpty(chips);
+                foreach (var chip in chips)
+                {
+                    var item = (ComponentItemViewModel)chip.DataContext!;
+                    var title = ((Grid)chip.Parent!).GetVisualDescendants().OfType<TextBlock>().First(text => text.Text == item.Title);
+                    var end = title.TranslatePoint(new Point(title.TextLayout.Width, 0), chip)!.Value;
+
+                    Assert.True(end.X <= 0, $"{language.Code}: \"{item.Title}\" runs {end.X:0} px under its chip.");
+                }
+            }
+        }
+        finally
+        {
+            localizer.SetLanguage("ru");
+        }
+    });
+
+    /// <summary>
     /// While a session is being joined, a screen of its own says what is going on, shows that the application is
     /// busy and lets the user give up: first the way to the host is looked for, then the host is asked.
     /// </summary>
@@ -1447,6 +1485,114 @@ public sealed class MainWindowTests
         {
             dialog.Close();
         }
+    });
+
+    /// <summary>
+    /// The settings offer the window about the application on the left of their bar, apart from their own buttons.
+    /// </summary>
+    /// <returns>A task that completes when the test is done.</returns>
+    [Fact]
+    public Task SettingsDialog_OffersTheWindowAboutTheApplication() => RunAsync(async fixture =>
+    {
+        var viewModel = new Golether.UI.ViewModels.Dialogs.SettingsViewModel(
+            language: null,
+            devices: null,
+            conferenceAvailable: false,
+            conferenceNotice: "Камеры недоступны",
+            canChooseAvatar: false,
+            canConfigureTunnels: true,
+            avatarPreview: null,
+            pickAvatar: () => Task.FromResult<AvatarSelection?>(null),
+            applyAvatar: _ => Task.CompletedTask,
+            openTunnels: () => Task.CompletedTask,
+            openAbout: () => Task.CompletedTask);
+        var dialog = new Golether.UI.Views.Dialogs.SettingsDialog { DataContext = viewModel };
+        dialog.Show();
+        try
+        {
+            await fixture.Settle();
+            var about = dialog.GetVisualDescendants().OfType<Button>()
+                .Single(button => AutomationProperties.GetName(button) == Golether.Localization.Texts.Get("Settings.About"));
+            var scroll = dialog.GetVisualDescendants().OfType<ScrollViewer>().First();
+
+            Assert.True(about.IsEffectivelyVisible);
+            Assert.True(IsInside(about, dialog));
+            Assert.DoesNotContain(scroll, about.GetVisualAncestors());
+            SaveFrame(dialog, "settings-dialog-about");
+        }
+        finally
+        {
+            dialog.Close();
+        }
+    });
+
+    /// <summary>
+    /// The window about the application shows the brand and the facts; on a small screen its text scrolls while the
+    /// close button stays in sight.
+    /// </summary>
+    /// <returns>A task that completes when the test is done.</returns>
+    [Fact]
+    public Task AboutDialog_ScrollsOnASmallScreen() => RunAsync(async fixture =>
+    {
+        var viewModel = new Golether.UI.ViewModels.Dialogs.AboutViewModel(Substitute.For<IDialogService>(), "ru");
+        var full = new Golether.UI.Views.Dialogs.AboutDialog { DataContext = viewModel };
+        var small = new Golether.UI.Views.Dialogs.AboutDialog
+        {
+            DataContext = viewModel,
+            SizeToContent = SizeToContent.Manual,
+            Height = 320,
+        };
+        full.Show();
+        small.Show();
+        try
+        {
+            await fixture.Settle();
+            var texts = full.GetVisualDescendants().OfType<TextBlock>().Select(text => text.Text).ToArray();
+            var scroll = small.GetVisualDescendants().OfType<ScrollViewer>().Single();
+            var close = small.GetVisualDescendants().OfType<Button>().Single(button => button.IsCancel);
+
+            Assert.Contains(viewModel.Version, texts);
+            Assert.Contains(Golether.Core.Configuration.ProjectSite.FEEDBACK_EMAIL, texts);
+            Assert.True(scroll.Extent.Height > scroll.Viewport.Height);
+            Assert.True(IsInside(close, small));
+            Assert.DoesNotContain(scroll, close.GetVisualAncestors());
+            SaveFrame(full, "about-dialog");
+            SaveFrame(small, "about-dialog-small");
+        }
+        finally
+        {
+            full.Close();
+            small.Close();
+        }
+    });
+
+    /// <summary>
+    /// An error can be reported from its own window; a plain message has no such button.
+    /// </summary>
+    /// <returns>A task that completes when the test is done.</returns>
+    [Fact]
+    public Task ErrorDialog_OffersToReport() => RunAsync(async fixture =>
+    {
+        var error = Golether.UI.Views.Dialogs.MessageDialog.ForError("Не удалось открыть видео", "Файл повреждён.");
+        var message = new Golether.UI.Views.Dialogs.MessageDialog("Готово", "Отчёт сохранён.");
+        error.Show();
+        message.Show();
+        try
+        {
+            await fixture.Settle();
+
+            Assert.True(ReportButton(error).IsEffectivelyVisible);
+            Assert.False(ReportButton(message).IsEffectivelyVisible);
+            SaveFrame(error, "error-dialog");
+        }
+        finally
+        {
+            error.Close();
+            message.Close();
+        }
+
+        static Button ReportButton(Window window)
+            => window.GetVisualDescendants().OfType<Button>().Single(button => button.Name == "ReportButton");
     });
 
     /// <summary>

@@ -238,6 +238,11 @@ quand la fenêtre est trop étroite pour les boutons de la barre du haut) : la v
 informations sur la séance (sans le nom du film) et les dernières lignes du journal. Les clés, jetons et mots de passe
 sont retirés du rapport, donc le fichier peut être envoyé à la personne qui vous aide.
 
+Quelle que soit la largeur de la fenêtre, le même rapport s'enregistre depuis **Réglages → À propos de Golether →
+Rapport de diagnostic…**. À côté, **Signaler un problème** ouvre dans votre messagerie une lettre aux développeurs
+(project.golether@gmail.com), avec la version et le système déjà remplis ; la fenêtre de chaque erreur propose la même
+chose. Joignez le rapport à la lettre : rien n'est envoyé tant que vous ne l'envoyez pas vous-même.
+
 Le rapport contient une ligne pour chaque connexion avec un participant : si elle est vérifiée, si le canal de données
 est ouvert et combien d'images sont sorties et entrées (`vidéo 120↑/0↓`). Elles montrent tout de suite où le lien
 casse : la connexion ne s'est pas établie, elle s'est établie à vide, ou la caméra ne donne rien.
@@ -346,6 +351,10 @@ Windows n'ajoute au registre que l'entrée de désinstallation et le gestionnair
   `%LOCALAPPDATA%\Golether`. Le programme d'installation apprend aussi au système à ouvrir les liens d'invitation avec
   Golether. Dans une archive décompressée, les liens ne s'ouvrent pas tout seuls : utilisez la clé (sous Linux,
   `install-desktop-entry.sh` active les liens) ;
+- le paquet pour Ubuntu et Debian (`.deb`, installé avec `sudo apt install ./Golether-<version>-linux-x64.deb`)
+  apporte les composants vidéo et caméra, ajoute Golether au menu, fait ouvrir les liens d'invitation par le système
+  et garde les données de chaque utilisateur dans son profil : `~/.local/share/Golether`. Il se retire avec
+  `sudo apt remove golether` ;
 - déplacez, copiez et supprimez le dossier `Golether` en entier : toutes les données voyagent avec lui ;
 - pour mettre à jour une copie décompressée, décompressez la nouvelle version et déplacez-y le dossier `data` de
   l'ancienne ;

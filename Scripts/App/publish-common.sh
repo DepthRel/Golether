@@ -2,7 +2,8 @@
 # Shared publish logic for publish-linux.sh and publish-macos.sh.
 # Publishes Golether (application and database migrator) as self-contained Release builds and packs them into
 # Golether-<version>-<runtime>.tar.gz and, when the zip tool is available, .zip.
-# Native libraries from <repository>/Native/<runtime>/ are included automatically.
+# Native libraries from <repository>/Native/<runtime>/ are included automatically, LICENSE.txt and
+# THIRD-PARTY-NOTICES.txt from the root of the repository too.
 # Usage: publish-common.sh <runtime> [configuration=Release] [output=artifacts/publish]
 set -euo pipefail
 
@@ -140,6 +141,7 @@ esac
 # shellcheck source=../Shared/package-notes.sh
 source "$script_dir/../Shared/package-notes.sh"
 write_package_notes "$script_dir/Notes" "$stage" "$platform" "$version" "$runtime"
+write_package_licenses "$stage"
 
 package_base="$(cd "$output" && pwd)/Golether-$version-$runtime"
 tar -czf "$package_base.tar.gz" -C "$(dirname "$stage")" --exclude="Golether/data" Golether
@@ -148,4 +150,13 @@ if command -v zip >/dev/null; then
   rm -f "$package_base.zip"
   (cd "$(dirname "$stage")" && zip -qry "$package_base.zip" Golether -x "Golether/data/*")
   echo "Package: $package_base.zip"
+fi
+
+# The installer of Debian, Ubuntu and their relatives, where dpkg-deb is at hand (any of them, WSL included).
+if [ "$platform" = linux ]; then
+  if command -v dpkg-deb >/dev/null; then
+    bash "$script_dir/build-deb.sh" "$runtime" "$stage" "$version" "$output"
+  else
+    echo "dpkg-deb is missing: no .deb package (it comes with Debian and Ubuntu, WSL included)." >&2
+  fi
 fi

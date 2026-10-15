@@ -19,7 +19,7 @@ At the end it lists the packages of the version with their size and SHA-256 and 
 |---|---|---|
 | `App/publish-win.ps1` | Windows | `Golether-<version>-win-x64.zip`, native components included |
 | `App/build-installer.ps1` | Windows | the same archive plus `Golether-<version>-setup.exe` (Inno Setup) from `App/golether.iss` |
-| `App/publish-linux.ps1` | Windows (WSL) | `Golether-<version>-linux-x64.tar.gz`, built inside WSL by `App/publish-linux-in-wsl.sh` |
+| `App/publish-linux.ps1` | Windows (WSL) | `Golether-<version>-linux-x64.tar.gz` and `.deb` (`App/build-deb.sh`), built inside WSL by `App/publish-linux-in-wsl.sh` |
 | `App/publish-linux.sh` | Linux | the Linux archive (`App/publish-common.sh` does the work) |
 | `App/publish-macos.sh` | macOS | `Golether.app` in an archive (the same `App/publish-common.sh`) |
 
@@ -49,6 +49,11 @@ application and `Server/Notes/README.<code>.txt` for the server. `README.en.txt`
 their code; `{version}` and `{runtime}` are filled in. A line tagged `[win]`, `[linux]`, `[macos]` or `[unix]` (Linux
 and macOS) goes only into the packages of that system. `Shared/package-notes.ps1` and `Shared/package-notes.sh` do the
 work for the PowerShell and the bash scripts. A new language is one more template in each folder.
+
+Every package also carries `LICENSE.txt` and `THIRD-PARTY-NOTICES.txt` from the root of the repository, next to the
+program (`Write-PackageLicenses` and `write_package_licenses` in the same files). The notices list every component that
+a package contains, with its license, its source and the full license texts: a new or updated dependency, NuGet or
+native, is written there in the same change.
 
 ## Shared — helpers of the other scripts
 

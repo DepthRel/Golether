@@ -4,6 +4,7 @@ using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Input.Platform;
 using Avalonia.Platform.Storage;
 using Avalonia.Threading;
+using Golether.Core.Configuration;
 using Golether.Localization;
 using Golether.Security.Admission;
 using Golether.UI.ViewModels.Dialogs;
@@ -57,12 +58,41 @@ public sealed class AvaloniaDialogService : IDialogService
         => new TunnelDialog { DataContext = viewModel }.ShowDialog(_owner);
 
     /// <inheritdoc />
-    public Task ShowErrorAsync(string title, string message)
-        => new MessageDialog(title, message).ShowDialog(_owner);
+    public async Task ShowErrorAsync(string title, string message)
+    {
+        var dialog = MessageDialog.ForError(title, message);
+        await dialog.ShowDialog(ActiveOwner);
+
+        if (dialog.ReportRequested)
+        {
+            await ReportProblemAsync(message.Length > 0 ? title + "\n" + message : title);
+        }
+    }
+
+    /// <inheritdoc />
+    public async Task ReportProblemAsync(string? details)
+    {
+        if (await ActiveOwner.Launcher.LaunchUriAsync(ProblemReport.CreateMailto(details)))
+        {
+            return;
+        }
+
+        // No mail program took the letter: the address is offered to write from anywhere else.
+        var title = Texts.Get("Problem.NoMail.Title");
+        var text = Texts.Format("Problem.NoMail.Text", ProjectSite.FEEDBACK_EMAIL);
+        if (await ConfirmAsync(title, text, Texts.Get("Problem.NoMail.Copy")))
+        {
+            await CopyTextAsync(ProjectSite.FEEDBACK_EMAIL);
+        }
+    }
+
+    /// <inheritdoc />
+    public Task ShowAboutAsync(AboutViewModel viewModel)
+        => new AboutDialog { DataContext = viewModel }.ShowDialog(ActiveOwner);
 
     /// <inheritdoc />
     public Task ShowMessageAsync(string title, string message)
-        => new MessageDialog(title, message).ShowDialog(_owner);
+        => new MessageDialog(title, message).ShowDialog(ActiveOwner);
 
     /// <inheritdoc />
     public async Task<bool> ConfirmAsync(string title, string message, string acceptText)

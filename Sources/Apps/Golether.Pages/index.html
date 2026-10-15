@@ -3,9 +3,16 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <!-- Nothing is loaded from other servers and nothing inline runs: the page is exactly the files of this folder. -->
-  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src 'self'; style-src 'self'; script-src 'self'; connect-src 'self'; base-uri 'none'; form-action 'none'">
+  <!--
+    Nothing inline runs, and the only thing loaded from another server is the Umami counter of visits (no cookies):
+    its script from cloud.umami.is, its reports to gateway.umami.is. It counts only on the published page, keeps the
+    part of the address after # and ? out of its reports and skips browsers that ask not to be tracked. The invitation
+    page (join/) has no counter at all: an invitation lives in its address.
+  -->
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src 'self'; style-src 'self'; script-src 'self' https://cloud.umami.is; connect-src 'self' https://gateway.umami.is; base-uri 'none'; form-action 'none'">
   <meta name="referrer" content="no-referrer">
+  <script defer src="https://cloud.umami.is/script.js" data-website-id="63b7cb24-1307-412c-9787-61794027a8fd"
+          data-domains="depthrel.github.io" data-do-not-track="true" data-exclude-search="true" data-exclude-hash="true"></script>
   <title>Golether: watch movies together, in sync</title>
   <meta name="description" content="Golether is a free app for watching a video file together: everyone sees the same frame at the same moment, with webcams and voice on the side.">
   <meta property="og:title" content="Golether: watch movies together, in sync">
@@ -134,19 +141,20 @@
             <h3>Windows</h3>
             <div class="meta"></div>
             <p class="hint" data-t="dl.windows">An installer for Windows 10 and newer. Invitation links open the app by themselves.</p>
-            <a class="btn accent" href="https://github.com/DepthRel/Golether/releases/latest" data-t="dl.button">Download</a>
+            <a class="btn accent" href="https://github.com/DepthRel/Golether/releases/latest" data-field="url" data-umami-event="download" data-umami-event-package="windows" data-umami-event-place="card" data-t="dl.button">Download</a>
           </div>
           <div class="download" data-os="linux">
             <h3>Linux</h3>
             <div class="meta"></div>
-            <p class="hint" data-t="dl.linux">An archive for 64-bit Linux. Unpack it, run install-desktop-entry.sh once, then start Golether.sh.</p>
-            <a class="btn accent" href="https://github.com/DepthRel/Golether/releases/latest" data-t="dl.button">Download</a>
+            <p class="hint" data-t="dl.linux">A package for Ubuntu, Debian and their relatives: the system installs the video and camera components with it. Other distributions take the archive.</p>
+            <a class="btn accent" href="https://github.com/DepthRel/Golether/releases/latest" data-field="deb" data-umami-event="download" data-umami-event-package="linux-deb" data-umami-event-place="card" data-t="dl.deb">Download .deb</a>
+            <a class="other" href="https://github.com/DepthRel/Golether/releases/latest" data-field="url" data-umami-event="download" data-umami-event-package="linux-archive" data-umami-event-place="card" data-t="dl.archive">or the .tar.gz archive</a>
           </div>
           <div class="download" data-os="macos">
             <h3>macOS</h3>
             <div class="meta"></div>
             <p class="hint" data-t="dl.macos">An archive for Macs with Apple silicon, macOS 14 and newer.</p>
-            <a class="btn accent" href="https://github.com/DepthRel/Golether/releases/latest" data-t="dl.button">Download</a>
+            <a class="btn accent" href="https://github.com/DepthRel/Golether/releases/latest" data-field="url" data-umami-event="download" data-umami-event-package="macos" data-umami-event-place="card" data-t="dl.button">Download</a>
           </div>
         </div>
       </div>
@@ -159,6 +167,7 @@
       <span>
         <a href="https://github.com/DepthRel/Golether" data-t="foot.source">Source code</a> ·
         <a id="guide-link" href="https://github.com/DepthRel/Golether/blob/main/Docs/En/UserGuide.md" data-t="foot.guide">User guide</a> ·
+        <a id="privacy-link" href="https://github.com/DepthRel/Golether/blob/main/Docs/En/Privacy.md" data-t="foot.privacy">Privacy</a> ·
         <a href="https://github.com/DepthRel/Golether/releases" data-t="foot.releases">All releases</a>
       </span>
     </div>

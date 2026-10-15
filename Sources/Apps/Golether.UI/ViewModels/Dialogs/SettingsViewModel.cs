@@ -32,6 +32,11 @@ public sealed partial class SettingsViewModel : ObservableObject
     private readonly Func<Task> _openTunnels;
 
     /// <summary>
+    /// Opens the window about the application, or <see langword="null"/> when it is not offered.
+    /// </summary>
+    private readonly Func<Task>? _openAbout;
+
+    /// <summary>
     /// Switches the adjustable layout on or off, or <see langword="null"/> when the layout is not offered.
     /// </summary>
     private readonly Action<bool>? _applyLayoutResizable;
@@ -107,6 +112,7 @@ public sealed partial class SettingsViewModel : ObservableObject
     /// <param name="checkUpdates">Whether new versions are looked for now.</param>
     /// <param name="updateUrl">The update source typed by the user, or an empty string for the project page.</param>
     /// <param name="applyUpdates">Stores the choices about updates.</param>
+    /// <param name="openAbout">Opens the window about the application, or <see langword="null"/> to leave it out.</param>
     public SettingsViewModel(
         LanguageViewModel? language,
         DevicesViewModel? devices,
@@ -125,8 +131,10 @@ public sealed partial class SettingsViewModel : ObservableObject
         bool canChooseUpdates = false,
         bool checkUpdates = true,
         string updateUrl = "",
-        Action<bool, string>? applyUpdates = null)
+        Action<bool, string>? applyUpdates = null,
+        Func<Task>? openAbout = null)
     {
+        _openAbout = openAbout;
         CanChooseUpdates = canChooseUpdates;
         CheckUpdates = checkUpdates;
         UpdateUrl = updateUrl;
@@ -381,6 +389,18 @@ public sealed partial class SettingsViewModel : ObservableObject
     /// <returns>A task that completes when the dialog is closed.</returns>
     [RelayCommand]
     private Task OpenTunnelsAsync() => _openTunnels();
+
+    /// <summary>
+    /// Gets a value indicating whether the window about the application is offered.
+    /// </summary>
+    public bool CanOpenAbout => _openAbout is not null;
+
+    /// <summary>
+    /// Opens the window about the application; it changes nothing in the settings.
+    /// </summary>
+    /// <returns>A task that completes when the window is closed.</returns>
+    [RelayCommand]
+    private Task OpenAboutAsync() => _openAbout?.Invoke() ?? Task.CompletedTask;
 
     /// <summary>
     /// Hands the chosen settings over: the avatar first, then the devices and the layout, and the language last, so

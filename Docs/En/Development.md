@@ -149,7 +149,7 @@ dependencies, time through `TimeProvider`/`IMonotonicClock`, untrusted input is 
 | Script | Result |
 |---|---|
 | `Scripts/App/publish-win.ps1 [-Runtime win-x64]` | `artifacts/publish/Golether-<version>-win-x64.zip` |
-| `Scripts/App/publish-linux.sh [linux-x64] [Release] [out]` | `.tar.gz` and `.zip` (when `zip` is available), `install-desktop-entry.sh` |
+| `Scripts/App/publish-linux.sh [linux-x64] [Release] [out]` | `.tar.gz` and `.zip` (when `zip` is available), `install-desktop-entry.sh`, `.deb` (where `dpkg-deb` is: Debian, Ubuntu, WSL) |
 | `Scripts/App/publish-macos.sh [osx-arm64\|osx-x64] ...` | `Golether.app` (Info.plist, icon, ad-hoc signature) in an archive |
 | `Scripts/App/publish-linux.ps1 [-Runtime linux-x64]` | the same Linux archive, built from Windows inside WSL (see below) |
 | `Scripts/Assets/update-site-screenshot.ps1` | the picture of the project page from `Docs/images/screenshot.png` |

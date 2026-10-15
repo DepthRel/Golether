@@ -7,7 +7,8 @@ webcams and voice. Design documentation: [Docs/En/Architecture.md](Docs/En/Archi
 
 - The latest .NET and C# (currently .NET 10, `LangVersion=latest`); shared settings live in `Directory.Build.props`,
   package versions centrally in `Directory.Packages.props`.
-- Only free dependencies compatible with GPL-3.0-or-later. Do not add packages without a need.
+- Only free dependencies compatible with GPL-3.0-or-later. Do not add packages without a need. A dependency that ends
+  up in a package (NuGet or native) is listed with its license text in `THIRD-PARTY-NOTICES.txt` in the same change.
 - Domain logic does not depend on the UI, hosting or infrastructure. Interfaces, dependency injection, small services.
 - External commands, paths, configurations and everything that came over the network are untrusted data: validate
   them and fail with a clear diagnostic.

@@ -10,6 +10,7 @@
         tools/dbmigrator/     the console database migrator
         golether.install      marks the installation root: all data (keys, database, components) is kept in Golether/data
         README.txt            first start notes in English, README.<code>.txt in the other languages (Notes/)
+        LICENSE.txt           the GPL-3.0 text; THIRD-PARTY-NOTICES.txt lists the components and their licenses
 
     The video (libmpv) and camera (GStreamer) components are downloaded, verified and included automatically.
 
@@ -104,6 +105,7 @@ $hasMpv = Test-Path (Join-Path $stage 'app\native\libmpv-2.dll')
 # The note of the package in every language of the application, from the templates in Notes.
 . (Join-Path (Split-Path -Parent $PSScriptRoot) 'Shared/package-notes.ps1')
 Write-PackageNotes -Notes (Join-Path $PSScriptRoot 'Notes') -Target $stage -Platform win -Version $version -Runtime $Runtime
+Write-PackageLicenses -Target $stage
 
 Add-Type -AssemblyName System.IO.Compression, System.IO.Compression.FileSystem
 $package = Join-Path (Resolve-Path $Output).Path "Golether-$version-$Runtime.zip"

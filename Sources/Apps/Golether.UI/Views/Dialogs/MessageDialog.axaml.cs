@@ -47,6 +47,36 @@ public sealed partial class MessageDialog : Window
     }
 
     /// <summary>
+    /// Gets a value indicating whether the dialog was closed to report the error.
+    /// </summary>
+    public bool ReportRequested { get; private set; }
+
+    /// <summary>
+    /// Creates the dialog of an error, which offers to report it.
+    /// </summary>
+    /// <param name="title">The title.</param>
+    /// <param name="message">The message.</param>
+    /// <returns>The dialog.</returns>
+    public static MessageDialog ForError(string title, string message)
+    {
+        var dialog = new MessageDialog(title, message);
+        dialog.ReportButton.IsVisible = true;
+
+        return dialog;
+    }
+
+    /// <summary>
+    /// Closes the dialog to report the error.
+    /// </summary>
+    /// <param name="sender">The button.</param>
+    /// <param name="e">The event data.</param>
+    private void OnReport(object? sender, RoutedEventArgs e)
+    {
+        ReportRequested = true;
+        Close(false);
+    }
+
+    /// <summary>
     /// Closes the dialog; a question is answered with yes.
     /// </summary>
     /// <param name="sender">The button.</param>

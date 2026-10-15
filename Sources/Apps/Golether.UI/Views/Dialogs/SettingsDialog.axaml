@@ -12,13 +12,29 @@
     All the settings gathered from the start screen and the session into one place. The buttons live in a bar under
     the scrolling part, so they stay in sight however long the list of settings grows.
   -->
+  <Window.Resources>
+    <!-- "Info outline" from Material Icons (Apache License 2.0). -->
+    <StreamGeometry x:Key="IconInfo">M11 7h2v2h-2zm0 4h2v6h-2zm1-9C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8z</StreamGeometry>
+  </Window.Resources>
   <DockPanel>
-    <!-- Nothing above is in effect yet: "Apply" hands it over, "Cancel" leaves everything as it was. -->
+    <!--
+      Nothing above is in effect yet: "Apply" hands it over, "Cancel" leaves everything as it was. The window about
+      the application is not a setting, so it sits on the left of the bar, apart from the list and its buttons.
+    -->
     <Border DockPanel.Dock="Bottom" Classes="panel" BorderBrush="{StaticResource GoletherLine}" BorderThickness="0,1,0,0" Padding="22,12">
-      <StackPanel Orientation="Horizontal" Spacing="8" HorizontalAlignment="Right">
-        <Button Classes="ghost" Content="{loc:Loc Common.Cancel}" Click="OnCancel" IsCancel="True" />
-        <Button Classes="accent" Content="{loc:Loc Common.Apply}" Click="OnApply" IsDefault="True" />
-      </StackPanel>
+      <DockPanel>
+        <Button DockPanel.Dock="Left" Classes="ghost" Command="{Binding OpenAboutCommand}" IsVisible="{Binding CanOpenAbout}"
+                AutomationProperties.Name="{loc:Loc Settings.About}">
+          <StackPanel Orientation="Horizontal" Spacing="6">
+            <PathIcon Data="{StaticResource IconInfo}" Width="14" Height="14" />
+            <TextBlock Text="{loc:Loc Settings.About}" />
+          </StackPanel>
+        </Button>
+        <StackPanel Orientation="Horizontal" Spacing="8" HorizontalAlignment="Right">
+          <Button Classes="ghost" Content="{loc:Loc Common.Cancel}" Click="OnCancel" IsCancel="True" />
+          <Button Classes="accent" Content="{loc:Loc Common.Apply}" Click="OnApply" IsDefault="True" />
+        </StackPanel>
+      </DockPanel>
     </Border>
   <ScrollViewer>
     <StackPanel Margin="22" Spacing="16">

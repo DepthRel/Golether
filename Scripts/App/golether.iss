@@ -27,6 +27,11 @@
 #ifndef InstallerArt
   #define InstallerArt SourcePath + "..\..\artifacts\installer-art"
 #endif
+; The license page of every language: a short introduction and the English text of the GPL, written by
+; Write-InstallerLicenses (Scripts/Shared/package-notes.ps1, run by the build script).
+#ifndef InstallerLicense
+  #define InstallerLicense SourcePath + "..\..\artifacts\installer-license"
+#endif
 
 [Setup]
 AppId={{7C2B1E22-2F1B-4C5E-9A0C-7C9C7E3A5B10}
@@ -78,12 +83,12 @@ ChangesAssociations=yes
 [Languages]
 ; The first language is the one offered by default. A new language is one more line here and one more block in
 ; [Messages] and [CustomMessages].
-Name: "english"; MessagesFile: "compiler:Default.isl"
-Name: "german"; MessagesFile: "compiler:Languages\German.isl"
-Name: "spanish"; MessagesFile: "compiler:Languages\Spanish.isl"
-Name: "french"; MessagesFile: "compiler:Languages\French.isl"
-Name: "portuguese"; MessagesFile: "compiler:Languages\Portuguese.isl"
-Name: "russian"; MessagesFile: "compiler:Languages\Russian.isl"
+Name: "english"; MessagesFile: "compiler:Default.isl"; LicenseFile: "{#InstallerLicense}\LICENSE.en.txt"
+Name: "german"; MessagesFile: "compiler:Languages\German.isl"; LicenseFile: "{#InstallerLicense}\LICENSE.de.txt"
+Name: "spanish"; MessagesFile: "compiler:Languages\Spanish.isl"; LicenseFile: "{#InstallerLicense}\LICENSE.es.txt"
+Name: "french"; MessagesFile: "compiler:Languages\French.isl"; LicenseFile: "{#InstallerLicense}\LICENSE.fr.txt"
+Name: "portuguese"; MessagesFile: "compiler:Languages\Portuguese.isl"; LicenseFile: "{#InstallerLicense}\LICENSE.pt.txt"
+Name: "russian"; MessagesFile: "compiler:Languages\Russian.isl"; LicenseFile: "{#InstallerLicense}\LICENSE.ru.txt"
 
 [Messages]
 ; The greeting of the first page; [name] and [name/ver] are filled in by Inno Setup.

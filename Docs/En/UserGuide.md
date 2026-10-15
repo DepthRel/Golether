@@ -229,6 +229,11 @@ window is narrow enough that the buttons of the top bar no longer fit): the vers
 information about the session (without the name of the film) and the last lines of the log. Keys, tokens and
 passwords are cut out of the report, so the file can be sent to whoever helps you.
 
+At any width of the window the same report is saved from **Settings → About Golether → Diagnostic report…**. Next to
+it, **Report a problem** opens a letter to the developers (project.golether@gmail.com) in your mail program, with the
+version and the system already filled in; the window of every error offers the same. Attach the report to the letter:
+nothing is sent until you send it yourself.
+
 The report has a line for every connection with a participant: whether it is verified, whether the data channel is
 open and how many frames went out and came in (`video 120↑/0↓`). They show at once where the link breaks: the
 connection did not come up, it came up empty, or the camera gives nothing.
@@ -333,6 +338,10 @@ entry and the handler of invitation links. Therefore:
   installation, and keeps each user's data in their profile: `%LOCALAPPDATA%\Golether`. The installer also teaches
   the system to open invitation links with Golether. In an unpacked archive links do not open by themselves: use the
   key (on Linux `install-desktop-entry.sh` switches the links on);
+- the package for Ubuntu and Debian (`.deb`, installed with `sudo apt install ./Golether-<version>-linux-x64.deb`)
+  brings the components for video and cameras with it, puts Golether into the menu, teaches the system to open
+  invitation links and keeps each user's data in their profile: `~/.local/share/Golether`. It is removed with
+  `sudo apt remove golether`;
 - move, copy and delete the `Golether` folder as a whole: all the data travels with it;
 - to update an unpacked copy, unpack the new version and move the `data` folder from the old one into it;
 - if the data used to be in `%LOCALAPPDATA%\Golether` (early builds), it is moved into `data` automatically at the

@@ -41,3 +41,45 @@ function Write-PackageNotes {
         [System.IO.File]::WriteAllText((Join-Path $Target $name), $text, $encoding)
     }
 }
+
+<#
+.SYNOPSIS
+  Puts the license of Golether (LICENSE.txt) and the notices of its components (THIRD-PARTY-NOTICES.txt) from the
+  root of the repository into a package; the GPL asks for both next to the program.
+#>
+function Write-PackageLicenses {
+    param(
+        [Parameter(Mandatory)] [string] $Target
+    )
+
+    $root = Resolve-Path (Join-Path $PSScriptRoot '..\..')
+    foreach ($name in 'LICENSE.txt', 'THIRD-PARTY-NOTICES.txt') {
+        Copy-Item (Join-Path $root $name) (Join-Path $Target $name) -Force
+    }
+}
+
+<#
+.SYNOPSIS
+  Writes the license page of the setup wizards in every language: LICENSE.<code>.txt is the short introduction of
+  License/intro.<code>.txt followed by the English text of the GPL, the only legally binding one.
+#>
+function Write-InstallerLicenses {
+    param(
+        [Parameter(Mandatory)] [string] $Target
+    )
+
+    $root = Resolve-Path (Join-Path $PSScriptRoot '..\..')
+    $license = [System.IO.File]::ReadAllText((Join-Path $root 'LICENSE.txt'))
+    $rule = '-' * 78
+
+    # Inno Setup reads a text page as UTF-8 only when it starts with a byte order mark.
+    $encoding = New-Object System.Text.UTF8Encoding $true
+
+    New-Item -ItemType Directory -Force $Target | Out-Null
+    foreach ($intro in Get-ChildItem (Join-Path $PSScriptRoot 'License') -Filter 'intro.*.txt') {
+        $code = $intro.BaseName.Substring('intro.'.Length)
+        $text = [System.IO.File]::ReadAllText($intro.FullName).TrimEnd() + "`n`n$rule`n`n" + $license
+        $text = $text.Replace("`r`n", "`n").Replace("`n", "`r`n")
+        [System.IO.File]::WriteAllText((Join-Path $Target "LICENSE.$code.txt"), $text, $encoding)
+    }
+}

@@ -63,7 +63,9 @@
       'dl.title': 'Golether holen',
       'dl.sub': 'Dieselbe Version für alle, die gemeinsam schauen.<br>Updates werden in der App angeboten.',
       'dl.windows': 'Ein Installationsprogramm für Windows 10 und neuer. Einladungslinks öffnen die App von selbst.',
-      'dl.linux': 'Ein Archiv für 64-Bit-Linux. Entpacken, einmal install-desktop-entry.sh ausführen, dann Golether.sh starten.',
+      'dl.linux': 'Ein Paket für Ubuntu, Debian und verwandte Systeme: Das System installiert die Komponenten für Video und Kameras gleich mit. Andere Distributionen nehmen das Archiv.',
+      'dl.deb': '.deb herunterladen',
+      'dl.archive': 'oder das Archiv .tar.gz',
       'dl.macos': 'Ein Archiv für Macs mit Apple Silicon, macOS 14 und neuer.',
       'dl.button': 'Herunterladen',
       'dl.version': 'Version ',
@@ -71,6 +73,7 @@
       'foot.license': 'Golether ist freie Software unter der Lizenz GPL-3.0-or-later.',
       'foot.source': 'Quellcode',
       'foot.guide': 'Handbuch',
+      'foot.privacy': 'Datenschutz',
       'foot.releases': 'Alle Versionen'
     },
     es: {
@@ -129,7 +132,9 @@
       'dl.title': 'Consigue Golether',
       'dl.sub': 'La misma versión para todos los que ven juntos.<br>Las actualizaciones se ofrecen dentro de la aplicación.',
       'dl.windows': 'Un instalador para Windows 10 y posteriores. Los enlaces de invitación abren la aplicación solos.',
-      'dl.linux': 'Un archivo para Linux de 64 bits. Descomprímelo, ejecuta una vez install-desktop-entry.sh y luego inicia Golether.sh.',
+      'dl.linux': 'Un paquete para Ubuntu, Debian y derivados: el sistema instala con él los componentes de vídeo y cámaras. Otras distribuciones usan el archivo.',
+      'dl.deb': 'Descargar .deb',
+      'dl.archive': 'o el archivo .tar.gz',
       'dl.macos': 'Un archivo para Mac con Apple silicon, macOS 14 y posteriores.',
       'dl.button': 'Descargar',
       'dl.version': 'versión ',
@@ -137,6 +142,7 @@
       'foot.license': 'Golether es software libre bajo la licencia GPL-3.0-or-later.',
       'foot.source': 'Código fuente',
       'foot.guide': 'Guía de uso',
+      'foot.privacy': 'Privacidad',
       'foot.releases': 'Todas las versiones'
     },
     fr: {
@@ -195,7 +201,9 @@
       'dl.title': 'Obtenir Golether',
       'dl.sub': 'La même version pour tous ceux qui regardent ensemble.<br>Les mises à jour sont proposées dans l’application.',
       'dl.windows': 'Un programme d’installation pour Windows 10 et plus récent. Les liens d’invitation ouvrent l’application tout seuls.',
-      'dl.linux': 'Une archive pour Linux 64 bits. Décompressez-la, lancez une fois install-desktop-entry.sh, puis démarrez Golether.sh.',
+      'dl.linux': 'Un paquet pour Ubuntu, Debian et leurs dérivées : le système installe avec lui les composants vidéo et caméra. Les autres distributions prennent l’archive.',
+      'dl.deb': 'Télécharger le .deb',
+      'dl.archive': 'ou l’archive .tar.gz',
       'dl.macos': 'Une archive pour les Mac avec puce Apple, macOS 14 et plus récent.',
       'dl.button': 'Télécharger',
       'dl.version': 'version ',
@@ -203,6 +211,7 @@
       'foot.license': 'Golether est un logiciel libre sous licence GPL-3.0-or-later.',
       'foot.source': 'Code source',
       'foot.guide': 'Guide d’utilisation',
+      'foot.privacy': 'Confidentialité',
       'foot.releases': 'Toutes les versions'
     },
     pt: {
@@ -261,7 +270,9 @@
       'dl.title': 'Obtenha o Golether',
       'dl.sub': 'A mesma versão para todos os que veem juntos.<br>As atualizações são propostas dentro da aplicação.',
       'dl.windows': 'Um instalador para Windows 10 e mais recente. As ligações de convite abrem a aplicação sozinhas.',
-      'dl.linux': 'Um arquivo para Linux de 64 bits. Descompacte-o, execute uma vez install-desktop-entry.sh e depois inicie Golether.sh.',
+      'dl.linux': 'Um pacote para Ubuntu, Debian e derivados: o sistema instala com ele os componentes de vídeo e câmaras. Outras distribuições usam o arquivo.',
+      'dl.deb': 'Transferir .deb',
+      'dl.archive': 'ou o arquivo .tar.gz',
       'dl.macos': 'Um arquivo para Mac com Apple silicon, macOS 14 e mais recente.',
       'dl.button': 'Transferir',
       'dl.version': 'versão ',
@@ -269,6 +280,7 @@
       'foot.license': 'O Golether é software livre sob a licença GPL-3.0-or-later.',
       'foot.source': 'Código-fonte',
       'foot.guide': 'Guia do utilizador',
+      'foot.privacy': 'Privacidade',
       'foot.releases': 'Todas as versões'
     },
     ru: {
@@ -327,7 +339,9 @@
       'dl.title': 'Установите Golether',
       'dl.sub': 'У всех, кто смотрит вместе, должна быть одна версия.<br>Об обновлениях приложение сообщит само.',
       'dl.windows': 'Установщик для Windows 10 и новее. Ссылки-приглашения открывают приложение сами.',
-      'dl.linux': 'Архив для 64-разрядного Linux. Распакуйте, один раз запустите install-desktop-entry.sh, затем Golether.sh.',
+      'dl.linux': 'Пакет для Ubuntu, Debian и родственных систем: вместе с ним система поставит компоненты для видео и камер. Для других дистрибутивов — архив.',
+      'dl.deb': 'Скачать .deb',
+      'dl.archive': 'или архив .tar.gz',
       'dl.macos': 'Архив для Mac на Apple silicon, macOS 14 и новее.',
       'dl.button': 'Скачать',
       'dl.version': 'версия ',
@@ -335,6 +349,7 @@
       'foot.license': 'Golether — свободная программа под лицензией GPL-3.0-or-later.',
       'foot.source': 'Исходный код',
       'foot.guide': 'Руководство',
+      'foot.privacy': 'Конфиденциальность',
       'foot.releases': 'Все выпуски'
     }
   };
@@ -376,8 +391,11 @@
       var entry = release && release[system];
       var version = entry && typeof entry.version === 'string' && /^[0-9][0-9A-Za-z.\-]{0,30}$/.test(entry.version) ? entry.version : null;
       card.querySelector('.meta').textContent = version ? text('dl.version') + version : '';
-      var url = entry && safeUrl(entry.url);
-      if (url) { card.querySelector('a').setAttribute('href', url); }
+      // Each link names the field of updates.json it takes: url (the archive or the installer) or deb.
+      card.querySelectorAll('a[data-field]').forEach(function (link) {
+        var url = entry && safeUrl(entry[link.getAttribute('data-field')]);
+        if (url) { link.setAttribute('href', url); }
+      });
       card.classList.toggle('mine', system === mine);
     });
 
@@ -385,7 +403,16 @@
     var entry = mine && release && release[mine];
     if (mine) {
       hero.querySelector('span').textContent = text('dl.for') + names[mine];
-      hero.setAttribute('href', (entry && safeUrl(entry.url)) || '#download');
+      // On Linux the package of the system comes first, as on the card.
+      var deb = entry && safeUrl(entry.deb);
+      var url = deb || (entry && safeUrl(entry.url));
+      hero.setAttribute('href', url || '#download');
+      // A click is counted as a download (Umami) only when the button leads to a package, not to the list below.
+      if (url) {
+        hero.setAttribute('data-umami-event', 'download');
+        hero.setAttribute('data-umami-event-package', mine === 'linux' ? (deb ? 'linux-deb' : 'linux-archive') : mine);
+        hero.setAttribute('data-umami-event-place', 'hero');
+      }
     }
   }
 
@@ -401,6 +428,7 @@
     if (picker) { picker.setAttribute('aria-label', text('nav.language')); }
     if (languages) {
       document.getElementById('guide-link').setAttribute('href', languages.docUrl(language, 'UserGuide.md'));
+      document.getElementById('privacy-link').setAttribute('href', languages.docUrl(language, 'Privacy.md'));
     }
     showPicker(language);
     showDownloads();

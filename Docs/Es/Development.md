@@ -152,7 +152,7 @@ entradas no fiables siempre se validan.
 | Script | Resultado |
 |---|---|
 | `Scripts/App/publish-win.ps1 [-Runtime win-x64]` | `artifacts/publish/Golether-<version>-win-x64.zip` |
-| `Scripts/App/publish-linux.sh [linux-x64] [Release] [out]` | `.tar.gz` y `.zip` (si está `zip`), `install-desktop-entry.sh` |
+| `Scripts/App/publish-linux.sh [linux-x64] [Release] [out]` | `.tar.gz` y `.zip` (si está `zip`), `install-desktop-entry.sh`, `.deb` (donde está `dpkg-deb`: Debian, Ubuntu, WSL) |
 | `Scripts/App/publish-macos.sh [osx-arm64\|osx-x64] ...` | `Golether.app` (Info.plist, icono, firma ad-hoc) en un archivo |
 | `Scripts/App/publish-linux.ps1 [-Runtime linux-x64]` | el mismo archivo de Linux, compilado desde Windows en WSL (ver abajo) |
 | `Scripts/Assets/update-site-screenshot.ps1` | la imagen de la página del proyecto a partir de `Docs/images/screenshot.png` |

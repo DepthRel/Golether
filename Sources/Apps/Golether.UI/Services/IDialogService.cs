@@ -31,12 +31,27 @@ public interface IDialogService
     Task ShowTunnelsAsync(TunnelDialogViewModel viewModel);
 
     /// <summary>
-    /// Shows an error.
+    /// Shows an error; the user can report it to the project from the same window.
     /// </summary>
     /// <param name="title">The title.</param>
     /// <param name="message">The message.</param>
     /// <returns>A task that completes when the dialog is closed.</returns>
     Task ShowErrorAsync(string title, string message);
+
+    /// <summary>
+    /// Opens a letter about a problem in the mail program of the user; when no mail program opens, offers to copy
+    /// the address instead.
+    /// </summary>
+    /// <param name="details">The message of the application the problem showed, or <see langword="null"/>.</param>
+    /// <returns>A task that completes when the letter is open or the address is offered.</returns>
+    Task ReportProblemAsync(string? details);
+
+    /// <summary>
+    /// Shows the window about the application.
+    /// </summary>
+    /// <param name="viewModel">The view model.</param>
+    /// <returns>A task that completes when the window is closed.</returns>
+    Task ShowAboutAsync(AboutViewModel viewModel);
 
     /// <summary>
     /// Shows a message.

@@ -83,6 +83,11 @@ The server folder and the zip are ready in artifacts/publish: they can be used w
 $art = Join-Path $root 'artifacts\installer-art'
 & (Join-Path $scriptDir '..\Assets\generate-installer-art.ps1') -OutputDirectory $art
 
+# The license page of the wizard in every language: a short introduction and the English text of the GPL.
+. (Join-Path $scriptDir '..\Shared\package-notes.ps1')
+$license = Join-Path $root 'artifacts\installer-license'
+Write-InstallerLicenses -Target $license
+
 Write-Host "==> Inno Setup: $iscc"
 & $iscc `
     "/DServerVersion=$version" `
@@ -90,6 +95,7 @@ Write-Host "==> Inno Setup: $iscc"
     "/DServerSource=$stage" `
     "/DServerOutputDir=$output" `
     "/DInstallerArt=$art" `
+    "/DInstallerLicense=$license" `
     (Join-Path $scriptDir 'golether-server.iss')
 if ($LASTEXITCODE -ne 0) {
     throw "Inno Setup failed with exit code $LASTEXITCODE."

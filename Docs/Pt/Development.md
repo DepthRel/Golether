@@ -150,7 +150,7 @@ não fiáveis são sempre validadas.
 | Script | Resultado |
 |---|---|
 | `Scripts/App/publish-win.ps1 [-Runtime win-x64]` | `artifacts/publish/Golether-<version>-win-x64.zip` |
-| `Scripts/App/publish-linux.sh [linux-x64] [Release] [out]` | `.tar.gz` e `.zip` (se o `zip` existir), `install-desktop-entry.sh` |
+| `Scripts/App/publish-linux.sh [linux-x64] [Release] [out]` | `.tar.gz` e `.zip` (se o `zip` existir), `install-desktop-entry.sh`, `.deb` (onde existir `dpkg-deb`: Debian, Ubuntu, WSL) |
 | `Scripts/App/publish-macos.sh [osx-arm64\|osx-x64] ...` | `Golether.app` (Info.plist, ícone, assinatura ad hoc) num arquivo |
 | `Scripts/App/publish-linux.ps1 [-Runtime linux-x64]` | o mesmo arquivo Linux, compilado a partir do Windows no WSL (ver abaixo) |
 | `Scripts/Assets/update-site-screenshot.ps1` | a imagem da página do projeto a partir de `Docs/images/screenshot.png` |

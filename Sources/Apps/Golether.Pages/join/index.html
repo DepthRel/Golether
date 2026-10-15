@@ -7,6 +7,7 @@
     The invitation page: turns https://…/join/#<invitation> into golether://join/v1/<invitation> and hands it to the
     application. The invitation is after the "#", so the browser never sends it to the server. The page loads nothing
     from other servers, sends nothing anywhere and runs no inline script: it is exactly the files of this folder.
+    Keep the counter of visits of the main page away from here: a script of another server would see the invitation.
   -->
   <meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src 'self'; style-src 'self'; script-src 'self'; base-uri 'none'; form-action 'none'">
   <meta name="referrer" content="no-referrer">

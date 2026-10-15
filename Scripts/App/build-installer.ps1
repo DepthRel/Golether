@@ -87,6 +87,11 @@ The package is ready in artifacts/publish/<runtime>/Golether: it can be used wit
 $art = Join-Path $root 'artifacts\installer-art'
 & (Join-Path $scriptDir '..\Assets\generate-installer-art.ps1') -OutputDirectory $art
 
+# The license page of the wizard in every language: a short introduction and the English text of the GPL.
+. (Join-Path $scriptDir '..\Shared\package-notes.ps1')
+$license = Join-Path $root 'artifacts\installer-license'
+Write-InstallerLicenses -Target $license
+
 Write-Host "==> Inno Setup: $iscc"
 & $iscc `
     "/DGoletherVersion=$version" `
@@ -94,6 +99,7 @@ Write-Host "==> Inno Setup: $iscc"
     "/DGoletherSource=$stage" `
     "/DGoletherOutputDir=$output" `
     "/DInstallerArt=$art" `
+    "/DInstallerLicense=$license" `
     (Join-Path $scriptDir 'golether.iss')
 if ($LASTEXITCODE -ne 0) {
     throw "Inno Setup failed with exit code $LASTEXITCODE."

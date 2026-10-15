@@ -48,8 +48,14 @@ The sealing is a mask against scanners, not a secret: the key is in the open cod
 
 ## Rules of the page
 
-- Nothing is loaded from other servers: no fonts, no scripts, no counters. Both pages pin this with a
-  `Content-Security-Policy` header; there are no inline scripts or styles either.
+- Nothing is loaded from other servers but one thing: the main page counts visits with Umami Cloud (no cookies), its
+  script from `cloud.umami.is` and its reports to `gateway.umami.is`. Besides visits it counts the `download` event of
+  the download links (`data-umami-event-package`: `windows`, `linux-deb`, `linux-archive`, `macos`;
+  `data-umami-event-place`: `card` or `hero`, the button at the top, which `site.js` marks for the system of the
+  visitor). It counts only on `depthrel.github.io`, keeps
+  the part of the address after `#` and `?` out of its reports and skips browsers that ask not to be tracked. The
+  invitation page has no counter: a script of another server would see the invitation in its address. Both pages
+  pin what they may load with a `Content-Security-Policy` header; there are no inline scripts or styles either.
 - The invitation stands after `#`, so the browser does not send it to the server. The invitation page passes it
   nowhere and removes it from the address bar at once.
 - The English text is written right in the HTML (the page reads fine without scripts); the other languages (Deutsch,

@@ -1,0 +1,12 @@
+Golether est un logiciel libre. Vous pouvez l'exécuter pour tout usage, étudier son fonctionnement, le partager et
+le modifier selon les termes de la Licence publique générale GNU, version 3 ou (à votre choix) toute version
+ultérieure, reproduite ci-dessous.
+
+Golether est fourni SANS AUCUNE GARANTIE, dans la mesure permise par la loi : voir les sections 15 et 16 de la
+licence.
+
+Golether contient des composants d'autres auteurs sous leurs propres licences ; ils sont listés dans
+THIRD-PARTY-NOTICES.txt dans le dossier d'installation. Le code source de Golether : https://github.com/DepthRel/Golether
+
+Ci-dessous figure le texte original anglais de la licence : lui seul a valeur juridique. Traductions non officielles :
+https://www.gnu.org/licenses/translations.html

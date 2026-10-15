@@ -1,0 +1,96 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:loc="using:Golether.UI.Localization"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vmd="using:Golether.UI.ViewModels.Dialogs"
+        x:Class="Golether.UI.Views.Dialogs.AboutDialog"
+        x:DataType="vmd:AboutViewModel"
+        Width="560" SizeToContent="Height" MaxHeight="840" CanResize="False"
+        WindowStartupLocation="CenterOwner" Icon="/Assets/golether.ico"
+        Title="{Binding Title}">
+  <!--
+    One window about the application: the brand and the slogan of the project page on top, then a word on privacy,
+    on the license and on how to write to the project, each part apart from the next. The text scrolls when the screen
+    is too small for it; the scroll bar hides itself until needed.
+  -->
+  <Window.Styles>
+    <!-- The headings of the parts: a step above the text, below the titles of the settings. -->
+    <Style Selector="TextBlock.heading">
+      <Setter Property="FontSize" Value="15" />
+      <Setter Property="FontWeight" Value="SemiBold" />
+    </Style>
+    <Style Selector="Border.separator">
+      <Setter Property="Height" Value="1" />
+      <Setter Property="Background" Value="{StaticResource GoletherLine}" />
+    </Style>
+  </Window.Styles>
+  <DockPanel>
+    <Border DockPanel.Dock="Bottom" Classes="panel" BorderBrush="{StaticResource GoletherLine}" BorderThickness="0,1,0,0" Padding="22,12">
+      <Button HorizontalAlignment="Right" Classes="accent" Content="{loc:Loc Common.Close}" Click="OnClose" IsDefault="True" IsCancel="True" />
+    </Border>
+    <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" AllowAutoHide="True">
+      <StackPanel Margin="28,18,28,24" Spacing="14">
+
+        <!-- The brand: the icon, the name as the header of the main window writes it, the slogan, the version. -->
+        <StackPanel HorizontalAlignment="Center" Spacing="6">
+          <Image Source="/Assets/golether-256.png" Width="56" Height="56" HorizontalAlignment="Center" />
+          <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
+            <TextBlock Classes="logo" FontSize="28" Text="gole" />
+            <TextBlock Classes="logo" FontSize="28" Text="ther" Foreground="{StaticResource GoletherAccent}" />
+          </StackPanel>
+          <TextBlock HorizontalAlignment="Center" TextAlignment="Center" TextWrapping="Wrap" FontSize="18"
+                     FontWeight="SemiBold" LineHeight="24">
+            <Run Text="{Binding SloganStart}" /><Run Text="{Binding SloganAccent}" Foreground="{StaticResource GoletherAccent}" /><Run Text="{Binding SloganEnd}" />
+            <LineBreak />
+            <Run Text="{Binding SloganSecondLine}" />
+          </TextBlock>
+          <TextBlock Classes="mono muted" FontSize="12" HorizontalAlignment="Center" Text="{Binding Version}" />
+          <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" Spacing="8" Margin="0,6,0,0">
+            <Button Classes="ghost" Content="{loc:Loc About.Website}" Command="{Binding OpenWebsiteCommand}" />
+            <Button Classes="ghost" Content="{loc:Loc About.Source}" Command="{Binding OpenSourceCommand}" />
+          </StackPanel>
+        </StackPanel>
+
+        <Border Classes="separator" />
+
+        <!-- Privacy -->
+        <StackPanel Spacing="8">
+          <TextBlock Classes="heading" Text="{loc:Loc About.Privacy}" />
+          <TextBlock Classes="muted" TextWrapping="Wrap" Text="{loc:Loc About.Privacy.Text}" />
+          <Button Classes="ghost" HorizontalAlignment="Left" Margin="0,4,0,0" Content="{loc:Loc About.Privacy.More}"
+                  Command="{Binding OpenPrivacyCommand}" />
+        </StackPanel>
+
+        <Border Classes="separator" />
+
+        <!-- License -->
+        <StackPanel Spacing="8">
+          <TextBlock Classes="heading" Text="{loc:Loc About.License}" />
+          <TextBlock Classes="muted" TextWrapping="Wrap" Text="{loc:Loc About.License.Text}" />
+          <WrapPanel Margin="0,4,0,-8">
+            <Button Classes="ghost" Margin="0,0,8,8" Content="{loc:Loc About.License.Open}" Command="{Binding OpenLicenseCommand}" />
+            <Button Classes="ghost" Margin="0,0,8,8" Content="{loc:Loc About.License.Notices}" Command="{Binding OpenNoticesCommand}" />
+          </WrapPanel>
+        </StackPanel>
+
+        <Border Classes="separator" />
+
+        <!-- Problems and ideas -->
+        <StackPanel Spacing="8">
+          <TextBlock Classes="heading" Text="{loc:Loc About.Feedback}" />
+          <TextBlock Classes="muted" TextWrapping="Wrap" Text="{loc:Loc About.Feedback.Text}" />
+          <DockPanel Margin="0,4,0,0">
+            <Button DockPanel.Dock="Right" Classes="ghost" Content="{loc:Loc Common.Copy}" Command="{Binding CopyEmailCommand}"
+                    AutomationProperties.Name="{loc:Loc About.Feedback.CopyName}" />
+            <SelectableTextBlock VerticalAlignment="Center" FontWeight="SemiBold" Text="{Binding FeedbackEmail}" />
+          </DockPanel>
+          <WrapPanel Margin="0,4,0,0">
+            <Button Classes="accent" Margin="0,0,8,8" Content="{loc:Loc Problem.Report}"
+                    ToolTip.Tip="{loc:Loc Problem.ReportTip}" Command="{Binding ReportProblemCommand}" />
+            <Button Classes="ghost" Margin="0,0,8,8" Content="{loc:Loc Main.Report}" ToolTip.Tip="{loc:Loc Main.ReportTip}"
+                    Command="{Binding SaveReportCommand}" IsVisible="{Binding CanSaveReport}" />
+          </WrapPanel>
+        </StackPanel>
+      </StackPanel>
+    </ScrollViewer>
+  </DockPanel>
+</Window>

@@ -204,9 +204,10 @@
                     <ItemsControl.ItemTemplate>
                       <DataTemplate x:DataType="vm:ComponentItemViewModel">
                         <StackPanel Spacing="6">
+                          <!-- A long title wraps instead of running under the status chip (English, Spanish). -->
                           <Grid ColumnDefinitions="*,Auto">
-                            <StackPanel>
-                              <TextBlock Text="{Binding Title}" FontWeight="SemiBold" />
+                            <StackPanel Margin="0,0,10,0">
+                              <TextBlock Text="{Binding Title}" FontWeight="SemiBold" TextWrapping="Wrap" />
                               <TextBlock Classes="muted" FontSize="12" Text="{Binding Purpose}" TextWrapping="Wrap" />
                             </StackPanel>
                             <Border Grid.Column="1" Classes="chip" Classes.secure="{Binding IsAvailable}" VerticalAlignment="Top">

@@ -13,6 +13,7 @@
         golether-server-monitor.exe  the launcher of Golether Server Monitor (the state, the journal of events, the
                               start and stop of the service and the settings in a window)
         monitor/              the monitor itself
+        LICENSE.txt           the GPL-3.0 text; THIRD-PARTY-NOTICES.txt lists the components and their licenses
 
     The project makes the layout (target GoletherServerPackageLayout); this script adds the monitor, README.txt and the
     archive.
@@ -99,6 +100,7 @@ foreach ($expected in @('golether-server.exe', 'bin\golether-server.dll', 'confi
 # and README.<code>.txt for the others. The installer shows the one of the chosen language after the installation.
 . (Join-Path (Split-Path -Parent $PSScriptRoot) 'Shared/package-notes.ps1')
 Write-PackageNotes -Notes (Join-Path $PSScriptRoot 'Notes') -Target (Join-Path $stage 'docs') -Platform win -Version $version -Runtime $Runtime
+Write-PackageLicenses -Target $stage
 
 Add-Type -AssemblyName System.IO.Compression, System.IO.Compression.FileSystem
 $package = Join-Path (Resolve-Path $Output).Path "GoletherServer-$version-$Runtime.zip"

@@ -4,13 +4,17 @@
         x:Class="Golether.UI.Views.Dialogs.MessageDialog"
         Width="460" SizeToContent="Height" CanResize="False"
         WindowStartupLocation="CenterOwner" Icon="/Assets/golether.ico">
-  <!-- A simple message with an OK button, or a question with two answers. -->
+  <!-- A simple message with an OK button, or a question with two answers. An error can be reported from here. -->
   <StackPanel Margin="22" Spacing="14">
     <TextBlock x:Name="TitleText" Classes="title" TextWrapping="Wrap" />
     <TextBlock x:Name="MessageText" TextWrapping="Wrap" Classes="muted" />
-    <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Spacing="8">
-      <Button x:Name="CancelButton" Classes="ghost" Content="{loc:Loc Common.Cancel}" Click="OnCancel" IsCancel="True" IsVisible="False" />
-      <Button x:Name="OkButton" Classes="accent" Content="{loc:Loc Common.Understood}" Click="OnOk" IsDefault="True" />
-    </StackPanel>
+    <DockPanel>
+      <Button x:Name="ReportButton" DockPanel.Dock="Left" Classes="ghost" Content="{loc:Loc Problem.ReportShort}"
+              ToolTip.Tip="{loc:Loc Problem.ReportTip}" Click="OnReport" IsVisible="False" />
+      <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Spacing="8">
+        <Button x:Name="CancelButton" Classes="ghost" Content="{loc:Loc Common.Cancel}" Click="OnCancel" IsCancel="True" IsVisible="False" />
+        <Button x:Name="OkButton" Classes="accent" Content="{loc:Loc Common.Understood}" Click="OnOk" IsDefault="True" />
+      </StackPanel>
+    </DockPanel>
   </StackPanel>
 </Window>

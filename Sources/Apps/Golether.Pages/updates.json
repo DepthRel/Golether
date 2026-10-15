@@ -7,6 +7,7 @@
   "linux": {
     "version": "0.3.2",
     "url": "https://github.com/DepthRel/Golether/releases/download/0.3.2/Golether-0.3.2-linux-x64.tar.gz",
+    "deb": "https://github.com/DepthRel/Golether/releases/download/0.3.2/Golether-0.3.2-linux-x64.deb",
     "page": "https://depthrel.github.io/Golether/#download"
   },
   "macos": {

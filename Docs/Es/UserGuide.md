@@ -233,6 +233,11 @@ cuando la ventana es tan estrecha que los botones de la barra superior ya no cab
 componentes, información sobre la sesión (sin el nombre de la película) y las últimas líneas del registro. Las claves,
 los tokens y las contraseñas se quitan del informe, así que el archivo se puede enviar a quien te ayude.
 
+Con cualquier ancho de la ventana, el mismo informe se guarda desde **Ajustes → Acerca de Golether → Informe de
+diagnóstico…**. Al lado, **Informar de un problema** abre en su programa de correo una carta a los desarrolladores
+(project.golether@gmail.com) con la versión y el sistema ya rellenados; la ventana de cualquier error ofrece lo mismo.
+Adjunte el informe a la carta: no se envía nada hasta que usted la envíe.
+
 El informe tiene una línea por cada conexión con un participante: si está verificada, si el canal de datos está
 abierto y cuántos fotogramas salieron y entraron (`vídeo 120↑/0↓`). Muestran enseguida dónde se rompe el enlace: la
 conexión no se estableció, se estableció vacía o la cámara no da nada.
@@ -335,6 +340,10 @@ registro la entrada de desinstalación y el manejador de los enlaces de invitaci
   la instalación y guarda los datos de cada usuario en su perfil: `%LOCALAPPDATA%\Golether`. El instalador también enseña
   al sistema a abrir los enlaces de invitación con Golether. En un archivo descomprimido los enlaces no se abren solos:
   usa la clave (en Linux `install-desktop-entry.sh` activa los enlaces);
+- el paquete para Ubuntu y Debian (`.deb`, se instala con `sudo apt install ./Golether-<version>-linux-x64.deb`) trae
+  consigo los componentes de vídeo y cámaras, añade Golether al menú, hace que el sistema abra los enlaces de
+  invitación y guarda los datos de cada usuario en su perfil: `~/.local/share/Golether`. Se quita con
+  `sudo apt remove golether`;
 - mueve, copia y borra la carpeta `Golether` entera: todos los datos viajan con ella;
 - para actualizar una copia descomprimida, descomprime la versión nueva y mueve a ella la carpeta `data` de la antigua;
 - si los datos estaban antes en `%LOCALAPPDATA%\Golether` (compilaciones antiguas), se mueven a `data` automáticamente en

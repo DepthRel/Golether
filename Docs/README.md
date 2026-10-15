@@ -6,6 +6,7 @@ main set, and a change of meaning goes into every language at once.
 | Document | English | Deutsch | Español | Français | Português | Русский |
 |---|---|---|---|---|---|---|
 | User guide | [UserGuide](En/UserGuide.md) | [Handbuch](De/UserGuide.md) | [Guía de uso](Es/UserGuide.md) | [Guide d'utilisation](Fr/UserGuide.md) | [Guia do utilizador](Pt/UserGuide.md) | [Руководство](Ru/UserGuide.md) |
+| Privacy | [Privacy](En/Privacy.md) | [Datenschutz](De/Privacy.md) | [Privacidad](Es/Privacy.md) | [Confidentialité](Fr/Privacy.md) | [Privacidade](Pt/Privacy.md) | [Конфиденциальность](Ru/Privacy.md) |
 | Architecture | [Architecture](En/Architecture.md) | [Architektur](De/Architecture.md) | [Arquitectura](Es/Architecture.md) | [Architecture](Fr/Architecture.md) | [Arquitetura](Pt/Architecture.md) | [Архитектура](Ru/Architecture.md) |
 | Network protocol | [Protocol](En/Protocol.md) | [Protokoll](De/Protocol.md) | [Protocolo](Es/Protocol.md) | [Protocole](Fr/Protocol.md) | [Protocolo](Pt/Protocol.md) | [Протокол](Ru/Protocol.md) |
 | Rendezvous server | [Rendezvous server](En/RendezvousServer.md) | [Vermittlungsserver](De/RendezvousServer.md) | [Servidor de encuentro](Es/RendezvousServer.md) | [Serveur de rendez-vous](Fr/RendezvousServer.md) | [Servidor de encontro](Pt/RendezvousServer.md) | [Сервер рукопожатий](Ru/RendezvousServer.md) |

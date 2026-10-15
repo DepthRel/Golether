@@ -416,7 +416,7 @@ public sealed partial class MainWindowViewModel : ObservableObject
     /// <summary>
     /// Gets the version of the application as <c>major.minor.patch</c>, shown in the corner of the status bar.
     /// </summary>
-    public string AppVersion { get; } = (typeof(MainWindowViewModel).Assembly.GetName().Version ?? new Version(0, 0, 0)).ToString(3);
+    public string AppVersion { get; } = AppInfo.Version;
 
     /// <summary>
     /// Gets or sets the notice about camera and voice availability.
@@ -817,12 +817,25 @@ public sealed partial class MainWindowViewModel : ObservableObject
             canChooseUpdates: _updates is not null,
             ChecksUpdates,
             UpdateUrl,
-            SetUpdateSource);
+            SetUpdateSource,
+            OpenAboutAsync);
 
         // Reading the device lists asks the media backend and takes a moment, so it runs while the window is already
         // on screen. Refilling the lists empties the boxes, so the choice is put back once the lists are complete.
         _ = RefreshDevicesAsync(settings);
         return _dialogs.ShowSettingsAsync(settings);
+    }
+
+    /// <summary>
+    /// Opens the window about the application, with the documents in the language of the application.
+    /// </summary>
+    /// <returns>A task that completes when the window is closed.</returns>
+    private Task OpenAboutAsync()
+    {
+        var saveReport = CanSaveReport ? SaveReportAsync : (Func<Task>?)null;
+        var about = new Dialogs.AboutViewModel(_dialogs, Texts.Localizer.Current.Code, saveReport);
+
+        return _dialogs.ShowAboutAsync(about);
     }
 
     /// <summary>

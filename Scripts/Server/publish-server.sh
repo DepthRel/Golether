@@ -7,6 +7,7 @@
 #   GoletherServer/config/            appsettings.json
 #   GoletherServer/docs/              ADMIN-GUIDE.md and README.txt in English, ADMIN-GUIDE.<code>.md and README.<code>.txt
 #                                     in the other languages (the notes come from the templates in Notes)
+#   GoletherServer/LICENSE.txt        the GPL-3.0 text; THIRD-PARTY-NOTICES.txt lists the components and their licenses
 #   GoletherServer/service/           install-service.sh, which installs, updates or removes the service: systemd on
 #                                     Linux (golether-server.service), launchd on macOS (org.golether.server.plist)
 #   GoletherServer/golether-server-monitor  the launcher of Golether Server Monitor (the state, the journal of
@@ -254,6 +255,7 @@ done
 # shellcheck source=../Shared/package-notes.sh
 source "$script_dir/../Shared/package-notes.sh"
 write_package_notes "$script_dir/Notes" "$stage/docs" "$platform" "$version" "$runtime"
+write_package_licenses "$stage"
 
 package_base="$(cd "$output" && pwd)/GoletherServer-$version-$runtime"
 if tar --version 2>/dev/null | grep -q "GNU tar"; then

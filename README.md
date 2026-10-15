@@ -76,11 +76,11 @@ What else you need depends on the OS.
 
 | | Windows 10+ | Linux (X11 / Wayland) | macOS 14+ |
 |---|---|---|---|
-| Package | `Golether-<version>-setup.exe` or `-win-x64.zip` | `.tar.gz` / `.zip` | `.tar.gz` / `.zip` with `Golether.app` |
+| Package | `Golether-<version>-setup.exe` or `-win-x64.zip` | `.deb` (Ubuntu, Debian) or `.tar.gz` / `.zip` | `.tar.gz` / `.zip` with `Golether.app` |
 | Video (libmpv) | included | install from your distribution: `libmpv2` or `mpv-libs` | `brew install mpv` |
 | Webcams and voice (GStreamer) | included | `gstreamer1.0-plugins-{base,good,bad}` and `gstreamer1.0-nice` | `brew install gstreamer` |
 | AmneziaWG tunnel | downloaded by the app on first use (about 4 MB, SHA-256 verified, no admin rights) | `amneziawg-tools` plus the `amneziawg` kernel module (or `amneziawg-go`) | `amneziawg-tools` |
-| First start | SmartScreen warns until the build is signed | `./install-desktop-entry.sh` adds a menu entry | not notarized: *Privacy & Security → Open Anyway*, or `xattr -dr com.apple.quarantine Golether.app` |
+| First start | SmartScreen warns until the build is signed | `.deb`: in the menu at once; an archive: `./install-desktop-entry.sh` adds a menu entry | not notarized: *Privacy & Security → Open Anyway*, or `xattr -dr com.apple.quarantine Golether.app` |
 
 - If libmpv is missing the app still starts, in a sync-only mode without a picture. The "Components" card on the
   start screen shows what is missing and, on Linux and macOS, a ready-to-copy terminal command. On Windows the
@@ -156,6 +156,7 @@ The documentation is kept by language: [English](Docs/En) is the main set, and t
 | Document | Audience |
 |---|---|
 | [User guide](Docs/En/UserGuide.md) | users: how to show a movie, invite people, raise a tunnel |
+| [Privacy](Docs/En/Privacy.md) | users: what Golether stores, what it sends and where |
 | [Architecture](Docs/En/Architecture.md) | design documentation: modules, synchronization, security, roadmap |
 | [Protocol](Docs/En/Protocol.md) | network protocol and packet formats |
 | [Rendezvous server](Docs/En/RendezvousServer.md) | how the rendezvous server works and how to build it |
@@ -174,7 +175,7 @@ Output goes to `artifacts/publish/`. Windows (PowerShell):
 Linux and macOS (bash). Build on the target OS, so that executable permissions survive in the archive:
 
 ```bash
-./Scripts/App/publish-linux.sh [linux-x64|linux-arm64]   # .tar.gz (+ .zip if zip is installed)
+./Scripts/App/publish-linux.sh [linux-x64|linux-arm64]   # .tar.gz (+ .zip if zip is installed, .deb if dpkg-deb is)
 ./Scripts/App/publish-macos.sh [osx-arm64|osx-x64]       # Golether.app with an ad-hoc signature
 ```
 
@@ -192,4 +193,6 @@ another and writes `artifacts/publish/SHA256SUMS-<version>.txt` (see [Scripts/RE
 
 ## License
 
-GPL-3.0-or-later. All dependencies are GPL-compatible.
+GPL-3.0-or-later: the text is in [LICENSE.txt](LICENSE.txt). All dependencies are GPL-compatible; the components,
+their licenses and where to get their source are listed in [THIRD-PARTY-NOTICES.txt](THIRD-PARTY-NOTICES.txt), which
+every package carries next to the program.

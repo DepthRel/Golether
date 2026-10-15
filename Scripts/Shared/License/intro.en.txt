@@ -1,0 +1,7 @@
+Golether is free software. You may run it for any purpose, study how it works, share it and change it under the
+terms of the GNU General Public License, version 3 or (at your option) any later version, printed below.
+
+Golether comes WITHOUT ANY WARRANTY, to the extent permitted by law: see sections 15 and 16 of the license.
+
+Golether contains components of other authors under their own licenses; they are listed in THIRD-PARTY-NOTICES.txt in
+the installation folder. The source code of Golether: https://github.com/DepthRel/Golether
