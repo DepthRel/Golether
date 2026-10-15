@@ -2,7 +2,8 @@
   "windows": {
     "version": "0.3.2",
     "url": "https://github.com/DepthRel/Golether/releases/download/0.3.2/Golether-0.3.2-setup.exe",
-    "page": "https://depthrel.github.io/Golether/#download"
+    "page": "https://depthrel.github.io/Golether/#download",
+    "zip": "https://github.com/DepthRel/Golether/releases/download/0.3.2/Golether-0.3.2-win-x64.zip"
   },
   "linux": {
     "version": "0.3.2",
@@ -13,6 +14,7 @@
   "macos": {
     "version": "0.3.2",
     "url": "https://github.com/DepthRel/Golether/releases/download/0.3.2/Golether-0.3.2-osx-arm64.tar.gz",
-    "page": "https://depthrel.github.io/Golether/#download"
+    "page": "https://depthrel.github.io/Golether/#download",
+    "intel": "https://github.com/DepthRel/Golether/releases/download/0.3.2/Golether-0.3.2-osx-x64.tar.gz"
   }
 }

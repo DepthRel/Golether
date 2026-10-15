@@ -37,7 +37,7 @@
             <TextBlock Classes="logo" FontSize="28" Text="gole" />
             <TextBlock Classes="logo" FontSize="28" Text="ther" Foreground="{StaticResource GoletherAccent}" />
           </StackPanel>
-          <TextBlock HorizontalAlignment="Center" TextAlignment="Center" TextWrapping="Wrap" FontSize="18"
+          <TextBlock HorizontalAlignment="Center" TextAlignment="Center" TextWrapping="Wrap" FontSize="18" Margin="0,10,0,2"
                      FontWeight="SemiBold" LineHeight="24">
             <Run Text="{Binding SloganStart}" /><Run Text="{Binding SloganAccent}" Foreground="{StaticResource GoletherAccent}" /><Run Text="{Binding SloganEnd}" />
             <LineBreak />

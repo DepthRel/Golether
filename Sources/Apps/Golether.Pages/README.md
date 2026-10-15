@@ -50,7 +50,8 @@ The sealing is a mask against scanners, not a secret: the key is in the open cod
 
 - Nothing is loaded from other servers but one thing: the main page counts visits with Umami Cloud (no cookies), its
   script from `cloud.umami.is` and its reports to `gateway.umami.is`. Besides visits it counts the `download` event of
-  the download links (`data-umami-event-package`: `windows`, `linux-deb`, `linux-archive`, `macos`;
+  the download links (`data-umami-event-package`: `windows`, `windows-zip`, `linux-deb`, `linux-archive`, `macos`,
+  `macos-intel`;
   `data-umami-event-place`: `card` or `hero`, the button at the top, which `site.js` marks for the system of the
   visitor). It counts only on `depthrel.github.io`, keeps
   the part of the address after `#` and `?` out of its reports and skips browsers that ask not to be tracked. The
