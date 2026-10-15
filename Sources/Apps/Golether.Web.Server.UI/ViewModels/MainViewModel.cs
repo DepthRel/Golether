@@ -6,35 +6,10 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Golether.Localization;
 using Golether.Web.Server.Contracts;
+using Golether.Web.Server.UI.Enums;
 using Golether.Web.Server.UI.Services;
 
 namespace Golether.Web.Server.UI.ViewModels;
-
-/// <summary>
-/// How the server is doing, in one word for the colour of the status.
-/// </summary>
-public enum ServerCondition
-{
-    /// <summary>
-    /// Not known yet.
-    /// </summary>
-    Unknown,
-
-    /// <summary>
-    /// Running and answering.
-    /// </summary>
-    Good,
-
-    /// <summary>
-    /// Changing its state, or running without being a service.
-    /// </summary>
-    Warning,
-
-    /// <summary>
-    /// Not running, or running without answering.
-    /// </summary>
-    Bad,
-}
 
 /// <summary>
 /// The main window of the monitor: the state of the server and its service, the journal of events and the settings.
@@ -45,12 +20,12 @@ public sealed partial class MainViewModel : ObservableObject
     /// <summary>
     /// The largest number of events the monitor holds; the oldest are dropped. The server itself keeps fewer.
     /// </summary>
-    public const int MaxRows = 20000;
+    public const int MAX_ROWS = 20000;
 
     /// <summary>
     /// How often the state of the service is asked for, in refreshes: running a tool every second is not needed.
     /// </summary>
-    private const int ServiceQueryEvery = 2;
+    private const int SERVICE_QUERY_EVERY = 2;
 
     /// <summary>
     /// Reads the server.
@@ -257,7 +232,7 @@ public sealed partial class MainViewModel : ObservableObject
 
         try
         {
-            if (_refreshes++ % ServiceQueryEvery == 0)
+            if (_refreshes++ % SERVICE_QUERY_EVERY == 0)
             {
                 ServiceState = await _service.QueryAsync(cancellationToken).ConfigureAwait(true);
             }
@@ -305,10 +280,10 @@ public sealed partial class MainViewModel : ObservableObject
             }
         }
 
-        if (_rows.Count > MaxRows)
+        if (_rows.Count > MAX_ROWS)
         {
-            var dropped = _rows.GetRange(MaxRows, _rows.Count - MaxRows);
-            _rows.RemoveRange(MaxRows, _rows.Count - MaxRows);
+            var dropped = _rows.GetRange(MAX_ROWS, _rows.Count - MAX_ROWS);
+            _rows.RemoveRange(MAX_ROWS, _rows.Count - MAX_ROWS);
             foreach (var row in dropped)
             {
                 Rows.Remove(row);

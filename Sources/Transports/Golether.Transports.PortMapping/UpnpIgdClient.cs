@@ -27,17 +27,17 @@ public sealed class UpnpIgdClient : IPortMappingProtocol
     /// <summary>
     /// The largest description or SOAP response that is read.
     /// </summary>
-    private const int MaxDocumentSize = 256 * 1024;
+    private const int MAX_DOCUMENT_SIZE = 256 * 1024;
 
     /// <summary>
     /// The UPnP error "only permanent leases are supported".
     /// </summary>
-    private const string OnlyPermanentLeases = "725";
+    private const string ONLY_PERMANENT_LEASES = "725";
 
     /// <summary>
     /// The search targets, from the most to the least specific.
     /// </summary>
-    private static readonly string[] SearchTargets =
+    private static readonly string[] _searchTargets =
     [
         "urn:schemas-upnp-org:device:InternetGatewayDevice:1",
         "urn:schemas-upnp-org:device:InternetGatewayDevice:2",
@@ -46,7 +46,7 @@ public sealed class UpnpIgdClient : IPortMappingProtocol
     /// <summary>
     /// The connection services that can forward ports.
     /// </summary>
-    private static readonly string[] ServiceTypes =
+    private static readonly string[] _serviceTypes =
     [
         "urn:schemas-upnp-org:service:WANIPConnection:2",
         "urn:schemas-upnp-org:service:WANIPConnection:1",
@@ -175,10 +175,10 @@ public sealed class UpnpIgdClient : IPortMappingProtocol
         foreach (var line in response.Split("\r\n"))
         {
             var colon = line.IndexOf(':');
-            if (colon > 0 && line[..colon].Trim().Equals("LOCATION", StringComparison.OrdinalIgnoreCase)
-                && Uri.TryCreate(line[(colon + 1)..].Trim(), UriKind.Absolute, out var location)
-                && location.Scheme == Uri.UriSchemeHttp
-                && IPAddress.TryParse(location.Host, out var host) && host.Equals(sender))
+            if (colon > 0 && line[..colon].Trim().Equals("LOCATION", StringComparison.OrdinalIgnoreCase) &&
+                Uri.TryCreate(line[(colon + 1)..].Trim(), UriKind.Absolute, out var location) &&
+                location.Scheme == Uri.UriSchemeHttp &&
+                IPAddress.TryParse(location.Host, out var host) && host.Equals(sender))
             {
                 return location;
             }
@@ -201,7 +201,7 @@ public sealed class UpnpIgdClient : IPortMappingProtocol
         var services = document.Descendants().Where(e => e.Name.LocalName == "service").ToArray();
         var baseText = document.Descendants().FirstOrDefault(e => e.Name.LocalName == "URLBase")?.Value.Trim();
         var baseUri = Uri.TryCreate(baseText, UriKind.Absolute, out var parsed) ? parsed : location;
-        foreach (var type in ServiceTypes)
+        foreach (var type in _serviceTypes)
         {
             var service = services.FirstOrDefault(s => Child(s, "serviceType") == type);
             var control = service is null ? null : Child(service, "controlURL");
@@ -268,7 +268,7 @@ public sealed class UpnpIgdClient : IPortMappingProtocol
         using var udp = new UdpClient(new IPEndPoint(IPAddress.Any, 0));
         try
         {
-            foreach (var target in SearchTargets)
+            foreach (var target in _searchTargets)
             {
                 await udp.SendAsync(BuildSearchRequest(target), _searchTarget, cancellationToken).ConfigureAwait(false);
             }
@@ -347,7 +347,7 @@ public sealed class UpnpIgdClient : IPortMappingProtocol
                 return lease;
             }
 
-            if (!response.Body.Contains("<errorCode>" + OnlyPermanentLeases + "</errorCode>", StringComparison.Ordinal))
+            if (!response.Body.Contains("<errorCode>" + ONLY_PERMANENT_LEASES + "</errorCode>", StringComparison.Ordinal))
             {
                 _logger.LogInformation("The router refused the UPnP mapping of port {Port}", port);
                 return null;
@@ -411,7 +411,7 @@ public sealed class UpnpIgdClient : IPortMappingProtocol
     }
 
     /// <summary>
-    /// Sends a request with a 5-second limit and reads at most <see cref="MaxDocumentSize"/> bytes.
+    /// Sends a request with a 5-second limit and reads at most <see cref="MAX_DOCUMENT_SIZE"/> bytes.
     /// </summary>
     /// <param name="request">The request.</param>
     /// <param name="cancellationToken">The cancellation token.</param>
@@ -428,7 +428,7 @@ public sealed class UpnpIgdClient : IPortMappingProtocol
         int read;
         while ((read = await stream.ReadAsync(chunk, timeout.Token).ConfigureAwait(false)) > 0)
         {
-            if (buffer.Length + read > MaxDocumentSize)
+            if (buffer.Length + read > MAX_DOCUMENT_SIZE)
             {
                 throw new InvalidDataException("The router response is too large.");
             }

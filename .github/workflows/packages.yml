@@ -1,13 +1,15 @@
-# Builds the Linux and macOS packages of Golether on the systems they are meant for.
+# Builds the macOS packages of Golether: they need macOS itself (sips, iconutil and codesign).
 #
 # Two ways to start it:
 #   - by hand: Actions -> Packages -> Run workflow. The archives appear as "Artifacts" of the run.
 #   - by a version tag (git tag 0.3.0 && git push origin 0.3.0). The archives are also attached to the release of
 #     that tag; a release that does not exist yet is created as a draft, so nothing is published by itself.
-#     Files of the release with the same names (Golether-<version>-linux-x64.tar.gz, -osx-arm64, -osx-x64) are
-#     replaced; the others (the installers, the zip archives, the server packages) stay untouched.
+#     Files of the release with the same names (Golether-<version>-osx-arm64.tar.gz, -osx-x64) are replaced; the
+#     others stay untouched.
 #
-# The Windows installer is built on the developer's machine (Scripts/App/build-installer.ps1) and added to the same release.
+# Everything else of a release (the Windows installers and archives, the Linux package of the application, the server
+# packages and the checksums) is built on the developer's machine by Scripts/build-release.ps1 and added to the same
+# release.
 name: Packages
 
 on:
@@ -22,29 +24,19 @@ permissions:
 jobs:
   build:
     name: ${{ matrix.runtime }}
-    runs-on: ${{ matrix.os }}
+    # macos-latest is Apple silicon; it also builds the Intel package, .NET publishes for another processor without trouble.
+    runs-on: macos-latest
     strategy:
       fail-fast: false
       matrix:
-        include:
-          - os: ubuntu-latest
-            runtime: linux-x64
-            script: publish-linux.sh
-          # macos-latest is Apple silicon: the icon and the ad-hoc signature need the tools of macOS itself.
-          - os: macos-latest
-            runtime: osx-arm64
-            script: publish-macos.sh
-          # Intel Macs: the same Apple silicon runner builds it, .NET publishes for another processor without trouble.
-          - os: macos-latest
-            runtime: osx-x64
-            script: publish-macos.sh
+        runtime: [osx-arm64, osx-x64]
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-dotnet@v4
         with:
           global-json-file: global.json
       - name: Build the package
-        run: bash "Scripts/App/${{ matrix.script }}" "${{ matrix.runtime }}"
+        run: bash Scripts/App/publish-macos.sh "${{ matrix.runtime }}"
       - uses: actions/upload-artifact@v4
         with:
           name: Golether-${{ matrix.runtime }}
@@ -73,5 +65,5 @@ jobs:
           if gh release view "$TAG" >/dev/null 2>&1; then
             gh release upload "$TAG" packages/*.tar.gz --clobber
           else
-            gh release create "$TAG" packages/*.tar.gz --draft --title "Golether $TAG" --notes "Linux and macOS packages. Add the Windows installer and the notes, then publish."
+            gh release create "$TAG" packages/*.tar.gz --draft --title "Golether $TAG" --notes "The macOS packages. Add the packages of Scripts/build-release.ps1 and the notes, then publish."
           fi

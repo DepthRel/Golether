@@ -68,9 +68,10 @@ CloseApplications=yes
 CloseApplicationsFilter=Golether.exe
 ; The wizard opens with a greeting, not with a question.
 DisableWelcomePage=no
-; The language is asked first. English is offered whatever the language of Windows is: it is the first in [Languages].
+; The language is asked first, with the language of Windows preselected; a Windows in a language the wizard does not
+; speak gets English, the first in [Languages].
 ShowLanguageDialog=yes
-LanguageDetectionMethod=none
+LanguageDetectionMethod=uilanguage
 ; The link handler is registered below: the shell must learn about it at once.
 ChangesAssociations=yes
 
@@ -78,12 +79,24 @@ ChangesAssociations=yes
 ; The first language is the one offered by default. A new language is one more line here and one more block in
 ; [Messages] and [CustomMessages].
 Name: "english"; MessagesFile: "compiler:Default.isl"
+Name: "german"; MessagesFile: "compiler:Languages\German.isl"
+Name: "spanish"; MessagesFile: "compiler:Languages\Spanish.isl"
+Name: "french"; MessagesFile: "compiler:Languages\French.isl"
+Name: "portuguese"; MessagesFile: "compiler:Languages\Portuguese.isl"
 Name: "russian"; MessagesFile: "compiler:Languages\Russian.isl"
 
 [Messages]
 ; The greeting of the first page; [name] and [name/ver] are filled in by Inno Setup.
 english.WelcomeLabel1=Welcome to the [name] setup
 english.WelcomeLabel2=Golether is for watching films together: everyone sees the same frame at the same moment, with the faces and voices of friends beside it.%n%nThis wizard installs [name/ver] on your computer.
+german.WelcomeLabel1=Willkommen bei der Installation von [name]
+german.WelcomeLabel2=Golether ist für gemeinsame Filmabende: Alle sehen im selben Moment dasselbe Bild, und die Gesichter und Stimmen der Freunde sind gleich daneben.%n%nDieser Assistent installiert [name/ver] auf Ihrem Computer.
+spanish.WelcomeLabel1=Te damos la bienvenida a la instalación de [name]
+spanish.WelcomeLabel2=Golether sirve para ver películas juntos: todos ven el mismo fotograma en el mismo momento, con las caras y las voces de los amigos al lado.%n%nEste asistente instalará [name/ver] en tu equipo.
+french.WelcomeLabel1=Bienvenue dans l'installation de [name]
+french.WelcomeLabel2=Golether sert à regarder des films ensemble : tout le monde voit la même image au même moment, avec les visages et les voix des amis à côté.%n%nCet assistant va installer [name/ver] sur votre ordinateur.
+portuguese.WelcomeLabel1=Bem-vindo à instalação do [name]
+portuguese.WelcomeLabel2=O Golether serve para ver filmes em conjunto: todos veem a mesma imagem no mesmo momento, com as caras e as vozes dos amigos ao lado.%n%nEste assistente vai instalar o [name/ver] no seu computador.
 russian.WelcomeLabel1=Добро пожаловать в установку приложения [name]
 russian.WelcomeLabel2=Golether — это кино вместе: все видят один и тот же кадр в один и тот же момент, а лица и голоса друзей рядом.%n%nМастер установит [name/ver] на ваш компьютер.
 
@@ -101,6 +114,54 @@ english.ModeRefused=Windows did not grant administrator rights (code %1), and Go
 english.RemoveData=Remove the personal data of Golether as well (keys, settings, the contact list)?
 english.RemoveDataShared=Only the data of the current user is removed. The data of the other users of this computer stays in their profiles.
 english.RemoveDataKeep=Press “No” if you are going to install Golether again.
+german.DesktopIcon=Verknüpfung auf dem Desktop
+german.Extras=Zusätzlich:
+german.Launch=Golether starten
+german.ModeTitle=Für wen Golether installiert wird
+german.ModeQuestion=Wer wird das Programm auf diesem Computer verwenden?
+german.ModeHelp=„Nur für mich“ installiert das Programm in Ihr Profil und benötigt keine Administratorrechte.%n„Für alle“ installiert es nach Program Files: Windows fragt einmal nach der Erlaubnis eines Administrators.
+german.ModeOnlyMe=Nur für mich (%1)
+german.ModeEveryone=Für alle
+german.ModeRefused=Windows hat keine Administratorrechte erteilt (Code %1), und ohne sie kann Golether nicht für alle installiert werden.%n%nStarten Sie die Installation als Administrator, um für alle zu installieren: Rechtsklick auf die Installationsdatei → „Als Administrator ausführen“. Oder wählen Sie „Nur für mich“.
+german.RemoveData=Auch die persönlichen Daten von Golether entfernen (Schlüssel, Einstellungen, Kontaktliste)?
+german.RemoveDataShared=Es werden nur die Daten des aktuellen Benutzers entfernt. Die Daten der anderen Benutzer dieses Computers bleiben in deren Profilen.
+german.RemoveDataKeep=Drücken Sie „Nein“, wenn Sie Golether erneut installieren wollen.
+spanish.DesktopIcon=Acceso directo en el escritorio
+spanish.Extras=Adicional:
+spanish.Launch=Iniciar Golether
+spanish.ModeTitle=Para quién instalar Golether
+spanish.ModeQuestion=¿Quién usará el programa en este equipo?
+spanish.ModeHelp=«Solo para mí» instala el programa en tu perfil y no necesita permisos de administrador.%n«Para todos» lo instala en Program Files: Windows pide una vez el permiso de un administrador.
+spanish.ModeOnlyMe=Solo para mí (%1)
+spanish.ModeEveryone=Para todos
+spanish.ModeRefused=Windows no concedió permisos de administrador (código %1), y sin ellos no se puede instalar Golether para todos.%n%nEjecuta la instalación como administrador para instalar para todos: clic derecho en el archivo de instalación → «Ejecutar como administrador». O elige «Solo para mí».
+spanish.RemoveData=¿Borrar también los datos personales de Golether (claves, ajustes, lista de contactos)?
+spanish.RemoveDataShared=Solo se borran los datos del usuario actual. Los datos de los demás usuarios de este equipo se quedan en sus perfiles.
+spanish.RemoveDataKeep=Pulsa «No» si vas a volver a instalar Golether.
+french.DesktopIcon=Raccourci sur le bureau
+french.Extras=Options supplémentaires :
+french.Launch=Lancer Golether
+french.ModeTitle=Pour qui installer Golether
+french.ModeQuestion=Qui utilisera le programme sur cet ordinateur ?
+french.ModeHelp=« Seulement pour moi » installe le programme dans votre profil et ne demande pas de droits d'administrateur.%n« Pour tout le monde » l'installe dans Program Files : Windows demande une fois l'autorisation d'un administrateur.
+french.ModeOnlyMe=Seulement pour moi (%1)
+french.ModeEveryone=Pour tout le monde
+french.ModeRefused=Windows n'a pas accordé les droits d'administrateur (code %1), et sans eux Golether ne peut pas être installé pour tout le monde.%n%nLancez l'installation en tant qu'administrateur pour installer pour tout le monde : clic droit sur le fichier d'installation → « Exécuter en tant qu'administrateur ». Ou choisissez « Seulement pour moi ».
+french.RemoveData=Supprimer aussi les données personnelles de Golether (clés, réglages, liste des contacts) ?
+french.RemoveDataShared=Seules les données de l'utilisateur actuel sont supprimées. Les données des autres utilisateurs de cet ordinateur restent dans leurs profils.
+french.RemoveDataKeep=Appuyez sur « Non » si vous comptez réinstaller Golether.
+portuguese.DesktopIcon=Atalho no ambiente de trabalho
+portuguese.Extras=Adicional:
+portuguese.Launch=Iniciar o Golether
+portuguese.ModeTitle=Para quem instalar o Golether
+portuguese.ModeQuestion=Quem vai usar o programa neste computador?
+portuguese.ModeHelp=“Só para mim” instala o programa no seu perfil e não precisa de direitos de administrador.%n“Para todos” instala-o em Program Files: o Windows pede uma vez a permissão de um administrador.
+portuguese.ModeOnlyMe=Só para mim (%1)
+portuguese.ModeEveryone=Para todos
+portuguese.ModeRefused=O Windows não concedeu direitos de administrador (código %1), e sem eles não é possível instalar o Golether para todos.%n%nExecute a instalação como administrador para instalar para todos: clique com o botão direito no ficheiro de instalação → “Executar como administrador”. Ou escolha “Só para mim”.
+portuguese.RemoveData=Remover também os dados pessoais do Golether (chaves, definições, lista de contactos)?
+portuguese.RemoveDataShared=Só são removidos os dados do utilizador atual. Os dados dos outros utilizadores deste computador ficam nos respetivos perfis.
+portuguese.RemoveDataKeep=Prima “Não” se vai voltar a instalar o Golether.
 russian.DesktopIcon=Значок на рабочем столе
 russian.Extras=Дополнительно:
 russian.Launch=Запустить Golether

@@ -1,3 +1,4 @@
+using Golether.Core.Enums;
 using Golether.Core.Identity;
 using Golether.Core.Playback;
 
@@ -11,7 +12,7 @@ public sealed class PlaybackStateTests
     /// <summary>
     /// A test host identifier.
     /// </summary>
-    private static readonly PeerId Host = PeerId.Parse(new string('1', 64));
+    private static readonly PeerId _host = PeerId.Parse(new string('1', 64));
 
     /// <summary>
     /// A paused state keeps its position regardless of time.
@@ -19,7 +20,7 @@ public sealed class PlaybackStateTests
     [Fact]
     public void ExpectedPosition_Paused_StaysAtPosition()
     {
-        var state = PlaybackState.Initial(Host, 1_000_000) with { Position = TimeSpan.FromMinutes(5) };
+        var state = PlaybackState.Initial(_host, 1_000_000) with { Position = TimeSpan.FromMinutes(5) };
 
         Assert.Equal(TimeSpan.FromMinutes(5), state.ExpectedPositionAt(99_000_000));
     }
@@ -37,7 +38,7 @@ public sealed class PlaybackStateTests
             ReferenceTime = 5_000_000,
             Rate = 2.0,
             Version = 1,
-            Origin = Host,
+            Origin = _host,
         };
 
         Assert.Equal(TimeSpan.FromSeconds(16), state.ExpectedPositionAt(8_000_000));
@@ -55,7 +56,7 @@ public sealed class PlaybackStateTests
             Position = TimeSpan.FromSeconds(30),
             ReferenceTime = 10_000_000,
             Version = 2,
-            Origin = Host,
+            Origin = _host,
         };
 
         Assert.True(state.IsScheduledAfter(9_000_000));
@@ -76,7 +77,7 @@ public sealed class PlaybackStateTests
             Position = TimeSpan.MaxValue,
             ReferenceTime = 5_000_000,
             Version = 3,
-            Origin = Host,
+            Origin = _host,
         };
 
         Assert.Equal(TimeSpan.MaxValue, state.ExpectedPositionAt(8_000_000));
@@ -89,10 +90,10 @@ public sealed class PlaybackStateTests
     [Fact]
     public void IsValid_RefusesWhatCannotBeFollowed()
     {
-        var good = PlaybackState.Initial(Host, 0) with { Position = TimeSpan.FromHours(2) };
+        var good = PlaybackState.Initial(_host, 0) with { Position = TimeSpan.FromHours(2) };
 
         Assert.True(good.IsValid());
-        Assert.True((good with { State = PlayState.Playing, Rate = PlaybackState.MaxRate }).IsValid());
+        Assert.True((good with { State = PlayState.Playing, Rate = PlaybackState.MAX_RATE }).IsValid());
         Assert.False((good with { State = (PlayState)7 }).IsValid());
         Assert.False((good with { Position = TimeSpan.FromSeconds(-1) }).IsValid());
         Assert.False((good with { Position = TimeSpan.MaxValue }).IsValid());

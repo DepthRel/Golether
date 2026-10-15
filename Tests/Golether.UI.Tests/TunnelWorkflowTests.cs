@@ -1,5 +1,8 @@
 using System.Net;
 using System.Net.Sockets;
+using Microsoft.Data.Sqlite;
+using Microsoft.Extensions.DependencyInjection;
+using NSubstitute;
 using Golether.Core.Data;
 using Golether.Core.Data.Migrations.SQLite.Runner;
 using Golether.Core.Data.Stores;
@@ -10,9 +13,6 @@ using Golether.Tunnels.AmneziaWG.Configuration;
 using Golether.Tunnels.AmneziaWG.Control;
 using Golether.Tunnels.AmneziaWG.Packages;
 using Golether.UI.Services;
-using Microsoft.Data.Sqlite;
-using Microsoft.Extensions.DependencyInjection;
-using NSubstitute;
 
 namespace Golether.UI.Tests;
 
@@ -78,8 +78,8 @@ public sealed class TunnelWorkflowTests : IDisposable
         Assert.Single(configuration.Peers);
         Assert.NotEqual(offer, second);
 
-        await restarted.ApplyAsync(TunnelWorkflow.HostInterfaceName, configuration, token);
-        await _hostController.Received(1).UpAsync(TunnelWorkflow.HostInterfaceName, configuration, token);
+        await restarted.ApplyAsync(TunnelWorkflow.HOST_INTERFACE_NAME, configuration, token);
+        await _hostController.Received(1).UpAsync(TunnelWorkflow.HOST_INTERFACE_NAME, configuration, token);
     }
 
     /// <summary>
@@ -131,7 +131,7 @@ public sealed class TunnelWorkflowTests : IDisposable
 
         var offer = await host.CreateOfferAsync("Вы", [], token);
 
-        var body = TunnelPackageCodec.Decode<TunnelOfferBody>(TunnelPackageCodec.OfferKind, offer, b => b.HostCertificate).Body;
+        var body = TunnelPackageCodec.Decode<TunnelOfferBody>(TunnelPackageCodec.OFFER_KIND, offer, b => b.HostCertificate).Body;
         Assert.True(
             body.HostEndpoints.Any(e => e.StartsWith("203.0.113.9:", StringComparison.Ordinal)),
             $"Внешнего адреса нет среди: {string.Join(", ", body.HostEndpoints)}");
@@ -152,7 +152,7 @@ public sealed class TunnelWorkflowTests : IDisposable
 
         var offer = await host.CreateOfferAsync("Вы", [], token);
 
-        var body = TunnelPackageCodec.Decode<TunnelOfferBody>(TunnelPackageCodec.OfferKind, offer, b => b.HostCertificate).Body;
+        var body = TunnelPackageCodec.Decode<TunnelOfferBody>(TunnelPackageCodec.OFFER_KIND, offer, b => b.HostCertificate).Body;
         Assert.DoesNotContain(body.HostEndpoints, e => e.StartsWith("203.0.113.9:", StringComparison.Ordinal));
     }
 
@@ -170,15 +170,15 @@ public sealed class TunnelWorkflowTests : IDisposable
         var configuration = await host.BuildHostConfigurationAsync(token);
         Assert.Empty(host.GetRaised());
 
-        await host.ApplyAsync(TunnelWorkflow.HostInterfaceName, configuration, token);
-        Assert.Equal([TunnelWorkflow.HostInterfaceName], host.GetRaised());
+        await host.ApplyAsync(TunnelWorkflow.HOST_INTERFACE_NAME, configuration, token);
+        Assert.Equal([TunnelWorkflow.HOST_INTERFACE_NAME], host.GetRaised());
 
         // A new run of the application sees the tunnel of the previous one and brings it down.
         var afterRestart = CreateWorkflow("lifetime", _hostIdentity, _hostController, raisedStatePath: state);
-        Assert.Equal([TunnelWorkflow.HostInterfaceName], afterRestart.GetRaised());
+        Assert.Equal([TunnelWorkflow.HOST_INTERFACE_NAME], afterRestart.GetRaised());
 
         Assert.Empty(await afterRestart.DropRaisedAsync(token));
-        await _hostController.Received(1).DownAsync(TunnelWorkflow.HostInterfaceName, token);
+        await _hostController.Received(1).DownAsync(TunnelWorkflow.HOST_INTERFACE_NAME, token);
         Assert.Empty(afterRestart.GetRaised());
 
         // Nothing is up any more: closing again asks the tools for nothing.
@@ -201,12 +201,12 @@ public sealed class TunnelWorkflowTests : IDisposable
         controller.DownAsync(Arg.Any<string>(), Arg.Any<CancellationToken>())
             .Returns(Task.FromException(new TunnelControlException("Пользователь отклонил запрос.")));
         var host = CreateWorkflow("refused", _hostIdentity, controller, raisedStatePath: state);
-        await host.ApplyAsync(TunnelWorkflow.HostInterfaceName, await host.BuildHostConfigurationAsync(token), token);
+        await host.ApplyAsync(TunnelWorkflow.HOST_INTERFACE_NAME, await host.BuildHostConfigurationAsync(token), token);
 
         var remaining = await host.DropRaisedAsync(token);
 
-        Assert.Equal([TunnelWorkflow.HostInterfaceName], remaining);
-        Assert.Equal([TunnelWorkflow.HostInterfaceName], host.GetRaised());
+        Assert.Equal([TunnelWorkflow.HOST_INTERFACE_NAME], remaining);
+        Assert.Equal([TunnelWorkflow.HOST_INTERFACE_NAME], host.GetRaised());
     }
 
     /// <summary>
@@ -221,8 +221,8 @@ public sealed class TunnelWorkflowTests : IDisposable
         var state = Path.Combine(_directory.FullName, "gone.txt");
         var controller = Substitute.For<ITunnelController>();
         var host = CreateWorkflow("gone", _hostIdentity, controller, raisedStatePath: state, isInterfaceUp: _ => false);
-        await host.ApplyAsync(TunnelWorkflow.HostInterfaceName, await host.BuildHostConfigurationAsync(token), token);
-        Assert.Equal([TunnelWorkflow.HostInterfaceName], host.GetRaised());
+        await host.ApplyAsync(TunnelWorkflow.HOST_INTERFACE_NAME, await host.BuildHostConfigurationAsync(token), token);
+        Assert.Equal([TunnelWorkflow.HOST_INTERFACE_NAME], host.GetRaised());
 
         Assert.Empty(await host.DropRaisedAsync(token));
 
@@ -322,7 +322,7 @@ public sealed class TunnelWorkflowTests : IDisposable
         /// <returns>A task that completes when the server stops.</returns>
         private async Task RunAsync(IPEndPoint reply, CancellationToken cancellationToken)
         {
-            var buffer = new byte[StunMessage.MaxSize];
+            var buffer = new byte[StunMessage.MAX_SIZE];
             while (!cancellationToken.IsCancellationRequested)
             {
                 SocketReceiveFromResult received;
@@ -335,14 +335,14 @@ public sealed class TunnelWorkflowTests : IDisposable
                     return;
                 }
 
-                if (received.ReceivedBytes < Stun.HeaderSize)
+                if (received.ReceivedBytes < Stun.HEADER_SIZE)
                 {
                     continue;
                 }
 
                 var request = StunMessage.Parse(buffer.AsSpan(0, received.ReceivedBytes));
-                var response = new StunMessage(Stun.Binding, Stun.ClassSuccess, request.TransactionId);
-                response.AddXorAddress(Stun.AttrXorMappedAddress, reply);
+                var response = new StunMessage(Stun.BINDING, Stun.CLASS_SUCCESS, request.TransactionId);
+                response.AddXorAddress(Stun.ATTR_XOR_MAPPED_ADDRESS, reply);
                 await _socket.SendToAsync(response.Encode(), SocketFlags.None, received.RemoteEndPoint, cancellationToken);
             }
         }

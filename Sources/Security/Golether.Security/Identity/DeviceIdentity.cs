@@ -17,12 +17,12 @@ public sealed class DeviceIdentity : IDisposable
     /// <summary>
     /// OID of the TLS server authentication extended key usage.
     /// </summary>
-    private const string ServerAuthOid = "1.3.6.1.5.5.7.3.1";
+    private const string SERVER_AUTH_OID = "1.3.6.1.5.5.7.3.1";
 
     /// <summary>
     /// OID of the TLS client authentication extended key usage.
     /// </summary>
-    private const string ClientAuthOid = "1.3.6.1.5.5.7.3.2";
+    private const string CLIENT_AUTH_OID = "1.3.6.1.5.5.7.3.2";
 
     /// <summary>
     /// Initializes a new instance of the <see cref="DeviceIdentity"/> class.
@@ -75,7 +75,7 @@ public sealed class DeviceIdentity : IDisposable
         var request = new CertificateRequest("CN=Golether device", key, HashAlgorithmName.SHA256);
         request.CertificateExtensions.Add(new X509BasicConstraintsExtension(false, false, 0, true));
         request.CertificateExtensions.Add(new X509KeyUsageExtension(X509KeyUsageFlags.DigitalSignature, true));
-        request.CertificateExtensions.Add(new X509EnhancedKeyUsageExtension([new Oid(ServerAuthOid), new Oid(ClientAuthOid)], false));
+        request.CertificateExtensions.Add(new X509EnhancedKeyUsageExtension([new Oid(SERVER_AUTH_OID), new Oid(CLIENT_AUTH_OID)], false));
 
         var now = timeProvider.GetUtcNow();
         using var created = request.CreateSelfSigned(now.AddDays(-1), now.AddYears(20));

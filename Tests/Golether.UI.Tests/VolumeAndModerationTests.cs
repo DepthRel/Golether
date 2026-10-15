@@ -1,11 +1,11 @@
 using System.Collections.Concurrent;
+using NSubstitute;
 using Golether.Core.Data.Stores;
 using Golether.Core.Identity;
 using Golether.Core.Session;
 using Golether.Media.Player;
 using Golether.Session;
 using Golether.UI.ViewModels;
-using NSubstitute;
 
 namespace Golether.UI.Tests;
 
@@ -77,8 +77,8 @@ public sealed class VolumeAndModerationTests
     [Fact]
     public async Task StoredVolume_IsRestored()
     {
-        _settings.GetAsync(VolumeViewModel.VolumeSetting, Arg.Any<CancellationToken>()).Returns("25");
-        _settings.GetAsync(VolumeViewModel.MutedSetting, Arg.Any<CancellationToken>()).Returns("true");
+        _settings.GetAsync(VolumeViewModel.VOLUME_SETTING, Arg.Any<CancellationToken>()).Returns("25");
+        _settings.GetAsync(VolumeViewModel.MUTED_SETTING, Arg.Any<CancellationToken>()).Returns("true");
         var volume = new VolumeViewModel(_player, _settings);
 
         await volume.LoadAsync();
@@ -156,7 +156,7 @@ public sealed class VolumeAndModerationTests
 
         // Louder than the original would only clip the voice, so the slider stops at 100 %.
         tile.VoiceVolume = 500;
-        Assert.Equal(ParticipantItemViewModel.MaxVoiceVolume, tile.VoiceVolume);
+        Assert.Equal(ParticipantItemViewModel.MAX_VOICE_VOLUME, tile.VoiceVolume);
 
         tile.ToggleVoiceMuteCommand.Execute(null);
         Assert.True(tile.IsVoiceMuted);

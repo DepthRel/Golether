@@ -1,5 +1,4 @@
 using System.Globalization;
-using Golether.Localization;
 
 namespace Golether.Localization.Tests;
 
@@ -69,32 +68,43 @@ public sealed class LocalizerTests
     }
 
     /// <summary>
-    /// The application carries English and Russian, English is the default, and the languages are offered by name.
+    /// The application carries English, German, Spanish, French, Portuguese and Russian, English is the default, and
+    /// the languages are offered by their own names.
     /// </summary>
     [Fact]
-    public void EmbeddedCatalog_HasEnglishAndRussian()
+    public void EmbeddedCatalog_HasTheSixLanguages()
     {
         var catalog = LanguageCatalog.LoadEmbedded();
 
-        Assert.Equal(["en", "ru"], catalog.Languages.Select(l => l.Code));
-        Assert.Equal(["English", "Русский"], catalog.Languages.Select(l => l.NativeName));
+        Assert.Equal(["de", "en", "es", "fr", "pt", "ru"], catalog.Languages.Select(l => l.Code));
+        Assert.Equal(["Deutsch", "English", "Español", "Français", "Português", "Русский"], catalog.Languages.Select(l => l.NativeName));
         Assert.Equal("en", catalog.Default.Language.Code);
     }
 
     /// <summary>
-    /// The operating system decides the language of a first start: Russian gets Russian, everything else the default
-    /// language, whatever the region is.
+    /// The operating system decides the language of a first start: a language the application has is taken whatever
+    /// the region is, and everything else gets the default language.
     /// </summary>
+    /// <param name="culture">The culture of the operating system.</param>
+    /// <param name="expected">The language chosen.</param>
     [Theory]
     [InlineData("ru-RU", "ru")]
     [InlineData("ru", "ru")]
     [InlineData("ru-KZ", "ru")]
     [InlineData("en-US", "en")]
     [InlineData("en-GB", "en")]
-    [InlineData("de-DE", "en")]
+    [InlineData("de-DE", "de")]
+    [InlineData("de-CH", "de")]
+    [InlineData("fr-FR", "fr")]
+    [InlineData("fr-CA", "fr")]
+    [InlineData("es-ES", "es")]
+    [InlineData("es-MX", "es")]
+    [InlineData("pt-PT", "pt")]
+    [InlineData("pt-BR", "pt")]
     [InlineData("ja-JP", "en")]
+    [InlineData("it-IT", "en")]
     [InlineData("", "en")]
-    public void Detect_ChoosesRussianOrTheDefault(string culture, string expected)
+    public void Detect_ChoosesAKnownLanguageOrTheDefault(string culture, string expected)
         => Assert.Equal(expected, LanguageCatalog.LoadEmbedded().Detect(CultureInfo.GetCultureInfo(culture)).Code);
 
     /// <summary>

@@ -12,7 +12,7 @@ internal sealed class FileLogger<T>(string? path) : ILogger<T>
     /// <summary>
     /// Serializes writes.
     /// </summary>
-    private static readonly Lock Gate = new();
+    private static readonly Lock _gate = new();
 
     /// <inheritdoc />
     public IDisposable? BeginScope<TState>(TState state)
@@ -29,7 +29,7 @@ internal sealed class FileLogger<T>(string? path) : ILogger<T>
             return;
         }
 
-        lock (Gate)
+        lock (_gate)
         {
             File.AppendAllText(path, $"{DateTime.Now:HH:mm:ss.fff} {logLevel} {formatter(state, exception)} {exception}{Environment.NewLine}");
         }

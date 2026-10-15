@@ -1,6 +1,7 @@
-using Golether.Web.Server.Contracts;
-using Golether.Web.Server.UI.Services;
 using NSubstitute;
+using Golether.Web.Server.Contracts;
+using Golether.Web.Server.UI.Enums;
+using Golether.Web.Server.UI.Services;
 
 namespace Golether.Web.Server.UI.Tests;
 
@@ -75,7 +76,7 @@ public sealed class ServiceManagerTests
         var calls = runner.ReceivedCalls().Select(call => (string)call.GetArguments()[0]! + " " + string.Join(" ", (IReadOnlyList<string>)call.GetArguments()[1]!)).ToArray();
         Assert.Equal(2, calls.Length);
         Assert.All(calls, call => Assert.StartsWith("powershell.exe -NoProfile -NonInteractive", call, StringComparison.Ordinal));
-        Assert.Contains("Start-Service -Name " + ServerContract.WindowsServiceName, calls[0], StringComparison.Ordinal);
+        Assert.Contains("Start-Service -Name " + ServerContract.WINDOWS_SERVICE_NAME, calls[0], StringComparison.Ordinal);
         Assert.Contains(@"Copy-Item -LiteralPath 'C:\Temp\new settings.json' -Destination 'C:\Program Files\Golether Server\config\appsettings.json'", calls[1], StringComparison.Ordinal);
         Assert.Contains("Restart-Service", calls[1], StringComparison.Ordinal);
         Assert.Equal("'it''s'", WindowsServiceManager.Literal("it's"));

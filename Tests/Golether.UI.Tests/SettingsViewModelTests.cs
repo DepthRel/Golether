@@ -1,10 +1,10 @@
+using NSubstitute;
 using Golether.Core.Data.Enums;
 using Golether.Core.Data.Stores;
 using Golether.Media.Conference;
 using Golether.UI.Services;
 using Golether.UI.ViewModels;
 using Golether.UI.ViewModels.Dialogs;
-using NSubstitute;
 
 namespace Golether.UI.Tests;
 
@@ -16,7 +16,7 @@ public sealed class SettingsViewModelTests
     /// <summary>
     /// A chosen avatar for the tests.
     /// </summary>
-    private static readonly AvatarSelection Chosen = new([1, 2, 3], [4, 5, 6], new AvatarFraming(2, 10, -5));
+    private static readonly AvatarSelection _chosen = new([1, 2, 3], [4, 5, 6], new AvatarFraming(2, 10, -5));
 
     /// <summary>
     /// Builds a view model over the given actions.
@@ -163,7 +163,7 @@ public sealed class SettingsViewModelTests
     public async Task Avatar_IsAppliedOnlyOnApply()
     {
         var applied = new List<AvatarSelection>();
-        var model = Create(() => Task.FromResult<AvatarSelection?>(Chosen), s =>
+        var model = Create(() => Task.FromResult<AvatarSelection?>(_chosen), s =>
         {
             applied.Add(s);
             return Task.CompletedTask;
@@ -173,7 +173,7 @@ public sealed class SettingsViewModelTests
         Assert.Empty(applied);
 
         await model.ApplyAsync();
-        Assert.Same(Chosen, Assert.Single(applied));
+        Assert.Same(_chosen, Assert.Single(applied));
 
         // Applying again does not send the same avatar twice.
         await model.ApplyAsync();
@@ -187,7 +187,7 @@ public sealed class SettingsViewModelTests
     public async Task Avatar_IsDiscardedWhenNotApplied()
     {
         var applied = new List<AvatarSelection>();
-        var model = Create(() => Task.FromResult<AvatarSelection?>(Chosen), s =>
+        var model = Create(() => Task.FromResult<AvatarSelection?>(_chosen), s =>
         {
             applied.Add(s);
             return Task.CompletedTask;

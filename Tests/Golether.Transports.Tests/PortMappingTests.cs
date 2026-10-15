@@ -4,9 +4,9 @@ using System.Net;
 using System.Net.Sockets;
 using System.Text;
 using System.Xml;
-using Golether.Transports.PortMapping;
 using Microsoft.Extensions.Time.Testing;
 using NSubstitute;
+using Golether.Transports.PortMapping;
 
 namespace Golether.Transports.Tests;
 
@@ -18,7 +18,7 @@ public sealed class PortMappingTests
     /// <summary>
     /// A description of a router with a WANIPConnection service.
     /// </summary>
-    private const string Description = """
+    private const string DESCRIPTION = """
         <?xml version="1.0"?>
         <root xmlns="urn:schemas-upnp-org:device-1-0">
           <device>
@@ -158,7 +158,7 @@ public sealed class PortMappingTests
             if (request.Method == HttpMethod.Get)
             {
                 Assert.Equal(descriptionUri, request.RequestUri);
-                return Respond(HttpStatusCode.OK, Description);
+                return Respond(HttpStatusCode.OK, DESCRIPTION);
             }
 
             Assert.Equal(new Uri("http://127.0.0.1:5000/ctl/IPConn"), request.RequestUri);
@@ -208,10 +208,10 @@ public sealed class PortMappingTests
         Assert.Null(UpnpIgdClient.ParseSearchResponse("HTTP/1.1 200 OK\r\nLOCATION: http://203.0.113.7/d.xml\r\n\r\n", IPAddress.Parse("203.0.113.7")));
 
         var location = new Uri("http://192.168.1.1:5000/d.xml");
-        Assert.Equal(new Uri("http://192.168.1.1:5000/ctl/IPConn"), UpnpIgdClient.ParseDescription(Description, location)!.ControlUri);
-        var foreign = Description.Replace("/ctl/IPConn", "http://evil.example/ctl", StringComparison.Ordinal);
+        Assert.Equal(new Uri("http://192.168.1.1:5000/ctl/IPConn"), UpnpIgdClient.ParseDescription(DESCRIPTION, location)!.ControlUri);
+        var foreign = DESCRIPTION.Replace("/ctl/IPConn", "http://evil.example/ctl", StringComparison.Ordinal);
         Assert.Null(UpnpIgdClient.ParseDescription(foreign, location));
-        var withDtd = "<?xml version=\"1.0\"?><!DOCTYPE root [<!ENTITY x \"y\">]>" + Description[(Description.IndexOf("<root", StringComparison.Ordinal))..];
+        var withDtd = "<?xml version=\"1.0\"?><!DOCTYPE root [<!ENTITY x \"y\">]>" + DESCRIPTION[(DESCRIPTION.IndexOf("<root", StringComparison.Ordinal))..];
         Assert.Throws<XmlException>(() => UpnpIgdClient.ParseDescription(withDtd, location));
     }
 

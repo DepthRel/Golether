@@ -101,7 +101,7 @@ public sealed class SingleInstanceTests
     [Fact]
     public void ParseMessage_RefusesAnOversizedMessage()
     {
-        var message = JsonSerializer.SerializeToUtf8Bytes(new[] { new string('x', SingleInstance.MaxMessageBytes) });
+        var message = JsonSerializer.SerializeToUtf8Bytes(new[] { new string('x', SingleInstance.MAX_MESSAGE_BYTES) });
 
         Assert.Null(SingleInstance.ParseMessage(message));
     }

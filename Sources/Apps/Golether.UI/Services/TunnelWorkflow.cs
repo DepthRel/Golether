@@ -1,8 +1,8 @@
 using System.Diagnostics;
-using System.Net.Sockets;
 using System.Net;
-using System.Text.Json;
+using System.Net.Sockets;
 using System.Text;
+using System.Text.Json;
 using Golether.Core.Data.Entities;
 using Golether.Core.Data.Enums;
 using Golether.Core.Data.Stores;
@@ -26,12 +26,12 @@ public sealed class TunnelWorkflow
     /// <summary>
     /// The name of the host interface.
     /// </summary>
-    public const string HostInterfaceName = "golether0";
+    public const string HOST_INTERFACE_NAME = "golether0";
 
     /// <summary>
     /// The JSON options of stored secrets.
     /// </summary>
-    private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
+    private static readonly JsonSerializerOptions _jsonOptions = new(JsonSerializerDefaults.Web);
 
     /// <summary>
     /// The local device.
@@ -163,7 +163,7 @@ public sealed class TunnelWorkflow
             OfferId = offer.Secrets.OfferId,
             Role = TunnelRole.Host,
             Status = TunnelStatus.Pending,
-            InterfaceName = HostInterfaceName,
+            InterfaceName = HOST_INTERFACE_NAME,
             TunnelAddress = offer.Secrets.AssignedAddress,
             SecretData = Protect(offer.Secrets),
             ExpiresAt = offer.Secrets.ExpiresAt,
@@ -180,7 +180,7 @@ public sealed class TunnelWorkflow
     /// <exception cref="FormatException">The answer is invalid or unknown.</exception>
     public async Task<HostTunnelResult> CompleteOfferAsync(string answerText, CancellationToken cancellationToken)
     {
-        var answer = TunnelPackageCodec.Decode<TunnelAnswerBody>(TunnelPackageCodec.AnswerKind, answerText, b => b.ParticipantCertificate);
+        var answer = TunnelPackageCodec.Decode<TunnelAnswerBody>(TunnelPackageCodec.ANSWER_KIND, answerText, b => b.ParticipantCertificate);
         var record = await _store.FindByOfferAsync(TunnelRole.Host, answer.Body.OfferId, cancellationToken).ConfigureAwait(false);
         if (record is null || record.Status != TunnelStatus.Pending || record.SecretData is null)
         {
@@ -201,7 +201,7 @@ public sealed class TunnelWorkflow
         record.ExpiresAt = null;
         await _store.UpdateAsync(record, cancellationToken).ConfigureAwait(false);
 
-        return new HostTunnelResult(completion.ParticipantName, completion.VerificationCode, HostInterfaceName,
+        return new HostTunnelResult(completion.ParticipantName, completion.VerificationCode, HOST_INTERFACE_NAME,
             await BuildHostConfigurationAsync(cancellationToken).ConfigureAwait(false));
     }
 
@@ -230,7 +230,7 @@ public sealed class TunnelWorkflow
 
         var acceptance = _negotiator.AcceptOffer(offerText, participantName, entered, listenPort);
         var interfaceName = "glt-" + acceptance.HostPeerId.Value[..8];
-        var body = TunnelPackageCodec.Decode<TunnelOfferBody>(TunnelPackageCodec.OfferKind, offerText, b => b.HostCertificate).Body;
+        var body = TunnelPackageCodec.Decode<TunnelOfferBody>(TunnelPackageCodec.OFFER_KIND, offerText, b => b.HostCertificate).Body;
 
         // The routers on both sides only let in what was asked for. Poking every address of the host from the port
         // the tunnel will use leaves a hole in this router, so the answer of the host is not dropped.
@@ -342,8 +342,8 @@ public sealed class TunnelWorkflow
         try
         {
             return System.Net.NetworkInformation.NetworkInterface.GetAllNetworkInterfaces()
-                .Any(adapter => string.Equals(adapter.Name, interfaceName, StringComparison.OrdinalIgnoreCase)
-                    || string.Equals(adapter.Description, interfaceName, StringComparison.OrdinalIgnoreCase));
+                .Any(adapter => string.Equals(adapter.Name, interfaceName, StringComparison.OrdinalIgnoreCase) ||
+                    string.Equals(adapter.Description, interfaceName, StringComparison.OrdinalIgnoreCase));
         }
         catch (System.Net.NetworkInformation.NetworkInformationException)
         {
@@ -440,14 +440,14 @@ public sealed class TunnelWorkflow
     /// <returns>The host interface.</returns>
     private async Task<HostTunnelInterface> GetOrCreateHostInterfaceAsync(CancellationToken cancellationToken)
     {
-        var stored = await _store.GetHostInterfaceAsync(HostInterfaceName, cancellationToken).ConfigureAwait(false);
+        var stored = await _store.GetHostInterfaceAsync(HOST_INTERFACE_NAME, cancellationToken).ConfigureAwait(false);
         if (stored is not null)
         {
             return Unprotect<HostTunnelInterface>(stored);
         }
 
-        var created = HostTunnelInterface.Create(HostInterfaceName);
-        await _store.SaveHostInterfaceAsync(HostInterfaceName, Protect(created), cancellationToken).ConfigureAwait(false);
+        var created = HostTunnelInterface.Create(HOST_INTERFACE_NAME);
+        await _store.SaveHostInterfaceAsync(HOST_INTERFACE_NAME, Protect(created), cancellationToken).ConfigureAwait(false);
         return created;
     }
 
@@ -471,7 +471,7 @@ public sealed class TunnelWorkflow
         try
         {
             using var socket = NatTraversal.Open(port);
-            var found = await NatTraversal.DiscoverAsync(socket, _stunServers, cancellationToken).ConfigureAwait(false);
+            var found = await NatTraversal.DiscoverAsync(socket, _stunServers, _timeProvider, cancellationToken).ConfigureAwait(false);
             return found is { IsPredictable: true }
                 ? new PeerEndpoint(found.Endpoint.Address.ToString(), port)
                 : null;
@@ -496,8 +496,8 @@ public sealed class TunnelWorkflow
         var addresses = new List<IPEndPoint>();
         foreach (var target in targets)
         {
-            if (PeerEndpoint.TryParse(target, out var endpoint) && IPAddress.TryParse(endpoint.Host, out var address)
-                && address.AddressFamily == AddressFamily.InterNetwork)
+            if (PeerEndpoint.TryParse(target, out var endpoint) && IPAddress.TryParse(endpoint.Host, out var address) &&
+                address.AddressFamily == AddressFamily.InterNetwork)
             {
                 addresses.Add(new IPEndPoint(address, endpoint.Port));
             }
@@ -525,7 +525,7 @@ public sealed class TunnelWorkflow
     /// <typeparam name="T">The value type.</typeparam>
     /// <param name="value">The value.</param>
     /// <returns>The protected data.</returns>
-    private byte[] Protect<T>(T value) => _protector.Protect(JsonSerializer.SerializeToUtf8Bytes(value, JsonOptions));
+    private byte[] Protect<T>(T value) => _protector.Protect(JsonSerializer.SerializeToUtf8Bytes(value, _jsonOptions));
 
     /// <summary>
     /// Restores a protected value.
@@ -534,6 +534,6 @@ public sealed class TunnelWorkflow
     /// <param name="data">The protected data.</param>
     /// <returns>The value.</returns>
     private T Unprotect<T>(byte[] data)
-        => JsonSerializer.Deserialize<T>(_protector.Unprotect(data), JsonOptions)
+        => JsonSerializer.Deserialize<T>(_protector.Unprotect(data), _jsonOptions)
            ?? throw new InvalidDataException("A stored tunnel record is empty.");
 }

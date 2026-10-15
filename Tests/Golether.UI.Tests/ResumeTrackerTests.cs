@@ -1,6 +1,6 @@
+using NSubstitute;
 using Golether.Core.Data.Stores;
 using Golether.UI.Services;
-using NSubstitute;
 
 namespace Golether.UI.Tests;
 
@@ -12,17 +12,17 @@ public sealed class ResumeTrackerTests
     /// <summary>
     /// The media identifier.
     /// </summary>
-    private const string Film = "c0ffee";
+    private const string FILM = "c0ffee";
 
     /// <summary>
     /// The film duration.
     /// </summary>
-    private static readonly TimeSpan Duration = TimeSpan.FromHours(2);
+    private static readonly TimeSpan _duration = TimeSpan.FromHours(2);
 
     /// <summary>
     /// The start of the test clock.
     /// </summary>
-    private static readonly DateTimeOffset Start = new(2026, 9, 17, 20, 0, 0, TimeSpan.Zero);
+    private static readonly DateTimeOffset _start = new(2026, 9, 17, 20, 0, 0, TimeSpan.Zero);
 
     /// <summary>
     /// The stored settings.
@@ -56,16 +56,16 @@ public sealed class ResumeTrackerTests
     [Fact]
     public async Task StoppedFilm_IsOffered()
     {
-        Assert.Null(await _tracker.BeginAsync(Film, Duration));
+        Assert.Null(await _tracker.BeginAsync(FILM, _duration));
 
-        _tracker.Report(Film, TimeSpan.FromMinutes(30), Duration, playing: true, Start);
-        _tracker.Report(Film, TimeSpan.FromMinutes(30) + TimeSpan.FromSeconds(5), Duration, playing: true, Start.AddSeconds(5));
-        Assert.Equal("1800", _stored[ResumeTracker.SettingPrefix + Film]);
+        _tracker.Report(FILM, TimeSpan.FromMinutes(30), _duration, playing: true, _start);
+        _tracker.Report(FILM, TimeSpan.FromMinutes(30) + TimeSpan.FromSeconds(5), _duration, playing: true, _start.AddSeconds(5));
+        Assert.Equal("1800", _stored[ResumeTracker.SETTING_PREFIX + FILM]);
 
-        _tracker.Report(Film, TimeSpan.FromMinutes(30) + TimeSpan.FromSeconds(7), Duration, playing: false, Start.AddSeconds(7));
-        Assert.Equal("1807", _stored[ResumeTracker.SettingPrefix + Film]);
+        _tracker.Report(FILM, TimeSpan.FromMinutes(30) + TimeSpan.FromSeconds(7), _duration, playing: false, _start.AddSeconds(7));
+        Assert.Equal("1807", _stored[ResumeTracker.SETTING_PREFIX + FILM]);
 
-        Assert.Equal(TimeSpan.FromSeconds(1807), await _tracker.BeginAsync(Film, Duration));
+        Assert.Equal(TimeSpan.FromSeconds(1807), await _tracker.BeginAsync(FILM, _duration));
     }
 
     /// <summary>
@@ -75,16 +75,16 @@ public sealed class ResumeTrackerTests
     [Fact]
     public async Task FreshStart_KeepsTheStoredStop()
     {
-        _stored[ResumeTracker.SettingPrefix + Film] = "3600";
-        _tracker.Report(Film, TimeSpan.FromMinutes(5), Duration, playing: false, Start);
-        Assert.Equal("3600", _stored[ResumeTracker.SettingPrefix + Film]);
+        _stored[ResumeTracker.SETTING_PREFIX + FILM] = "3600";
+        _tracker.Report(FILM, TimeSpan.FromMinutes(5), _duration, playing: false, _start);
+        Assert.Equal("3600", _stored[ResumeTracker.SETTING_PREFIX + FILM]);
 
-        Assert.Equal(TimeSpan.FromHours(1), await _tracker.BeginAsync(Film, Duration));
-        _tracker.Report(Film, TimeSpan.Zero, Duration, playing: false, Start);
-        _tracker.Report(Film, TimeSpan.FromSeconds(20), Duration, playing: true, Start.AddSeconds(20));
-        Assert.Equal("3600", _stored[ResumeTracker.SettingPrefix + Film]);
-        _tracker.Report("other", TimeSpan.FromMinutes(10), Duration, playing: false, Start);
-        Assert.False(_stored.ContainsKey(ResumeTracker.SettingPrefix + "other"));
+        Assert.Equal(TimeSpan.FromHours(1), await _tracker.BeginAsync(FILM, _duration));
+        _tracker.Report(FILM, TimeSpan.Zero, _duration, playing: false, _start);
+        _tracker.Report(FILM, TimeSpan.FromSeconds(20), _duration, playing: true, _start.AddSeconds(20));
+        Assert.Equal("3600", _stored[ResumeTracker.SETTING_PREFIX + FILM]);
+        _tracker.Report("other", TimeSpan.FromMinutes(10), _duration, playing: false, _start);
+        Assert.False(_stored.ContainsKey(ResumeTracker.SETTING_PREFIX + "other"));
     }
 
     /// <summary>
@@ -94,13 +94,13 @@ public sealed class ResumeTrackerTests
     [Fact]
     public async Task WatchedFilm_IsForgotten()
     {
-        _stored[ResumeTracker.SettingPrefix + Film] = "3600";
-        await _tracker.BeginAsync(Film, Duration);
+        _stored[ResumeTracker.SETTING_PREFIX + FILM] = "3600";
+        await _tracker.BeginAsync(FILM, _duration);
 
-        _tracker.Report(Film, Duration - TimeSpan.FromMinutes(1), Duration, playing: false, Start);
+        _tracker.Report(FILM, _duration - TimeSpan.FromMinutes(1), _duration, playing: false, _start);
 
-        Assert.Equal("0", _stored[ResumeTracker.SettingPrefix + Film]);
-        Assert.Null(await _tracker.BeginAsync(Film, Duration));
+        Assert.Equal("0", _stored[ResumeTracker.SETTING_PREFIX + FILM]);
+        Assert.Null(await _tracker.BeginAsync(FILM, _duration));
     }
 
     /// <summary>
@@ -114,5 +114,5 @@ public sealed class ResumeTrackerTests
     [InlineData(116, true)]
     [InlineData(117.5, false)]
     public void Offer_SkipsBothEnds(double minutes, bool offered)
-        => Assert.Equal(offered, ResumeTracker.IsWorthOffering(TimeSpan.FromMinutes(minutes), Duration));
+        => Assert.Equal(offered, ResumeTracker.IsWorthOffering(TimeSpan.FromMinutes(minutes), _duration));
 }

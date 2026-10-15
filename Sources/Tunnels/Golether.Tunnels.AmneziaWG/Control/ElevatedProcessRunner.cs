@@ -11,7 +11,7 @@ public sealed class ElevatedProcessRunner : IProcessRunner
     /// <summary>
     /// <c>ERROR_CANCELLED</c>: the user declined the UAC prompt.
     /// </summary>
-    public const int Cancelled = 1223;
+    public const int CANCELLED = 1223;
 
     /// <inheritdoc />
     public async Task<ProcessResult> RunAsync(string fileName, IReadOnlyList<string> arguments, TimeSpan timeout, CancellationToken cancellationToken)

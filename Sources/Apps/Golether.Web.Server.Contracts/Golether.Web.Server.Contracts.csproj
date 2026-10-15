@@ -10,6 +10,7 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <ProjectReference Include="../../Core/Golether.Core/Golether.Core.csproj" />
     <ProjectReference Include="../../Core/Golether.Localization/Golether.Localization.csproj" />
     <ProjectReference Include="../../Transports/Golether.Transports.Rendezvous/Golether.Transports.Rendezvous.csproj" />
   </ItemGroup>

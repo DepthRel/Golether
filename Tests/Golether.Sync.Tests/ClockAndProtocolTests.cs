@@ -1,4 +1,5 @@
 using Golether.Core.Data.Enums;
+using Golether.Core.Enums;
 using Golether.Core.Identity;
 using Golether.Core.Media;
 using Golether.Core.Playback;
@@ -20,12 +21,12 @@ public sealed class ClockAndProtocolTests
     public void Estimator_SymmetricHighLatency_IsExact()
     {
         var estimator = new ClockOffsetEstimator();
-        const long offset = 5_000_000_000;
+        const long OFFSET = 5_000_000_000;
 
         // One-way delay 620 ms, host processing 2 ms.
-        Assert.True(estimator.AddSample(1_000_000, 1_000_000 + offset + 620_000, 1_000_000 + offset + 622_000, 2_242_000));
+        Assert.True(estimator.AddSample(1_000_000, 1_000_000 + OFFSET + 620_000, 1_000_000 + OFFSET + 622_000, 2_242_000));
 
-        Assert.Equal(offset, estimator.OffsetMicroseconds);
+        Assert.Equal(OFFSET, estimator.OffsetMicroseconds);
         Assert.Equal(TimeSpan.FromMilliseconds(1240), estimator.RoundTrip);
         Assert.Equal(TimeSpan.FromMilliseconds(620), estimator.Uncertainty);
     }

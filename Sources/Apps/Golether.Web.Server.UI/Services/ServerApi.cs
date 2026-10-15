@@ -5,27 +5,6 @@ using Golether.Web.Server.Contracts;
 namespace Golether.Web.Server.UI.Services;
 
 /// <summary>
-/// Reads the server over its local status address.
-/// </summary>
-public interface IServerApi
-{
-    /// <summary>
-    /// Reads the health report.
-    /// </summary>
-    /// <param name="cancellationToken">The cancellation token.</param>
-    /// <returns>The report, or <see langword="null"/> when the server does not answer.</returns>
-    Task<HealthReport?> GetHealthAsync(CancellationToken cancellationToken);
-
-    /// <summary>
-    /// Reads the events after a number.
-    /// </summary>
-    /// <param name="after">The number of the last event the monitor has.</param>
-    /// <param name="cancellationToken">The cancellation token.</param>
-    /// <returns>The events, or <see langword="null"/> when the server does not answer.</returns>
-    Task<JournalPage?> GetJournalAsync(long after, CancellationToken cancellationToken);
-}
-
-/// <summary>
 /// Reads the server over HTTP. What arrives is checked like anything from outside: a broken answer is no answer.
 /// </summary>
 /// <param name="http">The HTTP client; its timeout bounds every request.</param>
@@ -34,11 +13,11 @@ public sealed class ServerApi(HttpClient http, Func<Uri> statusUrl) : IServerApi
 {
     /// <inheritdoc />
     public Task<HealthReport?> GetHealthAsync(CancellationToken cancellationToken)
-        => GetAsync<HealthReport>(ServerContract.HealthPath, cancellationToken);
+        => GetAsync<HealthReport>(ServerContract.HEALTH_PATH, cancellationToken);
 
     /// <inheritdoc />
     public Task<JournalPage?> GetJournalAsync(long after, CancellationToken cancellationToken)
-        => GetAsync<JournalPage>(ServerContract.JournalPath + "?after=" + after.ToString(CultureInfo.InvariantCulture), cancellationToken);
+        => GetAsync<JournalPage>(ServerContract.JOURNAL_PATH + "?after=" + after.ToString(CultureInfo.InvariantCulture), cancellationToken);
 
     /// <summary>
     /// Reads one answer.

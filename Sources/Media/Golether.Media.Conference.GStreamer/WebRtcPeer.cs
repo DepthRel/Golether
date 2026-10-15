@@ -3,9 +3,9 @@ using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using System.Security.Cryptography;
 using System.Text.RegularExpressions;
+using Microsoft.Extensions.Logging;
 using Golether.Core.Identity;
 using Golether.Media.Conference.GStreamer.Native;
-using Microsoft.Extensions.Logging;
 
 namespace Golether.Media.Conference.GStreamer;
 
@@ -23,42 +23,42 @@ internal sealed partial class WebRtcPeer : IDisposable
     /// <summary>
     /// The label of the data channel for chunk sharing.
     /// </summary>
-    private const string DataChannelLabel = "golether";
+    private const string DATA_CHANNEL_LABEL = "golether";
 
     /// <summary>
     /// <c>GST_WEBRTC_DATA_CHANNEL_STATE_OPEN</c>.
     /// </summary>
-    private const int DataChannelOpen = 2;
+    private const int DATA_CHANNEL_OPEN = 2;
 
     /// <summary>
     /// <c>GST_WEBRTC_ICE_CONNECTION_STATE_FAILED</c>.
     /// </summary>
-    private const int IceFailed = 4;
+    private const int ICE_FAILED = 4;
 
     /// <summary>
     /// The names of <c>GstWebRTCICEConnectionState</c> by value, for the journal.
     /// </summary>
-    private static readonly string[] IceConnectionStates = ["new", "checking", "connected", "completed", "failed", "disconnected", "closed"];
+    private static readonly string[] _iceConnectionStates = ["new", "checking", "connected", "completed", "failed", "disconnected", "closed"];
 
     /// <summary>
     /// The largest amount of unsent data before sends are refused.
     /// </summary>
-    private const ulong MaxBufferedData = 1024 * 1024;
+    private const ulong MAX_BUFFERED_DATA = 1024 * 1024;
 
     /// <summary>
     /// <c>GST_WEBRTC_DTLS_TRANSPORT_STATE_CONNECTED</c>.
     /// </summary>
-    private const int DtlsConnected = 4;
+    private const int DTLS_CONNECTED = 4;
 
     /// <summary>
     /// <c>GST_WEBRTC_DTLS_TRANSPORT_STATE_FAILED</c>.
     /// </summary>
-    private const int DtlsFailed = 2;
+    private const int DTLS_FAILED = 2;
 
     /// <summary>
     /// How often the DTLS state is checked.
     /// </summary>
-    private static readonly TimeSpan VerificationInterval = TimeSpan.FromMilliseconds(100);
+    private static readonly TimeSpan _verificationInterval = TimeSpan.FromMilliseconds(100);
 
     /// <summary>
     /// Guards native calls of the verification against disposal.
@@ -88,7 +88,7 @@ internal sealed partial class WebRtcPeer : IDisposable
     /// <summary>
     /// The maximum size of a signaling payload.
     /// </summary>
-    public const int MaxSignalLength = 64 * 1024;
+    public const int MAX_SIGNAL_LENGTH = 64 * 1024;
 
     /// <summary>
     /// The pipeline of the peer.
@@ -99,7 +99,7 @@ internal sealed partial class WebRtcPeer : IDisposable
     /// participant connects would otherwise keep the whole connection, the other device included, from being
     /// negotiated until it produces a frame.
     /// </remarks>
-    private const string Description =
+    private const string DESCRIPTION =
         "webrtcbin name=webrtc bundle-policy=max-bundle latency=300 " +
         "appsrc name=vsrc is-live=true do-timestamp=true format=time caps=\"video/x-vp8\" ! " +
         "valve name=vgate drop=true drop-mode=forward-sticky-events ! " +
@@ -114,7 +114,7 @@ internal sealed partial class WebRtcPeer : IDisposable
     /// <summary>
     /// The receiving chain of video: frames keep their size (640×360 or the economy 320×180), larger ones are scaled down.
     /// </summary>
-    private const string VideoReceiver =
+    private const string VIDEO_RECEIVER =
         "queue ! rtpvp8depay ! vp8dec ! videoconvert ! videoscale ! " +
         "video/x-raw,format=BGRA,width=[16,1280],height=[16,720],pixel-aspect-ratio=1/1 ! " +
         "appsink name=rvideo emit-signals=true max-buffers=1 drop=true sync=false";
@@ -122,7 +122,7 @@ internal sealed partial class WebRtcPeer : IDisposable
     /// <summary>
     /// The receiving chain of audio.
     /// </summary>
-    private const string AudioReceiver =
+    private const string AUDIO_RECEIVER =
         "queue ! rtpopusdepay ! opusdec plc=true ! audioconvert ! audioresample ! " +
         "audio/x-raw,format=S16LE,rate=48000,channels=1,layout=interleaved ! " +
         "appsink name=raudio emit-signals=true sync=false max-buffers=50 drop=true";
@@ -178,7 +178,7 @@ internal sealed partial class WebRtcPeer : IDisposable
         AudioSlot = audioSlot;
         _host = host;
         _logger = logger;
-        _pipeline = new GstPipeline($"peer {peer.ToShortString()}", Description, logger);
+        _pipeline = new GstPipeline($"peer {peer.ToShortString()}", DESCRIPTION, logger);
         _pipeline.Failed += (_, error) => _logger.LogWarning("Peer {Peer}: {Error}", Peer.ToShortString(), error);
         _self = GCHandle.Alloc(this);
         var webrtc = _pipeline.Element("webrtc");
@@ -268,7 +268,7 @@ internal sealed partial class WebRtcPeer : IDisposable
 
         lock (_nativeGate)
         {
-            if (_disposed || _channel == 0 || Signals.GetUInt64(_channel, "buffered-amount") > MaxBufferedData)
+            if (_disposed || _channel == 0 || Signals.GetUInt64(_channel, "buffered-amount") > MAX_BUFFERED_DATA)
             {
                 return false;
             }
@@ -311,21 +311,21 @@ internal sealed partial class WebRtcPeer : IDisposable
     {
         ArgumentNullException.ThrowIfNull(kind);
         ArgumentNullException.ThrowIfNull(payload);
-        if (payload.Length > MaxSignalLength)
+        if (payload.Length > MAX_SIGNAL_LENGTH)
         {
             throw new FormatException("The signaling payload is too large.");
         }
 
         switch (kind)
         {
-            case SignalKinds.Offer or SignalKinds.Answer when payload.StartsWith("v=0", StringComparison.Ordinal) && payload.Contains("\nm=", StringComparison.Ordinal):
+            case SignalKinds.OFFER or SignalKinds.ANSWER when payload.StartsWith("v=0", StringComparison.Ordinal) && payload.Contains("\nm=", StringComparison.Ordinal):
                 return;
-            case SignalKinds.Offer or SignalKinds.Answer:
+            case SignalKinds.OFFER or SignalKinds.ANSWER:
                 throw new FormatException("The session description is not valid SDP.");
-            case SignalKinds.Candidate:
+            case SignalKinds.CANDIDATE:
                 var separator = payload.IndexOf('\n');
-                if (separator <= 0 || separator > 5 || !payload.AsSpan(0, separator).ToString().All(char.IsAsciiDigit)
-                    || !payload.AsSpan(separator + 1).StartsWith("candidate:", StringComparison.Ordinal) || payload.Contains('\r'))
+                if (separator <= 0 || separator > 5 || !payload.AsSpan(0, separator).ToString().All(char.IsAsciiDigit) ||
+                    !payload.AsSpan(separator + 1).StartsWith("candidate:", StringComparison.Ordinal) || payload.Contains('\r'))
                 {
                     throw new FormatException("The ICE candidate is malformed.");
                 }
@@ -351,7 +351,7 @@ internal sealed partial class WebRtcPeer : IDisposable
                 lock (_nativeGate)
                 {
                     var channel = Signals.EmitForObject(_pipeline.Element("webrtc"), "create-data-channel",
-                        SignalArg.String(DataChannelLabel), SignalArg.Boxed(Gst.StructureGetType(), 0));
+                        SignalArg.String(DATA_CHANNEL_LABEL), SignalArg.Boxed(Gst.StructureGetType(), 0));
                     if (channel != 0)
                     {
                         AttachChannel(channel);
@@ -439,14 +439,14 @@ internal sealed partial class WebRtcPeer : IDisposable
 
                 switch (kind)
                 {
-                    case SignalKinds.Offer:
+                    case SignalKinds.OFFER:
                         SetRemoteDescription(1, payload);
-                        CreateAndSendDescription("create-answer", "answer", SignalKinds.Answer);
+                        CreateAndSendDescription("create-answer", "answer", SignalKinds.ANSWER);
                         break;
-                    case SignalKinds.Answer:
+                    case SignalKinds.ANSWER:
                         SetRemoteDescription(3, payload);
                         break;
-                    case SignalKinds.Candidate:
+                    case SignalKinds.CANDIDATE:
                         var separator = payload.IndexOf('\n');
                         if (separator <= 0 || !uint.TryParse(payload.AsSpan(0, separator), NumberStyles.None, CultureInfo.InvariantCulture, out var line))
                         {
@@ -515,7 +515,7 @@ internal sealed partial class WebRtcPeer : IDisposable
                 {
                     if (!peer._disposed)
                     {
-                        peer.CreateAndSendDescription("create-offer", "offer", SignalKinds.Offer);
+                        peer.CreateAndSendDescription("create-offer", "offer", SignalKinds.OFFER);
                     }
                 }
                 catch (Exception ex) when (ex is GstException or FormatException)
@@ -551,7 +551,7 @@ internal sealed partial class WebRtcPeer : IDisposable
 
             try
             {
-                peer._host.SendSignal(peer.Peer, SignalKinds.Candidate, line.ToString(CultureInfo.InvariantCulture) + "\n" + text);
+                peer._host.SendSignal(peer.Peer, SignalKinds.CANDIDATE, line.ToString(CultureInfo.InvariantCulture) + "\n" + text);
             }
             catch (Exception ex) when (ex is not OutOfMemoryException)
             {
@@ -580,8 +580,8 @@ internal sealed partial class WebRtcPeer : IDisposable
             // A connection that never leaves "checking" or ends in "failed" found no path between the devices; the
             // journal must show that without a debug build.
             var state = Signals.GetEnum(element, "ice-connection-state");
-            var name = state >= 0 && state < IceConnectionStates.Length ? IceConnectionStates[state] : state.ToString(System.Globalization.CultureInfo.InvariantCulture);
-            if (state == IceFailed)
+            var name = state >= 0 && state < _iceConnectionStates.Length ? _iceConnectionStates[state] : state.ToString(System.Globalization.CultureInfo.InvariantCulture);
+            if (state == ICE_FAILED)
             {
                 peer._logger.LogWarning("No network path to {Peer}: ICE {State}", peer.Peer.ToShortString(), name);
             }
@@ -627,7 +627,7 @@ internal sealed partial class WebRtcPeer : IDisposable
     /// </summary>
     /// <param name="sink">The appsink.</param>
     /// <param name="data">The peer handle.</param>
-    /// <returns><see cref="Samples.FlowOk"/>.</returns>
+    /// <returns><see cref="Samples.FLOW_OK"/>.</returns>
     [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
     private static int OnVideoSample(nint sink, nint data)
     {
@@ -644,7 +644,7 @@ internal sealed partial class WebRtcPeer : IDisposable
             });
         }
 
-        return Samples.FlowOk;
+        return Samples.FLOW_OK;
     }
 
     /// <summary>
@@ -652,7 +652,7 @@ internal sealed partial class WebRtcPeer : IDisposable
     /// </summary>
     /// <param name="sink">The appsink.</param>
     /// <param name="data">The peer handle.</param>
-    /// <returns><see cref="Samples.FlowOk"/>.</returns>
+    /// <returns><see cref="Samples.FLOW_OK"/>.</returns>
     [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
     private static int OnAudioSample(nint sink, nint data)
     {
@@ -668,7 +668,7 @@ internal sealed partial class WebRtcPeer : IDisposable
             });
         }
 
-        return Samples.FlowOk;
+        return Samples.FLOW_OK;
     }
 
     /// <summary>
@@ -686,16 +686,16 @@ internal sealed partial class WebRtcPeer : IDisposable
     {
         while (!_disposed)
         {
-            await Task.Delay(VerificationInterval).ConfigureAwait(false);
+            await Task.Delay(_verificationInterval).ConfigureAwait(false);
             var (state, pem) = ReadDtlsState();
-            if (state == DtlsFailed)
+            if (state == DTLS_FAILED)
             {
                 _logger.LogWarning("DTLS with {Peer} failed", Peer.ToShortString());
                 _host.RejectPeer(this, "DTLS failed");
                 return;
             }
 
-            if (state != DtlsConnected || _expectedFingerprint is not { } expected)
+            if (state != DTLS_CONNECTED || _expectedFingerprint is not { } expected)
             {
                 continue;
             }
@@ -771,7 +771,7 @@ internal sealed partial class WebRtcPeer : IDisposable
                 }
 
                 var state = Signals.GetEnum(transport, "state");
-                return (state, state == DtlsConnected ? Signals.GetString(transport, "remote-certificate") : null);
+                return (state, state == DTLS_CONNECTED ? Signals.GetString(transport, "remote-certificate") : null);
             }
             finally
             {
@@ -802,7 +802,7 @@ internal sealed partial class WebRtcPeer : IDisposable
 
         try
         {
-            if (Signals.GetString(channel, "label") != DataChannelLabel)
+            if (Signals.GetString(channel, "label") != DATA_CHANNEL_LABEL)
             {
                 return;
             }
@@ -891,7 +891,7 @@ internal sealed partial class WebRtcPeer : IDisposable
         Gst.SignalConnectData(channel, "on-open", (nint)(delegate* unmanaged[Cdecl]<nint, nint, void>)&OnChannelOpen, data, 0, 0);
         Gst.SignalConnectData(channel, "on-close", (nint)(delegate* unmanaged[Cdecl]<nint, nint, void>)&OnChannelClose, data, 0, 0);
         Gst.SignalConnectData(channel, "on-message-data", (nint)(delegate* unmanaged[Cdecl]<nint, nint, nint, void>)&OnChannelData, data, 0, 0);
-        if (Signals.GetEnum(channel, "ready-state") == DataChannelOpen)
+        if (Signals.GetEnum(channel, "ready-state") == DATA_CHANNEL_OPEN)
         {
             _channelOpen = true;
         }
@@ -1049,8 +1049,8 @@ internal sealed partial class WebRtcPeer : IDisposable
 
         var (description, sinkName, callback) = media switch
         {
-            "video" => (VideoReceiver, "rvideo", (nint)(delegate* unmanaged[Cdecl]<nint, nint, int>)&OnVideoSample),
-            "audio" => (AudioReceiver, "raudio", (nint)(delegate* unmanaged[Cdecl]<nint, nint, int>)&OnAudioSample),
+            "video" => (VIDEO_RECEIVER, "rvideo", (nint)(delegate* unmanaged[Cdecl]<nint, nint, int>)&OnVideoSample),
+            "audio" => (AUDIO_RECEIVER, "raudio", (nint)(delegate* unmanaged[Cdecl]<nint, nint, int>)&OnAudioSample),
             _ => (string.Empty, string.Empty, (nint)0),
         };
         if (description.Length == 0)

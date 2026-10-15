@@ -15,20 +15,20 @@ public sealed class WindowsFirewallTests
     [Fact]
     public void Helper_AcceptsOnlyItsOwnVerbs()
     {
-        Assert.True(WindowsFirewall.IsHelperInvocation([WindowsFirewall.Switch, WindowsFirewall.AllowVerb]));
+        Assert.True(WindowsFirewall.IsHelperInvocation([WindowsFirewall.SWITCH, WindowsFirewall.ALLOW_VERB]));
         Assert.False(WindowsFirewall.IsHelperInvocation([]));
-        Assert.False(WindowsFirewall.IsHelperInvocation(["--something-else", WindowsFirewall.AllowVerb]));
+        Assert.False(WindowsFirewall.IsHelperInvocation(["--something-else", WindowsFirewall.ALLOW_VERB]));
 
-        Assert.True(WindowsFirewall.TryParse([WindowsFirewall.Switch, WindowsFirewall.AllowVerb], out var allow));
-        Assert.Equal(WindowsFirewall.AllowVerb, allow);
-        Assert.True(WindowsFirewall.TryParse([WindowsFirewall.Switch, WindowsFirewall.RemoveVerb], out var remove));
-        Assert.Equal(WindowsFirewall.RemoveVerb, remove);
+        Assert.True(WindowsFirewall.TryParse([WindowsFirewall.SWITCH, WindowsFirewall.ALLOW_VERB], out var allow));
+        Assert.Equal(WindowsFirewall.ALLOW_VERB, allow);
+        Assert.True(WindowsFirewall.TryParse([WindowsFirewall.SWITCH, WindowsFirewall.REMOVE_VERB], out var remove));
+        Assert.Equal(WindowsFirewall.REMOVE_VERB, remove);
 
-        Assert.False(WindowsFirewall.TryParse([WindowsFirewall.Switch], out _));
-        Assert.False(WindowsFirewall.TryParse([WindowsFirewall.Switch, "drop"], out _));
-        Assert.False(WindowsFirewall.TryParse([WindowsFirewall.Switch, WindowsFirewall.AllowVerb, "C:\\evil.exe"], out _));
-        Assert.False(WindowsFirewall.TryParse(["--tunnel-helper", WindowsFirewall.AllowVerb], out _));
-        Assert.Equal(WindowsFirewall.InvalidArguments, WindowsFirewall.Run([WindowsFirewall.Switch, "drop"]));
+        Assert.False(WindowsFirewall.TryParse([WindowsFirewall.SWITCH], out _));
+        Assert.False(WindowsFirewall.TryParse([WindowsFirewall.SWITCH, "drop"], out _));
+        Assert.False(WindowsFirewall.TryParse([WindowsFirewall.SWITCH, WindowsFirewall.ALLOW_VERB, "C:\\evil.exe"], out _));
+        Assert.False(WindowsFirewall.TryParse(["--tunnel-helper", WindowsFirewall.ALLOW_VERB], out _));
+        Assert.Equal(WindowsFirewall.INVALID_ARGUMENTS, WindowsFirewall.Run([WindowsFirewall.SWITCH, "drop"]));
     }
 
     /// <summary>
@@ -36,7 +36,7 @@ public sealed class WindowsFirewallTests
     /// </summary>
     [Fact]
     public void Arguments_CarryTheVerbOnly()
-        => Assert.Equal([WindowsFirewall.Switch, WindowsFirewall.AllowVerb], WindowsFirewall.BuildArguments(WindowsFirewall.AllowVerb));
+        => Assert.Equal([WindowsFirewall.SWITCH, WindowsFirewall.ALLOW_VERB], WindowsFirewall.BuildArguments(WindowsFirewall.ALLOW_VERB));
 
     /// <summary>
     /// Reading the state needs no administrator rights and never throws: an unreadable firewall is reported as

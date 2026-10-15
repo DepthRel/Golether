@@ -141,8 +141,8 @@ public sealed class TlsPeerConnector : IPeerConnector
             ssl = new SslStream(new NetworkStream(socket, ownsSocket: true), leaveInnerStreamOpen: false);
             var authentication = new SslClientAuthenticationOptions
             {
-                TargetHost = TlsProtocol.TargetHost,
-                EnabledSslProtocols = TlsProtocol.Protocols,
+                TargetHost = TlsProtocol.TARGET_HOST,
+                EnabledSslProtocols = TlsProtocol.PROTOCOLS,
                 ClientCertificateContext = _context,
                 CertificateRevocationCheckMode = System.Security.Cryptography.X509Certificates.X509RevocationMode.NoCheck,
 
@@ -166,8 +166,8 @@ public sealed class TlsPeerConnector : IPeerConnector
             await ssl.WriteAsync(TlsProtocol.BuildPreamble(purpose), timeoutToken).ConfigureAwait(false);
             await ssl.FlushAsync(timeoutToken).ConfigureAwait(false);
             var answer = new byte[1];
-            if (await ssl.ReadAtLeastAsync(answer, 1, throwOnEndOfStream: false, timeoutToken).ConfigureAwait(false) != 1
-                || answer[0] != TlsProtocol.Accepted)
+            if (await ssl.ReadAtLeastAsync(answer, 1, throwOnEndOfStream: false, timeoutToken).ConfigureAwait(false) != 1 ||
+                answer[0] != TlsProtocol.ACCEPTED)
             {
                 throw new IOException(Texts.Format("Net.Error.PeerRefused", remote));
             }

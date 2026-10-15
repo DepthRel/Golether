@@ -120,18 +120,18 @@ public sealed class RelayMultiplexerTests
         server.Start();
 
         // One more "open" than the limit, written by hand.
-        for (uint id = 1; id <= RelayMultiplexer.MaxChannels + 1; id++)
+        for (uint id = 1; id <= RelayMultiplexer.MAX_CHANNELS + 1; id++)
         {
             await near.WriteAsync(Frame(id, 1, 0), token);
         }
 
         var refusal = new byte[7];
         await near.ReadExactlyAsync(refusal, token).AsTask().WaitAsync(TimeSpan.FromSeconds(10), token);
-        Assert.Equal((uint)RelayMultiplexer.MaxChannels + 1, BinaryPrimitives.ReadUInt32BigEndian(refusal));
+        Assert.Equal((uint)RelayMultiplexer.MAX_CHANNELS + 1, BinaryPrimitives.ReadUInt32BigEndian(refusal));
         Assert.Equal(3, refusal[4]);
-        Assert.Equal(RelayMultiplexer.MaxChannels, Volatile.Read(ref served));
+        Assert.Equal(RelayMultiplexer.MAX_CHANNELS, Volatile.Read(ref served));
 
-        await near.WriteAsync(Frame(1, 2, RelayMultiplexer.MaxPayload + 1), token);
+        await near.WriteAsync(Frame(1, 2, RelayMultiplexer.MAX_PAYLOAD + 1), token);
         await server.Completion.WaitAsync(TimeSpan.FromSeconds(10), token);
         Assert.False(server.IsAlive);
         release.SetResult();

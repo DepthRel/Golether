@@ -1,15 +1,15 @@
 using System.Text.Json.Nodes;
+using NSubstitute;
 using Golether.Web.Server.Options;
 using Golether.Web.Server.UI.Services;
 using Golether.Web.Server.UI.ViewModels;
-using NSubstitute;
 
 namespace Golether.Web.Server.UI.Tests;
 
 /// <summary>
 /// Tests of the settings: where they are found, how they are read and written, and how the form checks them.
 /// </summary>
-[Collection(TextsCollection.Name)]
+[Collection(TextsCollection.NAME)]
 public sealed class SettingsTests : IDisposable
 {
     /// <summary>

@@ -18,7 +18,7 @@ public static class Program
         var parsed = MigratorArguments.Parse(args);
         if (parsed.ShowHelp)
         {
-            Console.WriteLine(MigratorArguments.Usage);
+            Console.WriteLine(MigratorArguments.USAGE);
             return 0;
         }
 

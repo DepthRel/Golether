@@ -1,8 +1,8 @@
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
+using Microsoft.Extensions.Logging;
 using Golether.Core.Data.Enums;
 using Golether.Media.Conference.GStreamer.Native;
-using Microsoft.Extensions.Logging;
 
 namespace Golether.Media.Conference.GStreamer;
 
@@ -14,17 +14,17 @@ internal sealed partial class WebRtcPeer
     /// <summary>
     /// The name of the statistics the remote side reports about what it receives.
     /// </summary>
-    private const string RemoteInboundType = "remote-inbound-rtp";
+    private const string REMOTE_INBOUND_TYPE = "remote-inbound-rtp";
 
     /// <summary>
     /// The name of the same statistics in GStreamer releases before 1.24.
     /// </summary>
-    private const string RemoteInboundStats = "rtp-remote-inbound-stream-stats";
+    private const string REMOTE_INBOUND_STATS = "rtp-remote-inbound-stream-stats";
 
     /// <summary>
     /// How long a statistics request may take.
     /// </summary>
-    private static readonly TimeSpan StatsTimeout = TimeSpan.FromSeconds(2);
+    private static readonly TimeSpan _statsTimeout = TimeSpan.FromSeconds(2);
 
     /// <summary>
     /// Decides the quality from the statistics.
@@ -141,7 +141,7 @@ internal sealed partial class WebRtcPeer
         {
             // The wait runs aside, so a closing pipeline that never answers cannot block the caller.
             var wait = Task.Run(() => Gst.PromiseWait(promise));
-            if (!wait.Wait(StatsTimeout))
+            if (!wait.Wait(_statsTimeout))
             {
                 Gst.PromiseInterrupt(promise);
                 wait.Wait();
@@ -188,15 +188,15 @@ internal sealed partial class WebRtcPeer
     [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
     private static unsafe int OnStatistic(uint field, GValue* value, nint data)
     {
-        if (value == null || value->GType != Gst.StructureGetType()
-            || GCHandle.FromIntPtr(data).Target is not StatsCollector collector)
+        if (value == null || value->GType != Gst.StructureGetType() ||
+            GCHandle.FromIntPtr(data).Target is not StatsCollector collector)
         {
             return 1;
         }
 
         var structure = Gst.ValueGetStructure(value);
         var name = structure == 0 ? null : Marshal.PtrToStringUTF8(Gst.StructureGetName(structure));
-        if (name is null || !(name == RemoteInboundType || name.StartsWith(RemoteInboundStats, StringComparison.Ordinal)))
+        if (name is null || !(name == REMOTE_INBOUND_TYPE || name.StartsWith(REMOTE_INBOUND_STATS, StringComparison.Ordinal)))
         {
             return 1;
         }

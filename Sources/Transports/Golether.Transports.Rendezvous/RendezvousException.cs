@@ -1,5 +1,5 @@
+using Golether.Core.Enums;
 using Golether.Localization;
-using Golether.Transports.Rendezvous.Protocol;
 
 namespace Golether.Transports.Rendezvous;
 

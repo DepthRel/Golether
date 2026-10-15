@@ -1,6 +1,6 @@
 using System.Net;
 using System.Net.Sockets;
-using Golether.Transports.Rendezvous.Protocol;
+using Golether.Core.Enums;
 
 namespace Golether.Transports.Rendezvous.Punching;
 

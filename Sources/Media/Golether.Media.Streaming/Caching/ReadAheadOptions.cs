@@ -18,7 +18,7 @@ public sealed record ReadAheadOptions
     /// <summary>
     /// How far ahead of the player the media is read, in bytes, whatever the size of a piece.
     /// </summary>
-    private const long ReadAheadBytes = 128L * 1024 * 1024;
+    private const long READ_AHEAD_BYTES = 128L * 1024 * 1024;
 
     /// <summary>
     /// Returns the settings for a source that fetches over a given number of streams. One stream is left free of
@@ -35,7 +35,7 @@ public sealed record ReadAheadOptions
         return new ReadAheadOptions
         {
             BatchSize = Math.Max(1, streams - 1),
-            ReadAheadChunks = (int)Math.Clamp(ReadAheadBytes / chunkSize, 4, 4096),
+            ReadAheadChunks = (int)Math.Clamp(READ_AHEAD_BYTES / chunkSize, 4, 4096),
         };
     }
 

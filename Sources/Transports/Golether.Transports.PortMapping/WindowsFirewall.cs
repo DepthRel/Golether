@@ -24,52 +24,52 @@ public static class WindowsFirewall
     /// <summary>
     /// The command-line switch of the helper mode.
     /// </summary>
-    public const string Switch = "--firewall-helper";
+    public const string SWITCH = "--firewall-helper";
 
     /// <summary>
     /// The verb that allows incoming connections.
     /// </summary>
-    public const string AllowVerb = "allow";
+    public const string ALLOW_VERB = "allow";
 
     /// <summary>
     /// The verb that removes the rule.
     /// </summary>
-    public const string RemoveVerb = "remove";
+    public const string REMOVE_VERB = "remove";
 
     /// <summary>
     /// The name of the rule.
     /// </summary>
-    public const string RuleName = "Golether";
+    public const string RULE_NAME = "Golether";
 
     /// <summary>
     /// Exit code: done.
     /// </summary>
-    public const int Success = 0;
+    public const int SUCCESS = 0;
 
     /// <summary>
     /// Exit code: the firewall refused the change.
     /// </summary>
-    public const int Failure = 1;
+    public const int FAILURE = 1;
 
     /// <summary>
     /// Exit code: the arguments were rejected.
     /// </summary>
-    public const int InvalidArguments = 2;
+    public const int INVALID_ARGUMENTS = 2;
 
     /// <summary>
     /// <c>NET_FW_RULE_DIR_IN</c>.
     /// </summary>
-    private const int DirectionIn = 1;
+    private const int DIRECTION_IN = 1;
 
     /// <summary>
     /// <c>NET_FW_ACTION_ALLOW</c>.
     /// </summary>
-    private const int ActionAllow = 1;
+    private const int ACTION_ALLOW = 1;
 
     /// <summary>
     /// The time one <c>netsh</c> call may take.
     /// </summary>
-    private static readonly TimeSpan CallTimeout = TimeSpan.FromSeconds(30);
+    private static readonly TimeSpan _callTimeout = TimeSpan.FromSeconds(30);
 
     /// <summary>
     /// Checks whether incoming connections to a program are allowed.
@@ -104,9 +104,9 @@ public static class WindowsFirewall
     /// <summary>
     /// Builds the helper arguments.
     /// </summary>
-    /// <param name="verb"><see cref="AllowVerb"/> or <see cref="RemoveVerb"/>.</param>
+    /// <param name="verb"><see cref="ALLOW_VERB"/> or <see cref="REMOVE_VERB"/>.</param>
     /// <returns>The arguments.</returns>
-    public static string[] BuildArguments(string verb) => [Switch, verb];
+    public static string[] BuildArguments(string verb) => [SWITCH, verb];
 
     /// <summary>
     /// Checks whether the command line starts the helper mode.
@@ -114,7 +114,7 @@ public static class WindowsFirewall
     /// <param name="args">The command-line arguments.</param>
     /// <returns><see langword="true"/> for the helper mode.</returns>
     public static bool IsHelperInvocation(IReadOnlyList<string> args)
-        => args is { Count: > 0 } && args[0] == Switch;
+        => args is { Count: > 0 } && args[0] == SWITCH;
 
     /// <summary>
     /// Validates the helper arguments. The helper runs elevated, so it takes no paths from the command line at all:
@@ -126,7 +126,7 @@ public static class WindowsFirewall
     public static bool TryParse(IReadOnlyList<string> args, out string verb)
     {
         verb = string.Empty;
-        if (args is not { Count: 2 } || args[0] != Switch || args[1] is not (AllowVerb or RemoveVerb))
+        if (args is not { Count: 2 } || args[0] != SWITCH || args[1] is not (ALLOW_VERB or REMOVE_VERB))
         {
             return false;
         }
@@ -144,31 +144,31 @@ public static class WindowsFirewall
     {
         if (!TryParse(args, out var verb) || CurrentProgram() is not { } program)
         {
-            return InvalidArguments;
+            return INVALID_ARGUMENTS;
         }
 
         try
         {
             // The old rule goes first either way, so repeated calls do not pile up duplicates.
-            Netsh(["advfirewall", "firewall", "delete", "rule", $"name={RuleName}", "dir=in"], ignoreFailure: true);
-            if (verb == RemoveVerb)
+            Netsh(["advfirewall", "firewall", "delete", "rule", $"name={RULE_NAME}", "dir=in"], ignoreFailure: true);
+            if (verb == REMOVE_VERB)
             {
-                return Success;
+                return SUCCESS;
             }
 
             Netsh(
                 [
-                    "advfirewall", "firewall", "add", "rule", $"name={RuleName}", "dir=in", "action=allow",
+                    "advfirewall", "firewall", "add", "rule", $"name={RULE_NAME}", "dir=in", "action=allow",
                     $"program={program}", "enable=yes", "profile=any",
                     "description=Golether: incoming connections of session participants",
                 ],
                 ignoreFailure: false);
-            return Success;
+            return SUCCESS;
         }
         catch (Exception ex) when (ex is not OutOfMemoryException)
         {
             Trace.WriteLine($"Golether firewall helper: {ex.Message}");
-            return Failure;
+            return FAILURE;
         }
     }
 
@@ -210,15 +210,15 @@ public static class WindowsFirewall
 
         foreach (var rule in rules)
         {
-            if (Member(rule, "ApplicationName") is not string { Length: > 0 } application
-                || !string.Equals(Path.GetFullPath(application), program, StringComparison.OrdinalIgnoreCase))
+            if (Member(rule, "ApplicationName") is not string { Length: > 0 } application ||
+                !string.Equals(Path.GetFullPath(application), program, StringComparison.OrdinalIgnoreCase))
             {
                 continue;
             }
 
-            if (Member(rule, "Enabled") is true
-                && Convert.ToInt32(Member(rule, "Direction"), CultureInfo.InvariantCulture) == DirectionIn
-                && Convert.ToInt32(Member(rule, "Action"), CultureInfo.InvariantCulture) == ActionAllow)
+            if (Member(rule, "Enabled") is true &&
+                Convert.ToInt32(Member(rule, "Direction"), CultureInfo.InvariantCulture) == DIRECTION_IN &&
+                Convert.ToInt32(Member(rule, "Action"), CultureInfo.InvariantCulture) == ACTION_ALLOW)
             {
                 return FirewallState.Allowed;
             }
@@ -267,7 +267,7 @@ public static class WindowsFirewall
         }
 
         using var process = Process.Start(info) ?? throw new InvalidOperationException("netsh did not start.");
-        if (!process.WaitForExit(CallTimeout))
+        if (!process.WaitForExit(_callTimeout))
         {
             process.Kill(entireProcessTree: true);
             throw new InvalidOperationException("netsh did not finish in time.");

@@ -16,15 +16,53 @@ indent_size = 2
 end_of_line = lf
 
 [*.cs]
-csharp_style_namespace_declarations = file_scoped:warning
-csharp_prefer_braces = true:warning
+# The rules of AGENTS.md that analyzers can check are errors; EnforceCodeStyleInBuild (Directory.Build.props) runs
+# them in every build. What they cannot check is checked by Tests/Golether.Conventions.Tests.
 csharp_style_var_for_built_in_types = true:suggestion
 csharp_style_var_when_type_is_apparent = true:suggestion
-dotnet_sort_system_directives_first = true
-dotnet_naming_rule.private_fields_underscore.symbols = private_fields
-dotnet_naming_rule.private_fields_underscore.style = underscore_camel
-dotnet_naming_rule.private_fields_underscore.severity = suggestion
-dotnet_naming_symbols.private_fields.applicable_kinds = field
-dotnet_naming_symbols.private_fields.applicable_accessibilities = private
+
+# Braces around every block (IDE0011) and file-scoped namespaces (IDE0161).
+csharp_prefer_braces = true:error
+dotnet_diagnostic.IDE0011.severity = error
+csharp_style_namespace_declarations = file_scoped:error
+dotnet_diagnostic.IDE0161.severity = error
+
+# No unused using directives (IDE0005). Their order (System, then libraries, then Golether) is the project's own and
+# is checked by the conventions tests; dotnet_sort_system_directives_first is left out on purpose, because with it
+# dotnet format sorts the directives alphabetically and puts Golether before Microsoft.
+dotnet_diagnostic.IDE0005.severity = error
+
+# Naming (IDE1006): constants of any access, local ones too, are UPPER_SNAKE_CASE; private and protected fields
+# (static readonly ones too) are _camelCase; public fields, types and members are PascalCase; locals and parameters
+# are camelCase. Enumeration values are PascalCase.
+dotnet_diagnostic.IDE1006.severity = error
+
+dotnet_naming_rule.constants_upper_snake.symbols = constants
+dotnet_naming_rule.constants_upper_snake.style = upper_snake
+dotnet_naming_rule.constants_upper_snake.severity = error
+dotnet_naming_symbols.constants.applicable_kinds = field, local
+dotnet_naming_symbols.constants.applicable_accessibilities = *
+dotnet_naming_symbols.constants.required_modifiers = const
+
+dotnet_naming_rule.hidden_fields_underscore.symbols = hidden_fields
+dotnet_naming_rule.hidden_fields_underscore.style = underscore_camel
+dotnet_naming_rule.hidden_fields_underscore.severity = error
+dotnet_naming_symbols.hidden_fields.applicable_kinds = field
+dotnet_naming_symbols.hidden_fields.applicable_accessibilities = private, protected, private_protected
+
+dotnet_naming_rule.locals_camel.symbols = locals_and_parameters
+dotnet_naming_rule.locals_camel.style = camel
+dotnet_naming_rule.locals_camel.severity = error
+dotnet_naming_symbols.locals_and_parameters.applicable_kinds = parameter, local
+
+dotnet_naming_rule.types_and_members_pascal.symbols = types_and_members
+dotnet_naming_rule.types_and_members_pascal.style = pascal
+dotnet_naming_rule.types_and_members_pascal.severity = error
+dotnet_naming_symbols.types_and_members.applicable_kinds = namespace, class, struct, interface, enum, delegate, method, property, event, field, local_function
+
+dotnet_naming_style.upper_snake.capitalization = all_upper
+dotnet_naming_style.upper_snake.word_separator = _
+dotnet_naming_style.pascal.capitalization = pascal_case
+dotnet_naming_style.camel.capitalization = camel_case
 dotnet_naming_style.underscore_camel.required_prefix = _
 dotnet_naming_style.underscore_camel.capitalization = camel_case

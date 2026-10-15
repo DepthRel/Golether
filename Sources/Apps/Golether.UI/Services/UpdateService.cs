@@ -2,11 +2,11 @@ using System.Globalization;
 using System.Net.Http.Json;
 using System.Reflection;
 using System.Security.Cryptography;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 using Golether.Core.Configuration;
 using Golether.Core.Data.Stores;
 using Golether.Localization;
-using Microsoft.Extensions.Logging;
-using Microsoft.Extensions.Logging.Abstractions;
 
 namespace Golether.UI.Services;
 
@@ -22,32 +22,32 @@ public sealed class UpdateService : IUpdateService
     /// <summary>
     /// The setting with the address of the manifest.
     /// </summary>
-    public const string UrlSetting = "updates.url";
+    public const string URL_SETTING = "updates.url";
 
     /// <summary>
     /// The setting that switches the check off when it is <c>false</c>.
     /// </summary>
-    public const string EnabledSetting = "updates.check";
+    public const string ENABLED_SETTING = "updates.check";
 
     /// <summary>
     /// The setting with the version the user chose not to be told about again.
     /// </summary>
-    public const string IgnoredVersionSetting = "updates.ignoredVersion";
+    public const string IGNORED_VERSION_SETTING = "updates.ignoredVersion";
 
     /// <summary>
     /// The manifest read when the settings name no other.
     /// </summary>
-    public const string DefaultManifestUrl = ProjectSite.UpdatesUrl;
+    public const string DEFAULT_MANIFEST_URL = ProjectSite.UPDATES_URL;
 
     /// <summary>
     /// The largest manifest and package sizes accepted.
     /// </summary>
-    public const long MaxPackageBytes = 512L * 1024 * 1024;
+    public const long MAX_PACKAGE_BYTES = 512L * 1024 * 1024;
 
     /// <summary>
     /// The extension a download carries until its hash is checked.
     /// </summary>
-    public const string PartialExtension = ".part";
+    public const string PARTIAL_EXTENSION = ".part";
 
     /// <summary>
     /// The HTTP client.
@@ -81,7 +81,7 @@ public sealed class UpdateService : IUpdateService
     /// <summary>
     /// Gets the manifest that is really read: the one from the settings, or the one of the project page.
     /// </summary>
-    public string EffectiveManifestUrl => string.IsNullOrWhiteSpace(ManifestUrl) ? DefaultManifestUrl : ManifestUrl.Trim();
+    public string EffectiveManifestUrl => string.IsNullOrWhiteSpace(ManifestUrl) ? DEFAULT_MANIFEST_URL : ManifestUrl.Trim();
 
     /// <inheritdoc />
     public Version CurrentVersion { get; }
@@ -94,8 +94,8 @@ public sealed class UpdateService : IUpdateService
     public async Task LoadAsync(ISettingsStore settings)
     {
         ArgumentNullException.ThrowIfNull(settings);
-        ManifestUrl = await settings.GetAsync(UrlSetting, CancellationToken.None).ConfigureAwait(false) ?? string.Empty;
-        Enabled = await settings.GetAsync(EnabledSetting, CancellationToken.None).ConfigureAwait(false) != "false";
+        ManifestUrl = await settings.GetAsync(URL_SETTING, CancellationToken.None).ConfigureAwait(false) ?? string.Empty;
+        Enabled = await settings.GetAsync(ENABLED_SETTING, CancellationToken.None).ConfigureAwait(false) != "false";
     }
 
     /// <inheritdoc />
@@ -134,13 +134,13 @@ public sealed class UpdateService : IUpdateService
     /// </remarks>
     public static UpdateInfo? Choose(UpdateInfo? release, Version current)
     {
-        if (release is null
-            || !Version.TryParse(release.Version, out var version)
-            || version <= current
-            || !IsAllowed(release.Url)
-            || (release.Page is not null && !IsAllowed(release.Page))
-            || (release.Sha256 is not null && !IsHash(release.Sha256))
-            || release.Size is < 0 or > MaxPackageBytes)
+        if (release is null ||
+            !Version.TryParse(release.Version, out var version) ||
+            version <= current ||
+            !IsAllowed(release.Url) ||
+            (release.Page is not null && !IsAllowed(release.Page)) ||
+            (release.Sha256 is not null && !IsHash(release.Sha256)) ||
+            release.Size is < 0 or > MAX_PACKAGE_BYTES)
         {
             return null;
         }
@@ -181,7 +181,7 @@ public sealed class UpdateService : IUpdateService
         using var response = await _http.GetAsync(update.Url, HttpCompletionOption.ResponseHeadersRead, cancellationToken).ConfigureAwait(false);
         response.EnsureSuccessStatusCode();
         var total = response.Content.Headers.ContentLength ?? update.Size;
-        if (total > MaxPackageBytes)
+        if (total > MAX_PACKAGE_BYTES)
         {
             throw new InvalidDataException(Texts.Get("Update.Error.TooLarge"));
         }
@@ -189,7 +189,7 @@ public sealed class UpdateService : IUpdateService
         // The file gets its name only after the hash is checked: a download that broke off half way, or one that
         // failed the check, must not be left lying around looking like the update. An older file of the same name
         // goes first for the same reason: whatever sits under that name afterwards is what was just checked.
-        var partial = path + PartialExtension;
+        var partial = path + PARTIAL_EXTENSION;
         try
         {
             File.Delete(path);
@@ -213,7 +213,7 @@ public sealed class UpdateService : IUpdateService
     }
 
     /// <summary>
-    /// Copies the body of a response into a file, refusing more than <see cref="MaxPackageBytes"/>.
+    /// Copies the body of a response into a file, refusing more than <see cref="MAX_PACKAGE_BYTES"/>.
     /// </summary>
     /// <param name="response">The response.</param>
     /// <param name="path">The file to write.</param>
@@ -224,23 +224,22 @@ public sealed class UpdateService : IUpdateService
     /// <exception cref="InvalidDataException">The body is larger than allowed.</exception>
     private static async Task DownloadToAsync(HttpResponseMessage response, string path, long total, IProgress<double>? progress, CancellationToken cancellationToken)
     {
-        await using (var source = await response.Content.ReadAsStreamAsync(cancellationToken).ConfigureAwait(false))
-        await using (var target = new FileStream(path, FileMode.Create, FileAccess.Write, FileShare.None))
-        {
-            var buffer = new byte[128 * 1024];
-            long copied = 0;
-            int read;
-            while ((read = await source.ReadAsync(buffer, cancellationToken).ConfigureAwait(false)) > 0)
-            {
-                copied += read;
-                if (copied > MaxPackageBytes)
-                {
-                    throw new InvalidDataException(Texts.Get("Update.Error.TooLarge"));
-                }
+        await using var source = await response.Content.ReadAsStreamAsync(cancellationToken).ConfigureAwait(false);
+        await using var target = new FileStream(path, FileMode.Create, FileAccess.Write, FileShare.None);
 
-                await target.WriteAsync(buffer.AsMemory(0, read), cancellationToken).ConfigureAwait(false);
-                progress?.Report(total > 0 ? Math.Clamp((double)copied / total, 0, 1) : 0);
+        var buffer = new byte[128 * 1024];
+        long copied = 0;
+        int read;
+        while ((read = await source.ReadAsync(buffer, cancellationToken).ConfigureAwait(false)) > 0)
+        {
+            copied += read;
+            if (copied > MAX_PACKAGE_BYTES)
+            {
+                throw new InvalidDataException(Texts.Get("Update.Error.TooLarge"));
             }
+
+            await target.WriteAsync(buffer.AsMemory(0, read), cancellationToken).ConfigureAwait(false);
+            progress?.Report(total > 0 ? Math.Clamp((double)copied / total, 0, 1) : 0);
         }
     }
 
@@ -278,8 +277,8 @@ public sealed class UpdateService : IUpdateService
     /// <param name="url">The address.</param>
     /// <returns><see langword="true"/> when it may be used.</returns>
     public static bool IsAllowed(string? url)
-        => Uri.TryCreate(url, UriKind.Absolute, out var uri)
-            && (uri.Scheme == Uri.UriSchemeHttps || (uri.Scheme == Uri.UriSchemeHttp && uri.IsLoopback));
+        => Uri.TryCreate(url, UriKind.Absolute, out var uri) &&
+            (uri.Scheme == Uri.UriSchemeHttps || (uri.Scheme == Uri.UriSchemeHttp && uri.IsLoopback));
 
     /// <summary>
     /// Formats the size of a release.

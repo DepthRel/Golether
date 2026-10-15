@@ -14,22 +14,22 @@ public sealed class NatPmpClient : IPortMappingProtocol
     /// <summary>
     /// The NAT-PMP port of the gateway.
     /// </summary>
-    public const int DefaultPort = 5351;
+    public const int DEFAULT_PORT = 5351;
 
     /// <summary>
     /// Opcode: public address request.
     /// </summary>
-    private const byte ExternalAddressOpcode = 0;
+    private const byte EXTERNAL_ADDRESS_OPCODE = 0;
 
     /// <summary>
     /// Opcode: TCP mapping request.
     /// </summary>
-    private const byte MapTcpOpcode = 2;
+    private const byte MAP_TCP_OPCODE = 2;
 
     /// <summary>
     /// The offset added to the opcode in responses.
     /// </summary>
-    private const byte ResponseFlag = 128;
+    private const byte RESPONSE_FLAG = 128;
 
     /// <summary>
     /// The gateways to ask.
@@ -65,7 +65,7 @@ public sealed class NatPmpClient : IPortMappingProtocol
     /// <param name="logger">The logger.</param>
     public NatPmpClient(Func<IReadOnlyList<IPEndPoint>>? gateways = null, TimeSpan? initialTimeout = null, int attempts = 3, ILogger<NatPmpClient>? logger = null)
     {
-        _gateways = gateways ?? (() => NetworkAddresses.GetGateways().Select(g => new IPEndPoint(g, DefaultPort)).ToArray());
+        _gateways = gateways ?? (() => NetworkAddresses.GetGateways().Select(g => new IPEndPoint(g, DEFAULT_PORT)).ToArray());
         _initialTimeout = initialTimeout ?? TimeSpan.FromMilliseconds(250);
         ArgumentOutOfRangeException.ThrowIfLessThan(attempts, 1);
         _attempts = attempts;
@@ -117,7 +117,7 @@ public sealed class NatPmpClient : IPortMappingProtocol
     internal static byte[] BuildMappingRequest(int internalPort, int externalPort, uint lifetime)
     {
         var request = new byte[12];
-        request[1] = MapTcpOpcode;
+        request[1] = MAP_TCP_OPCODE;
         BinaryPrimitives.WriteUInt16BigEndian(request.AsSpan(4), (ushort)internalPort);
         BinaryPrimitives.WriteUInt16BigEndian(request.AsSpan(6), (ushort)externalPort);
         BinaryPrimitives.WriteUInt32BigEndian(request.AsSpan(8), lifetime);
@@ -132,9 +132,9 @@ public sealed class NatPmpClient : IPortMappingProtocol
     /// <returns>The external port and lease, or <see langword="null"/> when the router refused or the data is invalid.</returns>
     internal static (int ExternalPort, uint Lifetime)? ParseMappingResponse(ReadOnlySpan<byte> response, int internalPort)
     {
-        if (response.Length < 16 || response[0] != 0 || response[1] != MapTcpOpcode + ResponseFlag
-            || BinaryPrimitives.ReadUInt16BigEndian(response[2..]) != 0
-            || BinaryPrimitives.ReadUInt16BigEndian(response[8..]) != internalPort)
+        if (response.Length < 16 || response[0] != 0 || response[1] != MAP_TCP_OPCODE + RESPONSE_FLAG ||
+            BinaryPrimitives.ReadUInt16BigEndian(response[2..]) != 0 ||
+            BinaryPrimitives.ReadUInt16BigEndian(response[8..]) != internalPort)
         {
             return null;
         }
@@ -148,8 +148,8 @@ public sealed class NatPmpClient : IPortMappingProtocol
     /// <param name="response">The response.</param>
     /// <returns>The address, or <see langword="null"/> when the data is invalid.</returns>
     internal static IPAddress? ParseExternalAddressResponse(ReadOnlySpan<byte> response)
-        => response.Length >= 12 && response[0] == 0 && response[1] == ExternalAddressOpcode + ResponseFlag
-           && BinaryPrimitives.ReadUInt16BigEndian(response[2..]) == 0
+        => response.Length >= 12 && response[0] == 0 && response[1] == EXTERNAL_ADDRESS_OPCODE + RESPONSE_FLAG &&
+           BinaryPrimitives.ReadUInt16BigEndian(response[2..]) == 0
             ? new IPAddress(response.Slice(8, 4))
             : null;
 
@@ -164,7 +164,7 @@ public sealed class NatPmpClient : IPortMappingProtocol
     /// <returns>The mapping, or <see langword="null"/>.</returns>
     private async Task<(int ExternalPort, uint Lifetime)?> RequestMappingAsync(IPEndPoint gateway, int internalPort, int externalPort, uint lifetime, CancellationToken cancellationToken)
     {
-        var response = await ExchangeAsync(gateway, BuildMappingRequest(internalPort, externalPort, lifetime), MapTcpOpcode, cancellationToken).ConfigureAwait(false);
+        var response = await ExchangeAsync(gateway, BuildMappingRequest(internalPort, externalPort, lifetime), MAP_TCP_OPCODE, cancellationToken).ConfigureAwait(false);
         return response is null ? null : ParseMappingResponse(response, internalPort);
     }
 
@@ -176,7 +176,7 @@ public sealed class NatPmpClient : IPortMappingProtocol
     /// <returns>The address, or <see langword="null"/>.</returns>
     private async Task<IPAddress?> RequestExternalAddressAsync(IPEndPoint gateway, CancellationToken cancellationToken)
     {
-        var response = await ExchangeAsync(gateway, [0, ExternalAddressOpcode], ExternalAddressOpcode, cancellationToken).ConfigureAwait(false);
+        var response = await ExchangeAsync(gateway, [0, EXTERNAL_ADDRESS_OPCODE], EXTERNAL_ADDRESS_OPCODE, cancellationToken).ConfigureAwait(false);
         return response is null ? null : ParseExternalAddressResponse(response);
     }
 
@@ -204,7 +204,7 @@ public sealed class NatPmpClient : IPortMappingProtocol
                     var received = await udp.ReceiveAsync(wait.Token).ConfigureAwait(false);
 
                     // Only the gateway itself may answer (RFC 6886, section 3.1).
-                    if (received.RemoteEndPoint.Address.Equals(gateway.Address) && received.Buffer is [0, var op, ..] && op == opcode + ResponseFlag)
+                    if (received.RemoteEndPoint.Address.Equals(gateway.Address) && received.Buffer is [0, var op, ..] && op == opcode + RESPONSE_FLAG)
                     {
                         return received.Buffer;
                     }

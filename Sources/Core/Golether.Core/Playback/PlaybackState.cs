@@ -1,3 +1,4 @@
+using Golether.Core.Enums;
 using Golether.Core.Identity;
 using Golether.Core.Time;
 
@@ -23,12 +24,12 @@ public sealed record PlaybackState
     /// The slowest nominal rate accepted from the network. Together with the drift correction it stays inside what
     /// a player accepts.
     /// </summary>
-    public const double MinRate = 0.5;
+    public const double MIN_RATE = 0.5;
 
     /// <summary>
     /// The fastest nominal rate accepted from the network.
     /// </summary>
-    public const double MaxRate = 2.0;
+    public const double MAX_RATE = 2.0;
 
     /// <summary>
     /// Gets the playback mode.
@@ -83,13 +84,13 @@ public sealed record PlaybackState
 
     /// <summary>
     /// Checks a state received from the network: a known mode, a position inside <see cref="MaxPosition"/> and a
-    /// finite rate between <see cref="MinRate"/> and <see cref="MaxRate"/>.
+    /// finite rate between <see cref="MIN_RATE"/> and <see cref="MAX_RATE"/>.
     /// </summary>
     /// <returns><see langword="true"/> when the state can be followed.</returns>
     public bool IsValid()
-        => Enum.IsDefined(State)
-           && Position >= TimeSpan.Zero && Position <= MaxPosition
-           && double.IsFinite(Rate) && Rate is >= MinRate and <= MaxRate;
+        => Enum.IsDefined(State) &&
+           Position >= TimeSpan.Zero && Position <= MaxPosition &&
+           double.IsFinite(Rate) && Rate is >= MIN_RATE and <= MAX_RATE;
 
     /// <summary>
     /// Computes the position every node should show at the given session time.

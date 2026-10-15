@@ -11,7 +11,7 @@ public static class SqliteDatabaseMigrator
     /// <summary>
     /// The shared migrator configured for SQLite.
     /// </summary>
-    private static readonly DatabaseMigrator Migrator = new(new SqliteMigrationProvider());
+    private static readonly DatabaseMigrator _migrator = new(new SqliteMigrationProvider());
 
     /// <summary>
     /// Applies all pending migrations.
@@ -19,7 +19,7 @@ public static class SqliteDatabaseMigrator
     /// <param name="connectionString">The SQLite connection string (<c>Data Source=...</c>).</param>
     /// <returns>The versions applied by this call, ascending.</returns>
     /// <exception cref="ArgumentException">The connection string is invalid.</exception>
-    public static IReadOnlyList<long> MigrateUp(string connectionString) => Migrator.MigrateUp(connectionString);
+    public static IReadOnlyList<long> MigrateUp(string connectionString) => _migrator.MigrateUp(connectionString);
 
     /// <summary>
     /// Rolls the database back to a version.
@@ -27,7 +27,7 @@ public static class SqliteDatabaseMigrator
     /// <param name="connectionString">The SQLite connection string.</param>
     /// <param name="version">The version to keep.</param>
     /// <exception cref="ArgumentException">The connection string is invalid.</exception>
-    public static void MigrateDown(string connectionString, long version) => Migrator.MigrateDown(connectionString, version);
+    public static void MigrateDown(string connectionString, long version) => _migrator.MigrateDown(connectionString, version);
 
     /// <summary>
     /// Lists applied migration versions.
@@ -35,5 +35,5 @@ public static class SqliteDatabaseMigrator
     /// <param name="connectionString">The SQLite connection string.</param>
     /// <returns>The applied versions, ascending.</returns>
     /// <exception cref="ArgumentException">The connection string is invalid.</exception>
-    public static IReadOnlyList<long> GetAppliedVersions(string connectionString) => Migrator.GetAppliedVersions(connectionString);
+    public static IReadOnlyList<long> GetAppliedVersions(string connectionString) => _migrator.GetAppliedVersions(connectionString);
 }

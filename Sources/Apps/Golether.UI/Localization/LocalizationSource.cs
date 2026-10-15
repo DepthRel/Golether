@@ -13,12 +13,12 @@ public sealed class LocalizationSource : INotifyPropertyChanged
     /// <summary>
     /// The name Avalonia looks for in the change notification of an indexer: the name of the indexer property.
     /// </summary>
-    private const string IndexerName = "Item";
+    private const string INDEXER_NAME = "Item";
 
     /// <summary>
     /// The name XAML frameworks other than Avalonia use for a change of every indexer value.
     /// </summary>
-    private const string IndexerBracketsName = "Item[]";
+    private const string INDEXER_BRACKETS_NAME = "Item[]";
 
     /// <summary>
     /// The localizer whose texts are exposed.
@@ -51,8 +51,8 @@ public sealed class LocalizationSource : INotifyPropertyChanged
     /// </summary>
     private void Notify()
     {
-        PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(IndexerName));
-        PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(IndexerBracketsName));
+        PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(INDEXER_NAME));
+        PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(INDEXER_BRACKETS_NAME));
     }
 
     /// <summary>

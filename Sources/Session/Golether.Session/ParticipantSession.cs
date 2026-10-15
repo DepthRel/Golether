@@ -1,3 +1,5 @@
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 using Golether.Core.Data.Enums;
 using Golether.Core.Identity;
 using Golether.Core.Media;
@@ -18,8 +20,6 @@ using Golether.Sync.Clock;
 using Golether.Sync.Engine;
 using Golether.Sync.Protocol;
 using Golether.Transports;
-using Microsoft.Extensions.Logging.Abstractions;
-using Microsoft.Extensions.Logging;
 
 namespace Golether.Session;
 
@@ -32,7 +32,7 @@ public sealed class ParticipantSession : IAsyncDisposable
     /// <summary>
     /// The number of fast clock probes after joining.
     /// </summary>
-    private const int InitialProbes = 6;
+    private const int INITIAL_PROBES = 6;
 
     /// <summary>
     /// The local device.
@@ -131,7 +131,7 @@ public sealed class ParticipantSession : IAsyncDisposable
     /// they answer at once, and a meeting costs a round through the server. A reachable host answers well within
     /// these seconds; the direct attempts keep running after them, so a slow one still wins when it gets through.
     /// </summary>
-    private static readonly TimeSpan RendezvousHeadStart = TimeSpan.FromSeconds(4);
+    private static readonly TimeSpan _rendezvousHeadStart = TimeSpan.FromSeconds(4);
 
     /// <summary>
     /// Guards the mutable view fields.
@@ -405,7 +405,7 @@ public sealed class ParticipantSession : IAsyncDisposable
         _code = VerificationCode.Compute(invite.HostPeerId, _identity.PeerId, invite.Token);
         var stream = await ConnectAnyAsync(invite, cancellationToken).ConfigureAwait(false);
         _channel = new SessionMessageChannel(stream.Stream);
-        await _channel.SendAsync(new HelloMessage(SessionMessage.ProtocolVersion, DisplayName, invite.Token), cancellationToken).ConfigureAwait(false);
+        await _channel.SendAsync(new HelloMessage(SessionMessage.PROTOCOL_VERSION, DisplayName, invite.Token), cancellationToken).ConfigureAwait(false);
 
         WelcomeMessage welcome;
         while (true)
@@ -447,8 +447,8 @@ public sealed class ParticipantSession : IAsyncDisposable
         // The welcome came from the network like everything else: its parts are checked before they are used.
         try
         {
-            if (welcome.SessionName is null || welcome.Participants is null || welcome.Participants.Any(p => p is null)
-                || welcome.Playback is null || !welcome.Playback.IsValid())
+            if (welcome.SessionName is null || welcome.Participants is null || welcome.Participants.Any(p => p is null) ||
+                welcome.Playback is null || !welcome.Playback.IsValid())
             {
                 throw new InvalidDataException("The welcome of the host is incomplete.");
             }
@@ -823,7 +823,7 @@ public sealed class ParticipantSession : IAsyncDisposable
         System.Collections.Concurrent.ConcurrentQueue<string> errors,
         CancellationToken cancellationToken)
     {
-        await Task.WhenAny(direct, Task.Delay(RendezvousHeadStart, _timeProvider, cancellationToken)).ConfigureAwait(false);
+        await Task.WhenAny(direct, Task.Delay(_rendezvousHeadStart, _timeProvider, cancellationToken)).ConfigureAwait(false);
         if (cancellationToken.IsCancellationRequested || direct is { IsCompletedSuccessfully: true, Result: not null })
         {
             return null;
@@ -971,9 +971,11 @@ public sealed class ParticipantSession : IAsyncDisposable
                     case AvatarMessage avatar when avatar.Sender is { } owner && avatar.Sanitize() is { } cleanAvatar:
                         AvatarReceived?.Invoke(this, new AvatarUpdate(owner, cleanAvatar.Image, owner == _identity.PeerId));
                         break;
-                    case ByeMessage bye:
+                    case ByeMessage:
+                        // Texts do not travel over the network: whatever the host wrote, the end of the session is
+                        // worded here, in the language of this side.
                         ClosedByHost = true;
-                        reason = bye.Reason ?? Texts.Get("Session.Error.HostEnded");
+                        reason = Texts.Get("Session.Error.HostEnded");
                         return;
                     case RejectedMessage rejected:
                         ClosedByHost = true;
@@ -1032,7 +1034,7 @@ public sealed class ParticipantSession : IAsyncDisposable
             for (var probe = 0; !cancellationToken.IsCancellationRequested; probe++)
             {
                 await _channel!.SendAsync(new ClockPingMessage(_monotonic.NowMicroseconds), cancellationToken).ConfigureAwait(false);
-                var delay = probe < InitialProbes ? TimeSpan.FromMilliseconds(300) : _options.ClockProbeInterval;
+                var delay = probe < INITIAL_PROBES ? TimeSpan.FromMilliseconds(300) : _options.ClockProbeInterval;
                 await Task.Delay(delay, _timeProvider, cancellationToken).ConfigureAwait(false);
             }
         }
@@ -1058,8 +1060,8 @@ public sealed class ParticipantSession : IAsyncDisposable
                 try
                 {
                     // The expected position depends on the clock offset: apply states only once it is known.
-                    if (_clock.IsSynchronized && _latestState is { } latest
-                        && (_follower.Applied is null || latest.Version > _follower.Applied.Version))
+                    if (_clock.IsSynchronized && _latestState is { } latest &&
+                        (_follower.Applied is null || latest.Version > _follower.Applied.Version))
                     {
                         await _follower.ApplyAsync(latest, cancellationToken).ConfigureAwait(false);
                         Changed?.Invoke(this, EventArgs.Empty);
@@ -1175,7 +1177,7 @@ public sealed class ParticipantSession : IAsyncDisposable
     private ParticipantView[] ToViews(IReadOnlyList<ParticipantInfo> participants, IReadOnlyList<ParticipantStatus> statuses)
     {
         var known = new Dictionary<PeerId, ParticipantStatus>();
-        foreach (var status in statuses.Take(SessionOptions.MaxParticipantsLimit * 2))
+        foreach (var status in statuses.Take(SessionOptions.MAX_PARTICIPANTS_LIMIT * 2))
         {
             if (status is not null)
             {
@@ -1183,7 +1185,7 @@ public sealed class ParticipantSession : IAsyncDisposable
             }
         }
 
-        return participants.Take(SessionOptions.MaxParticipantsLimit)
+        return participants.Take(SessionOptions.MAX_PARTICIPANTS_LIMIT)
             .Where(p => p is not null && !p.PeerId.IsEmpty)
             .Select(p => new ParticipantView(
                 p with { DisplayName = ParticipantInfo.NormalizeDisplayName(p.DisplayName) },

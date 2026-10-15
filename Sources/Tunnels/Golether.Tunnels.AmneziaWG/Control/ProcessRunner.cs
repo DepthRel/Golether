@@ -12,7 +12,7 @@ public sealed class ProcessRunner : IProcessRunner
     /// <summary>
     /// The maximum captured output per stream.
     /// </summary>
-    private const int MaxOutput = 64 * 1024;
+    private const int MAX_OUTPUT = 64 * 1024;
 
     /// <inheritdoc />
     public async Task<ProcessResult> RunAsync(string fileName, IReadOnlyList<string> arguments, TimeSpan timeout, CancellationToken cancellationToken)
@@ -57,7 +57,7 @@ public sealed class ProcessRunner : IProcessRunner
     }
 
     /// <summary>
-    /// Reads a stream up to <see cref="MaxOutput"/> characters and discards the rest.
+    /// Reads a stream up to <see cref="MAX_OUTPUT"/> characters and discards the rest.
     /// </summary>
     /// <param name="reader">The reader.</param>
     /// <returns>The captured text.</returns>
@@ -68,9 +68,9 @@ public sealed class ProcessRunner : IProcessRunner
         int read;
         while ((read = await reader.ReadAsync(buffer).ConfigureAwait(false)) > 0)
         {
-            if (text.Length < MaxOutput)
+            if (text.Length < MAX_OUTPUT)
             {
-                text.Append(buffer, 0, Math.Min(read, MaxOutput - text.Length));
+                text.Append(buffer, 0, Math.Min(read, MAX_OUTPUT - text.Length));
             }
         }
 

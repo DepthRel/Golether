@@ -7,43 +7,6 @@ using Golether.Web.Server.Options;
 namespace Golether.Web.Server.UI.Services;
 
 /// <summary>
-/// The settings of the server the monitor edits: the <c>Rendezvous</c> section, the status address (<c>Urls</c>) and
-/// how detailed the log of the service is (<c>Logging:LogLevel:Default</c>).
-/// </summary>
-/// <param name="Rendezvous">The rendezvous settings.</param>
-/// <param name="StatusUrls">The addresses of the status page, separated by semicolons, as in <c>Urls</c>.</param>
-/// <param name="LogLevel">The level of the log of the service: Trace, Debug, Information, Warning, Error, Critical or None.</param>
-public sealed record ServerSettings(RendezvousServerOptions Rendezvous, string StatusUrls, string LogLevel)
-{
-    /// <summary>
-    /// The levels of the log, from the most detailed to none at all.
-    /// </summary>
-    public static IReadOnlyList<string> LogLevels { get; } = ["Trace", "Debug", "Information", "Warning", "Error", "Critical", "None"];
-
-    /// <summary>
-    /// The level of the log when the file does not say.
-    /// </summary>
-    public const string DefaultLogLevel = "Information";
-
-    /// <summary>
-    /// Checks the status addresses: every one is an <c>http</c> or <c>https</c> address with a port; the host may be
-    /// <c>+</c> or <c>*</c> ("every address of this computer"), as ASP.NET allows.
-    /// </summary>
-    /// <param name="urls">The addresses separated by semicolons.</param>
-    /// <returns><see langword="true"/> when all of them are valid.</returns>
-    public static bool IsValidStatusUrls(string urls)
-    {
-        var parts = (urls ?? string.Empty).Split(';', StringSplitOptions.TrimEntries);
-        return parts.Length > 0 && parts.All(part =>
-            Uri.TryCreate(part.Replace("://+", "://0.0.0.0", StringComparison.Ordinal).Replace("://*", "://0.0.0.0", StringComparison.Ordinal), UriKind.Absolute, out var uri)
-            && uri.Scheme is "http" or "https"
-            && part.LastIndexOf(':') > part.IndexOf("://", StringComparison.Ordinal)
-            && uri.Port is > 0 and <= 65535
-            && uri.AbsolutePath == "/");
-    }
-}
-
-/// <summary>
 /// Reads and writes <c>config/appsettings.json</c> of the server. Writing keeps every part of the file the monitor
 /// does not edit (the levels of the log for single sources, any other section the administrator added).
 /// </summary>
@@ -54,12 +17,12 @@ public sealed class ServerSettingsStore(string path, IServiceManager service)
     /// <summary>
     /// The options of reading: the file may have been written by hand.
     /// </summary>
-    private static readonly JsonDocumentOptions Reading = new() { AllowTrailingCommas = true, CommentHandling = JsonCommentHandling.Skip };
+    private static readonly JsonDocumentOptions _reading = new() { AllowTrailingCommas = true, CommentHandling = JsonCommentHandling.Skip };
 
     /// <summary>
     /// The options of writing the rendezvous section: the names as in the file, indented.
     /// </summary>
-    private static readonly JsonSerializerOptions Writing = new() { WriteIndented = true };
+    private static readonly JsonSerializerOptions _writing = new() { WriteIndented = true };
 
     /// <summary>
     /// The status address read last and the time of the file it was read from.
@@ -80,13 +43,13 @@ public sealed class ServerSettingsStore(string path, IServiceManager service)
     public ServerSettings Load()
     {
         var root = ReadRoot();
-        var rendezvous = root[RendezvousServerOptions.Section] is JsonObject section
+        var rendezvous = root[RendezvousServerOptions.SECTION] is JsonObject section
             ? section.Deserialize<RendezvousServerOptions>() ?? new RendezvousServerOptions()
             : new RendezvousServerOptions();
-        var urls = root["Urls"]?.GetValueKind() == JsonValueKind.String ? root["Urls"]!.GetValue<string>() : ServerContract.DefaultStatusUrl;
+        var urls = root["Urls"]?.GetValueKind() == JsonValueKind.String ? root["Urls"]!.GetValue<string>() : ServerContract.DEFAULT_STATUS_URL;
         var level = root["Logging"]?["LogLevel"]?["Default"] is JsonValue value && value.GetValueKind() == JsonValueKind.String
             ? value.GetValue<string>()
-            : ServerSettings.DefaultLogLevel;
+            : ServerSettings.DEFAULT_LOG_LEVEL;
         return new ServerSettings(rendezvous, urls, level);
     }
 
@@ -110,7 +73,7 @@ public sealed class ServerSettingsStore(string path, IServiceManager service)
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or JsonException)
         {
-            return new Uri(ServerContract.DefaultStatusUrl);
+            return new Uri(ServerContract.DEFAULT_STATUS_URL);
         }
     }
 
@@ -155,8 +118,8 @@ public sealed class ServerSettingsStore(string path, IServiceManager service)
     public static string Render(string current, ServerSettings settings)
     {
         ArgumentNullException.ThrowIfNull(settings);
-        var root = JsonNode.Parse(current, documentOptions: Reading) as JsonObject ?? throw new JsonException("The settings file is not a JSON object.");
-        root[RendezvousServerOptions.Section] = JsonSerializer.SerializeToNode(settings.Rendezvous, Writing);
+        var root = JsonNode.Parse(current, documentOptions: _reading) as JsonObject ?? throw new JsonException("The settings file is not a JSON object.");
+        root[RendezvousServerOptions.SECTION] = JsonSerializer.SerializeToNode(settings.Rendezvous, _writing);
         root["Urls"] = settings.StatusUrls;
         if (root["Logging"] is not JsonObject logging)
         {
@@ -171,7 +134,7 @@ public sealed class ServerSettingsStore(string path, IServiceManager service)
         }
 
         levels["Default"] = settings.LogLevel;
-        return root.ToJsonString(Writing) + Environment.NewLine;
+        return root.ToJsonString(_writing) + Environment.NewLine;
     }
 
     /// <summary>
@@ -179,7 +142,7 @@ public sealed class ServerSettingsStore(string path, IServiceManager service)
     /// </summary>
     /// <returns>The object.</returns>
     private JsonObject ReadRoot()
-        => JsonNode.Parse(File.ReadAllText(Path), documentOptions: Reading) as JsonObject ?? throw new JsonException("The settings file is not a JSON object.");
+        => JsonNode.Parse(File.ReadAllText(Path), documentOptions: _reading) as JsonObject ?? throw new JsonException("The settings file is not a JSON object.");
 
     /// <summary>
     /// Takes the status address from the settings: the first of <c>Urls</c>, with a "listen everywhere" host
@@ -192,14 +155,14 @@ public sealed class ServerSettingsStore(string path, IServiceManager service)
         var first = (root["Urls"]?.GetValueKind() == JsonValueKind.String ? root["Urls"]!.GetValue<string>() : null)?.Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).FirstOrDefault();
         if (first is null)
         {
-            return new Uri(ServerContract.DefaultStatusUrl);
+            return new Uri(ServerContract.DEFAULT_STATUS_URL);
         }
 
         // "+" and "*" are allowed by ASP.NET but are not hosts a URI knows.
         first = first.Replace("://+", "://0.0.0.0", StringComparison.Ordinal).Replace("://*", "://0.0.0.0", StringComparison.Ordinal);
         if (!Uri.TryCreate(first, UriKind.Absolute, out var uri))
         {
-            return new Uri(ServerContract.DefaultStatusUrl);
+            return new Uri(ServerContract.DEFAULT_STATUS_URL);
         }
 
         return uri.Host is "0.0.0.0" or "[::]" or "localhost"

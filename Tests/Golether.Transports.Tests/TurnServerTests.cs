@@ -39,21 +39,21 @@ public sealed class TurnServerTests : IAsyncLifetime
     public void Codec_RoundTrips()
     {
         var key = Stun.LongTermKey("u", "r", "p");
-        var message = new StunMessage(Stun.ChannelBind, Stun.ClassSuccess, RandomNumberGenerator.GetBytes(12))
-            .AddXorAddress(Stun.AttrXorPeerAddress, new IPEndPoint(IPAddress.Parse("192.0.2.10"), 5000))
-            .AddXorAddress(Stun.AttrXorRelayedAddress, new IPEndPoint(IPAddress.Parse("2001:db8::1"), 6000))
-            .AddText(Stun.AttrUsername, "u");
+        var message = new StunMessage(Stun.CHANNEL_BIND, Stun.CLASS_SUCCESS, RandomNumberGenerator.GetBytes(12))
+            .AddXorAddress(Stun.ATTR_XOR_PEER_ADDRESS, new IPEndPoint(IPAddress.Parse("192.0.2.10"), 5000))
+            .AddXorAddress(Stun.ATTR_XOR_RELAYED_ADDRESS, new IPEndPoint(IPAddress.Parse("2001:db8::1"), 6000))
+            .AddText(Stun.ATTR_USERNAME, "u");
         var bytes = message.Encode(key);
 
         Assert.Equal(0x0109, BinaryPrimitives.ReadUInt16BigEndian(bytes));
         var parsed = StunMessage.Parse(bytes);
-        Assert.Equal(Stun.ChannelBind, parsed.Method);
-        Assert.Equal(Stun.ClassSuccess, parsed.Class);
-        Assert.Equal(new IPEndPoint(IPAddress.Parse("192.0.2.10"), 5000), parsed.GetXorAddress(Stun.AttrXorPeerAddress));
-        Assert.Equal(new IPEndPoint(IPAddress.Parse("2001:db8::1"), 6000), parsed.GetXorAddress(Stun.AttrXorRelayedAddress));
+        Assert.Equal(Stun.CHANNEL_BIND, parsed.Method);
+        Assert.Equal(Stun.CLASS_SUCCESS, parsed.Class);
+        Assert.Equal(new IPEndPoint(IPAddress.Parse("192.0.2.10"), 5000), parsed.GetXorAddress(Stun.ATTR_XOR_PEER_ADDRESS));
+        Assert.Equal(new IPEndPoint(IPAddress.Parse("2001:db8::1"), 6000), parsed.GetXorAddress(Stun.ATTR_XOR_RELAYED_ADDRESS));
         Assert.True(parsed.VerifyIntegrity(key));
         Assert.False(parsed.VerifyIntegrity(Stun.LongTermKey("u", "r", "wrong")));
-        Assert.Equal(0x0017, StunMessage.TypeOf(Stun.Data, Stun.ClassIndication));
+        Assert.Equal(0x0017, StunMessage.TypeOf(Stun.DATA, Stun.CLASS_INDICATION));
         Assert.Throws<InvalidDataException>(() => StunMessage.Parse([0x40, 0, 0, 0]));
 
         // The fingerprint of RFC 5769 test vectors is CRC-32 over the message XOR 0x5354554E; check the CRC itself.
@@ -75,22 +75,22 @@ public sealed class TurnServerTests : IAsyncLifetime
         await using var client = await TurnClient.ConnectAsync(_server.Port, token);
 
         // 1. Unauthenticated allocate gets a challenge; a wrong password is refused.
-        var challenge = await client.RequestAsync(new StunMessage(Stun.Allocate, Stun.ClassRequest, RandomNumberGenerator.GetBytes(12))
-            .Add(Stun.AttrRequestedTransport, [17, 0, 0, 0]), null, token);
+        var challenge = await client.RequestAsync(new StunMessage(Stun.ALLOCATE, Stun.CLASS_REQUEST, RandomNumberGenerator.GetBytes(12))
+            .Add(Stun.ATTR_REQUESTED_TRANSPORT, [17, 0, 0, 0]), null, token);
         Assert.Equal(401, challenge.GetErrorCode());
-        var realm = challenge.GetText(Stun.AttrRealm)!;
-        var nonce = challenge.GetText(Stun.AttrNonce)!;
-        var wrong = await client.RequestAsync(Signed(Stun.Allocate, realm, nonce, "not the password").Add(Stun.AttrRequestedTransport, [17, 0, 0, 0]),
+        var realm = challenge.GetText(Stun.ATTR_REALM)!;
+        var nonce = challenge.GetText(Stun.ATTR_NONCE)!;
+        var wrong = await client.RequestAsync(Signed(Stun.ALLOCATE, realm, nonce, "not the password").Add(Stun.ATTR_REQUESTED_TRANSPORT, [17, 0, 0, 0]),
             Stun.LongTermKey(_credentials.Username, realm, "not the password"), token);
         Assert.Equal(401, wrong.GetErrorCode());
         Assert.Equal(0, _server.AllocationCount);
 
         // 2. The right credentials create a relay.
         var key = Stun.LongTermKey(_credentials.Username, realm, _credentials.Password);
-        var allocated = await client.RequestAsync(Signed(Stun.Allocate, realm, nonce).Add(Stun.AttrRequestedTransport, [17, 0, 0, 0]), key, token);
-        Assert.Equal(Stun.ClassSuccess, allocated.Class);
+        var allocated = await client.RequestAsync(Signed(Stun.ALLOCATE, realm, nonce).Add(Stun.ATTR_REQUESTED_TRANSPORT, [17, 0, 0, 0]), key, token);
+        Assert.Equal(Stun.CLASS_SUCCESS, allocated.Class);
         Assert.True(allocated.VerifyIntegrity(key));
-        var relay = allocated.GetXorAddress(Stun.AttrXorRelayedAddress)!;
+        var relay = allocated.GetXorAddress(Stun.ATTR_XOR_RELAYED_ADDRESS)!;
         Assert.Equal(IPAddress.Loopback, relay.Address);
         Assert.Equal(1, _server.AllocationCount);
 
@@ -99,8 +99,8 @@ public sealed class TurnServerTests : IAsyncLifetime
         await stranger.SendAsync(new byte[] { 9 }, relay, token);
         await Assert.ThrowsAnyAsync<OperationCanceledException>(() => ReceiveAsync(peer, TimeSpan.FromMilliseconds(300), token));
 
-        var permitted = await client.RequestAsync(Signed(Stun.CreatePermission, realm, nonce).AddXorAddress(Stun.AttrXorPeerAddress, peerAddress), key, token);
-        Assert.Equal(Stun.ClassSuccess, permitted.Class);
+        var permitted = await client.RequestAsync(Signed(Stun.CREATE_PERMISSION, realm, nonce).AddXorAddress(Stun.ATTR_XOR_PEER_ADDRESS, peerAddress), key, token);
+        Assert.Equal(Stun.CLASS_SUCCESS, permitted.Class);
 
         // 4. Send indication out, Data indication back.
         await client.SendRawAsync(Indication(peerAddress, [1, 2, 3]), token);
@@ -109,15 +109,15 @@ public sealed class TurnServerTests : IAsyncLifetime
         Assert.Equal(relay.Port, outgoing.RemoteEndPoint.Port);
         await peer.SendAsync(new byte[] { 4, 5 }, relay, token);
         var data = StunMessage.Parse(await client.ReadFrameAsync(token));
-        Assert.Equal((Stun.Data, Stun.ClassIndication), (data.Method, data.Class));
-        Assert.Equal([4, 5], data.Get(Stun.AttrData));
-        Assert.Equal(peerAddress, data.GetXorAddress(Stun.AttrXorPeerAddress));
+        Assert.Equal((Stun.DATA, Stun.CLASS_INDICATION), (data.Method, data.Class));
+        Assert.Equal([4, 5], data.Get(Stun.ATTR_DATA));
+        Assert.Equal(peerAddress, data.GetXorAddress(Stun.ATTR_XOR_PEER_ADDRESS));
 
         // 5. A channel carries both directions without STUN headers.
-        var bound = await client.RequestAsync(Signed(Stun.ChannelBind, realm, nonce)
-            .Add(Stun.AttrChannelNumber, [0x40, 0x01, 0, 0])
-            .AddXorAddress(Stun.AttrXorPeerAddress, peerAddress), key, token);
-        Assert.Equal(Stun.ClassSuccess, bound.Class);
+        var bound = await client.RequestAsync(Signed(Stun.CHANNEL_BIND, realm, nonce)
+            .Add(Stun.ATTR_CHANNEL_NUMBER, [0x40, 0x01, 0, 0])
+            .AddXorAddress(Stun.ATTR_XOR_PEER_ADDRESS, peerAddress), key, token);
+        Assert.Equal(Stun.CLASS_SUCCESS, bound.Class);
         await client.SendRawAsync([0x40, 0x01, 0, 5, 10, 11, 12, 13, 14, 0, 0, 0], token);
         Assert.Equal([10, 11, 12, 13, 14], (await ReceiveAsync(peer, TimeSpan.FromSeconds(5), token)).Buffer);
         await peer.SendAsync(new byte[] { 7, 7, 7 }, relay, token);
@@ -125,8 +125,8 @@ public sealed class TurnServerTests : IAsyncLifetime
         Assert.Equal([0x40, 0x01, 0, 3, 7, 7, 7], channelFrame);
 
         // 6. A refresh with lifetime 0 removes the relay.
-        var deleted = await client.RequestAsync(Signed(Stun.Refresh, realm, nonce).AddUInt32(Stun.AttrLifetime, 0), key, token);
-        Assert.Equal(Stun.ClassSuccess, deleted.Class);
+        var deleted = await client.RequestAsync(Signed(Stun.REFRESH, realm, nonce).AddUInt32(Stun.ATTR_LIFETIME, 0), key, token);
+        Assert.Equal(Stun.CLASS_SUCCESS, deleted.Class);
         Assert.Equal(0, _server.AllocationCount);
     }
 
@@ -148,16 +148,16 @@ public sealed class TurnServerTests : IAsyncLifetime
 
         var serving = _server.ServeAsync(accepted.GetStream(), remote, IPAddress.Loopback, token);
 
-        var challenge = await client.RequestAsync(new StunMessage(Stun.Allocate, Stun.ClassRequest, RandomNumberGenerator.GetBytes(12))
-            .Add(Stun.AttrRequestedTransport, [17, 0, 0, 0]), null, token);
-        var realm = challenge.GetText(Stun.AttrRealm)!;
-        var nonce = challenge.GetText(Stun.AttrNonce)!;
+        var challenge = await client.RequestAsync(new StunMessage(Stun.ALLOCATE, Stun.CLASS_REQUEST, RandomNumberGenerator.GetBytes(12))
+            .Add(Stun.ATTR_REQUESTED_TRANSPORT, [17, 0, 0, 0]), null, token);
+        var realm = challenge.GetText(Stun.ATTR_REALM)!;
+        var nonce = challenge.GetText(Stun.ATTR_NONCE)!;
         var key = Stun.LongTermKey(_credentials.Username, realm, _credentials.Password);
-        var allocated = await client.RequestAsync(Signed(Stun.Allocate, realm, nonce).Add(Stun.AttrRequestedTransport, [17, 0, 0, 0]), key, token);
+        var allocated = await client.RequestAsync(Signed(Stun.ALLOCATE, realm, nonce).Add(Stun.ATTR_REQUESTED_TRANSPORT, [17, 0, 0, 0]), key, token);
 
-        Assert.Equal(Stun.ClassSuccess, allocated.Class);
-        Assert.Equal(IPAddress.Loopback, allocated.GetXorAddress(Stun.AttrXorRelayedAddress)!.Address);
-        Assert.Equal(remote, allocated.GetXorAddress(Stun.AttrXorMappedAddress));
+        Assert.Equal(Stun.CLASS_SUCCESS, allocated.Class);
+        Assert.Equal(IPAddress.Loopback, allocated.GetXorAddress(Stun.ATTR_XOR_RELAYED_ADDRESS)!.Address);
+        Assert.Equal(remote, allocated.GetXorAddress(Stun.ATTR_XOR_MAPPED_ADDRESS));
         Assert.Equal(1, _server.AllocationCount);
 
         await client.DisposeAsync();
@@ -187,10 +187,10 @@ public sealed class TurnServerTests : IAsyncLifetime
     /// <param name="username">The user name; the server's when <see langword="null"/>.</param>
     /// <returns>The request.</returns>
     private StunMessage Signed(ushort method, string realm, string nonce, string? username = null)
-        => new StunMessage(method, Stun.ClassRequest, RandomNumberGenerator.GetBytes(12))
-            .AddText(Stun.AttrUsername, username is null || username.StartsWith("not", StringComparison.Ordinal) ? _credentials.Username : username)
-            .AddText(Stun.AttrRealm, realm)
-            .AddText(Stun.AttrNonce, nonce);
+        => new StunMessage(method, Stun.CLASS_REQUEST, RandomNumberGenerator.GetBytes(12))
+            .AddText(Stun.ATTR_USERNAME, username is null || username.StartsWith("not", StringComparison.Ordinal) ? _credentials.Username : username)
+            .AddText(Stun.ATTR_REALM, realm)
+            .AddText(Stun.ATTR_NONCE, nonce);
 
     /// <summary>
     /// Builds a Send indication.
@@ -199,9 +199,9 @@ public sealed class TurnServerTests : IAsyncLifetime
     /// <param name="data">The payload.</param>
     /// <returns>The bytes.</returns>
     private static byte[] Indication(IPEndPoint peer, byte[] data)
-        => new StunMessage(Stun.Send, Stun.ClassIndication, RandomNumberGenerator.GetBytes(12))
-            .AddXorAddress(Stun.AttrXorPeerAddress, peer)
-            .Add(Stun.AttrData, data)
+        => new StunMessage(Stun.SEND, Stun.CLASS_INDICATION, RandomNumberGenerator.GetBytes(12))
+            .AddXorAddress(Stun.ATTR_XOR_PEER_ADDRESS, peer)
+            .Add(Stun.ATTR_DATA, data)
             .Encode();
 
     /// <summary>
@@ -283,7 +283,7 @@ public sealed class TurnServerTests : IAsyncLifetime
             await stream.ReadExactlyAsync(header, limit.Token);
             var length = BinaryPrimitives.ReadUInt16BigEndian(header.AsSpan(2));
             var isChannel = (header[0] & 0xC0) == 0x40;
-            var rest = new byte[isChannel ? (length + 3) & ~3 : Stun.HeaderSize - 4 + length];
+            var rest = new byte[isChannel ? (length + 3) & ~3 : Stun.HEADER_SIZE - 4 + length];
             await stream.ReadExactlyAsync(rest, limit.Token);
             return [.. header, .. isChannel ? rest.AsSpan(0, length) : rest];
         }
@@ -309,28 +309,28 @@ public sealed class TurnServerTests : IAsyncLifetime
         await using var server = new TurnServer(new TurnServerOptions { Credentials = _credentials, ListenAddress = IPAddress.Any });
         server.Start();
         await using var client = await TurnClient.ConnectAsync(server.Port, token);
-        var challenge = await client.RequestAsync(new StunMessage(Stun.Allocate, Stun.ClassRequest, RandomNumberGenerator.GetBytes(12))
-            .Add(Stun.AttrRequestedTransport, [17, 0, 0, 0]), null, token);
-        var realm = challenge.GetText(Stun.AttrRealm)!;
-        var nonce = challenge.GetText(Stun.AttrNonce)!;
+        var challenge = await client.RequestAsync(new StunMessage(Stun.ALLOCATE, Stun.CLASS_REQUEST, RandomNumberGenerator.GetBytes(12))
+            .Add(Stun.ATTR_REQUESTED_TRANSPORT, [17, 0, 0, 0]), null, token);
+        var realm = challenge.GetText(Stun.ATTR_REALM)!;
+        var nonce = challenge.GetText(Stun.ATTR_NONCE)!;
         var key = Stun.LongTermKey(_credentials.Username, realm, _credentials.Password);
-        var allocated = await client.RequestAsync(Signed(Stun.Allocate, realm, nonce).Add(Stun.AttrRequestedTransport, [17, 0, 0, 0]), key, token);
-        Assert.Equal(Stun.ClassSuccess, allocated.Class);
+        var allocated = await client.RequestAsync(Signed(Stun.ALLOCATE, realm, nonce).Add(Stun.ATTR_REQUESTED_TRANSPORT, [17, 0, 0, 0]), key, token);
+        Assert.Equal(Stun.CLASS_SUCCESS, allocated.Class);
 
         foreach (var address in new[] { "127.0.0.1", "239.255.255.250", "255.255.255.255", "0.0.0.0" })
         {
             var peer = new IPEndPoint(IPAddress.Parse(address), 1900);
-            var permission = await client.RequestAsync(Signed(Stun.CreatePermission, realm, nonce).AddXorAddress(Stun.AttrXorPeerAddress, peer), key, token);
+            var permission = await client.RequestAsync(Signed(Stun.CREATE_PERMISSION, realm, nonce).AddXorAddress(Stun.ATTR_XOR_PEER_ADDRESS, peer), key, token);
             Assert.Equal(403, permission.GetErrorCode());
-            var channel = await client.RequestAsync(Signed(Stun.ChannelBind, realm, nonce)
-                .Add(Stun.AttrChannelNumber, [0x40, 0x02, 0, 0])
-                .AddXorAddress(Stun.AttrXorPeerAddress, peer), key, token);
+            var channel = await client.RequestAsync(Signed(Stun.CHANNEL_BIND, realm, nonce)
+                .Add(Stun.ATTR_CHANNEL_NUMBER, [0x40, 0x02, 0, 0])
+                .AddXorAddress(Stun.ATTR_XOR_PEER_ADDRESS, peer), key, token);
             Assert.Equal(403, channel.GetErrorCode());
         }
 
         // An ordinary address of another network is still served.
         var allowed = await client.RequestAsync(
-            Signed(Stun.CreatePermission, realm, nonce).AddXorAddress(Stun.AttrXorPeerAddress, new IPEndPoint(IPAddress.Parse("192.168.77.5"), 5000)), key, token);
-        Assert.Equal(Stun.ClassSuccess, allowed.Class);
+            Signed(Stun.CREATE_PERMISSION, realm, nonce).AddXorAddress(Stun.ATTR_XOR_PEER_ADDRESS, new IPEndPoint(IPAddress.Parse("192.168.77.5"), 5000)), key, token);
+        Assert.Equal(Stun.CLASS_SUCCESS, allowed.Class);
     }
 }

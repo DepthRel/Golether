@@ -61,7 +61,7 @@ if ($LASTEXITCODE -ne 0 -or -not $projectUrl) {
 
 $iscc = (Get-Command 'ISCC.exe' -ErrorAction SilentlyContinue).Source
 if (-not $iscc) {
-    # Любая установленная версия Inno Setup (6, 7 и новее), включая установку в профиль пользователя.
+    # Any installed version of Inno Setup (6, 7 and newer), including an installation into the user profile.
     $roots = @("${env:ProgramFiles(x86)}", "$env:ProgramFiles", "$env:LOCALAPPDATA\Programs") | Where-Object { $_ -and (Test-Path $_) }
     $iscc = $roots |
         ForEach-Object { Get-ChildItem -Path $_ -Filter "Inno Setup*" -Directory -ErrorAction SilentlyContinue } |
@@ -73,9 +73,9 @@ if (-not $iscc) {
 
 if (-not $iscc) {
     throw @'
-Inno Setup не найден. Установите его (бесплатно, https://jrsoftware.org/isdl.php)
-или добавьте ISCC.exe в PATH, затем запустите скрипт снова.
-Папка сервера и zip уже готовы в artifacts/publish — ими можно пользоваться и без установщика.
+Inno Setup was not found. Install it (free, https://jrsoftware.org/isdl.php)
+or add ISCC.exe to PATH, then run the script again.
+The server folder and the zip are ready in artifacts/publish: they can be used without the installer.
 '@
 }
 
@@ -102,6 +102,6 @@ if (-not (Test-Path $setup)) {
 
 $hash = (Get-FileHash -Algorithm SHA256 $setup).Hash
 Write-Host ''
-Write-Host "Установщик: $setup"
-Write-Host ("Размер: {0:N1} МБ" -f ((Get-Item $setup).Length / 1MB))
+Write-Host "Installer: $setup"
+Write-Host ("Size: {0:N1} MB" -f ((Get-Item $setup).Length / 1MB))
 Write-Host "SHA-256: $hash"

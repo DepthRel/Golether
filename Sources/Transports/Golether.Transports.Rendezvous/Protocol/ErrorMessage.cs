@@ -1,3 +1,5 @@
+using Golether.Core.Enums;
+
 namespace Golether.Transports.Rendezvous.Protocol;
 
 /// <summary>

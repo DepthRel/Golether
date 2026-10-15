@@ -8,15 +8,15 @@ internal static class MpvError
     /// <summary>
     /// Loading failed (<c>MPV_ERROR_LOADING_FAILED</c>).
     /// </summary>
-    public const int LoadingFailed = -13;
+    public const int LOADING_FAILED = -13;
 
     /// <summary>
     /// The operation is unsupported (<c>MPV_ERROR_UNSUPPORTED</c>).
     /// </summary>
-    public const int Unsupported = -18;
+    public const int UNSUPPORTED = -18;
 
     /// <summary>
     /// A generic error (<c>MPV_ERROR_GENERIC</c>).
     /// </summary>
-    public const int Generic = -20;
+    public const int GENERIC = -20;
 }

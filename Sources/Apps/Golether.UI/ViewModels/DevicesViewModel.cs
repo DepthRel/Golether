@@ -16,12 +16,12 @@ public sealed partial class DevicesViewModel : ObservableObject
     /// <summary>
     /// The setting with the camera identifier.
     /// </summary>
-    public const string CameraSetting = "conference.camera";
+    public const string CAMERA_SETTING = "conference.camera";
 
     /// <summary>
     /// The setting with the microphone identifier.
     /// </summary>
-    public const string MicrophoneSetting = "conference.microphone";
+    public const string MICROPHONE_SETTING = "conference.microphone";
 
     /// <summary>
     /// The devices backend.
@@ -104,8 +104,8 @@ public sealed partial class DevicesViewModel : ObservableObject
             return;
         }
 
-        var cameraId = await _settings.GetAsync(CameraSetting, CancellationToken.None).ConfigureAwait(true);
-        var microphoneId = await _settings.GetAsync(MicrophoneSetting, CancellationToken.None).ConfigureAwait(true);
+        var cameraId = await _settings.GetAsync(CAMERA_SETTING, CancellationToken.None).ConfigureAwait(true);
+        var microphoneId = await _settings.GetAsync(MICROPHONE_SETTING, CancellationToken.None).ConfigureAwait(true);
         _updating = true;
         try
         {
@@ -128,7 +128,7 @@ public sealed partial class DevicesViewModel : ObservableObject
     {
         if (!_updating && value is not null)
         {
-            _ = SaveAndApplyAsync(CameraSetting, value);
+            _ = SaveAndApplyAsync(CAMERA_SETTING, value);
         }
     }
 
@@ -140,7 +140,7 @@ public sealed partial class DevicesViewModel : ObservableObject
     {
         if (!_updating && value is not null)
         {
-            _ = SaveAndApplyAsync(MicrophoneSetting, value);
+            _ = SaveAndApplyAsync(MICROPHONE_SETTING, value);
         }
     }
 

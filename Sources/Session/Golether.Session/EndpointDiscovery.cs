@@ -37,8 +37,8 @@ public static class EndpointDiscovery
             foreach (var unicast in nic.GetIPProperties().UnicastAddresses)
             {
                 var address = unicast.Address;
-                if (IPAddress.IsLoopback(address) || address.IsIPv6LinkLocal || address.IsIPv6SiteLocal
-                    || (address.AddressFamily == AddressFamily.InterNetwork && address.GetAddressBytes() is [169, 254, ..]))
+                if (IPAddress.IsLoopback(address) || address.IsIPv6LinkLocal || address.IsIPv6SiteLocal ||
+                    (address.AddressFamily == AddressFamily.InterNetwork && address.GetAddressBytes() is [169, 254, ..]))
                 {
                     continue;
                 }
@@ -72,9 +72,9 @@ public static class EndpointDiscovery
     /// <param name="nic">The interface.</param>
     /// <returns><see langword="true"/> for a tunnel interface.</returns>
     private static bool IsTunnel(NetworkInterface nic)
-        => nic.Name.Contains("golether", StringComparison.OrdinalIgnoreCase)
-           || nic.Description.Contains("AmneziaWG", StringComparison.OrdinalIgnoreCase)
-           || nic.Description.Contains("WireGuard", StringComparison.OrdinalIgnoreCase);
+        => nic.Name.Contains("golether", StringComparison.OrdinalIgnoreCase) ||
+           nic.Description.Contains("AmneziaWG", StringComparison.OrdinalIgnoreCase) ||
+           nic.Description.Contains("WireGuard", StringComparison.OrdinalIgnoreCase);
 
     /// <summary>
     /// Removes the IPv6 scope suffix.

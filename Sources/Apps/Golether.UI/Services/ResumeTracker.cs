@@ -15,7 +15,7 @@ public sealed class ResumeTracker
     /// <summary>
     /// The prefix of the settings with positions.
     /// </summary>
-    public const string SettingPrefix = "resume.";
+    public const string SETTING_PREFIX = "resume.";
 
     /// <summary>
     /// Positions before this are not worth offering.
@@ -71,7 +71,7 @@ public sealed class ResumeTracker
     {
         ArgumentException.ThrowIfNullOrEmpty(mediaId);
         _mediaId = null;
-        var text = await _settings.GetAsync(SettingPrefix + mediaId, CancellationToken.None).ConfigureAwait(true);
+        var text = await _settings.GetAsync(SETTING_PREFIX + mediaId, CancellationToken.None).ConfigureAwait(true);
         _mediaId = mediaId;
         _saved = double.TryParse(text, NumberStyles.Float, CultureInfo.InvariantCulture, out var seconds) && seconds >= 0
             ? TimeSpan.FromSeconds(seconds)
@@ -123,7 +123,7 @@ public sealed class ResumeTracker
         _saved = value;
         _savedAt = now;
         _ = _settings.SetAsync(
-            SettingPrefix + mediaId,
+            SETTING_PREFIX + mediaId,
             Math.Round(value.TotalSeconds, 1).ToString(CultureInfo.InvariantCulture),
             CancellationToken.None);
     }

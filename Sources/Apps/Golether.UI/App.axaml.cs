@@ -3,11 +3,11 @@ using Avalonia.Controls;
 using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Markup.Xaml;
 using Avalonia.Threading;
+using Microsoft.Extensions.Logging;
 using Golether.Localization;
 using Golether.UI.Services;
 using Golether.UI.Views;
 using Golether.UI.Views.Dialogs;
-using Microsoft.Extensions.Logging;
 
 namespace Golether.UI;
 

@@ -39,8 +39,10 @@ transcode or install a server.
 - **Works behind grey IPs.** A tiny rendezvous server of your own (any machine with a public IP) introduces the
   host and the guests, and they punch a direct connection through their routers: no port forwarding on either side,
   and nothing of the session passes through the server. See the
-  [administrator guide](Sources/Apps/Golether.Web.Server/ADMIN-GUIDE.md) (Windows, Linux, macOS; [in Russian](Sources/Apps/Golether.Web.Server/ADMIN-GUIDE.ru.md)) and
-  [how it works](Docs/En/RendezvousServer.md).
+  [administrator guide](Sources/Apps/Golether.Web.Server/ADMIN-GUIDE.md) (Windows, Linux, macOS; also in
+  [Deutsch](Sources/Apps/Golether.Web.Server/ADMIN-GUIDE.de.md), [Español](Sources/Apps/Golether.Web.Server/ADMIN-GUIDE.es.md),
+  [Français](Sources/Apps/Golether.Web.Server/ADMIN-GUIDE.fr.md), [Português](Sources/Apps/Golether.Web.Server/ADMIN-GUIDE.pt.md)
+  and [Русский](Sources/Apps/Golether.Web.Server/ADMIN-GUIDE.ru.md)) and [how it works](Docs/En/RendezvousServer.md).
 - **AmneziaWG tunnel, built in.** When the direct path is blocked, raise a tunnel between participants right from the
   app: no server of your own, no separate VPN client to set up.
 - **Secure by default.** Device keys are pinned, the host admits every participant, and both sides compare a
@@ -49,7 +51,10 @@ transcode or install a server.
   join. The same invitation as a key to paste is always there as the fallback.
 - **Instant start.** Open a video with "Open with → Golether", and a session is created for it. UPnP / NAT-PMP can
   open the port on your router automatically.
-- **Resume where you stopped**, and a UI in English and Russian (a new language is one JSON file).
+- **Resume where you stopped.**
+- **Six languages**: English, Deutsch, Español, Français, Português and Русский. The language of the system is chosen
+  on the first start (English when there is no such pack), and every text switches on the fly. A new language is one
+  JSON file and a flag.
 
 ## Built with
 
@@ -124,7 +129,8 @@ combination, so two instances can be tried on one machine. Each profile builds o
 
 ```
 Sources/
-  Apps/          the application (Golether.UI)
+  Apps/          the application (Golether.UI), the rendezvous server (Golether.Web.Server), its monitor
+                 (Golether.Web.Server.UI) and their shared contracts, the project page (Golether.Pages)
   Components/    native components: catalog, checksums, installer
   Core/          core, data and migrations, localization
   Database/      console database migrator
@@ -133,25 +139,28 @@ Sources/
   Session/       host and participant sessions
   Sync/          protocol and playback synchronization
   Transports/    TLS, relay, port mapping
+  Tools/         the golether-components utility for package builds
   Tunnels/       AmneziaWG tunnels
 Tests/           one test project per module
-Docs/            documentation: En (the main set), Ru (the same set in Russian), images
-Scripts/         packaging: App (the application), Server (the server and its monitor), Assets (pictures)
+Docs/            documentation: En (the main set), De, Es, Fr, Pt, Ru (the same set translated), images
+Scripts/         packaging: App (the application), Server (the server and its monitor), Assets (pictures),
+                 Shared (helpers); build-release.ps1 builds a whole release
 ```
 
 ## Documentation
 
-The documentation is kept by language: [English](Docs/En) is the main set, [Russian](Docs/Ru) is the same set
-translated.
+The documentation is kept by language: [English](Docs/En) is the main set, and the same set is translated into
+[Deutsch](Docs/De), [Español](Docs/Es), [Français](Docs/Fr), [Português](Docs/Pt) and [Русский](Docs/Ru) (see
+[Docs/README.md](Docs/README.md)).
 
-| Document | Audience | На русском |
-|---|---|---|
-| [User guide](Docs/En/UserGuide.md) | users: how to show a movie, invite people, raise a tunnel | [Руководство](Docs/Ru/UserGuide.md) |
-| [Architecture](Docs/En/Architecture.md) | design documentation: modules, synchronization, security, roadmap | [Архитектура](Docs/Ru/Architecture.md) |
-| [Protocol](Docs/En/Protocol.md) | network protocol and packet formats | [Протокол](Docs/Ru/Protocol.md) |
-| [Rendezvous server](Docs/En/RendezvousServer.md) | how the rendezvous server works and how to build it | [Сервер рукопожатий](Docs/Ru/RendezvousServer.md) |
-| [Development](Docs/En/Development.md) | developers: build, tests, debugging, packaging | [Разработка](Docs/Ru/Development.md) |
-| [AGENTS.md](AGENTS.md) | code rules (in Russian) | |
+| Document | Audience |
+|---|---|
+| [User guide](Docs/En/UserGuide.md) | users: how to show a movie, invite people, raise a tunnel |
+| [Architecture](Docs/En/Architecture.md) | design documentation: modules, synchronization, security, roadmap |
+| [Protocol](Docs/En/Protocol.md) | network protocol and packet formats |
+| [Rendezvous server](Docs/En/RendezvousServer.md) | how the rendezvous server works and how to build it |
+| [Development](Docs/En/Development.md) | developers: build, tests, debugging, packaging |
+| [AGENTS.md](AGENTS.md) | code rules and code style for people and coding agents |
 
 ## Packaging
 
@@ -174,8 +183,12 @@ Linux package inside WSL for you: it copies the sources into the WSL file system
 the executable permissions) and brings the archive back to `artifacts/publish`. A macOS package must be built on
 macOS: the icon and the ad-hoc signature come from `sips`, `iconutil` and `codesign`, which exist only there, and
 without the signature an arm64 build will not start on Apple Silicon. Without a Mac, use the **Packages** workflow
-(`.github/workflows/packages.yml`): run it by hand or push a version tag, and it builds the Linux and macOS packages
-on GitHub runners and attaches them to the release of that tag.
+(`.github/workflows/packages.yml`): run it by hand or push a version tag, and it builds the macOS packages on GitHub
+runners and attaches them to the release of that tag.
+
+Everything else of a release is built on Windows with one command: `./Scripts/build-release.ps1` runs the app
+installer, the Linux app package (WSL), the server installer and the Linux and macOS server packages one after
+another and writes `artifacts/publish/SHA256SUMS-<version>.txt` (see [Scripts/README.md](Scripts/README.md)).
 
 ## License
 

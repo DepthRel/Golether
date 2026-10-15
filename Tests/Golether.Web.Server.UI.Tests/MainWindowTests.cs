@@ -1,14 +1,17 @@
+using System.Globalization;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Headless;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
+using NSubstitute;
+using Golether.Core.Enums;
 using Golether.Localization;
 using Golether.Web.Server.Contracts;
+using Golether.Web.Server.UI.Enums;
 using Golether.Web.Server.UI.Services;
 using Golether.Web.Server.UI.ViewModels;
 using Golether.Web.Server.UI.Views;
-using NSubstitute;
 
 namespace Golether.Web.Server.UI.Tests;
 
@@ -16,13 +19,13 @@ namespace Golether.Web.Server.UI.Tests;
 /// The window of the monitor in the Avalonia headless platform: it shows the state, the table lines up with its
 /// header, and a narrow window still holds everything.
 /// </summary>
-[Collection(TextsCollection.Name)]
+[Collection(TextsCollection.NAME)]
 public sealed class MainWindowTests : IDisposable
 {
     /// <summary>
     /// The headless session, shared by the tests of this class.
     /// </summary>
-    private static readonly Lazy<HeadlessUnitTestSession> Session = new(() => HeadlessUnitTestSession.StartNew(typeof(TestApp)));
+    private static readonly Lazy<HeadlessUnitTestSession> _session = new(() => HeadlessUnitTestSession.StartNew(typeof(TestApp)));
 
     /// <summary>
     /// The settings file of the test.
@@ -40,7 +43,7 @@ public sealed class MainWindowTests : IDisposable
     /// </summary>
     /// <returns>A task that completes when the test is done.</returns>
     [Fact]
-    public Task Window_ShowsTheJournalInColumns() => Session.Value.Dispatch(
+    public Task Window_ShowsTheJournalInColumns() => _session.Value.Dispatch(
         async () =>
         {
             var model = CreateModel();
@@ -89,7 +92,7 @@ public sealed class MainWindowTests : IDisposable
     /// </summary>
     /// <returns>A task that completes when the test is done.</returns>
     [Fact]
-    public Task StopQuestion_DefaultsToCancel() => Session.Value.Dispatch(
+    public Task StopQuestion_DefaultsToCancel() => _session.Value.Dispatch(
         () =>
         {
             var dialog = new ConfirmDialog(Texts.Get("Monitor.Stop.Confirm.Title"), Texts.Get("Monitor.Stop.Confirm.Text"), Texts.Get("Monitor.Stop"));
@@ -104,6 +107,22 @@ public sealed class MainWindowTests : IDisposable
             Assert.Equal(Texts.Get("Monitor.Cancel"), cancel.Content);
             Assert.Contains(buttons, b => b.Classes.Contains("danger") && Equals(b.Content, Texts.Get("Monitor.Stop")));
             dialog.Close();
+        },
+        TestContext.Current.CancellationToken);
+
+    /// <summary>
+    /// Every language the monitor speaks is offered with its flag, and a language without one is shown by name only.
+    /// </summary>
+    /// <returns>A task that completes when the test is done.</returns>
+    [Fact]
+    public Task LanguageSelector_ShowsTheFlagOfEveryLanguage() => _session.Value.Dispatch(
+        () =>
+        {
+            var flags = FlagImageConverter.Instance;
+
+            Assert.All(Texts.Localizer.Languages, language => Assert.NotNull(flags.Convert(language, typeof(object), null, CultureInfo.InvariantCulture)));
+            Assert.Null(flags.Convert(new LanguageInfo("xx", "Nowhere"), typeof(object), null, CultureInfo.InvariantCulture));
+            Assert.Null(flags.Convert("en", typeof(object), null, CultureInfo.InvariantCulture));
         },
         TestContext.Current.CancellationToken);
 
@@ -126,7 +145,7 @@ public sealed class MainWindowTests : IDisposable
             [
                 new JournalEntry(1, started, JournalEvent.ServerStarted, Detail: "0.3.1"),
                 new JournalEntry(2, started.AddSeconds(5), JournalEvent.HostRegistered, "203.0.113.7:51234", "EC80-995D-ECE8-183B", "1a2b3c4d"),
-                new JournalEntry(3, started.AddSeconds(9), JournalEvent.MeetingFailed, "198.51.100.20:40000", Room: "1a2b3c4d", Reason: Golether.Transports.Rendezvous.Protocol.RendezvousError.Timeout),
+                new JournalEntry(3, started.AddSeconds(9), JournalEvent.MeetingFailed, "198.51.100.20:40000", Room: "1a2b3c4d", Reason: RendezvousError.Timeout),
             ],
             3));
         return new MainViewModel(api, service, new ServerSettingsStore(_file, service), Substitute.For<IDialogs>(), TimeProvider.System);
@@ -149,20 +168,4 @@ public sealed class MainWindowTests : IDisposable
         using var file = File.Create(Path.Combine(folder, name + ".png"));
         window.CaptureRenderedFrame()!.Save(file, Avalonia.Media.Imaging.PngBitmapEncoderOptions.Default);
     }
-}
-
-/// <summary>
-/// The monitor application on the headless platform, drawn with Skia so frames can be saved.
-/// </summary>
-public static class TestApp
-{
-    /// <summary>
-    /// Builds the application.
-    /// </summary>
-    /// <returns>The builder.</returns>
-    public static AppBuilder BuildAvaloniaApp()
-        => AppBuilder.Configure<App>()
-            .UseSkia()
-            .WithInterFont()
-            .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false });
 }

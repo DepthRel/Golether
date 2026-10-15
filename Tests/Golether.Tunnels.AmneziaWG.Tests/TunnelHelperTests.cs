@@ -1,8 +1,8 @@
 using System.ComponentModel;
+using NSubstitute;
 using Golether.Localization;
 using Golether.Tunnels.AmneziaWG.Configuration;
 using Golether.Tunnels.AmneziaWG.Control;
-using NSubstitute;
 
 namespace Golether.Tunnels.AmneziaWG.Tests;
 
@@ -14,7 +14,7 @@ public sealed class TunnelHelperTests : IDisposable
     /// <summary>
     /// The helper executable used in the tests.
     /// </summary>
-    private const string Helper = @"C:\Golether\app\Golether.exe";
+    private const string HELPER = @"C:\Golether\app\Golether.exe";
 
     /// <summary>
     /// The tunnels directory.
@@ -66,7 +66,7 @@ public sealed class TunnelHelperTests : IDisposable
         foreach (var args in rejected)
         {
             Assert.False(TunnelHelper.TryParse(args, out _, out _, out _), string.Join(' ', args));
-            Assert.Equal(TunnelHelper.InvalidArguments, TunnelHelper.Run(args, Substitute.For<IProcessRunner>(), _amneziaWg));
+            Assert.Equal(TunnelHelper.INVALID_ARGUMENTS, TunnelHelper.Run(args, Substitute.For<IProcessRunner>(), _amneziaWg));
         }
     }
 
@@ -84,11 +84,11 @@ public sealed class TunnelHelperTests : IDisposable
         runner.RunAsync(_amneziaWg, Arg.Is<IReadOnlyList<string>>(a => a[0] == "/installtunnelservice"), Arg.Any<TimeSpan>(), Arg.Any<CancellationToken>())
             .Returns(new ProcessResult(0, string.Empty, string.Empty), new ProcessResult(5, string.Empty, "Access is denied"));
 
-        Assert.Equal(TunnelHelper.Success, TunnelHelper.Run(TunnelHelper.BuildArguments("up", config, result), runner, _amneziaWg));
+        Assert.Equal(TunnelHelper.SUCCESS, TunnelHelper.Run(TunnelHelper.BuildArguments("up", config, result), runner, _amneziaWg));
         Assert.False(File.Exists(result));
         runner.Received(1).RunAsync(_amneziaWg, Arg.Is<IReadOnlyList<string>>(a => a.SequenceEqual(new[] { "/installtunnelservice", config })), Arg.Any<TimeSpan>(), Arg.Any<CancellationToken>());
 
-        Assert.Equal(TunnelHelper.Failure, TunnelHelper.Run(TunnelHelper.BuildArguments("up", config, result), runner, _amneziaWg));
+        Assert.Equal(TunnelHelper.FAILURE, TunnelHelper.Run(TunnelHelper.BuildArguments("up", config, result), runner, _amneziaWg));
         Assert.Contains("Access is denied", File.ReadAllText(result), StringComparison.Ordinal);
     }
 
@@ -105,7 +105,7 @@ public sealed class TunnelHelperTests : IDisposable
         runner.RunAsync(_amneziaWg, Arg.Any<IReadOnlyList<string>>(), Arg.Any<TimeSpan>(), Arg.Any<CancellationToken>())
             .Returns(new ProcessResult(5, string.Empty, "Access is denied"));
 
-        Assert.Equal(TunnelHelper.Failure, TunnelHelper.Run(TunnelHelper.BuildArguments("down", config, result), runner, _amneziaWg));
+        Assert.Equal(TunnelHelper.FAILURE, TunnelHelper.Run(TunnelHelper.BuildArguments("down", config, result), runner, _amneziaWg));
         var text = File.ReadAllText(result);
 
         Assert.DoesNotContain("завершился", text, StringComparison.Ordinal);
@@ -129,13 +129,13 @@ public sealed class TunnelHelperTests : IDisposable
         var direct = Substitute.For<IProcessRunner>();
         var elevated = Substitute.For<IProcessRunner>();
         IReadOnlyList<string>? helperArgs = null;
-        elevated.RunAsync(Helper, Arg.Any<IReadOnlyList<string>>(), Arg.Any<TimeSpan>(), Arg.Any<CancellationToken>())
+        elevated.RunAsync(HELPER, Arg.Any<IReadOnlyList<string>>(), Arg.Any<TimeSpan>(), Arg.Any<CancellationToken>())
             .Returns(call =>
             {
                 helperArgs = call.ArgAt<IReadOnlyList<string>>(1);
                 return new ProcessResult(0, string.Empty, string.Empty);
             });
-        var options = new AwgCliOptions { ConfigDirectory = _directory.FullName, WindowsExecutable = _amneziaWg, HelperExecutable = Helper };
+        var options = new AwgCliOptions { ConfigDirectory = _directory.FullName, WindowsExecutable = _amneziaWg, HelperExecutable = HELPER };
         var controller = new AwgCliTunnelController(direct, options, isWindows: true, elevatedRunner: elevated);
 
         await controller.UpAsync("golether0", HostTunnelInterface.Create().BuildConfiguration([]), token);
@@ -146,18 +146,18 @@ public sealed class TunnelHelperTests : IDisposable
         Assert.Equal(controller.GetConfigPath("golether0"), config);
         await direct.DidNotReceiveWithAnyArgs().RunAsync(default!, default!, default, Arg.Any<CancellationToken>());
 
-        elevated.RunAsync(Helper, Arg.Any<IReadOnlyList<string>>(), Arg.Any<TimeSpan>(), Arg.Any<CancellationToken>())
+        elevated.RunAsync(HELPER, Arg.Any<IReadOnlyList<string>>(), Arg.Any<TimeSpan>(), Arg.Any<CancellationToken>())
             .Returns(call =>
             {
                 File.WriteAllText(call.ArgAt<IReadOnlyList<string>>(1)[3], TunnelHelper.EncodeToolFailure("amneziawg.exe", 5, "denied"));
-                return new ProcessResult(TunnelHelper.Failure, string.Empty, string.Empty);
+                return new ProcessResult(TunnelHelper.FAILURE, string.Empty, string.Empty);
             });
         var failure = await Assert.ThrowsAsync<TunnelControlException>(() => controller.DownAsync("golether0", token));
         Assert.Contains("кодом 5", failure.Message, StringComparison.Ordinal);
         Assert.Empty(_directory.GetFiles("*.result"));
 
-        elevated.RunAsync(Helper, Arg.Any<IReadOnlyList<string>>(), Arg.Any<TimeSpan>(), Arg.Any<CancellationToken>())
-            .Returns<ProcessResult>(_ => throw new Win32Exception(ElevatedProcessRunner.Cancelled));
+        elevated.RunAsync(HELPER, Arg.Any<IReadOnlyList<string>>(), Arg.Any<TimeSpan>(), Arg.Any<CancellationToken>())
+            .Returns<ProcessResult>(_ => throw new Win32Exception(ElevatedProcessRunner.CANCELLED));
         var declined = await Assert.ThrowsAsync<TunnelControlException>(() => controller.DownAsync("golether0", token));
         Assert.Contains("права администратора", declined.Message, StringComparison.Ordinal);
     }

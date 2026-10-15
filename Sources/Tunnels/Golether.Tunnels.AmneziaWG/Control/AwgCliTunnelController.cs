@@ -1,9 +1,9 @@
 using System.ComponentModel;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 using Golether.Localization;
 using Golether.Security.Secrets;
 using Golether.Tunnels.AmneziaWG.Configuration;
-using Microsoft.Extensions.Logging;
-using Microsoft.Extensions.Logging.Abstractions;
 
 namespace Golether.Tunnels.AmneziaWG.Control;
 
@@ -120,7 +120,7 @@ public sealed class AwgCliTunnelController : ITunnelController
 
         if (_windows && _options.HelperExecutable is not null)
         {
-            await RunHelperAsync(TunnelHelper.UpVerb, path, cancellationToken).ConfigureAwait(false);
+            await RunHelperAsync(TunnelHelper.UP_VERB, path, cancellationToken).ConfigureAwait(false);
         }
         else if (_windows)
         {
@@ -144,7 +144,7 @@ public sealed class AwgCliTunnelController : ITunnelController
         var path = GetConfigPath(interfaceName);
         if (_windows && _options.HelperExecutable is not null)
         {
-            await RunHelperAsync(TunnelHelper.DownVerb, path, cancellationToken).ConfigureAwait(false);
+            await RunHelperAsync(TunnelHelper.DOWN_VERB, path, cancellationToken).ConfigureAwait(false);
         }
         else if (_windows)
         {
@@ -196,14 +196,14 @@ public sealed class AwgCliTunnelController : ITunnelController
     /// <exception cref="TunnelControlException">The prompt was declined or AmneziaWG failed.</exception>
     private async Task RunHelperAsync(string verb, string configPath, CancellationToken cancellationToken)
     {
-        var resultPath = Path.Combine(Path.GetDirectoryName(configPath)!, $"helper-{Guid.NewGuid():N}{TunnelHelper.ResultExtension}");
+        var resultPath = Path.Combine(Path.GetDirectoryName(configPath)!, $"helper-{Guid.NewGuid():N}{TunnelHelper.RESULT_EXTENSION}");
         ProcessResult result;
         try
         {
             result = await _elevatedRunner.RunAsync(
                 _options.HelperExecutable!, TunnelHelper.BuildArguments(verb, configPath, resultPath), _options.Timeout + _options.Timeout, cancellationToken).ConfigureAwait(false);
         }
-        catch (Win32Exception ex) when (ex.NativeErrorCode == ElevatedProcessRunner.Cancelled)
+        catch (Win32Exception ex) when (ex.NativeErrorCode == ElevatedProcessRunner.CANCELLED)
         {
             throw new TunnelControlException(Texts.Get("Tunnel.Error.ElevationDeclined"), ex);
         }
@@ -216,7 +216,7 @@ public sealed class AwgCliTunnelController : ITunnelController
         File.Delete(resultPath);
         if (!result.Succeeded)
         {
-            throw new TunnelControlException(result.ExitCode == TunnelHelper.InvalidArguments
+            throw new TunnelControlException(result.ExitCode == TunnelHelper.INVALID_ARGUMENTS
                 ? Texts.Get("Tunnel.Error.HelperRejected")
                 : detail.Length > 0 ? TunnelHelper.DescribeFailure(detail) : Texts.Format("Tunnel.Error.HelperExitCode", result.ExitCode));
         }

@@ -107,7 +107,8 @@ GoletherServer/
   golether-server(.exe)   the launcher: the same .NET host with the server icon, pointing at bin/ (like Golether.exe)
   bin/                    the program, the .NET runtime and the libraries
   config/appsettings.json the settings; the program in bin/ finds them by itself (PackageLayout); config/monitor.json the settings of the monitor
-  docs/                   ADMIN-GUIDE.md and README.txt in English, ADMIN-GUIDE.ru.md and README.ru.txt in Russian
+  docs/                   ADMIN-GUIDE.md and README.txt in English, ADMIN-GUIDE.<code>.md and README.<code>.txt in
+                          German, Spanish, French, Portuguese and Russian (de, es, fr, pt, ru)
   service/                Linux and macOS: install-service.sh and golether-server.service / org.golether.server.plist
   golether-server-monitor(.exe)  the launcher of the monitor: the application host pointing at monitor/
   monitor/                Golether Server Monitor (Golether.Web.Server.UI), self-contained like the server
@@ -117,14 +118,15 @@ When started from the sources (`dotnet run`) there is no layout, and `appsetting
 The archives for Linux and macOS can be built on Windows as well (Git Bash): the script sets the executable
 permissions itself, and the local signature for macOS is put on by `install-service.sh` during installation.
 
-The Windows installer speaks English and Russian (English is offered first) and shows the note in the chosen
-language after the installation.
+The Windows installer speaks English, German, Spanish, French, Portuguese and Russian (the language of Windows is
+preselected, English when the wizard does not speak it); after the installation it shows the note and opens the
+administrator guide in the chosen language.
 
 The server icon is the application icon with a server rack badge: `Assets/golether-server.svg` in the server
 project; the raster versions are drawn by `Scripts/Assets/generate-icon.ps1 -Server`.
 
 For debugging the server runs straight from the sources: `dotnet run --project Sources/Apps/Golether.Web.Server` or
-the "Сервер рукопожатий" profile in VS Code.
+the "Rendezvous server" profile in VS Code.
 
 ## The monitor
 
@@ -143,8 +145,8 @@ nor Avalonia.
 - **`GET /journal?after=N`** on the status address answers the events after number N (at most 1000) and the start
   time of the run; a different start time tells the monitor that the server was restarted. It answers only
   requests from this computer (`403` otherwise), whatever address `Urls` has. Events and reasons travel by name
-  (`ServerContract.Json`), and the monitor words them in the language of the system (`Monitor.Event.*`,
-  `Monitor.Reason.*`).
+  (`ServerContract.Json`), and the monitor words them in its own language (`Monitor.Event.*`, `Monitor.Reason.*`):
+  the language of the system on the first start, then the one chosen in its language selector (with flags).
 - **The service** is controlled with the tools of the system: `sc query` and PowerShell run as administrator on
   Windows, `systemctl` and `pkexec` on Linux, `launchctl` and `osascript ... with administrator privileges` on macOS.
   The state is read without special rights; every change asks for them at the moment of the action. Saving the

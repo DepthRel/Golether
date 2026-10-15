@@ -6,7 +6,7 @@ namespace Golether.UI.Localization;
 
 /// <summary>
 /// The markup extension that puts a localized text into XAML: <c>Text="{loc:Loc Main.Title}"</c>. With
-/// <see cref="Arg"/> the text is a format string: <c>{loc:Loc Key=Main.Device, Arg={Binding Fingerprint}}</c>. The
+/// <see cref="Arg"/> the text is a format string: <c>{loc:Loc Key=Main.Device, Arg={BINDING Fingerprint}}</c>. The
 /// text follows the language the user chose without reopening the window.
 /// </summary>
 public sealed class LocExtension : MarkupExtension

@@ -104,7 +104,8 @@ GoletherServer/
   golether-server(.exe)   запускатель: тот же хост .NET с иконкой сервера, указывающий на bin/ (как Golether.exe)
   bin/                    программа, среда .NET и библиотеки
   config/appsettings.json настройки; программа из bin/ находит их сама (PackageLayout); config/monitor.json — настройки монитора
-  docs/                   ADMIN-GUIDE.md и README.txt на английском, ADMIN-GUIDE.ru.md и README.ru.txt на русском
+  docs/                   ADMIN-GUIDE.md и README.txt на английском, ADMIN-GUIDE.<код>.md и README.<код>.txt на
+                          немецком, испанском, французском, португальском и русском (de, es, fr, pt, ru)
   service/                Linux и macOS: install-service.sh и golether-server.service / org.golether.server.plist
   golether-server-monitor(.exe)  запускатель монитора: хост приложения, указывающий на monitor/
   monitor/                Golether Server Monitor (Golether.Web.Server.UI), самодостаточный, как и сервер
@@ -114,14 +115,15 @@ GoletherServer/
 Linux и macOS можно собирать и на Windows (Git Bash): права на запуск программ скрипт выставляет сам, а локальную
 подпись для macOS ставит `install-service.sh` при установке.
 
-Установщик для Windows говорит по-английски и по-русски (английский предлагается первым) и после установки
-показывает памятку на выбранном языке.
+Установщик для Windows говорит по-английски, по-немецки, по-испански, по-французски, по-португальски и по-русски
+(заранее выбран язык Windows, а если мастер его не знает — английский); после установки он показывает памятку и
+открывает руководство администратора на выбранном языке.
 
 Иконка сервера — иконка приложения с бейджем серверной стойки: `Assets/golether-server.svg` в проекте сервера,
 растровые версии рисует `Scripts/Assets/generate-icon.ps1 -Server`.
 
 Для отладки сервер запускается прямо из исходников: `dotnet run --project Sources/Apps/Golether.Web.Server` или
-профиль «Сервер рукопожатий» в VS Code.
+профиль «Rendezvous server» в VS Code.
 
 ## Монитор
 
@@ -139,7 +141,8 @@ Linux и macOS можно собирать и на Windows (Git Bash): прав�
 - **`GET /journal?after=N`** на адресе состояния отвечает событиями после номера N (не больше 1000) и временем
   запуска; другое время запуска говорит монитору, что сервер перезапускали. Отвечает только запросам с этого
   компьютера (иначе `403`), какой бы адрес ни стоял в `Urls`. События и причины передаются именами
-  (`ServerContract.Json`), а монитор переводит их на язык системы (`Monitor.Event.*`, `Monitor.Reason.*`).
+  (`ServerContract.Json`), а монитор переводит их на свой язык (`Monitor.Event.*`, `Monitor.Reason.*`): на первом
+  запуске — язык системы, потом — выбранный в его списке языков (с флагами).
 - **Служба** управляется средствами системы: `sc query` и PowerShell от администратора на Windows, `systemctl` и
   `pkexec` на Linux, `launchctl` и `osascript ... with administrator privileges` на macOS. Состояние читается без
   особых прав; любое изменение просит их в момент действия. Сохранение настроек кладёт новый файл на место и

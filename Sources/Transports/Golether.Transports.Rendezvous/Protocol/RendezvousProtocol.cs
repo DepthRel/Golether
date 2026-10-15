@@ -14,33 +14,33 @@ public static class RendezvousProtocol
     /// <summary>
     /// The protocol version implemented by this build.
     /// </summary>
-    public const int Version = 1;
+    public const int VERSION = 1;
 
     /// <summary>
     /// The default port of the server: TCP for meetings, UDP for STUN.
     /// </summary>
-    public const int DefaultPort = 47900;
+    public const int DEFAULT_PORT = 47900;
 
     /// <summary>
     /// The largest frame either side accepts: 16 KiB (a certificate and a signature fit easily).
     /// </summary>
-    public const int MaxFrameSize = 16 * 1024;
+    public const int MAX_FRAME_SIZE = 16 * 1024;
 
     /// <summary>
     /// The largest number of local addresses a device may report.
     /// </summary>
-    public const int MaxLocals = 8;
+    public const int MAX_LOCALS = 8;
 
     /// <summary>
     /// The number of random bytes in a nonce and in a meeting identifier.
     /// </summary>
-    public const int RandomBytes = 16;
+    public const int RANDOM_BYTES = 16;
 
     /// <summary>
     /// Creates a random nonce or meeting identifier (base64url).
     /// </summary>
     /// <returns>The value.</returns>
-    public static string CreateRandomId() => Base64Url.EncodeToString(RandomNumberGenerator.GetBytes(RandomBytes));
+    public static string CreateRandomId() => Base64Url.EncodeToString(RandomNumberGenerator.GetBytes(RANDOM_BYTES));
 
     /// <summary>
     /// Checks the format of a nonce or meeting identifier.
@@ -75,9 +75,9 @@ public static class RendezvousProtocol
     public static bool TryParseEndpoint([NotNullWhen(true)] string? text, [NotNullWhen(true)] out IPEndPoint? endpoint)
     {
         endpoint = null;
-        if (text is null || text.Length > 21 || !IPEndPoint.TryParse(text, out var parsed)
-            || parsed.AddressFamily != AddressFamily.InterNetwork || parsed.Port is < 1 or > 65535
-            || parsed.Address.Equals(IPAddress.Any) || parsed.Address.Equals(IPAddress.Broadcast))
+        if (text is null || text.Length > 21 || !IPEndPoint.TryParse(text, out var parsed) ||
+            parsed.AddressFamily != AddressFamily.InterNetwork || parsed.Port is < 1 or > 65535 ||
+            parsed.Address.Equals(IPAddress.Any) || parsed.Address.Equals(IPAddress.Broadcast))
         {
             return false;
         }
@@ -90,9 +90,9 @@ public static class RendezvousProtocol
     /// Parses the local addresses of a message, dropping the unusable ones.
     /// </summary>
     /// <param name="locals">The texts, or <see langword="null"/>.</param>
-    /// <returns>At most <see cref="MaxLocals"/> addresses.</returns>
+    /// <returns>At most <see cref="MAX_LOCALS"/> addresses.</returns>
     public static IReadOnlyList<IPEndPoint> ParseLocals(IEnumerable<string>? locals)
         => locals is null
             ? []
-            : [.. locals.Take(MaxLocals).Select(l => TryParseEndpoint(l, out var e) ? e : null).OfType<IPEndPoint>().Distinct()];
+            : [.. locals.Take(MAX_LOCALS).Select(l => TryParseEndpoint(l, out var e) ? e : null).OfType<IPEndPoint>().Distinct()];
 }

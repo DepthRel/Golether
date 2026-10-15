@@ -20,12 +20,12 @@ public readonly record struct IPv4Cidr(IPAddress Address, int PrefixLength)
     {
         value = default;
         var slash = text?.IndexOf('/') ?? -1;
-        if (slash <= 0
-            || !IPAddress.TryParse(text![..slash], out var address)
-            || address.AddressFamily != System.Net.Sockets.AddressFamily.InterNetwork
-            || text[..slash].Count(c => c == '.') != 3
-            || !int.TryParse(text[(slash + 1)..], NumberStyles.None, CultureInfo.InvariantCulture, out var prefix)
-            || prefix > 32)
+        if (slash <= 0 ||
+            !IPAddress.TryParse(text![..slash], out var address) ||
+            address.AddressFamily != System.Net.Sockets.AddressFamily.InterNetwork ||
+            text[..slash].Count(c => c == '.') != 3 ||
+            !int.TryParse(text[(slash + 1)..], NumberStyles.None, CultureInfo.InvariantCulture, out var prefix) ||
+            prefix > 32)
         {
             return false;
         }

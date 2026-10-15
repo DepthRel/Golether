@@ -10,25 +10,25 @@ internal sealed class AddressRateLimiter
     /// <summary>
     /// The length of a window.
     /// </summary>
-    private static readonly TimeSpan Window = TimeSpan.FromMinutes(1);
+    private static readonly TimeSpan _window = TimeSpan.FromMinutes(1);
 
     /// <summary>
     /// The number of tracked addresses after which the stale ones are dropped.
     /// </summary>
-    private const int CleanupThreshold = 10_000;
+    private const int CLEANUP_THRESHOLD = 10_000;
 
     /// <summary>
     /// The largest number of tracked addresses. UDP senders can forge their address, so without a ceiling a flood of
     /// forged requests would grow the table without end; over it, addresses not seen yet are refused until old ones
     /// expire.
     /// </summary>
-    internal const int MaxTracked = 200_000;
+    internal const int MAX_TRACKED = 200_000;
 
     /// <summary>
     /// The shortest time between two sweeps of stale addresses: a sweep walks the whole table, and a full table must
     /// not make every request pay for it.
     /// </summary>
-    private static readonly TimeSpan SweepInterval = TimeSpan.FromSeconds(5);
+    private static readonly TimeSpan _sweepInterval = TimeSpan.FromSeconds(5);
 
     /// <summary>
     /// The requests allowed per window.
@@ -78,18 +78,18 @@ internal sealed class AddressRateLimiter
         var now = _timeProvider.GetUtcNow();
         lock (_gate)
         {
-            if (_windows.Count >= CleanupThreshold && now - _lastSweep >= SweepInterval)
+            if (_windows.Count >= CLEANUP_THRESHOLD && now - _lastSweep >= _sweepInterval)
             {
                 _lastSweep = now;
-                foreach (var stale in _windows.Where(w => now - w.Value.Start >= Window).Select(w => w.Key).ToList())
+                foreach (var stale in _windows.Where(w => now - w.Value.Start >= _window).Select(w => w.Key).ToList())
                 {
                     _windows.Remove(stale);
                 }
             }
 
             var known = _windows.TryGetValue(address, out var current);
-            var window = known && now - current.Start < Window ? current : (Start: now, Count: 0);
-            if (window.Count >= _perMinute || (!known && _windows.Count >= MaxTracked))
+            var window = known && now - current.Start < _window ? current : (Start: now, Count: 0);
+            if (window.Count >= _perMinute || (!known && _windows.Count >= MAX_TRACKED))
             {
                 return false;
             }

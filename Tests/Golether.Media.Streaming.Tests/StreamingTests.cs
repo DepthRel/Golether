@@ -16,7 +16,7 @@ public sealed class StreamingTests : IAsyncLifetime
     /// <summary>
     /// The chunk size used by the tests.
     /// </summary>
-    private const int ChunkSize = 64 * 1024;
+    private const int CHUNK_SIZE = 64 * 1024;
 
     /// <summary>
     /// The temporary media file.
@@ -31,7 +31,7 @@ public sealed class StreamingTests : IAsyncLifetime
     /// <inheritdoc />
     public async ValueTask InitializeAsync()
     {
-        _content = RandomNumberGenerator.GetBytes((5 * ChunkSize) + 1234);
+        _content = RandomNumberGenerator.GetBytes((5 * CHUNK_SIZE) + 1234);
         await File.WriteAllBytesAsync(_path, _content);
     }
 
@@ -104,7 +104,7 @@ public sealed class StreamingTests : IAsyncLifetime
         var foreign = media with { QuickId = new string('0', 64) };
 
         await Assert.ThrowsAsync<ChunkUnavailableException>(() => client.FetchAsync(foreign, 0, token));
-        Assert.Equal(_content[..ChunkSize], await client.FetchAsync(media, 0, token));
+        Assert.Equal(_content[..CHUNK_SIZE], await client.FetchAsync(media, 0, token));
     }
 
     /// <summary>
@@ -177,7 +177,7 @@ public sealed class StreamingTests : IAsyncLifetime
 
         var chunk = await source.GetChunkAsync(1, token).AsTask().WaitAsync(TimeSpan.FromSeconds(10), token);
 
-        Assert.Equal(_content.AsSpan(ChunkSize, ChunkSize).ToArray(), chunk);
+        Assert.Equal(_content.AsSpan(CHUNK_SIZE, CHUNK_SIZE).ToArray(), chunk);
         Assert.Equal(2, opened);
         foreach (var stream in dead)
         {
@@ -195,10 +195,10 @@ public sealed class StreamingTests : IAsyncLifetime
     public async Task ReadAhead_LeavesAStreamForWhatThePlayerNeedsNow()
     {
         var token = TestContext.Current.CancellationToken;
-        const int Streams = 3;
+        const int STREAMS = 3;
         var media = new MediaDescriptor { FileName = "film.avi", Length = 20 * 1024, ChunkSize = 1024, QuickId = new string('a', 64) };
-        await using var source = new SlowSource(media, Streams, immediate: [0, 1, 19]);
-        await using var reader = new CachedMediaReader(source, new ChunkCache(), ReadAheadOptions.For(Streams, media.ChunkSize));
+        await using var source = new SlowSource(media, STREAMS, immediate: [0, 1, 19]);
+        await using var reader = new CachedMediaReader(source, new ChunkCache(), ReadAheadOptions.For(STREAMS, media.ChunkSize));
         var buffer = new byte[16];
 
         Assert.Equal(16, await reader.ReadAsync(0, buffer, token));
@@ -206,12 +206,12 @@ public sealed class StreamingTests : IAsyncLifetime
 
         // The player reads on, so reading ahead has started, and its pieces are stuck on the slow connection.
         var deadline = DateTime.UtcNow.AddSeconds(10);
-        while (source.Stuck < Streams - 1 && DateTime.UtcNow < deadline)
+        while (source.Stuck < STREAMS - 1 && DateTime.UtcNow < deadline)
         {
             await Task.Delay(20, token);
         }
 
-        Assert.Equal(Streams - 1, source.Stuck);
+        Assert.Equal(STREAMS - 1, source.Stuck);
 
         // The player jumps to the end of the file: that piece comes at once.
         var read = await reader.ReadAsync(19 * 1024, buffer, token).AsTask().WaitAsync(TimeSpan.FromSeconds(5), token);
@@ -262,6 +262,29 @@ public sealed class StreamingTests : IAsyncLifetime
         Assert.Equal(128, ReadAheadOptions.For(4, 1024 * 1024).ReadAheadChunks);
         Assert.Equal(32, ReadAheadOptions.For(4, 4 * 1024 * 1024).ReadAheadChunks);
         Assert.Equal(8, ReadAheadOptions.For(4, 16 * 1024 * 1024).ReadAheadChunks);
+    }
+
+    /// <summary>
+    /// The player and the read-ahead asking for the same piece at once cost the host one piece, not two: the reader
+    /// asks its source once per piece, whether or not the source sorts out repeated requests itself.
+    /// </summary>
+    /// <returns>A task that completes when the test is done.</returns>
+    [Fact]
+    public async Task Reader_AsksTheSourceOncePerPiece()
+    {
+        var token = TestContext.Current.CancellationToken;
+        var media = await DescribeAsync();
+        var source = new HeldSource(media);
+        await using var reader = new CachedMediaReader(source, new ChunkCache());
+
+        var first = reader.ReadAsync(0, new byte[10], token).AsTask();
+        var second = reader.ReadAsync(5, new byte[10], token).AsTask();
+        source.Release(_content[..CHUNK_SIZE]);
+
+        var read = await Task.WhenAll(first, second);
+
+        Assert.Equal([10, 10], read);
+        Assert.Equal(1, source.Requests);
     }
 
     /// <summary>
@@ -329,6 +352,55 @@ public sealed class StreamingTests : IAsyncLifetime
     }
 
     /// <summary>
+    /// A source that holds every request until released and, unlike the real sources, does not merge repeated
+    /// requests for the same piece.
+    /// </summary>
+    /// <param name="media">The media.</param>
+    private sealed class HeldSource(MediaDescriptor media) : IChunkSource
+    {
+        /// <summary>
+        /// Completed with the data of the piece when the requests may be answered.
+        /// </summary>
+        private readonly TaskCompletionSource<byte[]> _released = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        /// <summary>
+        /// The number of requests received.
+        /// </summary>
+        private int _requests;
+
+        /// <inheritdoc />
+        public MediaDescriptor Media => media;
+
+        /// <summary>
+        /// Gets the number of requests received.
+        /// </summary>
+        public int Requests => Volatile.Read(ref _requests);
+
+        /// <summary>
+        /// Answers every request with the data.
+        /// </summary>
+        /// <param name="data">The data of the piece.</param>
+        public void Release(byte[] data)
+        {
+            _released.TrySetResult(data);
+        }
+
+        /// <inheritdoc />
+        public async ValueTask<byte[]> GetChunkAsync(long index, CancellationToken cancellationToken)
+        {
+            Interlocked.Increment(ref _requests);
+
+            return await _released.Task.WaitAsync(cancellationToken);
+        }
+
+        /// <inheritdoc />
+        public ValueTask DisposeAsync()
+        {
+            return ValueTask.CompletedTask;
+        }
+    }
+
+    /// <summary>
     /// The stream seeks and reads synchronously like the player does.
     /// </summary>
     [Fact]
@@ -339,17 +411,17 @@ public sealed class StreamingTests : IAsyncLifetime
         await using var reader = new CachedMediaReader(source, new ChunkCache());
         using var stream = new MediaReadStream(reader);
 
-        stream.Seek((2 * ChunkSize) - 10, SeekOrigin.Begin);
+        stream.Seek((2 * CHUNK_SIZE) - 10, SeekOrigin.Begin);
         var buffer = new byte[100];
         var read = stream.Read(buffer, 0, buffer.Length);
 
         Assert.Equal(10, read);
-        Assert.Equal(_content.AsSpan((2 * ChunkSize) - 10, 10).ToArray(), buffer[..10]);
-        Assert.Equal(2 * ChunkSize, stream.Position);
+        Assert.Equal(_content.AsSpan((2 * CHUNK_SIZE) - 10, 10).ToArray(), buffer[..10]);
+        Assert.Equal(2 * CHUNK_SIZE, stream.Position);
         stream.Seek(0, SeekOrigin.End);
         Assert.Equal(0, stream.Read(buffer, 0, buffer.Length));
         Assert.Throws<IOException>(() => stream.Seek(1, SeekOrigin.End));
-        Assert.True(reader.GetBufferedBytesAhead((2 * ChunkSize) - 10) >= 10);
+        Assert.True(reader.GetBufferedBytesAhead((2 * CHUNK_SIZE) - 10) >= 10);
     }
 
     /// <summary>
@@ -380,7 +452,7 @@ public sealed class StreamingTests : IAsyncLifetime
     /// </summary>
     /// <returns>The descriptor.</returns>
     private async Task<MediaDescriptor> DescribeAsync()
-        => (await MediaFiles.DescribeAsync(_path, TestContext.Current.CancellationToken)) with { ChunkSize = ChunkSize };
+        => (await MediaFiles.DescribeAsync(_path, TestContext.Current.CancellationToken)) with { ChunkSize = CHUNK_SIZE };
 
     /// <summary>
     /// Creates two connected loopback socket streams.

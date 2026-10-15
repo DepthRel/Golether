@@ -1,5 +1,5 @@
-using CommunityToolkit.Mvvm.ComponentModel;
 using Avalonia.Media;
+using CommunityToolkit.Mvvm.ComponentModel;
 using Golether.Localization;
 using Golether.UI.Services;
 

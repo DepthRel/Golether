@@ -1,3 +1,4 @@
+using Microsoft.Extensions.Logging;
 using Golether.Core.Data.Enums;
 using Golether.Core.Data.Stores;
 using Golether.Core.Identity;
@@ -15,7 +16,7 @@ using Golether.Transports.PortMapping;
 using Golether.Transports.Relay;
 using Golether.Transports.Rendezvous;
 using Golether.Transports.Tls;
-using Microsoft.Extensions.Logging;
+using Golether.UI.Enums;
 
 namespace Golether.UI.Services;
 
@@ -97,12 +98,12 @@ public sealed class SessionService : ISessionService, IAsyncDisposable
     /// <summary>
     /// The number of reconnection attempts after the connection to the host broke.
     /// </summary>
-    private const int ReconnectAttempts = 8;
+    private const int RECONNECT_ATTEMPTS = 8;
 
     /// <summary>
     /// The waits before the attempts; the last one repeats.
     /// </summary>
-    private static readonly TimeSpan[] ReconnectDelays =
+    private static readonly TimeSpan[] _reconnectDelays =
     [
         TimeSpan.FromSeconds(2),
         TimeSpan.FromSeconds(3),
@@ -201,8 +202,8 @@ public sealed class SessionService : ISessionService, IAsyncDisposable
     /// then, and the next session releases what is left of it (see <see cref="ReleaseEndedAsync"/>).
     /// </remarks>
     public bool IsActive
-        => _host is not null
-           || (_participant is { } participant && (_reconnecting is not null || participant.GetSnapshot().State != SessionState.Ended));
+        => _host is not null ||
+           (_participant is { } participant && (_reconnecting is not null || participant.GetSnapshot().State != SessionState.Ended));
 
     /// <inheritdoc />
     public bool IsHost => _host is not null;
@@ -248,7 +249,7 @@ public sealed class SessionService : ISessionService, IAsyncDisposable
             new AdmissionService(_prompt, new AdmissionOptions(), _timeProvider),
             _contacts,
             _player,
-            StopwatchMonotonicClock.Instance,
+            SystemMonotonicClock.Instance,
             _timeProvider,
             sessionName,
             displayName,
@@ -561,9 +562,9 @@ public sealed class SessionService : ISessionService, IAsyncDisposable
         try
         {
             var result = await new Golether.Tunnels.AmneziaWG.Control.ElevatedProcessRunner()
-                .RunAsync(program, WindowsFirewall.BuildArguments(WindowsFirewall.AllowVerb), TimeSpan.FromMinutes(2), cancellationToken)
+                .RunAsync(program, WindowsFirewall.BuildArguments(WindowsFirewall.ALLOW_VERB), TimeSpan.FromMinutes(2), cancellationToken)
                 .ConfigureAwait(false);
-            if (result.ExitCode != WindowsFirewall.Success)
+            if (result.ExitCode != WindowsFirewall.SUCCESS)
             {
                 return false;
             }
@@ -721,17 +722,17 @@ public sealed class SessionService : ISessionService, IAsyncDisposable
         var token = cancellation.Token;
         try
         {
-            for (var attempt = 1; attempt <= ReconnectAttempts && !token.IsCancellationRequested; attempt++)
+            for (var attempt = 1; attempt <= RECONNECT_ATTEMPTS && !token.IsCancellationRequested; attempt++)
             {
-                var delay = ReconnectDelays[Math.Min(attempt - 1, ReconnectDelays.Length - 1)];
-                Report(Texts.Format("Session.Reconnect.Lost", attempt, ReconnectAttempts, delay.TotalSeconds.ToString("0", System.Globalization.CultureInfo.InvariantCulture)));
+                var delay = _reconnectDelays[Math.Min(attempt - 1, _reconnectDelays.Length - 1)];
+                Report(Texts.Format("Session.Reconnect.Lost", attempt, RECONNECT_ATTEMPTS, delay.TotalSeconds.ToString("0", System.Globalization.CultureInfo.InvariantCulture)));
                 await Task.Delay(delay, _timeProvider, token).ConfigureAwait(false);
                 if (!ReferenceEquals(_participant, ended) || _reconnectInvite is not { } ticket)
                 {
                     return;
                 }
 
-                Report(Texts.Format("Session.Reconnect.Trying", attempt, ReconnectAttempts));
+                Report(Texts.Format("Session.Reconnect.Trying", attempt, RECONNECT_ATTEMPTS));
 
                 // The ended session shares the player and the cameras with the new one. It is released before the
                 // new one starts: released afterwards, its shutdown would stop the film and the cameras the new
@@ -832,7 +833,7 @@ public sealed class SessionService : ISessionService, IAsyncDisposable
             connector,
             _player,
             new MpvMediaUriRegistry(),
-            StopwatchMonotonicClock.Instance,
+            SystemMonotonicClock.Instance,
             _timeProvider,
             displayName,
             _options,
@@ -851,10 +852,10 @@ public sealed class SessionService : ISessionService, IAsyncDisposable
     /// <returns>A task that completes when the ended session is released.</returns>
     private async Task ReleaseEndedAsync()
     {
-        if (_reconnecting is null
-            && _participant is { } ended
-            && ended.GetSnapshot().State == SessionState.Ended
-            && ReferenceEquals(Interlocked.CompareExchange(ref _participant, null, ended), ended))
+        if (_reconnecting is null &&
+            _participant is { } ended &&
+            ended.GetSnapshot().State == SessionState.Ended &&
+            ReferenceEquals(Interlocked.CompareExchange(ref _participant, null, ended), ended))
         {
             _reconnectInvite = null;
             await ended.DisposeAsync().ConfigureAwait(false);

@@ -11,7 +11,7 @@ internal static unsafe class Samples
     /// <summary>
     /// <c>GST_FLOW_OK</c>.
     /// </summary>
-    public const int FlowOk = 0;
+    public const int FLOW_OK = 0;
 
     /// <summary>
     /// Pulls a sample from an appsink and gives the mapped data to a callback.
@@ -61,9 +61,9 @@ internal static unsafe class Samples
     /// </summary>
     /// <param name="appSource">The appsrc.</param>
     /// <param name="data">The data.</param>
-    /// <param name="timestamp">The presentation time in nanoseconds, or <see cref="Gst.ClockTimeNone"/> to leave it to the appsrc.</param>
+    /// <param name="timestamp">The presentation time in nanoseconds, or <see cref="Gst.CLOCK_TIME_NONE"/> to leave it to the appsrc.</param>
     /// <returns><see langword="true"/> when the appsrc accepted the buffer.</returns>
-    public static bool Push(nint appSource, ReadOnlySpan<byte> data, ulong timestamp = Gst.ClockTimeNone)
+    public static bool Push(nint appSource, ReadOnlySpan<byte> data, ulong timestamp = Gst.CLOCK_TIME_NONE)
     {
         var buffer = Gst.BufferNewAllocate(0, (nuint)data.Length, 0);
         if (buffer == 0)
@@ -77,9 +77,9 @@ internal static unsafe class Samples
         }
 
         // Without a timestamp (GST_CLOCK_TIME_NONE) do-timestamp on the appsrc stamps the buffer.
-        Marshal.WriteInt64(buffer, Gst.BufferPtsOffset, unchecked((long)timestamp));
-        Marshal.WriteInt64(buffer, Gst.BufferPtsOffset + 8, unchecked((long)Gst.ClockTimeNone));
-        return Gst.AppSrcPushBuffer(appSource, buffer) == FlowOk;
+        Marshal.WriteInt64(buffer, Gst.BUFFER_PTS_OFFSET, unchecked((long)timestamp));
+        Marshal.WriteInt64(buffer, Gst.BUFFER_PTS_OFFSET + 8, unchecked((long)Gst.CLOCK_TIME_NONE));
+        return Gst.AppSrcPushBuffer(appSource, buffer) == FLOW_OK;
     }
 
     /// <summary>

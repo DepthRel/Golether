@@ -2,10 +2,10 @@ using System.Net;
 using System.Net.Security;
 using System.Net.Sockets;
 using System.Threading.Channels;
-using Golether.Core.Identity;
-using Golether.Security.Identity;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
+using Golether.Core.Identity;
+using Golether.Security.Identity;
 
 namespace Golether.Transports.Tls;
 
@@ -188,8 +188,8 @@ public sealed class TlsPeerListener : IPeerListener
                 await _handshakeSlots.WaitAsync(cancellationToken).ConfigureAwait(false);
                 socket = await _listener.AcceptSocketAsync(cancellationToken).ConfigureAwait(false);
             }
-            catch (Exception ex) when (ex is OperationCanceledException or ObjectDisposedException
-                                       || (ex is SocketException && cancellationToken.IsCancellationRequested))
+            catch (Exception ex) when (ex is OperationCanceledException or ObjectDisposedException ||
+                                       (ex is SocketException && cancellationToken.IsCancellationRequested))
             {
                 return;
             }
@@ -225,7 +225,7 @@ public sealed class TlsPeerListener : IPeerListener
             {
                 ServerCertificateContext = _context,
                 ClientCertificateRequired = true,
-                EnabledSslProtocols = TlsProtocol.Protocols,
+                EnabledSslProtocols = TlsProtocol.PROTOCOLS,
                 CertificateRevocationCheckMode = System.Security.Cryptography.X509Certificates.X509RevocationMode.NoCheck,
                 RemoteCertificateValidationCallback = (_, certificate, _, _) =>
                     TlsProtocol.TryGetPeer(certificate, out peer) && peer != _identity.PeerId,
@@ -233,15 +233,15 @@ public sealed class TlsPeerListener : IPeerListener
             await ssl.AuthenticateAsServerAsync(authentication, timeout.Token).ConfigureAwait(false);
 
             var preamble = new byte[6];
-            if (await ssl.ReadAtLeastAsync(preamble, preamble.Length, throwOnEndOfStream: false, timeout.Token).ConfigureAwait(false) != preamble.Length
-                || !TlsProtocol.TryParsePreamble(preamble, out var purpose))
+            if (await ssl.ReadAtLeastAsync(preamble, preamble.Length, throwOnEndOfStream: false, timeout.Token).ConfigureAwait(false) != preamble.Length ||
+                !TlsProtocol.TryParsePreamble(preamble, out var purpose))
             {
                 _logger.LogWarning("Dropped {Remote}: invalid preamble", remote);
                 return;
             }
 
             TlsProtocol.ConfigureSocket(socket, purpose, _options);
-            await ssl.WriteAsync(new[] { TlsProtocol.Accepted }, timeout.Token).ConfigureAwait(false);
+            await ssl.WriteAsync(new[] { TlsProtocol.ACCEPTED }, timeout.Token).ConfigureAwait(false);
             await ssl.FlushAsync(timeout.Token).ConfigureAwait(false);
 
             var stream = new PeerStream(peer, purpose, ssl, remote)

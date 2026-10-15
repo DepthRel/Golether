@@ -13,7 +13,7 @@ public sealed class StunMessage
     /// <summary>
     /// The largest message accepted.
     /// </summary>
-    public const int MaxSize = 4096;
+    public const int MAX_SIZE = 4096;
 
     /// <summary>
     /// Initializes a new instance of the <see cref="StunMessage"/> class.
@@ -67,7 +67,7 @@ public sealed class StunMessage
     /// Combines a method and a class into the message type.
     /// </summary>
     /// <param name="method">The method.</param>
-    /// <param name="messageClass">The class bits (<see cref="Stun.ClassRequest"/> and so on).</param>
+    /// <param name="messageClass">The class bits (<see cref="Stun.CLASS_REQUEST"/> and so on).</param>
     /// <returns>The type.</returns>
     public static ushort TypeOf(ushort method, ushort messageClass)
     {
@@ -83,7 +83,7 @@ public sealed class StunMessage
     /// <param name="header">At least four bytes.</param>
     /// <returns>The size including the header.</returns>
     public static int MessageSize(ReadOnlySpan<byte> header)
-        => (header[0] & 0xC0) == 0 ? Stun.HeaderSize + BinaryPrimitives.ReadUInt16BigEndian(header[2..]) : -1;
+        => (header[0] & 0xC0) == 0 ? Stun.HEADER_SIZE + BinaryPrimitives.ReadUInt16BigEndian(header[2..]) : -1;
 
     /// <summary>
     /// Parses a message.
@@ -93,15 +93,15 @@ public sealed class StunMessage
     /// <exception cref="InvalidDataException">The data is not a valid STUN message.</exception>
     public static StunMessage Parse(ReadOnlySpan<byte> data)
     {
-        if (data.Length < Stun.HeaderSize || data.Length > MaxSize || (data[0] & 0xC0) != 0
-            || BinaryPrimitives.ReadUInt32BigEndian(data[4..]) != Stun.MagicCookie)
+        if (data.Length < Stun.HEADER_SIZE || data.Length > MAX_SIZE || (data[0] & 0xC0) != 0 ||
+            BinaryPrimitives.ReadUInt32BigEndian(data[4..]) != Stun.MAGIC_COOKIE)
         {
             throw new InvalidDataException("Not a STUN message.");
         }
 
         var type = BinaryPrimitives.ReadUInt16BigEndian(data);
         var length = BinaryPrimitives.ReadUInt16BigEndian(data[2..]);
-        if (length % 4 != 0 || Stun.HeaderSize + length != data.Length)
+        if (length % 4 != 0 || Stun.HEADER_SIZE + length != data.Length)
         {
             throw new InvalidDataException("Invalid STUN length.");
         }
@@ -110,7 +110,7 @@ public sealed class StunMessage
         var raw = type & ~0x110;
         var method = (ushort)((raw & 0x00F) | ((raw & 0x0E0) >> 1) | ((raw & 0x3E00) >> 2));
         var message = new StunMessage(method, messageClass, data.Slice(8, 12)) { Raw = data.ToArray() };
-        var offset = Stun.HeaderSize;
+        var offset = Stun.HEADER_SIZE;
         while (offset < data.Length)
         {
             if (offset + 4 > data.Length)
@@ -125,9 +125,9 @@ public sealed class StunMessage
                 throw new InvalidDataException("Truncated STUN attribute.");
             }
 
-            if (message.IntegrityOffset < 0 || attributeType == Stun.AttrFingerprint)
+            if (message.IntegrityOffset < 0 || attributeType == Stun.ATTR_FINGERPRINT)
             {
-                if (attributeType == Stun.AttrMessageIntegrity)
+                if (attributeType == Stun.ATTR_MESSAGE_INTEGRITY)
                 {
                     message.IntegrityOffset = offset;
                 }
@@ -216,7 +216,7 @@ public sealed class StunMessage
         value[2] = (byte)(code / 100);
         value[3] = (byte)(code % 100);
         text.CopyTo(value, 4);
-        return Add(Stun.AttrErrorCode, value);
+        return Add(Stun.ATTR_ERROR_CODE, value);
     }
 
     /// <summary>
@@ -230,7 +230,7 @@ public sealed class StunMessage
     /// Reads the error code of an error response.
     /// </summary>
     /// <returns>The code, or 0.</returns>
-    public int GetErrorCode() => Get(Stun.AttrErrorCode) is { Length: >= 4 } value ? (value[2] * 100) + value[3] : 0;
+    public int GetErrorCode() => Get(Stun.ATTR_ERROR_CODE) is { Length: >= 4 } value ? (value[2] * 100) + value[3] : 0;
 
     /// <summary>
     /// Checks MESSAGE-INTEGRITY with a key.
@@ -239,14 +239,14 @@ public sealed class StunMessage
     /// <returns><see langword="true"/> when the message carries a valid integrity attribute.</returns>
     public bool VerifyIntegrity(byte[] key)
     {
-        if (IntegrityOffset < 0 || Get(Stun.AttrMessageIntegrity) is not { Length: 20 } expected)
+        if (IntegrityOffset < 0 || Get(Stun.ATTR_MESSAGE_INTEGRITY) is not { Length: 20 } expected)
         {
             return false;
         }
 
         // The HMAC covers the message up to the attribute, with the length field counting up to its end.
         var covered = Raw.AsSpan(0, IntegrityOffset).ToArray();
-        BinaryPrimitives.WriteUInt16BigEndian(covered.AsSpan(2), (ushort)(IntegrityOffset + 24 - Stun.HeaderSize));
+        BinaryPrimitives.WriteUInt16BigEndian(covered.AsSpan(2), (ushort)(IntegrityOffset + 24 - Stun.HEADER_SIZE));
 #pragma warning disable CA5350 // HMAC-SHA1 is mandated by STUN.
         var actual = HMACSHA1.HashData(key, covered);
 #pragma warning restore CA5350
@@ -261,12 +261,12 @@ public sealed class StunMessage
     public byte[] Encode(byte[]? integrityKey = null)
     {
         var buffer = new MemoryStream();
-        Span<byte> header = stackalloc byte[Stun.HeaderSize];
+        Span<byte> header = stackalloc byte[Stun.HEADER_SIZE];
         BinaryPrimitives.WriteUInt16BigEndian(header, TypeOf(Method, Class));
-        BinaryPrimitives.WriteUInt32BigEndian(header[4..], Stun.MagicCookie);
+        BinaryPrimitives.WriteUInt32BigEndian(header[4..], Stun.MAGIC_COOKIE);
         TransactionId.CopyTo(header[8..]);
         buffer.Write(header);
-        foreach (var (type, value) in Attributes.Where(a => a.Type is not (Stun.AttrMessageIntegrity or Stun.AttrFingerprint)))
+        foreach (var (type, value) in Attributes.Where(a => a.Type is not (Stun.ATTR_MESSAGE_INTEGRITY or Stun.ATTR_FINGERPRINT)))
         {
             WriteAttribute(buffer, type, value);
         }
@@ -277,14 +277,14 @@ public sealed class StunMessage
 #pragma warning disable CA5350 // HMAC-SHA1 is mandated by STUN.
             var mac = HMACSHA1.HashData(integrityKey, buffer.ToArray());
 #pragma warning restore CA5350
-            WriteAttribute(buffer, Stun.AttrMessageIntegrity, mac);
+            WriteAttribute(buffer, Stun.ATTR_MESSAGE_INTEGRITY, mac);
         }
 
         SetLength(buffer, (int)buffer.Length + 8);
         var crc = Crc32.Compute(buffer.ToArray()) ^ 0x5354554E;
         var fingerprint = new byte[4];
         BinaryPrimitives.WriteUInt32BigEndian(fingerprint, crc);
-        WriteAttribute(buffer, Stun.AttrFingerprint, fingerprint);
+        WriteAttribute(buffer, Stun.ATTR_FINGERPRINT, fingerprint);
         return buffer.ToArray();
     }
 
@@ -300,7 +300,7 @@ public sealed class StunMessage
         var bytes = address.GetAddressBytes();
         var value = new byte[4 + bytes.Length];
         value[1] = address.AddressFamily == AddressFamily.InterNetwork ? (byte)1 : (byte)2;
-        BinaryPrimitives.WriteUInt16BigEndian(value.AsSpan(2), (ushort)(endpoint.Port ^ (Stun.MagicCookie >> 16)));
+        BinaryPrimitives.WriteUInt16BigEndian(value.AsSpan(2), (ushort)(endpoint.Port ^ (Stun.MAGIC_COOKIE >> 16)));
         var mask = Mask(transactionId);
         for (var i = 0; i < bytes.Length; i++)
         {
@@ -331,7 +331,7 @@ public sealed class StunMessage
             bytes[i] = (byte)(value[4 + i] ^ mask[i]);
         }
 
-        var port = BinaryPrimitives.ReadUInt16BigEndian(value.AsSpan(2)) ^ (int)(Stun.MagicCookie >> 16);
+        var port = BinaryPrimitives.ReadUInt16BigEndian(value.AsSpan(2)) ^ (int)(Stun.MAGIC_COOKIE >> 16);
         return new IPEndPoint(new IPAddress(bytes), port);
     }
 
@@ -343,7 +343,7 @@ public sealed class StunMessage
     private static byte[] Mask(byte[] transactionId)
     {
         var mask = new byte[16];
-        BinaryPrimitives.WriteUInt32BigEndian(mask, Stun.MagicCookie);
+        BinaryPrimitives.WriteUInt32BigEndian(mask, Stun.MAGIC_COOKIE);
         transactionId.CopyTo(mask, 4);
         return mask;
     }
@@ -375,6 +375,6 @@ public sealed class StunMessage
     private static void SetLength(MemoryStream buffer, int totalSize)
     {
         var raw = buffer.GetBuffer();
-        BinaryPrimitives.WriteUInt16BigEndian(raw.AsSpan(2), (ushort)(totalSize - Stun.HeaderSize));
+        BinaryPrimitives.WriteUInt16BigEndian(raw.AsSpan(2), (ushort)(totalSize - Stun.HEADER_SIZE));
     }
 }

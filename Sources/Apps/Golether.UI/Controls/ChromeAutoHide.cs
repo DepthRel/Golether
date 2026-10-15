@@ -1,3 +1,5 @@
+using Golether.UI.Enums;
+
 namespace Golether.UI.Controls;
 
 /// <summary>
@@ -176,8 +178,8 @@ public sealed class ChromeAutoHide
     private void Update()
     {
         // Hidden bars come back only from their zone; a movement elsewhere does not bring them.
-        var bars = !_barsHiding || _held || _zone == PointerZone.Bars
-            || (BarsVisible && _time.GetElapsedTime(_barsSeen) < Delay);
+        var bars = !_barsHiding || _held || _zone == PointerZone.Bars ||
+            (BarsVisible && _time.GetElapsedTime(_barsSeen) < Delay);
         var cursor = !_cursorHiding || _held || _zone != PointerZone.Video || _time.GetElapsedTime(_moved) < Delay;
 
         if (bars == BarsVisible && cursor == CursorVisible)

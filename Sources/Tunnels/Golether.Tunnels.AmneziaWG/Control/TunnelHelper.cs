@@ -12,7 +12,7 @@ namespace Golether.Tunnels.AmneziaWG.Control;
 /// <remarks>
 /// <para>
 /// On Windows the application does not need to run as administrator. For each tunnel change it starts its own
-/// executable with <see cref="Switch"/> through the UAC prompt; that process only calls <c>amneziawg.exe</c> for a
+/// executable with <see cref="SWITCH"/> through the UAC prompt; that process only calls <c>amneziawg.exe</c> for a
 /// configuration of the tunnels folder and ends. No service or privileged process stays behind.
 /// </para>
 /// <para>Arguments: <c>--tunnel-helper up &lt;config.conf&gt; &lt;result file&gt;</c> or
@@ -23,42 +23,42 @@ public static class TunnelHelper
     /// <summary>
     /// The command-line switch of the helper mode.
     /// </summary>
-    public const string Switch = "--tunnel-helper";
+    public const string SWITCH = "--tunnel-helper";
 
     /// <summary>
     /// The verb that brings a tunnel up.
     /// </summary>
-    public const string UpVerb = "up";
+    public const string UP_VERB = "up";
 
     /// <summary>
     /// The verb that brings a tunnel down.
     /// </summary>
-    public const string DownVerb = "down";
+    public const string DOWN_VERB = "down";
 
     /// <summary>
     /// The extension of result files.
     /// </summary>
-    public const string ResultExtension = ".result";
+    public const string RESULT_EXTENSION = ".result";
 
     /// <summary>
     /// Exit code: done.
     /// </summary>
-    public const int Success = 0;
+    public const int SUCCESS = 0;
 
     /// <summary>
     /// Exit code: AmneziaWG failed; the reason is in the result file.
     /// </summary>
-    public const int Failure = 1;
+    public const int FAILURE = 1;
 
     /// <summary>
     /// Exit code: the arguments were rejected.
     /// </summary>
-    public const int InvalidArguments = 2;
+    public const int INVALID_ARGUMENTS = 2;
 
     /// <summary>
     /// The time one AmneziaWG call may take.
     /// </summary>
-    private static readonly TimeSpan CallTimeout = TimeSpan.FromSeconds(60);
+    private static readonly TimeSpan _callTimeout = TimeSpan.FromSeconds(60);
 
     /// <summary>
     /// Checks whether the command line starts the helper mode.
@@ -66,12 +66,12 @@ public static class TunnelHelper
     /// <param name="args">The command-line arguments.</param>
     /// <returns><see langword="true"/> for the helper mode.</returns>
     public static bool IsHelperInvocation(IReadOnlyList<string> args)
-        => args is { Count: > 0 } && args[0] == Switch;
+        => args is { Count: > 0 } && args[0] == SWITCH;
 
     /// <summary>
     /// Runs the helper mode.
     /// </summary>
-    /// <param name="args">The command-line arguments including <see cref="Switch"/>.</param>
+    /// <param name="args">The command-line arguments including <see cref="SWITCH"/>.</param>
     /// <param name="runner">Runs AmneziaWG.</param>
     /// <param name="windowsExecutable">The path of <c>amneziawg.exe</c>.</param>
     /// <returns>The exit code.</returns>
@@ -81,13 +81,13 @@ public static class TunnelHelper
         ArgumentNullException.ThrowIfNull(runner);
         if (!TryParse(args, out var verb, out var configPath, out var resultPath))
         {
-            return InvalidArguments;
+            return INVALID_ARGUMENTS;
         }
 
         var interfaceName = Path.GetFileNameWithoutExtension(configPath);
         try
         {
-            if (verb == UpVerb)
+            if (verb == UP_VERB)
             {
                 // Replace an existing service so a changed configuration takes effect.
                 Call(runner, windowsExecutable, ["/uninstalltunnelservice", interfaceName], ignoreFailure: true);
@@ -98,24 +98,24 @@ public static class TunnelHelper
                 Call(runner, windowsExecutable, ["/uninstalltunnelservice", interfaceName], ignoreFailure: false);
             }
 
-            return Success;
+            return SUCCESS;
         }
         catch (Exception ex) when (ex is TunnelControlException or Win32Exception or TimeoutException or InvalidOperationException)
         {
             TryWrite(resultPath, ex.Message);
-            return Failure;
+            return FAILURE;
         }
     }
 
     /// <summary>
     /// Builds the helper arguments for a tunnel change.
     /// </summary>
-    /// <param name="verb"><see cref="UpVerb"/> or <see cref="DownVerb"/>.</param>
+    /// <param name="verb"><see cref="UP_VERB"/> or <see cref="DOWN_VERB"/>.</param>
     /// <param name="configPath">The configuration file.</param>
     /// <param name="resultPath">The result file.</param>
     /// <returns>The arguments.</returns>
     public static string[] BuildArguments(string verb, string configPath, string resultPath)
-        => [Switch, verb, configPath, resultPath];
+        => [SWITCH, verb, configPath, resultPath];
 
     /// <summary>
     /// Validates the helper arguments. The helper runs elevated, so it accepts only a <c>.conf</c> file with a valid
@@ -129,18 +129,18 @@ public static class TunnelHelper
     public static bool TryParse(IReadOnlyList<string> args, out string verb, out string configPath, out string resultPath)
     {
         verb = configPath = resultPath = string.Empty;
-        if (args is not { Count: 4 } || args[0] != Switch || args[1] is not (UpVerb or DownVerb))
+        if (args is not { Count: 4 } || args[0] != SWITCH || args[1] is not (UP_VERB or DOWN_VERB))
         {
             return false;
         }
 
         var config = args[2];
         var result = args[3];
-        if (!Path.IsPathFullyQualified(config) || !Path.IsPathFullyQualified(result)
-            || !string.Equals(Path.GetExtension(config), ".conf", StringComparison.OrdinalIgnoreCase)
-            || !string.Equals(Path.GetExtension(result), ResultExtension, StringComparison.OrdinalIgnoreCase)
-            || !string.Equals(Path.GetDirectoryName(Path.GetFullPath(config)), Path.GetDirectoryName(Path.GetFullPath(result)), StringComparison.OrdinalIgnoreCase)
-            || (args[1] == UpVerb && !File.Exists(config)))
+        if (!Path.IsPathFullyQualified(config) || !Path.IsPathFullyQualified(result) ||
+            !string.Equals(Path.GetExtension(config), ".conf", StringComparison.OrdinalIgnoreCase) ||
+            !string.Equals(Path.GetExtension(result), RESULT_EXTENSION, StringComparison.OrdinalIgnoreCase) ||
+            !string.Equals(Path.GetDirectoryName(Path.GetFullPath(config)), Path.GetDirectoryName(Path.GetFullPath(result)), StringComparison.OrdinalIgnoreCase) ||
+            (args[1] == UP_VERB && !File.Exists(config)))
         {
             return false;
         }
@@ -173,7 +173,7 @@ public static class TunnelHelper
         ProcessResult result;
         try
         {
-            result = runner.RunAsync(executable, arguments, CallTimeout, CancellationToken.None).GetAwaiter().GetResult();
+            result = runner.RunAsync(executable, arguments, _callTimeout, CancellationToken.None).GetAwaiter().GetResult();
         }
         catch (Exception ex) when (ignoreFailure && ex is Win32Exception or TimeoutException or InvalidOperationException)
         {
@@ -191,7 +191,7 @@ public static class TunnelHelper
     /// The marker that starts a tool failure in the result file. The helper runs in its own process that knows nothing
     /// about the language the user chose, so it reports the facts and the application words them.
     /// </summary>
-    private const string ToolFailurePrefix = "tool-failed\t";
+    private const string TOOL_FAILURE_PREFIX = "tool-failed\t";
 
     /// <summary>
     /// Encodes the failure of AmneziaWG for the result file.
@@ -201,7 +201,7 @@ public static class TunnelHelper
     /// <param name="detail">What the program printed.</param>
     /// <returns>The text for the result file.</returns>
     public static string EncodeToolFailure(string tool, int exitCode, string detail)
-        => string.Concat(ToolFailurePrefix, tool, "\t", exitCode.ToString(System.Globalization.CultureInfo.InvariantCulture), "\t", detail);
+        => string.Concat(TOOL_FAILURE_PREFIX, tool, "\t", exitCode.ToString(System.Globalization.CultureInfo.InvariantCulture), "\t", detail);
 
     /// <summary>
     /// Words the text the helper left in the result file in the language of the application.
@@ -211,8 +211,8 @@ public static class TunnelHelper
     public static string DescribeFailure(string text)
     {
         ArgumentNullException.ThrowIfNull(text);
-        if (text.StartsWith(ToolFailurePrefix, StringComparison.Ordinal)
-            && text[ToolFailurePrefix.Length..].Split('\t', 3) is [var tool, var code, var detail])
+        if (text.StartsWith(TOOL_FAILURE_PREFIX, StringComparison.Ordinal) &&
+            text[TOOL_FAILURE_PREFIX.Length..].Split('\t', 3) is [var tool, var code, var detail])
         {
             return Texts.Format("Tunnel.Error.ToolFailed", tool, code, detail);
         }

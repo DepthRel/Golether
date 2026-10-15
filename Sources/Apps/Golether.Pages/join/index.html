@@ -20,10 +20,8 @@
     <div class="wrap">
       <a class="brand" href="../"><img src="../assets/golether.svg" alt=""><span>gole<b>ther</b></span></a>
       <nav>
-        <span class="lang" role="group" aria-label="Language">
-          <button type="button" data-lang="en" aria-pressed="true">EN</button>
-          <button type="button" data-lang="ru" aria-pressed="false">RU</button>
-        </span>
+        <!-- The language picker: languages.js fills it in; without scripts the page simply stays in English. -->
+        <div class="lang" data-root="../" aria-label="Language"></div>
       </nav>
     </div>
   </header>
@@ -68,6 +66,7 @@
     </div>
   </main>
 
+  <script src="../assets/languages.js"></script>
   <script src="../assets/join.js"></script>
 </body>
 </html>

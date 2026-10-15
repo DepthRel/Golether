@@ -1,7 +1,8 @@
-using Golether.Core.Media;
-using Golether.Media.Streaming.Protocol;
+using System.Collections.Concurrent;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
+using Golether.Core.Media;
+using Golether.Media.Streaming.Protocol;
 
 namespace Golether.Media.Streaming.Caching;
 
@@ -44,6 +45,11 @@ public sealed class CachedMediaReader : IAsyncDisposable
     /// The read-ahead loop.
     /// </summary>
     private readonly Task _readAhead;
+
+    /// <summary>
+    /// The pieces being loaded from the source, so a piece asked for twice at once is loaded once.
+    /// </summary>
+    private readonly ConcurrentDictionary<long, Lazy<Task<byte[]>>> _loading = new();
 
     /// <summary>
     /// The chunk index of the latest read.
@@ -160,9 +166,35 @@ public sealed class CachedMediaReader : IAsyncDisposable
             return cached;
         }
 
-        var data = await _source.GetChunkAsync(index, cancellationToken).ConfigureAwait(false);
-        _cache.Add(index, data);
-        return data;
+        var loading = _loading.GetOrAdd(index, i => new Lazy<Task<byte[]>>(() => LoadAsync(i)));
+
+        return await loading.Value.WaitAsync(cancellationToken).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Loads a piece from the source into the cache. The piece enters the cache before it leaves the pieces being
+    /// loaded, so no request falls between the two and asks the source for it again.
+    /// </summary>
+    /// <param name="index">The chunk index.</param>
+    /// <returns>The chunk data.</returns>
+    private async Task<byte[]> LoadAsync(long index)
+    {
+        try
+        {
+            if (_cache.TryGet(index, out var cached))
+            {
+                return cached;
+            }
+
+            var data = await _source.GetChunkAsync(index, _stopping.Token).ConfigureAwait(false);
+            _cache.Add(index, data);
+
+            return data;
+        }
+        finally
+        {
+            _loading.TryRemove(index, out _);
+        }
     }
 
     /// <summary>

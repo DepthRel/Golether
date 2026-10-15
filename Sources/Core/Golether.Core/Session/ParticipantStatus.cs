@@ -70,7 +70,7 @@ public sealed record ParticipantStatus
     /// <summary>
     /// The largest round trip accepted from the network, in milliseconds.
     /// </summary>
-    public const int MaxRoundTripMilliseconds = 600_000;
+    public const int MAX_ROUND_TRIP_MILLISECONDS = 600_000;
 
     /// <summary>
     /// Returns the status with every number brought into a sane range. A status comes from another device and is
@@ -82,7 +82,7 @@ public sealed record ParticipantStatus
         Position = Position is { } position ? Bound(position) : null,
         Drift = Bound(Drift),
         CacheAhead = Bound(CacheAhead),
-        RoundTripMilliseconds = RoundTripMilliseconds is { } roundTrip ? Math.Clamp(roundTrip, 0, MaxRoundTripMilliseconds) : null,
+        RoundTripMilliseconds = RoundTripMilliseconds is { } roundTrip ? Math.Clamp(roundTrip, 0, MAX_ROUND_TRIP_MILLISECONDS) : null,
         BytesFromPeers = Math.Max(0, BytesFromPeers),
         BytesToPeers = Math.Max(0, BytesToPeers),
     };

@@ -1,10 +1,10 @@
+using NSubstitute;
 using Golether.Core.Data.Enums;
 using Golether.Core.Identity;
 using Golether.Session;
 using Golether.Sync.Protocol;
 using Golether.UI.Services;
 using Golether.UI.ViewModels;
-using NSubstitute;
 
 namespace Golether.UI.Tests;
 
@@ -16,12 +16,12 @@ public sealed class DrawingViewModelTests
     /// <summary>
     /// This device.
     /// </summary>
-    private static readonly PeerId Self = PeerId.Parse(new string('a', 64));
+    private static readonly PeerId _self = PeerId.Parse(new string('a', 64));
 
     /// <summary>
     /// Another participant.
     /// </summary>
-    private static readonly PeerId Guest = PeerId.Parse(new string('b', 64));
+    private static readonly PeerId _guest = PeerId.Parse(new string('b', 64));
 
     /// <summary>
     /// The session.
@@ -134,23 +134,23 @@ public sealed class DrawingViewModelTests
     [Fact]
     public void ReceivedStroke_IsCollected()
     {
-        _drawing.Apply(new StrokeUpdate(Guest, "AB12", StrokePhase.Start, [new StrokePoint(0.1f, 0.1f)], false));
-        _drawing.Apply(new StrokeUpdate(Guest, "AB12", StrokePhase.Continue, [new StrokePoint(0.2f, 0.2f), new StrokePoint(0.3f, 0.3f)], false));
+        _drawing.Apply(new StrokeUpdate(_guest, "AB12", StrokePhase.Start, [new StrokePoint(0.1f, 0.1f)], false));
+        _drawing.Apply(new StrokeUpdate(_guest, "AB12", StrokePhase.Continue, [new StrokePoint(0.2f, 0.2f), new StrokePoint(0.3f, 0.3f)], false));
 
         var stroke = Assert.Single(_drawing.Strokes);
-        Assert.Equal(("AB12", Guest, false), (stroke.Id, stroke.Author, stroke.IsLocal));
+        Assert.Equal(("AB12", _guest, false), (stroke.Id, stroke.Author, stroke.IsLocal));
         Assert.Equal(3, stroke.Points.Count);
         Assert.Null(stroke.EndedAt);
         Assert.True(_drawing.HasStrokes);
 
         // Every participant draws in their own colour, the one their avatar has.
-        _drawing.Apply(new StrokeUpdate(Self, "CD34", StrokePhase.Start, [new StrokePoint(0.5f, 0.5f)], true));
-        Assert.Equal(ParticipantColors.For(Guest), stroke.Color);
-        Assert.Equal(ParticipantColors.For(Self), _drawing.Strokes[1].Color);
+        _drawing.Apply(new StrokeUpdate(_self, "CD34", StrokePhase.Start, [new StrokePoint(0.5f, 0.5f)], true));
+        Assert.Equal(ParticipantColors.For(_guest), stroke.Color);
+        Assert.Equal(ParticipantColors.For(_self), _drawing.Strokes[1].Color);
         Assert.True(_drawing.Strokes[1].IsLocal);
 
         // The end of a stroke nobody started is not worth a line.
-        _drawing.Apply(new StrokeUpdate(Guest, "EF56", StrokePhase.End, [], false));
+        _drawing.Apply(new StrokeUpdate(_guest, "EF56", StrokePhase.End, [], false));
         Assert.Equal(2, _drawing.Strokes.Count);
     }
 
@@ -181,8 +181,8 @@ public sealed class DrawingViewModelTests
     [Fact]
     public void FinishedStroke_HoldsThenFades()
     {
-        _drawing.Apply(new StrokeUpdate(Guest, "AB12", StrokePhase.Start, [new StrokePoint(0.1f, 0.1f)], false));
-        _drawing.Apply(new StrokeUpdate(Guest, "AB12", StrokePhase.End, [new StrokePoint(0.2f, 0.2f)], false));
+        _drawing.Apply(new StrokeUpdate(_guest, "AB12", StrokePhase.Start, [new StrokePoint(0.1f, 0.1f)], false));
+        _drawing.Apply(new StrokeUpdate(_guest, "AB12", StrokePhase.End, [new StrokePoint(0.2f, 0.2f)], false));
         var stroke = Assert.Single(_drawing.Strokes);
         Assert.Equal(1, stroke.Opacity);
 
@@ -207,7 +207,7 @@ public sealed class DrawingViewModelTests
     [Fact]
     public void UnfinishedStroke_IsNotFaded_ButIsDroppedEventually()
     {
-        _drawing.Apply(new StrokeUpdate(Guest, "AB12", StrokePhase.Start, [new StrokePoint(0.1f, 0.1f)], false));
+        _drawing.Apply(new StrokeUpdate(_guest, "AB12", StrokePhase.Start, [new StrokePoint(0.1f, 0.1f)], false));
         _time.Advance(DrawingViewModel.StrokeHold + DrawingViewModel.StrokeFade);
         _drawing.Tick();
         Assert.Equal(1, Assert.Single(_drawing.Strokes).Opacity);
@@ -223,12 +223,12 @@ public sealed class DrawingViewModelTests
     [Fact]
     public void Strokes_AreLimited()
     {
-        for (var i = 0; i < DrawingViewModel.MaxStrokes + 5; i++)
+        for (var i = 0; i < DrawingViewModel.MAX_STROKES + 5; i++)
         {
-            _drawing.Apply(new StrokeUpdate(Guest, $"AB{i:X4}", StrokePhase.Start, [new StrokePoint(0.1f, 0.1f)], false));
+            _drawing.Apply(new StrokeUpdate(_guest, $"AB{i:X4}", StrokePhase.Start, [new StrokePoint(0.1f, 0.1f)], false));
         }
 
-        Assert.Equal(DrawingViewModel.MaxStrokes, _drawing.Strokes.Count);
+        Assert.Equal(DrawingViewModel.MAX_STROKES, _drawing.Strokes.Count);
         Assert.Equal("AB0005", _drawing.Strokes[0].Id);
     }
 
@@ -239,7 +239,7 @@ public sealed class DrawingViewModelTests
     public void Reset_ClearsEverything()
     {
         _drawing.IsPenActive = true;
-        _drawing.Apply(new StrokeUpdate(Guest, "AB12", StrokePhase.Start, [new StrokePoint(0.1f, 0.1f)], false));
+        _drawing.Apply(new StrokeUpdate(_guest, "AB12", StrokePhase.Start, [new StrokePoint(0.1f, 0.1f)], false));
 
         _drawing.Reset();
 
@@ -247,7 +247,7 @@ public sealed class DrawingViewModelTests
         Assert.False(_drawing.IsPenActive);
 
         // The identifier is forgotten too: the same one starts a new stroke.
-        _drawing.Apply(new StrokeUpdate(Guest, "AB12", StrokePhase.Continue, [new StrokePoint(0.2f, 0.2f)], false));
+        _drawing.Apply(new StrokeUpdate(_guest, "AB12", StrokePhase.Continue, [new StrokePoint(0.2f, 0.2f)], false));
         Assert.Single(Assert.Single(_drawing.Strokes).Points);
     }
 
@@ -278,17 +278,17 @@ public sealed class DrawingViewModelTests
     [Fact]
     public void Stroke_IsNotChangedByAnotherParticipant()
     {
-        _drawing.Apply(new StrokeUpdate(Guest, "AB12", StrokePhase.Start, [new StrokePoint(0.1f, 0.1f)], false));
+        _drawing.Apply(new StrokeUpdate(_guest, "AB12", StrokePhase.Start, [new StrokePoint(0.1f, 0.1f)], false));
 
-        _drawing.Apply(new StrokeUpdate(Self, "AB12", StrokePhase.Continue, [new StrokePoint(0.9f, 0.9f)], true));
-        _drawing.Apply(new StrokeUpdate(Self, "AB12", StrokePhase.End, [], true));
+        _drawing.Apply(new StrokeUpdate(_self, "AB12", StrokePhase.Continue, [new StrokePoint(0.9f, 0.9f)], true));
+        _drawing.Apply(new StrokeUpdate(_self, "AB12", StrokePhase.End, [], true));
 
         var stroke = Assert.Single(_drawing.Strokes);
-        Assert.Equal(Guest, stroke.Author);
+        Assert.Equal(_guest, stroke.Author);
         Assert.Single(stroke.Points);
         Assert.Null(stroke.EndedAt);
 
-        _drawing.Apply(new StrokeUpdate(Guest, "AB12", StrokePhase.End, [new StrokePoint(0.2f, 0.2f)], false));
+        _drawing.Apply(new StrokeUpdate(_guest, "AB12", StrokePhase.End, [new StrokePoint(0.2f, 0.2f)], false));
         Assert.Equal(2, stroke.Points.Count);
         Assert.NotNull(stroke.EndedAt);
     }

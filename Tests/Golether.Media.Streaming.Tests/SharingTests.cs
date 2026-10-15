@@ -19,17 +19,17 @@ public sealed class SharingTests : IAsyncLifetime
     /// <summary>
     /// The chunk size used by the tests.
     /// </summary>
-    private const int ChunkSize = 64 * 1024;
+    private const int CHUNK_SIZE = 64 * 1024;
 
     /// <summary>
     /// The first participant.
     /// </summary>
-    private static readonly PeerId Anna = PeerId.Parse(new string('a', 64));
+    private static readonly PeerId _anna = PeerId.Parse(new string('a', 64));
 
     /// <summary>
     /// The second participant.
     /// </summary>
-    private static readonly PeerId Boris = PeerId.Parse(new string('b', 64));
+    private static readonly PeerId _boris = PeerId.Parse(new string('b', 64));
 
     /// <summary>
     /// The temporary media file.
@@ -49,9 +49,9 @@ public sealed class SharingTests : IAsyncLifetime
     /// <inheritdoc />
     public async ValueTask InitializeAsync()
     {
-        _content = RandomNumberGenerator.GetBytes((5 * ChunkSize) + 1234);
+        _content = RandomNumberGenerator.GetBytes((5 * CHUNK_SIZE) + 1234);
         await File.WriteAllBytesAsync(_path, _content);
-        _media = (await MediaFiles.DescribeAsync(_path, CancellationToken.None)) with { ChunkSize = ChunkSize };
+        _media = (await MediaFiles.DescribeAsync(_path, CancellationToken.None)) with { ChunkSize = CHUNK_SIZE };
     }
 
     /// <inheritdoc />
@@ -98,20 +98,20 @@ public sealed class SharingTests : IAsyncLifetime
         annaCache.Add(1, Chunk(1));
         annaCache.Add(2, Chunk(2));
         annaCache.Add(5, Chunk(5));
-        await using var anna = Exchange(network.Join(Anna), annaCache);
-        await using var boris = Exchange(network.Join(Boris), new ChunkCache());
+        await using var anna = Exchange(network.Join(_anna), annaCache);
+        await using var boris = Exchange(network.Join(_boris), new ChunkCache());
 
         anna.Announce();
-        Assert.Equal([Anna], boris.PeersHaving(2));
+        Assert.Equal([_anna], boris.PeersHaving(2));
         Assert.Empty(boris.PeersHaving(3));
         Assert.Equal([(1L, 2L), (5L, 1L)], annaCache.GetRanges(8));
 
         var received = await boris.TryFetchAsync(2, token);
         Assert.NotNull(received);
-        Assert.Equal(Anna, received.Value.Peer);
+        Assert.Equal(_anna, received.Value.Peer);
         Assert.Equal(Chunk(2), received.Value.Data);
         Assert.Equal(Chunk(5), (await boris.TryFetchAsync(5, token))!.Value.Data);
-        Assert.Equal(ChunkSize + 1234, anna.BytesSent);
+        Assert.Equal(CHUNK_SIZE + 1234, anna.BytesSent);
         Assert.True(network.Messages > 8, "The chunk travels in several parts.");
 
         // A peer that claims a chunk it no longer has answers "miss"; nobody else has it.
@@ -136,9 +136,9 @@ public sealed class SharingTests : IAsyncLifetime
             annaCache.Add(i, Chunk(i));
         }
 
-        await using var anna = Exchange(network.Join(Anna), annaCache);
+        await using var anna = Exchange(network.Join(_anna), annaCache);
         var (server, host) = CreateHost();
-        var borisExchange = Exchange(network.Join(Boris), new ChunkCache());
+        var borisExchange = Exchange(network.Join(_boris), new ChunkCache());
         await using var swarm = new SwarmChunkSource(host, borisExchange);
         anna.Announce();
         // The announcement travels through the fake network: wait until Boris knows Anna has the chunks.
@@ -152,7 +152,7 @@ public sealed class SharingTests : IAsyncLifetime
         Assert.Equal(Chunk(5), await swarm.GetChunkAsync(5, token));
         Assert.Equal(0, server.ChunksServed);
         Assert.Equal(2, server.HashesServed);
-        Assert.Equal(ChunkSize + 1234, swarm.BytesFromPeers);
+        Assert.Equal(CHUNK_SIZE + 1234, swarm.BytesFromPeers);
 
         network.Corrupt = true;
         Assert.Equal(Chunk(1), await swarm.GetChunkAsync(1, token));
@@ -160,7 +160,7 @@ public sealed class SharingTests : IAsyncLifetime
         Assert.Equal(1, server.ChunksServed);
 
         network.Corrupt = false;
-        network.Leave(Anna);
+        network.Leave(_anna);
         Assert.Equal(Chunk(2), await swarm.GetChunkAsync(2, token));
         Assert.Equal(2, server.ChunksServed);
     }
@@ -175,8 +175,8 @@ public sealed class SharingTests : IAsyncLifetime
         var network = new MemoryNetwork { RefuseEvery = 3 };
         var annaCache = new ChunkCache();
         annaCache.Add(0, Chunk(0));
-        await using var anna = Exchange(network.Join(Anna), annaCache);
-        await using var boris = Exchange(network.Join(Boris), new ChunkCache());
+        await using var anna = Exchange(network.Join(_anna), annaCache);
+        await using var boris = Exchange(network.Join(_boris), new ChunkCache());
         anna.Announce();
         if (boris.PeersHaving(0).Count == 0)
         {
@@ -194,7 +194,7 @@ public sealed class SharingTests : IAsyncLifetime
     /// </summary>
     /// <param name="index">The chunk index.</param>
     /// <returns>The bytes.</returns>
-    private byte[] Chunk(long index) => _content.AsSpan((int)(index * ChunkSize), _media.GetChunkLength(index)).ToArray();
+    private byte[] Chunk(long index) => _content.AsSpan((int)(index * CHUNK_SIZE), _media.GetChunkLength(index)).ToArray();
 
     /// <summary>
     /// Creates an exchange serving from a cache.
@@ -316,7 +316,7 @@ public sealed class SharingTests : IAsyncLifetime
                 }
 
                 var copy = message.ToArray();
-                if (network.Corrupt && copy[0] == PeerChunkExchange.DataMessage)
+                if (network.Corrupt && copy[0] == PeerChunkExchange.DATA_MESSAGE)
                 {
                     copy[^1] ^= 0x55;
                 }

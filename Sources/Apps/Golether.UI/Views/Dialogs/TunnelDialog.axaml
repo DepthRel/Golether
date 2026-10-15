@@ -18,7 +18,7 @@
                  Text="{loc:Loc TunnelDialog.Explanation}" />
       <TextBlock TextWrapping="Wrap" Text="{Binding AvailabilityText}"
                  Classes.muted="{Binding !IsAvailable}" />
-      <!-- Движок туннеля ставится отсюда же: иначе окно просит сделать то, чего в нём сделать нельзя. -->
+      <!-- The tunnel engine is installed right here: otherwise the window would ask for something it cannot do. -->
       <Panel IsVisible="{Binding NeedsComponent}">
       <Border Classes="card" Padding="12" DataContext="{Binding Component}">
         <StackPanel Spacing="6">
@@ -45,7 +45,7 @@
       <ProgressBar IsIndeterminate="True" IsVisible="{Binding IsBusy}" />
       <TextBlock TextWrapping="Wrap" Foreground="{StaticResource GoletherSecure}" Text="{Binding Message}" />
       <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Spacing="8">
-        <!-- Туннель и так опустится при выходе из Golether; кнопка нужна, чтобы не ждать выхода. -->
+        <!-- The tunnel comes down anyway when Golether exits; the button is there so that nobody has to wait for it. -->
         <Button Classes="ghost" Content="{loc:Loc TunnelDialog.Drop}" Command="{Binding DropCommand}" IsVisible="{Binding HasRaisedTunnels}"
                 ToolTip.Tip="{loc:Loc TunnelDialog.DropTip}" />
         <Button Classes="ghost" Content="{loc:Loc Common.Close}" Click="OnClose" IsCancel="True" />

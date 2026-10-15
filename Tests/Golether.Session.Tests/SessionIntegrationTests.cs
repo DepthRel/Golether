@@ -1,8 +1,9 @@
 using System.Collections.Concurrent;
 using System.Security.Cryptography;
+using NSubstitute;
 using Golether.Core.Data.Enums;
+using Golether.Core.Enums;
 using Golether.Core.Networking;
-using Golether.Core.Playback;
 using Golether.Core.Session;
 using Golether.Core.Time;
 using Golether.Localization;
@@ -15,7 +16,6 @@ using Golether.Security.Invites;
 using Golether.Sync.Protocol;
 using Golether.Transports;
 using Golether.Transports.Tls;
-using NSubstitute;
 
 namespace Golether.Session.Tests;
 
@@ -27,12 +27,12 @@ public sealed class SessionIntegrationTests : IAsyncLifetime
     /// <summary>
     /// Transport options: a free port.
     /// </summary>
-    private static readonly TlsTransportOptions Transport = new() { Port = 0, HandshakeTimeout = TimeSpan.FromSeconds(10) };
+    private static readonly TlsTransportOptions _transport = new() { Port = 0, HandshakeTimeout = TimeSpan.FromSeconds(10) };
 
     /// <summary>
     /// Session options with a short start lead to keep the test fast.
     /// </summary>
-    private static readonly SessionOptions Options = new()
+    private static readonly SessionOptions _options = new()
     {
         Authority = new() { StartLead = TimeSpan.FromMilliseconds(500) },
         TickInterval = TimeSpan.FromMilliseconds(50),
@@ -67,12 +67,12 @@ public sealed class SessionIntegrationTests : IAsyncLifetime
     /// <summary>
     /// The host player.
     /// </summary>
-    private readonly SimulatedPlayer _hostPlayer = new(StopwatchMonotonicClock.Instance, TimeSpan.FromHours(2));
+    private readonly SimulatedPlayer _hostPlayer = new(SystemMonotonicClock.Instance, TimeSpan.FromHours(2));
 
     /// <summary>
     /// The participant player.
     /// </summary>
-    private readonly SimulatedPlayer _guestPlayer = new(StopwatchMonotonicClock.Instance, TimeSpan.FromHours(2));
+    private readonly SimulatedPlayer _guestPlayer = new(SystemMonotonicClock.Instance, TimeSpan.FromHours(2));
 
     /// <summary>
     /// The registry that captures the participant media stream.
@@ -99,7 +99,7 @@ public sealed class SessionIntegrationTests : IAsyncLifetime
     {
         await File.WriteAllBytesAsync(_mediaPath, _content);
         _prompt.AskAsync(Arg.Any<AdmissionRequest>(), Arg.Any<CancellationToken>()).Returns(true);
-        var listener = new TlsPeerListener(_hostIdentity, Transport);
+        var listener = new TlsPeerListener(_hostIdentity, _transport);
         listener.Start();
         _host = new HostSession(
             _hostIdentity,
@@ -108,11 +108,11 @@ public sealed class SessionIntegrationTests : IAsyncLifetime
             new AdmissionService(_prompt, new AdmissionOptions(), TimeProvider.System),
             contacts: null,
             _hostPlayer,
-            StopwatchMonotonicClock.Instance,
+            SystemMonotonicClock.Instance,
             TimeProvider.System,
             "Вечер кино",
             "Вы",
-            Options,
+            _options,
             conference: _hostConference);
         _host.Start();
     }
@@ -298,16 +298,16 @@ public sealed class SessionIntegrationTests : IAsyncLifetime
 
         // A participant who joins now (with its own identity) is sent both avatars that were already chosen.
         using var secondIdentity = DeviceIdentity.CreateNew(TimeProvider.System);
-        await using var secondPlayer = new SimulatedPlayer(StopwatchMonotonicClock.Instance, TimeSpan.FromHours(2));
+        await using var secondPlayer = new SimulatedPlayer(SystemMonotonicClock.Instance, TimeSpan.FromHours(2));
         await using var second = new ParticipantSession(
             secondIdentity,
-            new TlsPeerConnector(secondIdentity, Transport),
+            new TlsPeerConnector(secondIdentity, _transport),
             secondPlayer,
             new CapturingRegistry(),
-            StopwatchMonotonicClock.Instance,
+            SystemMonotonicClock.Instance,
             TimeProvider.System,
             "Олег",
-            Options,
+            _options,
             conference: new FakeConference());
         var secondAvatars = new ConcurrentQueue<AvatarUpdate>();
         second.AvatarReceived += (_, e) => secondAvatars.Enqueue(e);
@@ -373,7 +373,7 @@ public sealed class SessionIntegrationTests : IAsyncLifetime
         using var secondIdentity = DeviceIdentity.CreateNew(TimeProvider.System);
         var secondConference = new FakeConference();
         var secondRegistry = new CapturingRegistry();
-        await using var secondPlayer = new SimulatedPlayer(StopwatchMonotonicClock.Instance, TimeSpan.FromHours(2));
+        await using var secondPlayer = new SimulatedPlayer(SystemMonotonicClock.Instance, TimeSpan.FromHours(2));
         _guestConference.DataPeersSource = () => [secondIdentity.PeerId];
         _guestConference.DataSink = (_, data) => secondConference.ReceiveData(_guestIdentity.PeerId, data);
         secondConference.DataPeersSource = () => [_guestIdentity.PeerId];
@@ -382,18 +382,18 @@ public sealed class SessionIntegrationTests : IAsyncLifetime
         await using var first = CreateGuest();
         await first.JoinAsync(_host.CreateInvite([new PeerEndpoint("127.0.0.1", _host.Port)]), token);
         Assert.Equal(_content, await ReadAllAsync(_registry, token));
-        var chunks = (int)(((_content.Length - 1) / Golether.Core.Media.MediaDescriptor.DefaultChunkSize) + 1);
+        var chunks = (int)(((_content.Length - 1) / Golether.Core.Media.MediaDescriptor.DEFAULT_CHUNK_SIZE) + 1);
         Assert.Equal(chunks, _host.ChunksServed);
 
         await using var second = new ParticipantSession(
             secondIdentity,
-            new TlsPeerConnector(secondIdentity, Transport),
+            new TlsPeerConnector(secondIdentity, _transport),
             secondPlayer,
             secondRegistry,
-            StopwatchMonotonicClock.Instance,
+            SystemMonotonicClock.Instance,
             TimeProvider.System,
             "Олег",
-            Options,
+            _options,
             conference: secondConference);
         await second.JoinAsync(_host.CreateInvite([new PeerEndpoint("127.0.0.1", _host.Port)]), token);
 
@@ -590,13 +590,13 @@ public sealed class SessionIntegrationTests : IAsyncLifetime
         using var lateIdentity = DeviceIdentity.CreateNew(TimeProvider.System);
         await using var late = new ParticipantSession(
             lateIdentity,
-            new TlsPeerConnector(lateIdentity, Transport),
-            new SimulatedPlayer(StopwatchMonotonicClock.Instance, TimeSpan.FromHours(2)),
+            new TlsPeerConnector(lateIdentity, _transport),
+            new SimulatedPlayer(SystemMonotonicClock.Instance, TimeSpan.FromHours(2)),
             new CapturingRegistry(),
-            StopwatchMonotonicClock.Instance,
+            SystemMonotonicClock.Instance,
             TimeProvider.System,
             "Опоздавший",
-            Options);
+            _options);
         await Assert.ThrowsAsync<SessionJoinException>(() => late.JoinAsync(invite, token));
         Assert.Equal(2, _host.GetSnapshot().Participants.Count);
     }
@@ -620,8 +620,8 @@ public sealed class SessionIntegrationTests : IAsyncLifetime
         Assert.Equal("Вечер кино", snapshot.SessionName);
         Assert.Equal(_content.Length, snapshot.Media!.Length);
         await _prompt.Received(1).AskAsync(
-            Arg.Is<AdmissionRequest>(r => r.PeerId == _guestIdentity.PeerId && r.DisplayName == "Марина"
-                                          && r.VerificationCode.ToString() == snapshot.VerificationCode!.ToString()),
+            Arg.Is<AdmissionRequest>(r => r.PeerId == _guestIdentity.PeerId && r.DisplayName == "Марина" &&
+                                          r.VerificationCode.ToString() == snapshot.VerificationCode!.ToString()),
             Arg.Any<CancellationToken>());
         await WaitUntilAsync(() => _host.GetSnapshot().Participants.Count == 2, token);
 
@@ -726,7 +726,7 @@ public sealed class SessionIntegrationTests : IAsyncLifetime
         var token = TestContext.Current.CancellationToken;
         await _host.ShareMediaAsync(_mediaPath, token);
         using var stranger = DeviceIdentity.CreateNew(TimeProvider.System);
-        var connector = new TlsPeerConnector(stranger, Transport);
+        var connector = new TlsPeerConnector(stranger, _transport);
 
         await using var stream = await connector.ConnectAsync(
             new PeerEndpoint("127.0.0.1", _host.Port), _hostIdentity.PeerId, StreamPurpose.MediaData, token);
@@ -745,7 +745,7 @@ public sealed class SessionIntegrationTests : IAsyncLifetime
         await using var guest = CreateGuest();
         await guest.JoinAsync(_host.CreateInvite([new PeerEndpoint("127.0.0.1", _host.Port)]), token);
         await WaitUntilAsync(() => _host.GetSnapshot().Participants.Count == 2, token);
-        var connector = new TlsPeerConnector(_guestIdentity, Transport);
+        var connector = new TlsPeerConnector(_guestIdentity, _transport);
         await using var stream = await connector.ConnectAsync(
             new PeerEndpoint("127.0.0.1", _host.Port), _hostIdentity.PeerId, StreamPurpose.MediaData, token);
         var reading = ReadUntilClosedAsync(stream.Stream, token);
@@ -792,13 +792,13 @@ public sealed class SessionIntegrationTests : IAsyncLifetime
     private static ParticipantSession CreateGuest(DeviceIdentity identity, string name)
         => new(
             identity,
-            new TlsPeerConnector(identity, Transport),
-            new SimulatedPlayer(StopwatchMonotonicClock.Instance, TimeSpan.FromHours(2)),
+            new TlsPeerConnector(identity, _transport),
+            new SimulatedPlayer(SystemMonotonicClock.Instance, TimeSpan.FromHours(2)),
             new CapturingRegistry(),
-            StopwatchMonotonicClock.Instance,
+            SystemMonotonicClock.Instance,
             TimeProvider.System,
             name,
-            Options);
+            _options);
 
     /// <summary>
     /// Creates a participant session.
@@ -807,13 +807,13 @@ public sealed class SessionIntegrationTests : IAsyncLifetime
     private ParticipantSession CreateGuest()
         => new(
             _guestIdentity,
-            new TlsPeerConnector(_guestIdentity, Transport),
+            new TlsPeerConnector(_guestIdentity, _transport),
             _guestPlayer,
             _registry,
-            StopwatchMonotonicClock.Instance,
+            SystemMonotonicClock.Instance,
             TimeProvider.System,
             "Марина",
-            Options,
+            _options,
             conference: _guestConference);
 
     /// <summary>
@@ -865,7 +865,7 @@ public sealed class SessionIntegrationTests : IAsyncLifetime
         await guest.JoinAsync(_host.CreateInvite([new PeerEndpoint("127.0.0.1", ClosedPort())]), token);
         Assert.Equal(_content, await ReadAllAsync(_registry, token));
         var opened = rendezvous.Purposes.Count(purpose => purpose == StreamPurpose.MediaData);
-        Assert.InRange(opened, 1, Options.MediaDataStreams);
+        Assert.InRange(opened, 1, _options.MediaDataStreams);
 
         var second = Path.Combine(Path.GetTempPath(), $"golether-session-{Guid.NewGuid():N}.mkv");
         var other = RandomNumberGenerator.GetBytes(700_000);
@@ -943,11 +943,11 @@ public sealed class SessionIntegrationTests : IAsyncLifetime
         await guest.JoinAsync(_host.CreateInvite([new PeerEndpoint("127.0.0.1", ClosedPort())]), token);
         var port = new Uri(_guestConference.Relay!).Port;
 
-        const int Connections = 12;
+        const int CONNECTIONS = 12;
         var cameras = new List<System.Net.Sockets.TcpClient>();
         try
         {
-            await Task.WhenAll(Enumerable.Range(0, Connections).Select(async index =>
+            await Task.WhenAll(Enumerable.Range(0, CONNECTIONS).Select(async index =>
             {
                 var camera = new System.Net.Sockets.TcpClient();
                 lock (cameras)
@@ -964,7 +964,7 @@ public sealed class SessionIntegrationTests : IAsyncLifetime
                 Assert.Equal([(byte)index, (byte)(index + 1)], echoed);
             }));
 
-            Assert.Equal(Connections, relay.Served.Count);
+            Assert.Equal(CONNECTIONS, relay.Served.Count);
             Assert.Single(rendezvous.Purposes, purpose => purpose == StreamPurpose.RelayShared);
             Assert.DoesNotContain(StreamPurpose.Relay, rendezvous.Purposes);
         }
@@ -1037,7 +1037,7 @@ public sealed class SessionIntegrationTests : IAsyncLifetime
         _host.Relay = new Transports.Relay.RelayCredentials(47999, "golether-x", "secret_1");
         _host.RelayServer = relay;
         using var stranger = DeviceIdentity.CreateNew(TimeProvider.System);
-        var connector = new TlsPeerConnector(stranger, Transport);
+        var connector = new TlsPeerConnector(stranger, _transport);
 
         await using var stream = await connector.ConnectAsync(
             new PeerEndpoint("127.0.0.1", _host.Port), _hostIdentity.PeerId, StreamPurpose.Relay, token);
@@ -1106,13 +1106,13 @@ public sealed class SessionIntegrationTests : IAsyncLifetime
     private ParticipantSession CreateGuest(IRendezvousConnector rendezvous)
         => new(
             _guestIdentity,
-            new TlsPeerConnector(_guestIdentity, Transport),
+            new TlsPeerConnector(_guestIdentity, _transport),
             _guestPlayer,
             _registry,
-            StopwatchMonotonicClock.Instance,
+            SystemMonotonicClock.Instance,
             TimeProvider.System,
             "Марина",
-            Options,
+            _options,
             conference: _guestConference,
             rendezvous: rendezvous);
 
@@ -1147,7 +1147,7 @@ public sealed class SessionIntegrationTests : IAsyncLifetime
         /// <summary>
         /// Runs the real TLS handshake with the pinned key.
         /// </summary>
-        private readonly TlsPeerConnector _tls = new(identity, Transport);
+        private readonly TlsPeerConnector _tls = new(identity, _transport);
 
         /// <summary>
         /// Gets the purposes of the met streams.
@@ -1213,13 +1213,13 @@ public sealed class SessionIntegrationTests : IAsyncLifetime
         var invite = _host.CreateInvite([new PeerEndpoint("127.0.0.1", _host.Port)]);
         await using var self = new ParticipantSession(
             _hostIdentity,
-            new TlsPeerConnector(_hostIdentity, Transport),
+            new TlsPeerConnector(_hostIdentity, _transport),
             _guestPlayer,
             _registry,
-            StopwatchMonotonicClock.Instance,
+            SystemMonotonicClock.Instance,
             TimeProvider.System,
             "Вы",
-            Options);
+            _options);
 
         var error = await Assert.ThrowsAsync<SessionJoinException>(() => self.JoinAsync(invite, TestContext.Current.CancellationToken));
 
@@ -1236,10 +1236,10 @@ public sealed class SessionIntegrationTests : IAsyncLifetime
     {
         var token = TestContext.Current.CancellationToken;
         var invite = _host.CreateInvite([new PeerEndpoint("127.0.0.1", _host.Port)]);
-        var connector = new TlsPeerConnector(_guestIdentity, Transport);
+        var connector = new TlsPeerConnector(_guestIdentity, _transport);
         await using var stream = await connector.ConnectAsync(new PeerEndpoint("127.0.0.1", _host.Port), _hostIdentity.PeerId, StreamPurpose.Control, token);
         await using var channel = new SessionMessageChannel(stream.Stream);
-        await channel.SendAsync(new HelloMessage(SessionMessage.ProtocolVersion, "Марина", invite.Token), token);
+        await channel.SendAsync(new HelloMessage(SessionMessage.PROTOCOL_VERSION, "Марина", invite.Token), token);
         while (await channel.ReceiveAsync(token) is not WelcomeMessage)
         {
         }

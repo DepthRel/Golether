@@ -13,12 +13,12 @@ public sealed class LocalizationSource : INotifyPropertyChanged
     /// <summary>
     /// The name of the indexer for change notifications.
     /// </summary>
-    private const string IndexerName = "Item";
+    private const string INDEXER_NAME = "Item";
 
     /// <summary>
     /// The name of the indexer with brackets, which some bindings listen to.
     /// </summary>
-    private const string IndexerBracketsName = "Item[]";
+    private const string INDEXER_BRACKETS_NAME = "Item[]";
 
     /// <summary>
     /// The localizer.
@@ -65,7 +65,7 @@ public sealed class LocalizationSource : INotifyPropertyChanged
     /// </summary>
     private void Notify()
     {
-        PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(IndexerName));
-        PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(IndexerBracketsName));
+        PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(INDEXER_NAME));
+        PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(INDEXER_BRACKETS_NAME));
     }
 }

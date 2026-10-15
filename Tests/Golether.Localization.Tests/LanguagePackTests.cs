@@ -1,5 +1,4 @@
 using System.Text.RegularExpressions;
-using Golether.Localization;
 
 namespace Golether.Localization.Tests;
 
@@ -53,8 +52,8 @@ public sealed partial class LanguagePackTests
     /// <returns>The paths.</returns>
     private static IEnumerable<string> SourceFiles(string extension)
         => Directory.EnumerateFiles(Path.Combine(RepositoryRoot(), "Sources"), "*" + extension, SearchOption.AllDirectories)
-            .Where(f => !f.Contains($"{Path.DirectorySeparatorChar}obj{Path.DirectorySeparatorChar}", StringComparison.Ordinal)
-                && !f.Contains($"{Path.DirectorySeparatorChar}bin{Path.DirectorySeparatorChar}", StringComparison.Ordinal));
+            .Where(f => !f.Contains($"{Path.DirectorySeparatorChar}obj{Path.DirectorySeparatorChar}", StringComparison.Ordinal) &&
+                !f.Contains($"{Path.DirectorySeparatorChar}bin{Path.DirectorySeparatorChar}", StringComparison.Ordinal));
 
     /// <summary>
     /// Returns the texts of a pack by key.
@@ -119,6 +118,35 @@ public sealed partial class LanguagePackTests
     }
 
     /// <summary>
+    /// Every language names the 64 words of the verification code, each word once: two different codes never read
+    /// the same, and the words of one number are translations of each other in every language.
+    /// </summary>
+    /// <param name="code">The language.</param>
+    [Theory]
+    [MemberData(nameof(Languages))]
+    public void Language_HasDistinctVerificationWords(string code)
+    {
+        var pack = LanguageCatalog.LoadEmbedded().Find(code)!;
+        var words = Enumerable.Range(0, 64)
+            .Select(number => pack.TryGet("Verification.Word." + number.ToString("00", System.Globalization.CultureInfo.InvariantCulture), out var word) ? word.Trim().ToLowerInvariant() : string.Empty)
+            .ToArray();
+
+        Assert.DoesNotContain(string.Empty, words);
+        Assert.Equal(64, words.Distinct().Count());
+        Assert.False(pack.TryGet("Verification.Word.64", out _));
+    }
+
+    /// <summary>
+    /// Every language comes with its flag for the language selectors of the application and of the server monitor
+    /// (<c>Scripts/Assets/generate-flags.ps1</c> draws them).
+    /// </summary>
+    /// <param name="code">The language.</param>
+    [Theory]
+    [MemberData(nameof(Languages))]
+    public void Language_HasAFlag(string code)
+        => Assert.True(File.Exists(Path.Combine(RepositoryRoot(), "Sources", "Apps", "Golether.UI", "Assets", "Flags", code + ".png")));
+
+    /// <summary>
     /// Every language names itself in its own language, once.
     /// </summary>
     [Fact]
@@ -162,16 +190,13 @@ public sealed partial class LanguagePackTests
 
     /// <summary>
     /// The screens and the messages carry no text of a language in their code: whatever the user reads comes from a
-    /// language pack. Comments are not texts, and neither are the words of the verification code, which both sides
-    /// of a session must show the same in every interface language.
+    /// language pack, the words of the verification code included. Comments are not texts.
     /// </summary>
     [Fact]
     public void NoRussianTextIsLeftInTheCode()
     {
         var cyrillic = new Regex("[Ѐ-ӿ]");
-        var exceptions = new[] { "VerificationCode.cs" };
         var leftovers = SourceFiles(".cs").Concat(SourceFiles(".axaml"))
-            .Where(f => !exceptions.Contains(Path.GetFileName(f)))
             .SelectMany(file => File.ReadLines(file)
                 .Select((line, index) => (File: file, Line: index + 1, Text: line))
                 .Where(l => cyrillic.IsMatch(l.Text) && !IsComment(l.Text)))
@@ -188,10 +213,10 @@ public sealed partial class LanguagePackTests
     private static bool IsComment(string line)
     {
         var trimmed = line.TrimStart();
-        return trimmed.StartsWith("//", StringComparison.Ordinal)
-            || trimmed.StartsWith("<!--", StringComparison.Ordinal)
-            || trimmed.StartsWith("-->", StringComparison.Ordinal)
-            || trimmed.StartsWith("*", StringComparison.Ordinal)
-            || !trimmed.Contains('<') && !trimmed.Contains('"') && !trimmed.Contains('=') && !trimmed.Contains(';');
+        return trimmed.StartsWith("//", StringComparison.Ordinal) ||
+            trimmed.StartsWith("<!--", StringComparison.Ordinal) ||
+            trimmed.StartsWith("-->", StringComparison.Ordinal) ||
+            trimmed.StartsWith("*", StringComparison.Ordinal) ||
+            !trimmed.Contains('<') && !trimmed.Contains('"') && !trimmed.Contains('=') && !trimmed.Contains(';');
     }
 }

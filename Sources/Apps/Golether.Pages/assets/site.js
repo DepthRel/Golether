@@ -1,13 +1,279 @@
-// The project page: the language switch and the download buttons. English is written in the HTML itself, so the page
-// reads fine without scripts; other languages are tables here. A new language is one more table and one more button.
+// The project page: the texts of every language, the language picker and the download buttons. English is written
+// in the HTML itself, so the page reads fine without scripts; the other languages are tables here. The list of
+// languages, the picker and the links to the documentation live in languages.js, shared with the invitation page.
 (function () {
   'use strict';
 
-  document.documentElement.classList.add('js');
+  var languages = window.GoletherLanguages;
 
   var texts = {
+    de: {
+      'page.title': 'Golether: Filme gemeinsam und synchron ansehen',
+      'nav.language': 'Sprache',
+      'nav.join': 'So treten Sie bei',
+      'nav.host': 'So laden Sie ein',
+      'nav.download': 'Herunterladen',
+      'hero.title': 'Filme <em>gemeinsam</em> ansehen,<br>wo immer Sie sind',
+      'hero.lead': 'Für alle dasselbe Bild, selbst Tausende Kilometer voneinander entfernt.<br>Das Lachen und die Stimmen Ihrer Liebsten ganz nah.',
+      'hero.download': 'Golether herunterladen',
+      'hero.how': 'Ich habe eine Einladung',
+      'hero.free': 'Kostenlos und quelloffen · Windows, Linux, macOS',
+      'hero.shot': 'Das Golether-Fenster: ein Film im Player, die Teilnehmer und der Chat rechts',
+      'hero.sync': 'synchron',
+      'join.eyebrow': 'Sie wurden eingeladen',
+      'join.title': 'Vier Schritte bis zum Film',
+      'join.sub': 'Sie brauchen nur Golether auf Ihrem Computer und den Link, den Ihnen jemand geschickt hat.',
+      'join.1.title': 'Auf den Link klicken',
+      'join.1.text': 'Der Browser fragt, ob Golether geöffnet werden soll. Stimmen Sie zu.',
+      'join.2.title': 'Bestätigen',
+      'join.2.text': 'Golether zeigt den Namen der Sitzung und wer Sie einlädt. Drücken Sie „Beitreten“.',
+      'join.3.title': 'Code vergleichen',
+      'join.3.text': 'Sie und der Gastgeber sehen dieselben drei Wörter und eine Zahl. Sagen Sie sie einander laut.',
+      'join.4.title': 'Genießen',
+      'join.4.text': 'Der Gastgeber lässt Sie herein, und der Film startet für alle im selben Moment.',
+      'join.note': '<b>Der Link hat die App nicht geöffnet?</b> Bitten Sie den Gastgeber um den <b>Schlüssel</b>: Kopieren Sie ihn, öffnen Sie Golether, fügen Sie ihn in das Feld „Einladung“ ein und drücken Sie „Verbinden“. Ein Link gilt 15 Minuten, ein Schlüssel bis zu einer Stunde; mit einer Einladung kann die ganze Runde beitreten.',
+      'code.1': 'Ahorn',
+      'code.2': 'Fluss',
+      'code.3': 'Stein',
+      'host.eyebrow': 'Sie laden ein',
+      'host.title': 'Zeigen Sie Ihren Freunden einen Film',
+      'host.sub': 'Der Film bleibt auf Ihrem Computer und geht direkt zu Ihren Gästen.<br>Bis zu fünf Personen schauen gemeinsam.',
+      'host.1.title': 'Film auswählen',
+      'host.1.text': 'Drücken Sie „Sitzung erstellen“ und wählen Sie eine Videodatei. Nichts wird auf einen Server hochgeladen.',
+      'host.2.title': 'Einladung schicken',
+      'host.2.text': 'Drücken Sie „Einladen“, kopieren Sie den Link und posten Sie ihn in Ihren Gruppenchat. Alle treten mit demselben Link bei.',
+      'host.3.title': 'Gäste einlassen',
+      'host.3.text': 'Vergleichen Sie den Code mit Ihrem Gast per Sprache, lassen Sie ihn herein und drücken Sie auf Abspielen.',
+      'why.eyebrow': 'Warum Golether',
+      'why.title': 'Wie auf demselben Sofa',
+      'why.sub': 'Alles für einen gemeinsamen Abend passt in ein Fenster.',
+      'why.1.title': 'Perfekt synchron',
+      'why.1.text': 'Abspielen, Pause und Spulen wirken für alle zugleich, egal wer die Taste drückt.',
+      'why.2.title': 'Originalqualität',
+      'why.2.text': 'Der Film wird nicht zu einem verschwommenen Stream umkodiert: Alle sehen die Datei, wie sie ist.',
+      'why.3.title': 'Gesichter und Stimmen',
+      'why.3.text': 'Webcams, Sprache, Chat und Reaktionen über dem Film. Sie können sogar direkt aufs Bild zeichnen, und alle sehen es.',
+      'why.4.title': 'Privat',
+      'why.4.text': 'Die Verbindung ist verschlüsselt und läuft direkt zwischen Ihnen. Niemand kommt ohne Zustimmung des Gastgebers herein.',
+      'why.5.title': 'Eigene Untertitel und Tonspur',
+      'why.5.text': 'Jeder wählt Untertitel und Tonspur selbst, unabhängig von den anderen.',
+      'why.6.title': 'Für immer kostenlos',
+      'why.6.text': 'Offener Quellcode. Keine Konten, keine Werbung, keine Abos.',
+      'dl.eyebrow': 'Herunterladen',
+      'dl.title': 'Golether holen',
+      'dl.sub': 'Dieselbe Version für alle, die gemeinsam schauen.<br>Updates werden in der App angeboten.',
+      'dl.windows': 'Ein Installationsprogramm für Windows 10 und neuer. Einladungslinks öffnen die App von selbst.',
+      'dl.linux': 'Ein Archiv für 64-Bit-Linux. Entpacken, einmal install-desktop-entry.sh ausführen, dann Golether.sh starten.',
+      'dl.macos': 'Ein Archiv für Macs mit Apple Silicon, macOS 14 und neuer.',
+      'dl.button': 'Herunterladen',
+      'dl.version': 'Version ',
+      'dl.for': 'Herunterladen für ',
+      'foot.license': 'Golether ist freie Software unter der Lizenz GPL-3.0-or-later.',
+      'foot.source': 'Quellcode',
+      'foot.guide': 'Handbuch',
+      'foot.releases': 'Alle Versionen'
+    },
+    es: {
+      'page.title': 'Golether: ved películas juntos y sincronizados',
+      'nav.language': 'Idioma',
+      'nav.join': 'Cómo unirse',
+      'nav.host': 'Cómo invitar',
+      'nav.download': 'Descargar',
+      'hero.title': 'Ved películas <em>juntos</em><br>estéis donde estéis',
+      'hero.lead': 'El mismo fotograma para todos, aunque os separen miles de kilómetros.<br>Las risas y las voces de los tuyos, justo a tu lado.',
+      'hero.download': 'Descargar Golether',
+      'hero.how': 'Tengo una invitación',
+      'hero.free': 'Gratis y de código abierto · Windows, Linux, macOS',
+      'hero.shot': 'La ventana de Golether: una película en el reproductor, los participantes y el chat a la derecha',
+      'hero.sync': 'sincronizados',
+      'join.eyebrow': 'Te han invitado',
+      'join.title': 'Cuatro pasos hasta la película',
+      'join.sub': 'Solo necesitas Golether en tu ordenador y el enlace que te ha enviado tu amigo.',
+      'join.1.title': 'Haz clic en el enlace',
+      'join.1.text': 'El navegador pregunta si quieres abrir Golether. Di que sí.',
+      'join.2.title': 'Confirma',
+      'join.2.text': 'Golether muestra el nombre de la sesión y quién te invita. Pulsa «Unirse».',
+      'join.3.title': 'Compara el código',
+      'join.3.text': 'Tú y el anfitrión veis las mismas tres palabras y un número. Decídoslas en voz alta.',
+      'join.4.title': 'Disfruta',
+      'join.4.text': 'El anfitrión te deja entrar y la película empieza para todos en el mismo momento.',
+      'join.note': '<b>¿El enlace no abrió la aplicación?</b> Pide al anfitrión la <b>clave</b>: cópiala, abre Golether, pégala en el campo «Invitación» y pulsa «Conectar». Un enlace vale 15 minutos y una clave hasta una hora; todo el grupo puede unirse con una sola invitación.',
+      'code.1': 'arce',
+      'code.2': 'río',
+      'code.3': 'piedra',
+      'host.eyebrow': 'Tú invitas',
+      'host.title': 'Muestra una película a tus amigos',
+      'host.sub': 'La película se queda en tu ordenador y va directamente a tus invitados.<br>Hasta cinco personas ven juntas.',
+      'host.1.title': 'Elige la película',
+      'host.1.text': 'Pulsa «Crear una sesión» y elige un archivo de vídeo. No se sube nada a ningún servidor.',
+      'host.2.title': 'Envía la invitación',
+      'host.2.text': 'Pulsa «Invitar», copia el enlace y publícalo en tu chat de grupo. Todos se unen con el mismo enlace.',
+      'host.3.title': 'Déjalos entrar',
+      'host.3.text': 'Compara el código con tu invitado de viva voz, déjalo entrar y dale a reproducir.',
+      'why.eyebrow': 'Por qué Golether',
+      'why.title': 'Como en el mismo sofá',
+      'why.sub': 'Todo lo necesario para una noche juntos cabe en una ventana.',
+      'why.1.title': 'Perfectamente sincronizado',
+      'why.1.text': 'Reproducir, pausar y rebobinar funcionan para todos a la vez, pulse quien pulse el botón.',
+      'why.2.title': 'Calidad original',
+      'why.2.text': 'La película no se recodifica en una emisión borrosa: todos ven el archivo tal como es.',
+      'why.3.title': 'Caras y voces',
+      'why.3.text': 'Cámaras, voz, chat y reacciones sobre la película. Incluso puedes dibujar sobre la imagen, y todos lo ven.',
+      'why.4.title': 'Privado',
+      'why.4.text': 'La conexión está cifrada y va directamente entre vosotros. Nadie entra sin la aprobación del anfitrión.',
+      'why.5.title': 'Tus propios subtítulos y audio',
+      'why.5.text': 'Cada uno elige los subtítulos y la pista de audio por su cuenta, sin depender de los demás.',
+      'why.6.title': 'Gratis para siempre',
+      'why.6.text': 'Código abierto. Sin cuentas, sin anuncios, sin suscripciones.',
+      'dl.eyebrow': 'Descargar',
+      'dl.title': 'Consigue Golether',
+      'dl.sub': 'La misma versión para todos los que ven juntos.<br>Las actualizaciones se ofrecen dentro de la aplicación.',
+      'dl.windows': 'Un instalador para Windows 10 y posteriores. Los enlaces de invitación abren la aplicación solos.',
+      'dl.linux': 'Un archivo para Linux de 64 bits. Descomprímelo, ejecuta una vez install-desktop-entry.sh y luego inicia Golether.sh.',
+      'dl.macos': 'Un archivo para Mac con Apple silicon, macOS 14 y posteriores.',
+      'dl.button': 'Descargar',
+      'dl.version': 'versión ',
+      'dl.for': 'Descargar para ',
+      'foot.license': 'Golether es software libre bajo la licencia GPL-3.0-or-later.',
+      'foot.source': 'Código fuente',
+      'foot.guide': 'Guía de uso',
+      'foot.releases': 'Todas las versiones'
+    },
+    fr: {
+      'page.title': 'Golether : regarder des films ensemble, en synchro',
+      'nav.language': 'Langue',
+      'nav.join': 'Comment rejoindre',
+      'nav.host': 'Comment inviter',
+      'nav.download': 'Télécharger',
+      'hero.title': 'Regardez des films <em>ensemble</em><br>où que vous soyez',
+      'hero.lead': 'La même image pour tous, même à des milliers de kilomètres.<br>Les rires et les voix de vos proches, tout près de vous.',
+      'hero.download': 'Télécharger Golether',
+      'hero.how': 'J’ai une invitation',
+      'hero.free': 'Gratuit et open source · Windows, Linux, macOS',
+      'hero.shot': 'La fenêtre de Golether : un film dans le lecteur, les participants et la discussion à droite',
+      'hero.sync': 'en synchro',
+      'join.eyebrow': 'Vous êtes invité',
+      'join.title': 'Quatre étapes jusqu’au film',
+      'join.sub': 'Il vous faut seulement Golether sur votre ordinateur et le lien qu’un ami vous a envoyé.',
+      'join.1.title': 'Cliquez sur le lien',
+      'join.1.text': 'Le navigateur demande s’il faut ouvrir Golether. Acceptez.',
+      'join.2.title': 'Confirmez',
+      'join.2.text': 'Golether affiche le nom de la séance et qui vous invite. Appuyez sur « Rejoindre ».',
+      'join.3.title': 'Comparez le code',
+      'join.3.text': 'Vous et l’hôte voyez les trois mêmes mots et un nombre. Dites-les-vous à voix haute.',
+      'join.4.title': 'Profitez',
+      'join.4.text': 'L’hôte vous fait entrer, et le film démarre pour tout le monde au même moment.',
+      'join.note': '<b>Le lien n’a pas ouvert l’application ?</b> Demandez plutôt la <b>clé</b> à l’hôte : copiez-la, ouvrez Golether, collez-la dans le champ « Invitation » et appuyez sur « Se connecter ». Un lien est valable 15 minutes, une clé jusqu’à une heure ; toute la bande peut rejoindre avec une seule invitation.',
+      'code.1': 'érable',
+      'code.2': 'rivière',
+      'code.3': 'pierre',
+      'host.eyebrow': 'Vous invitez',
+      'host.title': 'Montrez un film à vos amis',
+      'host.sub': 'Le film reste sur votre ordinateur et va directement à vos invités.<br>Jusqu’à cinq personnes regardent ensemble.',
+      'host.1.title': 'Choisissez le film',
+      'host.1.text': 'Appuyez sur « Créer une séance » et choisissez un fichier vidéo. Rien n’est envoyé sur un serveur.',
+      'host.2.title': 'Envoyez l’invitation',
+      'host.2.text': 'Appuyez sur « Inviter », copiez le lien et publiez-le dans votre discussion de groupe. Tout le monde rejoint avec le même lien.',
+      'host.3.title': 'Faites-les entrer',
+      'host.3.text': 'Comparez le code avec votre invité à voix haute, faites-le entrer et lancez la lecture.',
+      'why.eyebrow': 'Pourquoi Golether',
+      'why.title': 'Comme sur le même canapé',
+      'why.sub': 'Tout ce qu’il faut pour une soirée ensemble tient dans une fenêtre.',
+      'why.1.title': 'Parfaitement synchronisé',
+      'why.1.text': 'Lecture, pause et retour en arrière valent pour tout le monde à la fois, quel que soit celui qui appuie.',
+      'why.2.title': 'Qualité d’origine',
+      'why.2.text': 'Le film n’est pas réencodé en un flux flou : chacun regarde le fichier tel qu’il est.',
+      'why.3.title': 'Visages et voix',
+      'why.3.text': 'Webcams, voix, discussion et réactions par-dessus le film. Vous pouvez même dessiner sur l’image, et tout le monde le voit.',
+      'why.4.title': 'Privé',
+      'why.4.text': 'La connexion est chiffrée et passe directement entre vous. Personne n’entre sans l’accord de l’hôte.',
+      'why.5.title': 'Vos sous-titres et votre audio',
+      'why.5.text': 'Chacun choisit ses sous-titres et sa piste audio, indépendamment des autres.',
+      'why.6.title': 'Gratuit pour de bon',
+      'why.6.text': 'Code ouvert. Pas de compte, pas de publicité, pas d’abonnement.',
+      'dl.eyebrow': 'Télécharger',
+      'dl.title': 'Obtenir Golether',
+      'dl.sub': 'La même version pour tous ceux qui regardent ensemble.<br>Les mises à jour sont proposées dans l’application.',
+      'dl.windows': 'Un programme d’installation pour Windows 10 et plus récent. Les liens d’invitation ouvrent l’application tout seuls.',
+      'dl.linux': 'Une archive pour Linux 64 bits. Décompressez-la, lancez une fois install-desktop-entry.sh, puis démarrez Golether.sh.',
+      'dl.macos': 'Une archive pour les Mac avec puce Apple, macOS 14 et plus récent.',
+      'dl.button': 'Télécharger',
+      'dl.version': 'version ',
+      'dl.for': 'Télécharger pour ',
+      'foot.license': 'Golether est un logiciel libre sous licence GPL-3.0-or-later.',
+      'foot.source': 'Code source',
+      'foot.guide': 'Guide d’utilisation',
+      'foot.releases': 'Toutes les versions'
+    },
+    pt: {
+      'page.title': 'Golether: vejam filmes juntos, em sincronia',
+      'nav.language': 'Idioma',
+      'nav.join': 'Como entrar',
+      'nav.host': 'Como convidar',
+      'nav.download': 'Transferir',
+      'hero.title': 'Vejam filmes <em>juntos</em><br>estejam onde estiverem',
+      'hero.lead': 'A mesma imagem para todos, mesmo a milhares de quilómetros de distância.<br>As gargalhadas e as vozes dos seus, mesmo ao lado.',
+      'hero.download': 'Transferir o Golether',
+      'hero.how': 'Tenho um convite',
+      'hero.free': 'Gratuito e de código aberto · Windows, Linux, macOS',
+      'hero.shot': 'A janela do Golether: um filme no leitor, os participantes e a conversa à direita',
+      'hero.sync': 'em sincronia',
+      'join.eyebrow': 'Foi convidado',
+      'join.title': 'Quatro passos até ao filme',
+      'join.sub': 'Só precisa do Golether no computador e da ligação que um amigo lhe enviou.',
+      'join.1.title': 'Clique na ligação',
+      'join.1.text': 'O navegador pergunta se quer abrir o Golether. Diga que sim.',
+      'join.2.title': 'Confirme',
+      'join.2.text': 'O Golether mostra o nome da sessão e quem o convida. Prima “Entrar”.',
+      'join.3.title': 'Compare o código',
+      'join.3.text': 'Você e o anfitrião veem as mesmas três palavras e um número. Digam-nos um ao outro em voz alta.',
+      'join.4.title': 'Divirta-se',
+      'join.4.text': 'O anfitrião deixa-o entrar e o filme começa para todos no mesmo momento.',
+      'join.note': '<b>A ligação não abriu a aplicação?</b> Peça antes a <b>chave</b> ao anfitrião: copie-a, abra o Golether, cole-a no campo “Convite” e prima “Ligar”. Uma ligação é válida durante 15 minutos e uma chave até uma hora; todo o grupo pode entrar com um só convite.',
+      'code.1': 'bordo',
+      'code.2': 'rio',
+      'code.3': 'pedra',
+      'host.eyebrow': 'Você convida',
+      'host.title': 'Mostre um filme aos seus amigos',
+      'host.sub': 'O filme fica no seu computador e vai diretamente para os seus convidados.<br>Até cinco pessoas veem juntas.',
+      'host.1.title': 'Escolha o filme',
+      'host.1.text': 'Prima “Criar uma sessão” e escolha um ficheiro de vídeo. Nada é enviado para nenhum servidor.',
+      'host.2.title': 'Envie o convite',
+      'host.2.text': 'Prima “Convidar”, copie a ligação e publique-a na conversa do grupo. Todos entram com a mesma ligação.',
+      'host.3.title': 'Deixe-os entrar',
+      'host.3.text': 'Compare o código com o seu convidado de viva voz, deixe-o entrar e carregue em reproduzir.',
+      'why.eyebrow': 'Porquê o Golether',
+      'why.title': 'Como no mesmo sofá',
+      'why.sub': 'Tudo para uma noite em conjunto cabe numa janela.',
+      'why.1.title': 'Perfeitamente sincronizado',
+      'why.1.text': 'Reproduzir, pausar e recuar funcionam para todos ao mesmo tempo, seja quem for que carregue no botão.',
+      'why.2.title': 'Qualidade original',
+      'why.2.text': 'O filme não é recodificado numa transmissão desfocada: todos veem o ficheiro tal como é.',
+      'why.3.title': 'Caras e vozes',
+      'why.3.text': 'Câmaras, voz, conversa e reações por cima do filme. Pode até desenhar sobre a imagem, e todos veem.',
+      'why.4.title': 'Privado',
+      'why.4.text': 'A ligação é cifrada e vai diretamente entre vocês. Ninguém entra sem a aprovação do anfitrião.',
+      'why.5.title': 'As suas legendas e o seu áudio',
+      'why.5.text': 'Cada um escolhe as legendas e a faixa de áudio por si, independentemente dos outros.',
+      'why.6.title': 'Gratuito para sempre',
+      'why.6.text': 'Código aberto. Sem contas, sem anúncios, sem subscrições.',
+      'dl.eyebrow': 'Transferir',
+      'dl.title': 'Obtenha o Golether',
+      'dl.sub': 'A mesma versão para todos os que veem juntos.<br>As atualizações são propostas dentro da aplicação.',
+      'dl.windows': 'Um instalador para Windows 10 e mais recente. As ligações de convite abrem a aplicação sozinhas.',
+      'dl.linux': 'Um arquivo para Linux de 64 bits. Descompacte-o, execute uma vez install-desktop-entry.sh e depois inicie Golether.sh.',
+      'dl.macos': 'Um arquivo para Mac com Apple silicon, macOS 14 e mais recente.',
+      'dl.button': 'Transferir',
+      'dl.version': 'versão ',
+      'dl.for': 'Transferir para ',
+      'foot.license': 'O Golether é software livre sob a licença GPL-3.0-or-later.',
+      'foot.source': 'Código-fonte',
+      'foot.guide': 'Guia do utilizador',
+      'foot.releases': 'Todas as versões'
+    },
     ru: {
       'page.title': 'Golether: смотрите кино вместе, синхронно',
+      'nav.language': 'Язык',
       'nav.join': 'Как войти',
       'nav.host': 'Как пригласить',
       'nav.download': 'Скачать',
@@ -30,6 +296,9 @@
       'join.4.title': 'Наслаждайтесь',
       'join.4.text': 'Ведущий впускает вас, и фильм начинается у всех в один момент.',
       'join.note': '<b>Ссылка не открыла приложение?</b> Попросите у ведущего <b>ключ</b>: скопируйте его, откройте Golether, вставьте в поле «Приглашение» и нажмите «Подключиться». Ссылка действует 15 минут, ключ — до часа; по одному приглашению может войти вся компания.',
+      'code.1': 'клён',
+      'code.2': 'река',
+      'code.3': 'камень',
       'host.eyebrow': 'Вы приглашаете',
       'host.title': 'Покажите фильм друзьям',
       'host.sub': 'Фильм остаётся на вашем компьютере и идёт к гостям напрямую.<br>Вместе смотрят до пяти человек.',
@@ -71,17 +340,12 @@
   };
 
   // What the HTML says is the English table.
-  var english = { 'page.title': document.title, 'dl.version': 'version ', 'dl.for': 'Download for ' };
+  var english = { 'page.title': document.title, 'nav.language': 'Language', 'dl.version': 'version ', 'dl.for': 'Download for ' };
   var nodes = document.querySelectorAll('[data-t]');
   nodes.forEach(function (node) { english[node.getAttribute('data-t')] = node.innerHTML; });
   var alts = document.querySelectorAll('[data-t-alt]');
   alts.forEach(function (node) { english[node.getAttribute('data-t-alt')] = node.getAttribute('alt'); });
   texts.en = english;
-
-  // The documentation is kept by language in Docs/<folder>. A language of the page that has no translated guide yet
-  // gets the English one: a new documentation language is one more entry here.
-  var docs = { en: 'En', ru: 'Ru' };
-  var docsRoot = 'https://github.com/DepthRel/Golether/blob/main/Docs/';
 
   var language = 'en';
   var release = null;
@@ -125,32 +389,38 @@
     }
   }
 
+  var picker = document.querySelector('.lang');
+  var showPicker = picker && languages ? languages.mountPicker(picker, switchTo) : function () { };
+
   function apply(next) {
     language = texts[next] ? next : 'en';
     document.documentElement.lang = language;
     document.title = text('page.title');
     nodes.forEach(function (node) { node.innerHTML = text(node.getAttribute('data-t')); });
     alts.forEach(function (node) { node.setAttribute('alt', text(node.getAttribute('data-t-alt'))); });
-    document.getElementById('guide-link').setAttribute('href', docsRoot + (docs[language] || docs.en) + '/UserGuide.md');
-    document.querySelectorAll('.lang button').forEach(function (button) {
-      button.setAttribute('aria-pressed', button.getAttribute('data-lang') === language ? 'true' : 'false');
-    });
+    if (picker) { picker.setAttribute('aria-label', text('nav.language')); }
+    if (languages) {
+      document.getElementById('guide-link').setAttribute('href', languages.docUrl(language, 'UserGuide.md'));
+    }
+    showPicker(language);
     showDownloads();
   }
 
-  function remembered() {
-    try { return localStorage.getItem('golether.language'); } catch (e) { return null; }
+  // A chosen language fades the page out and back in, so the switch reads as one change rather than a flicker.
+  function switchTo(next) {
+    var body = document.body;
+    if (window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+      apply(next);
+      return;
+    }
+    body.classList.add('switching');
+    window.setTimeout(function () {
+      apply(next);
+      body.classList.remove('switching');
+    }, 160);
   }
 
-  document.querySelectorAll('.lang button').forEach(function (button) {
-    button.addEventListener('click', function () {
-      var chosen = button.getAttribute('data-lang');
-      try { localStorage.setItem('golether.language', chosen); } catch (e) { /* the choice lasts for this visit */ }
-      apply(chosen);
-    });
-  });
-
-  apply(remembered() || ((navigator.language || 'en').slice(0, 2).toLowerCase()));
+  apply(languages ? languages.detect() : 'en');
 
   // The same file the application reads to learn about new versions.
   fetch('updates.json', { cache: 'no-cache' })

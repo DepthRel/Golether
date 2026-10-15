@@ -1,8 +1,9 @@
 using System.Net;
 using System.Net.Sockets;
+using Golether.Core.Enums;
 using Golether.Core.Networking;
 using Golether.Transports.Rendezvous.Protocol;
-using Golether.Web.Server.Contracts;
+using Golether.Web.Server.Enums;
 using Golether.Web.Server.Infrastructure;
 using Golether.Web.Server.Options;
 
@@ -80,7 +81,7 @@ internal sealed class ConnectionHandler
             using (var limit = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken))
             {
                 limit.CancelAfter(_options.FirstMessageTimeout);
-                await channel.SendAsync(new ServerHelloMessage(RendezvousProtocol.Version, nonce), limit.Token).ConfigureAwait(false);
+                await channel.SendAsync(new ServerHelloMessage(RendezvousProtocol.VERSION, nonce), limit.Token).ConfigureAwait(false);
                 first = await channel.ReceiveAsync(limit.Token).ConfigureAwait(false);
             }
 
@@ -125,9 +126,9 @@ internal sealed class ConnectionHandler
     /// <returns>A task that completes when the registration ends.</returns>
     private async Task HostAsync(RendezvousChannel channel, IPEndPoint observed, string nonce, RegisterMessage register, CancellationToken cancellationToken)
     {
-        if (!RendezvousPoint.IsValidRoom(register.Room)
-            || !RendezvousSignature.TryDecode(register.Certificate, RendezvousSignature.MaxCertificateSize, out var certificate)
-            || !RendezvousSignature.TryDecode(register.Signature, RendezvousSignature.MaxSignatureSize, out var signature))
+        if (!RendezvousPoint.IsValidRoom(register.Room) ||
+            !RendezvousSignature.TryDecode(register.Certificate, RendezvousSignature.MAX_CERTIFICATE_SIZE, out var certificate) ||
+            !RendezvousSignature.TryDecode(register.Signature, RendezvousSignature.MAX_SIGNATURE_SIZE, out var signature))
         {
             _journal?.Record(JournalEvent.HostRefused, observed, reason: RendezvousError.BadRequest);
             await RefuseAsync(channel, RendezvousError.BadRequest, cancellationToken).ConfigureAwait(false);

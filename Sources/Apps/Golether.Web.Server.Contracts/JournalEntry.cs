@@ -1,4 +1,4 @@
-using Golether.Transports.Rendezvous.Protocol;
+using Golether.Core.Enums;
 
 namespace Golether.Web.Server.Contracts;
 

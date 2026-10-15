@@ -1,5 +1,6 @@
 using System.Net;
 using System.Net.Sockets;
+using Golether.Core.Enums;
 using Golether.Core.Networking;
 using Golether.Transports.Rendezvous.Protocol;
 using Golether.Transports.Rendezvous.Punching;
@@ -67,7 +68,7 @@ internal sealed class RendezvousConnection : IAsyncDisposable
                 throw new RendezvousException(hello is ErrorMessage error ? error.Error : RendezvousError.BadRequest);
             }
 
-            if (greeting.Version != RendezvousProtocol.Version)
+            if (greeting.Version != RendezvousProtocol.VERSION)
             {
                 throw new RendezvousException(RendezvousError.UnsupportedVersion);
             }
@@ -76,8 +77,8 @@ internal sealed class RendezvousConnection : IAsyncDisposable
             channel = null;
             return connection;
         }
-        catch (Exception ex) when (ex is SocketException or IOException and not RendezvousException or InvalidDataException
-                                   || (ex is OperationCanceledException && !cancellationToken.IsCancellationRequested))
+        catch (Exception ex) when (ex is SocketException or IOException and not RendezvousException or InvalidDataException ||
+                                   (ex is OperationCanceledException && !cancellationToken.IsCancellationRequested))
         {
             throw new RendezvousException(RendezvousError.Unreachable, ex);
         }

@@ -8,7 +8,7 @@ internal static class Crc32
     /// <summary>
     /// The lookup table of the reflected polynomial 0xEDB88320.
     /// </summary>
-    private static readonly uint[] Table = BuildTable();
+    private static readonly uint[] _table = BuildTable();
 
     /// <summary>
     /// Computes the checksum.
@@ -20,7 +20,7 @@ internal static class Crc32
         var crc = 0xFFFFFFFFu;
         foreach (var value in data)
         {
-            crc = Table[(crc ^ value) & 0xFF] ^ (crc >> 8);
+            crc = _table[(crc ^ value) & 0xFF] ^ (crc >> 8);
         }
 
         return ~crc;

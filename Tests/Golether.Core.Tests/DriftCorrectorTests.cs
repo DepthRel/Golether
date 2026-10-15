@@ -1,3 +1,4 @@
+using Golether.Core.Enums;
 using Golether.Core.Playback;
 
 namespace Golether.Core.Tests;

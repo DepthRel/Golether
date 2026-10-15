@@ -1,6 +1,6 @@
-using Golether.Core.Data.Entities;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
+using Golether.Core.Data.Entities;
 
 namespace Golether.Core.Data.Context;
 
@@ -13,14 +13,14 @@ public sealed class GoletherDbContext : DbContext
     /// <summary>
     /// Stores <see cref="DateTimeOffset"/> as Unix milliseconds.
     /// </summary>
-    private static readonly ValueConverter<DateTimeOffset, long> UnixMilliseconds = new(
+    private static readonly ValueConverter<DateTimeOffset, long> _unixMilliseconds = new(
         value => value.ToUnixTimeMilliseconds(),
         value => DateTimeOffset.FromUnixTimeMilliseconds(value));
 
     /// <summary>
     /// Stores nullable <see cref="DateTimeOffset"/> as Unix milliseconds.
     /// </summary>
-    private static readonly ValueConverter<DateTimeOffset?, long?> NullableUnixMilliseconds = new(
+    private static readonly ValueConverter<DateTimeOffset?, long?> _nullableUnixMilliseconds = new(
         value => value.HasValue ? value.Value.ToUnixTimeMilliseconds() : null,
         value => value.HasValue ? DateTimeOffset.FromUnixTimeMilliseconds(value.Value) : null);
 
@@ -61,8 +61,8 @@ public sealed class GoletherDbContext : DbContext
             entity.ToTable("Contacts");
             entity.HasKey(e => e.PeerId);
             entity.Property(e => e.DisplayName).IsRequired();
-            entity.Property(e => e.FirstSeenAt).HasConversion(UnixMilliseconds);
-            entity.Property(e => e.LastSeenAt).HasConversion(UnixMilliseconds);
+            entity.Property(e => e.FirstSeenAt).HasConversion(_unixMilliseconds);
+            entity.Property(e => e.LastSeenAt).HasConversion(_unixMilliseconds);
         });
 
         modelBuilder.Entity<HostTunnelInterfaceEntity>(entity =>
@@ -70,7 +70,7 @@ public sealed class GoletherDbContext : DbContext
             entity.ToTable("HostTunnelInterfaces");
             entity.HasKey(e => e.InterfaceName);
             entity.Property(e => e.SecretData).IsRequired();
-            entity.Property(e => e.CreatedAt).HasConversion(UnixMilliseconds);
+            entity.Property(e => e.CreatedAt).HasConversion(_unixMilliseconds);
         });
 
         modelBuilder.Entity<TunnelEntity>(entity =>
@@ -79,9 +79,9 @@ public sealed class GoletherDbContext : DbContext
             entity.HasKey(e => e.Id);
             entity.Property(e => e.Role).HasConversion<int>();
             entity.Property(e => e.Status).HasConversion<int>();
-            entity.Property(e => e.CreatedAt).HasConversion(UnixMilliseconds);
-            entity.Property(e => e.UpdatedAt).HasConversion(UnixMilliseconds);
-            entity.Property(e => e.ExpiresAt).HasConversion(NullableUnixMilliseconds);
+            entity.Property(e => e.CreatedAt).HasConversion(_unixMilliseconds);
+            entity.Property(e => e.UpdatedAt).HasConversion(_unixMilliseconds);
+            entity.Property(e => e.ExpiresAt).HasConversion(_nullableUnixMilliseconds);
             entity.HasIndex(e => new { e.Role, e.OfferId }).IsUnique();
         });
 

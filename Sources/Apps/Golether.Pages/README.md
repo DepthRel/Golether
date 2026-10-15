@@ -1,62 +1,70 @@
 # Golether.Pages
 
-Страница проекта: <https://depthrel.github.io/Golether/>. Обычные статические файлы без сборки, публикуются
-GitHub Pages из этой папки (`.github/workflows/pages.yml`) при каждом изменении в ветке `main`.
+The project page: <https://depthrel.github.io/Golether/>. Plain static files with no build step, published by GitHub
+Pages from this folder (`.github/workflows/pages.yml`) on every change in the `main` branch.
 
-| Файл | Зачем |
+| File | What for |
 |---|---|
-| `index.html`, `assets/site.css`, `assets/site.js` | Визитка для людей без технических знаний: что это, как войти по приглашению, как пригласить, где скачать. Русский и английский. |
-| `join/index.html`, `assets/join.js` | Страница приглашения: превращает `https://…/join/#<приглашение>` в `golether://join/v1/<приглашение>` и передаёт приложению. |
-| `updates.json` | Последний выпуск. Его читают и кнопки «Скачать» на странице, и проверка обновлений в приложении. |
-| `config.json` | Адрес сервера рукопожатий проекта в зашифрованном виде. Его читает приложение в режиме «Автоматически». |
+| `index.html`, `assets/site.css`, `assets/site.js` | The card for people without technical knowledge: what it is, how to join by invitation, how to invite, where to download. |
+| `join/index.html`, `assets/join.js` | The invitation page: turns `https://…/join/#<invitation>` into `golether://join/v1/<invitation>` and hands it to the application. |
+| `assets/languages.js`, `assets/flags/*.svg` | The languages of both pages and the language picker with flags; the links to the documentation in the chosen language. |
+| `updates.json` | The latest release. The "Download" buttons of the page and the update check of the application both read it. |
+| `config.json` | The address of the project's rendezvous server, sealed. The application reads it in the "Automatically" mode. |
 
-## Первая публикация
+## First publication
 
-1. Откройте репозиторий на GitHub: **Settings → Pages**.
-2. В разделе **Build and deployment** выберите **Source: GitHub Actions**.
-3. Отправьте коммит с этой папкой в `main` (или запустите workflow **Pages** вручную на вкладке **Actions**).
-4. Через пару минут страница откроется по адресу <https://depthrel.github.io/Golether/>.
+1. Open the repository on GitHub: **Settings → Pages**.
+2. Under **Build and deployment** choose **Source: GitHub Actions**.
+3. Push a commit with this folder to `main` (or run the **Pages** workflow by hand on the **Actions** tab).
+4. A couple of minutes later the page opens at <https://depthrel.github.io/Golether/>.
 
-## Новый выпуск
+## A new release
 
-1. Отправьте тег версии: `git tag 0.3.0; git push origin 0.3.0`. Workflow **Packages** соберёт
-   `Golether-0.3.0-linux-x64.tar.gz`, `Golether-0.3.0-osx-arm64.tar.gz` и `Golether-0.3.0-osx-x64.tar.gz` и приложит
-   их к выпуску (если выпуска ещё нет — к черновику).
-   Соберите `Golether-0.3.0-setup.exe` (`Scripts/App/build-installer.ps1`), добавьте его в тот же выпуск и опубликуйте.
-2. В `updates.json` замените номер версии в `version` и в `url` у каждой системы. Необязательное поле `notes` —
-   строка «что нового», её покажет приложение.
-3. Закоммитьте. Страница обновится сама, а приложения прежних версий при запуске покажут «Доступна новая версия».
+1. Push a version tag: `git tag 0.3.0; git push origin 0.3.0`. The **Packages** workflow builds
+   `Golether-0.3.0-osx-arm64.tar.gz` and `Golether-0.3.0-osx-x64.tar.gz` and attaches them to the release (to a draft
+   when there is no release yet).
+   Run `Scripts/build-release.ps1` on Windows: it builds the Windows installer and archive, the Linux package and every
+   server package, and writes `SHA256SUMS-0.3.0.txt`. Add them to the same release and publish it.
+2. In `updates.json` replace the version number in `version` and in the `url` of every system. The optional `notes`
+   field is a "what is new" line the application shows.
+3. Commit. The page updates itself, and applications of earlier versions say "A new version is available" at start.
 
-`Scripts/App/build-installer.ps1` печатает готовую запись для Windows.
+`Scripts/App/build-installer.ps1` prints a ready entry for Windows.
 
-## Новая картинка
+## A new picture
 
-Страница показывает `assets/screenshot.jpg` — облегчённую копию `Docs/images/screenshot.png` (не шире 1600 пикселей).
-После замены снимка запустите `Scripts/Assets/update-site-screenshot.ps1` и закоммитьте оба файла. Если изменились пропорции,
-поправьте `width` и `height` картинки в `index.html`: скрипт печатает новые размеры.
+The page shows `assets/screenshot.jpg`, a lighter copy of `Docs/images/screenshot.png` (at most 1600 pixels wide).
+After replacing the screenshot run `Scripts/Assets/update-site-screenshot.ps1` and commit both files. If the
+proportions changed, correct the `width` and `height` of the picture in `index.html`: the script prints the new size.
 
-## Адрес сервера рукопожатий
+## The rendezvous server address
 
-`config.json` выглядит так: `{ "rendezvous": "g1.…" }`. Строку делает утилита владельца `Golether.AdminSettings`
-(отдельный репозиторий): впишите в неё `хост:порт` и сохраните результат поверх `config.json`. Пустая строка
-означает «сервера нет»: приложение создаст сеанс без него и скажет об этом ведущему.
+`config.json` looks like `{ "rendezvous": "g1.…" }`. The string is made by the owner's utility
+`Golether.AdminSettings` (a separate repository): enter `host:port` into it and save the result over `config.json`. An
+empty string means "no server": the application creates a session without one and tells the host so.
 
-Шифрование — маска от сканеров, а не тайна: ключ есть в открытом коде приложения
-(`Golether.Security.Discovery.EndpointSeal`), и адрес сервера входит в каждое приглашение.
+The sealing is a mask against scanners, not a secret: the key is in the open code of the application
+(`Golether.Security.Discovery.EndpointSeal`), and the server address is part of every invitation.
 
-## Правила страницы
+## Rules of the page
 
-- Ничего не загружается с чужих серверов: ни шрифтов, ни скриптов, ни счётчиков. Это закреплено заголовком
-  `Content-Security-Policy` в обеих страницах; встроенных скриптов и стилей тоже нет.
-- Приглашение стоит после `#`, поэтому браузер не отправляет его серверу. Страница приглашения никуда его не
-  передаёт и сразу убирает из адресной строки.
-- Английский текст написан прямо в HTML (страница читается и без скриптов), остальные языки — таблицы в
-  `assets/site.js` и `assets/join.js`. Новый язык: ещё одна таблица и кнопка в переключателе.
-- Ссылка «Руководство» в подвале ведёт в документацию на языке страницы: таблица `docs` в `assets/site.js`
-  сопоставляет язык с папкой в `Docs/` (`en` → `En`, `ru` → `Ru`). Языку без перевода открывается английское
-  руководство; для нового языка документации добавьте в таблицу одну строку.
+- Nothing is loaded from other servers: no fonts, no scripts, no counters. Both pages pin this with a
+  `Content-Security-Policy` header; there are no inline scripts or styles either.
+- The invitation stands after `#`, so the browser does not send it to the server. The invitation page passes it
+  nowhere and removes it from the address bar at once.
+- The English text is written right in the HTML (the page reads fine without scripts); the other languages (Deutsch,
+  Español, Français, Português, Русский) are tables in `assets/site.js` and `assets/join.js`. Without scripts the
+  language picker is hidden.
+- The language is chosen like in the application: the one the visitor picked before (kept in `localStorage`),
+  otherwise the first language of the browser the page speaks, otherwise English.
+- A new language: one more entry in the `list` of `assets/languages.js`, its flag in `assets/flags/<code>.svg`
+  (3:2), and one more table in `assets/site.js` and `assets/join.js`. A table must have every key the English page
+  has.
+- The "User guide" link in the footer leads to the documentation in the language of the page: the `docs` table in
+  `assets/languages.js` maps a language to its folder in `Docs/` (`en` → `En`, `de` → `De`, …). A language without a
+  translated guide gets the English one; a new documentation language is one more entry in that table.
 
-## Посмотреть локально
+## Look at it locally
 
-Любой статический сервер из этой папки, например `npx http-server . -p 8765`, затем <http://127.0.0.1:8765/>.
-Открывать `index.html` просто как файл не получится: политика безопасности страницы разрешает только свой сайт.
+Any static server in this folder, for example `npx http-server . -p 8765`, then <http://127.0.0.1:8765/>. Opening
+`index.html` as a file does not work: the security policy of the page allows only its own site.

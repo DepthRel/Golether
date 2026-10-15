@@ -29,11 +29,11 @@ public static class NetworkAddresses
         }
 
         var b = address.GetAddressBytes();
-        return b[0] is 0 or 10 or 127
-               || (b[0] == 172 && b[1] is >= 16 and <= 31)
-               || (b[0] == 192 && b[1] == 168)
-               || (b[0] == 169 && b[1] == 254)
-               || (b[0] == 100 && b[1] is >= 64 and <= 127);
+        return b[0] is 0 or 10 or 127 ||
+               (b[0] == 172 && b[1] is >= 16 and <= 31) ||
+               (b[0] == 192 && b[1] == 168) ||
+               (b[0] == 169 && b[1] == 254) ||
+               (b[0] == 100 && b[1] is >= 64 and <= 127);
     }
 
     /// <summary>
@@ -55,10 +55,10 @@ public static class NetworkAddresses
         }
 
         var b = address.GetAddressBytes();
-        return b[0] is 10 or 127
-               || (b[0] == 172 && b[1] is >= 16 and <= 31)
-               || (b[0] == 192 && b[1] == 168)
-               || (b[0] == 169 && b[1] == 254);
+        return b[0] is 10 or 127 ||
+               (b[0] == 172 && b[1] is >= 16 and <= 31) ||
+               (b[0] == 192 && b[1] == 168) ||
+               (b[0] == 169 && b[1] == 254);
     }
 
     /// <summary>

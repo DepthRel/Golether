@@ -1,7 +1,10 @@
+using NSubstitute;
+using NSubstitute.ExceptionExtensions;
 using Golether.Components.Catalog;
 using Golether.Components.Installation;
 using Golether.Core.Data.Enums;
 using Golether.Core.Data.Stores;
+using Golether.Core.Enums;
 using Golether.Core.Identity;
 using Golether.Core.Media;
 using Golether.Core.Networking;
@@ -12,11 +15,10 @@ using Golether.Security.Invites;
 using Golether.Session;
 using Golether.Sync.Engine;
 using Golether.Sync.Protocol;
+using Golether.UI.Enums;
 using Golether.UI.Services;
-using Golether.UI.ViewModels.Dialogs;
 using Golether.UI.ViewModels;
-using NSubstitute.ExceptionExtensions;
-using NSubstitute;
+using Golether.UI.ViewModels.Dialogs;
 
 namespace Golether.UI.Tests;
 
@@ -28,12 +30,12 @@ public sealed class ViewModelTests
     /// <summary>
     /// The host device.
     /// </summary>
-    private static readonly PeerId Host = PeerId.Parse(new string('a', 64));
+    private static readonly PeerId _host = PeerId.Parse(new string('a', 64));
 
     /// <summary>
     /// A participant.
     /// </summary>
-    private static readonly PeerId Guest = PeerId.Parse(new string('b', 64));
+    private static readonly PeerId _guest = PeerId.Parse(new string('b', 64));
 
     /// <summary>
     /// The session service substitute.
@@ -168,7 +170,7 @@ public sealed class ViewModelTests
     [Fact]
     public async Task StoppedFilm_OffersToContinue()
     {
-        _settings.GetAsync(ResumeTracker.SettingPrefix + new string('c', 64), Arg.Any<CancellationToken>()).Returns("4000");
+        _settings.GetAsync(ResumeTracker.SETTING_PREFIX + new string('c', 64), Arg.Any<CancellationToken>()).Returns("4000");
         var start = Snapshot(PlayState.Paused, TimeSpan.Zero) with
         {
             Local = new FollowerStatus(new PlayerSnapshot(true, TimeSpan.Zero, TimeSpan.FromHours(2), true, false, TimeSpan.Zero, 1.0), TimeSpan.Zero, TimeSpan.Zero, null),
@@ -193,7 +195,7 @@ public sealed class ViewModelTests
         // The position of the current film is remembered.
         _session.GetSnapshot().Returns(Snapshot(PlayState.Paused, TimeSpan.Zero));
         viewModel.Refresh();
-        await _settings.Received().SetAsync(ResumeTracker.SettingPrefix + new string('c', 64), "3600", Arg.Any<CancellationToken>());
+        await _settings.Received().SetAsync(ResumeTracker.SETTING_PREFIX + new string('c', 64), "3600", Arg.Any<CancellationToken>());
     }
 
     /// <summary>
@@ -206,7 +208,7 @@ public sealed class ViewModelTests
     {
         var waiting = Snapshot(PlayState.Paused, TimeSpan.Zero) with
         {
-            Playback = PlaybackState.Initial(Host, 0) with { State = PlayState.Paused, Position = TimeSpan.FromHours(1), Cause = PlaybackCause.WaitingForParticipants },
+            Playback = PlaybackState.Initial(_host, 0) with { State = PlayState.Paused, Position = TimeSpan.FromHours(1), Cause = PlaybackCause.WaitingForParticipants },
         };
         var loading = new ParticipantView(new ParticipantInfo(PeerId.Parse(new string('d', 64)), "Олег", false), null, false);
         _session.GetSnapshot().Returns(waiting with { Participants = [.. waiting.Participants, loading] });
@@ -232,9 +234,9 @@ public sealed class ViewModelTests
             Participants =
             [
                 Local(),
-                new ParticipantView(new ParticipantInfo(Guest, "Марина", false), new ParticipantStatus { PeerId = Guest, Position = TimeSpan.FromHours(1), IsBuffering = true }, false),
+                new ParticipantView(new ParticipantInfo(_guest, "Марина", false), new ParticipantStatus { PeerId = _guest, Position = TimeSpan.FromHours(1), IsBuffering = true }, false),
                 loading,
-                new ParticipantView(new ParticipantInfo(PeerId.Parse(new string('e', 64)), "Ира", false), new ParticipantStatus { PeerId = Guest, Position = TimeSpan.FromMinutes(3), CacheAhead = TimeSpan.FromMinutes(1) }, false),
+                new ParticipantView(new ParticipantInfo(PeerId.Parse(new string('e', 64)), "Ира", false), new ParticipantStatus { PeerId = _guest, Position = TimeSpan.FromMinutes(3), CacheAhead = TimeSpan.FromMinutes(1) }, false),
             ],
         };
         Assert.Equal("Ждём: Марина, Олег и ещё 1…", MainWindowViewModel.DescribeWaiting(slow, TimeSpan.FromHours(2)));
@@ -254,7 +256,7 @@ public sealed class ViewModelTests
     [Fact]
     public async Task SidePanel_SwitchesTabsAndHides()
     {
-        _settings.GetAsync(MainWindowViewModel.SideTabSetting, Arg.Any<CancellationToken>()).Returns("events");
+        _settings.GetAsync(MainWindowViewModel.SIDE_TAB_SETTING, Arg.Any<CancellationToken>()).Returns("events");
         var viewModel = CreateViewModel();
         await viewModel.LoadAsync();
         Assert.True(viewModel.ShowEvents);
@@ -264,13 +266,13 @@ public sealed class ViewModelTests
         viewModel.ShowTabCommand.Execute(SideTab.Chat);
         Assert.True(viewModel.ShowChat);
         Assert.True(viewModel.Chat.IsExpanded);
-        await _settings.Received().SetAsync(MainWindowViewModel.SideTabSetting, "chat", Arg.Any<CancellationToken>());
+        await _settings.Received().SetAsync(MainWindowViewModel.SIDE_TAB_SETTING, "chat", Arg.Any<CancellationToken>());
 
         viewModel.ShowTabCommand.Execute(SideTab.Chat);
         Assert.False(viewModel.EventsExpanded);
         Assert.False(viewModel.Chat.IsExpanded);
         Assert.Equal("▸", viewModel.SidePanelArrow);
-        await _settings.Received().SetAsync(MainWindowViewModel.EventsExpandedSetting, "false", Arg.Any<CancellationToken>());
+        await _settings.Received().SetAsync(MainWindowViewModel.EVENTS_EXPANDED_SETTING, "false", Arg.Any<CancellationToken>());
 
         viewModel.ToggleEventsCommand.Execute(null);
         Assert.True(viewModel.ShowChat);
@@ -314,7 +316,7 @@ public sealed class ViewModelTests
         await viewModel.JoinCommand.ExecuteAsync(null);
 
         await _dialogs.Received(1).ShowErrorAsync(Arg.Any<string>(), "Ведущий отклонил запрос.");
-        await _settings.Received(1).SetAsync(MainWindowViewModel.DisplayNameSetting, "Марина", Arg.Any<CancellationToken>());
+        await _settings.Received(1).SetAsync(MainWindowViewModel.DISPLAY_NAME_SETTING, "Марина", Arg.Any<CancellationToken>());
         Assert.False(viewModel.IsBusy);
     }
 
@@ -384,14 +386,14 @@ public sealed class ViewModelTests
         _dialogs.ConfirmAsync(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<string>()).Returns(agreed);
         var viewModel = CreateViewModel();
         viewModel.Refresh();
-        var guest = viewModel.Participants.Single(p => p.PeerId == Guest);
+        var guest = viewModel.Participants.Single(p => p.PeerId == _guest);
         Assert.True(guest.CanModerate);
-        Assert.False(viewModel.Participants.Single(p => p.PeerId == Host).CanModerate);
+        Assert.False(viewModel.Participants.Single(p => p.PeerId == _host).CanModerate);
 
         await guest.RemoveCommand.ExecuteAsync(null);
 
         await _dialogs.Received(1).ConfirmAsync(Arg.Any<string>(), Arg.Is<string>(text => text.Contains("Марина")), Arg.Any<string>());
-        await _session.Received(agreed ? 1 : 0).RemoveParticipantAsync(Guest);
+        await _session.Received(agreed ? 1 : 0).RemoveParticipantAsync(_guest);
     }
 
     /// <summary>
@@ -403,11 +405,11 @@ public sealed class ViewModelTests
     {
         _session.GetSnapshot().Returns(Snapshot(PlayState.Paused, TimeSpan.Zero));
         _dialogs.ConfirmAsync(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<string>()).Returns(true);
-        _session.RemoveParticipantAsync(Guest).ThrowsAsync(new InvalidOperationException("Сеанс уже завершён."));
+        _session.RemoveParticipantAsync(_guest).ThrowsAsync(new InvalidOperationException("Сеанс уже завершён."));
         var viewModel = CreateViewModel();
         viewModel.Refresh();
 
-        await viewModel.Participants.Single(p => p.PeerId == Guest).RemoveCommand.ExecuteAsync(null);
+        await viewModel.Participants.Single(p => p.PeerId == _guest).RemoveCommand.ExecuteAsync(null);
 
         await _dialogs.Received(1).ShowErrorAsync(Arg.Any<string>(), "Сеанс уже завершён.");
     }
@@ -420,7 +422,7 @@ public sealed class ViewModelTests
     {
         _session.CreateInvite(Arg.Any<IReadOnlyList<PeerEndpoint>>(), Arg.Any<TimeSpan>()).Returns(new Invite
         {
-            HostPeerId = Host,
+            HostPeerId = _host,
             HostName = "Вы",
             SessionName = "Вечер",
             Endpoints = [PeerEndpoint.Parse("192.168.1.2:47800")],
@@ -437,8 +439,8 @@ public sealed class ViewModelTests
         dialog.Regenerate();
 
         // The link and the key are two invitations: the link for a click, the key for pasting.
-        Assert.StartsWith(Invite.WebLinkPrefix, dialog.Link, StringComparison.Ordinal);
-        Assert.StartsWith(Invite.LinkPrefix, dialog.Key, StringComparison.Ordinal);
+        Assert.StartsWith(Invite.WEB_LINK_PREFIX, dialog.Link, StringComparison.Ordinal);
+        Assert.StartsWith(Invite.LINK_PREFIX, dialog.Key, StringComparison.Ordinal);
         _session.Received(2).CreateInvite(Arg.Is<IReadOnlyList<PeerEndpoint>>(e => e.Single() == PeerEndpoint.Parse("203.0.113.24:47800")), TimeSpan.FromMinutes(15));
 
         await dialog.CopyCommand.ExecuteAsync(null);
@@ -456,7 +458,7 @@ public sealed class ViewModelTests
     {
         _session.CreateInvite(Arg.Any<IReadOnlyList<PeerEndpoint>>(), Arg.Any<TimeSpan>()).Returns(call => new Invite
         {
-            HostPeerId = Host,
+            HostPeerId = _host,
             HostName = "Вы",
             SessionName = "Вечер",
             Endpoints = [PeerEndpoint.Parse("192.168.1.2:47800")],
@@ -534,7 +536,7 @@ public sealed class ViewModelTests
     /// </summary>
     /// <returns>The view.</returns>
     private static ParticipantView Local()
-        => new(new ParticipantInfo(Host, "Вы", true), new ParticipantStatus { PeerId = Host, Position = TimeSpan.FromHours(1) }, true);
+        => new(new ParticipantInfo(_host, "Вы", true), new ParticipantStatus { PeerId = _host, Position = TimeSpan.FromHours(1) }, true);
 
     /// <summary>
     /// Builds a host snapshot with one remote participant.
@@ -550,16 +552,16 @@ public sealed class ViewModelTests
             IsHost = true,
             State = SessionState.Active,
             SessionName = "Вечер кино",
-            HostPeerId = Host,
+            HostPeerId = _host,
             Participants =
             [
                 Local(),
                 new ParticipantView(
-                    new ParticipantInfo(Guest, "Марина", false),
-                    new ParticipantStatus { PeerId = Guest, Position = TimeSpan.FromHours(1), Drift = guestDrift, RoundTripMilliseconds = 1240, CacheAhead = TimeSpan.FromSeconds(12) },
+                    new ParticipantInfo(_guest, "Марина", false),
+                    new ParticipantStatus { PeerId = _guest, Position = TimeSpan.FromHours(1), Drift = guestDrift, RoundTripMilliseconds = 1240, CacheAhead = TimeSpan.FromSeconds(12) },
                     false),
             ],
-            Playback = PlaybackState.Initial(Host, 0) with { State = state, Position = TimeSpan.FromHours(1) },
+            Playback = PlaybackState.Initial(_host, 0) with { State = state, Position = TimeSpan.FromHours(1) },
             Media = new MediaDescriptor { FileName = "Dune.mkv", Length = (long)(64.2 * 1024 * 1024 * 1024), QuickId = new string('c', 64) },
             Local = new FollowerStatus(player, TimeSpan.FromHours(1), TimeSpan.Zero, null),
         };

@@ -1,6 +1,7 @@
 using System.Net;
 using System.Security.Cryptography;
 using System.Text;
+using Golether.Core.Enums;
 using Golether.Core.Identity;
 using Golether.Transports.Rendezvous.Protocol;
 using Golether.Web.Server.Contracts;
@@ -9,8 +10,8 @@ namespace Golether.Web.Server.Infrastructure;
 
 /// <summary>
 /// The latest events of the server, for the monitor on this computer. The journal lives in memory only: it holds at
-/// most <see cref="Capacity"/> events, forgets the oldest, is never written to disk and starts empty with every run
-/// of the server. It is served on the local status address only (see <see cref="ServerContract.JournalPath"/>).
+/// most <see cref="CAPACITY"/> events, forgets the oldest, is never written to disk and starts empty with every run
+/// of the server. It is served on the local status address only (see <see cref="ServerContract.JOURNAL_PATH"/>).
 /// </summary>
 /// <remarks>
 /// The journal tells no more than the log of the service already does: the addresses that reached the server, the
@@ -21,7 +22,7 @@ internal sealed class ServerJournal
     /// <summary>
     /// The largest number of events kept.
     /// </summary>
-    public const int Capacity = 5000;
+    public const int CAPACITY = 5000;
 
     /// <summary>
     /// The events, the oldest first.
@@ -87,7 +88,7 @@ internal sealed class ServerJournal
                 room is null ? null : TagOf(room),
                 reason,
                 detail));
-            while (_entries.Count > Capacity)
+            while (_entries.Count > CAPACITY)
             {
                 _entries.Dequeue();
             }
@@ -98,14 +99,14 @@ internal sealed class ServerJournal
     /// Returns the events after a number.
     /// </summary>
     /// <param name="after">The number of the last event the reader has; 0 for everything kept.</param>
-    /// <returns>At most <see cref="ServerContract.JournalPageSize"/> events, the oldest first.</returns>
+    /// <returns>At most <see cref="ServerContract.JOURNAL_PAGE_SIZE"/> events, the oldest first.</returns>
     public JournalPage Read(long after)
     {
         lock (_gate)
         {
             // A reader that is ahead of the journal knew an earlier run of the server: it gets everything.
             var from = after > _last ? 0 : after;
-            return new JournalPage(Started, [.. _entries.Where(e => e.Sequence > from).Take(ServerContract.JournalPageSize)], _last);
+            return new JournalPage(Started, [.. _entries.Where(e => e.Sequence > from).Take(ServerContract.JOURNAL_PAGE_SIZE)], _last);
         }
     }
 

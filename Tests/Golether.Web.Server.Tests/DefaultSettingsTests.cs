@@ -1,7 +1,8 @@
 using System.Text.Json;
+using Microsoft.Extensions.Configuration;
+using Golether.Web.Server.Enums;
 using Golether.Web.Server.Infrastructure;
 using Golether.Web.Server.Options;
-using Microsoft.Extensions.Configuration;
 
 namespace Golether.Web.Server.Tests;
 
@@ -26,11 +27,11 @@ public sealed class DefaultSettingsTests : IDisposable
         var configuration = new ConfigurationBuilder().AddJsonStream(stream).Build();
 
         Assert.Equal("http://127.0.0.1:47980", configuration["Urls"]);
-        var options = configuration.GetSection(RendezvousServerOptions.Section).Get<RendezvousServerOptions>()!;
+        var options = configuration.GetSection(RendezvousServerOptions.SECTION).Get<RendezvousServerOptions>()!;
         Assert.Empty(options.Validate());
         Assert.Equal(47900, options.Port);
         Assert.Equal(
-            File.ReadAllText(Path.Combine(AppContext.BaseDirectory, DefaultSettings.FileName)).Trim(),
+            File.ReadAllText(Path.Combine(AppContext.BaseDirectory, DefaultSettings.FILE_NAME)).Trim(),
             new StreamReader(DefaultSettings.Open()).ReadToEnd().Trim());
     }
 
@@ -44,7 +45,7 @@ public sealed class DefaultSettingsTests : IDisposable
 
         Assert.Equal(SettingsFileState.Created, DefaultSettings.EnsureFile(config, out var problem));
         Assert.Null(problem);
-        var file = Path.Combine(config, DefaultSettings.FileName);
+        var file = Path.Combine(config, DefaultSettings.FILE_NAME);
         using (JsonDocument.Parse(File.ReadAllText(file)))
         {
         }

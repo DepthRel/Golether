@@ -10,12 +10,12 @@ internal static class PackageLayout
     /// <summary>
     /// The folder of the program and its libraries in a package.
     /// </summary>
-    public const string ProgramFolder = "bin";
+    public const string PROGRAM_FOLDER = "bin";
 
     /// <summary>
     /// The folder of the settings in a package.
     /// </summary>
-    public const string ConfigFolder = "config";
+    public const string CONFIG_FOLDER = "config";
 
     /// <summary>
     /// Finds the folder with <c>appsettings.json</c>.
@@ -29,12 +29,12 @@ internal static class PackageLayout
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(programDirectory);
         var program = Path.GetFullPath(programDirectory).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
-        if (string.Equals(Path.GetFileName(program), ProgramFolder, StringComparison.OrdinalIgnoreCase)
-            && Path.GetDirectoryName(program) is { } root
-            && (Directory.Exists(Path.Combine(root, ConfigFolder)) || IsPackageRoot(root)))
+        if (string.Equals(Path.GetFileName(program), PROGRAM_FOLDER, StringComparison.OrdinalIgnoreCase) &&
+            Path.GetDirectoryName(program) is { } root &&
+            (Directory.Exists(Path.Combine(root, CONFIG_FOLDER)) || IsPackageRoot(root)))
         {
             // In a package the settings belong in config even when the folder was deleted: it is made again there.
-            return Path.Combine(root, ConfigFolder);
+            return Path.Combine(root, CONFIG_FOLDER);
         }
 
         return program;

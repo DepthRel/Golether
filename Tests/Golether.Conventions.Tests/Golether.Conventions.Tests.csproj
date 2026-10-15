@@ -1,0 +1,11 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    Tests of the rules of AGENTS.md that the compiler and the analyzers cannot check: they parse the sources of the
+    repository with Roslyn and look at their shape. They reference no project of the product.
+  -->
+  <ItemGroup>
+    <PackageReference Include="Microsoft.CodeAnalysis.CSharp" />
+  </ItemGroup>
+
+</Project>

@@ -15,7 +15,7 @@ public readonly record struct PeerEndpoint(string Host, int Port)
     /// <summary>
     /// The maximum length of a host name (RFC 1035).
     /// </summary>
-    private const int MaxHostLength = 253;
+    private const int MAX_HOST_LENGTH = 253;
 
     /// <summary>
     /// Parses <c>host:port</c>, <c>1.2.3.4:port</c> or <c>[v6]:port</c>.
@@ -35,7 +35,7 @@ public readonly record struct PeerEndpoint(string Host, int Port)
     public static bool TryParse([NotNullWhen(true)] string? text, out PeerEndpoint endpoint)
     {
         endpoint = default;
-        if (string.IsNullOrWhiteSpace(text) || text.Length > MaxHostLength + 8)
+        if (string.IsNullOrWhiteSpace(text) || text.Length > MAX_HOST_LENGTH + 8)
         {
             return false;
         }
@@ -98,15 +98,15 @@ public readonly record struct PeerEndpoint(string Host, int Port)
     /// <returns><see langword="true"/> when the host consists of valid DNS labels.</returns>
     private static bool IsValidHost(string host)
     {
-        if (host.Length is 0 or > MaxHostLength)
+        if (host.Length is 0 or > MAX_HOST_LENGTH)
         {
             return false;
         }
 
         foreach (var label in host.Split('.'))
         {
-            if (label.Length is 0 or > 63 || label.StartsWith('-') || label.EndsWith('-')
-                || !label.All(c => char.IsAsciiLetterOrDigit(c) || c == '-'))
+            if (label.Length is 0 or > 63 || label.StartsWith('-') || label.EndsWith('-') ||
+                !label.All(c => char.IsAsciiLetterOrDigit(c) || c == '-'))
             {
                 return false;
             }

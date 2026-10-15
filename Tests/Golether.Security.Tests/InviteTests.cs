@@ -1,8 +1,8 @@
+using Microsoft.Extensions.Time.Testing;
 using Golether.Core.Data.Enums;
 using Golether.Core.Identity;
 using Golether.Core.Networking;
 using Golether.Security.Invites;
-using Microsoft.Extensions.Time.Testing;
 
 namespace Golether.Security.Tests;
 
@@ -40,7 +40,7 @@ public sealed class InviteTests
         Assert.Equal(invite.Endpoints, parsed.Endpoints);
         Assert.Equal(invite.Token, parsed.Token);
         Assert.Equal(invite.ExpiresAt, parsed.ExpiresAt);
-        Assert.StartsWith(Invite.LinkPrefix, invite.ToLink(), StringComparison.Ordinal);
+        Assert.StartsWith(Invite.LINK_PREFIX, invite.ToLink(), StringComparison.Ordinal);
     }
 
     /// <summary>
@@ -72,7 +72,7 @@ public sealed class InviteTests
         var payload = System.Text.Json.Nodes.JsonNode.Parse(DecodePayload(Sample().ToLink()))!.AsObject();
         payload["meet"] = meet;
         payload["room"] = room;
-        var link = Invite.LinkPrefix + System.Buffers.Text.Base64Url.EncodeToString(System.Text.Encoding.UTF8.GetBytes(payload.ToJsonString()));
+        var link = Invite.LINK_PREFIX + System.Buffers.Text.Base64Url.EncodeToString(System.Text.Encoding.UTF8.GetBytes(payload.ToJsonString()));
 
         Assert.Throws<FormatException>(() => Invite.ParseLink(link));
     }
@@ -83,7 +83,7 @@ public sealed class InviteTests
     /// <param name="link">The link.</param>
     /// <returns>The JSON text.</returns>
     private static string DecodePayload(string link)
-        => System.Text.Encoding.UTF8.GetString(System.Buffers.Text.Base64Url.DecodeFromChars(link.AsSpan(Invite.LinkPrefix.Length)));
+        => System.Text.Encoding.UTF8.GetString(System.Buffers.Text.Base64Url.DecodeFromChars(link.AsSpan(Invite.LINK_PREFIX.Length)));
 
     /// <summary>
     /// Foreign or damaged links are rejected.
@@ -126,7 +126,7 @@ public sealed class InviteTests
         var registry = new InviteRegistry(new FakeTimeProvider());
         var (token, _) = registry.Issue();
 
-        for (var attempt = 0; attempt < InviteRegistry.MaxUses; attempt++)
+        for (var attempt = 0; attempt < InviteRegistry.MAX_USES; attempt++)
         {
             Assert.Equal(InviteCheckResult.Accepted, registry.TryUse(token, out _));
         }
@@ -218,7 +218,7 @@ public sealed class InviteTests
     {
         var json = DecodePayload(Sample().ToLink()).Replace("\"expires\":2000000000", "\"expires\":" + expires, StringComparison.Ordinal);
         Assert.Contains(expires, json, StringComparison.Ordinal);
-        var link = Invite.LinkPrefix + System.Buffers.Text.Base64Url.EncodeToString(System.Text.Encoding.UTF8.GetBytes(json));
+        var link = Invite.LINK_PREFIX + System.Buffers.Text.Base64Url.EncodeToString(System.Text.Encoding.UTF8.GetBytes(json));
 
         Assert.Throws<FormatException>(() => Invite.ParseLink(link));
     }

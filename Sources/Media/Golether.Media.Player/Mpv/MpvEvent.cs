@@ -1,4 +1,5 @@
 using System.Runtime.InteropServices;
+using Golether.Media.Player.Enums;
 
 namespace Golether.Media.Player.Mpv;
 

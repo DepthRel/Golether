@@ -33,9 +33,10 @@ referenced in `Directory.Build.props` for every `*.Tests` project.
 | Project | What it checks |
 |---|---|
 | Golether.Components.Tests | the catalog, hints for Linux/macOS, PE imports, the installer (checksum, size, cache), reuse of GStreamer |
+| Golether.Conventions.Tests | the rules of AGENTS.md that analyzers cannot check, on the sources parsed with Roslyn: one type per file, private nested types, XML comments, enums in Enums folders, logical operators at the end of a line, the order of usings, time only through TimeProvider, the schema only through migrations, projects in their solution folders |
 | Golether.Media.Conference.GStreamer.Tests | two WebRTC nodes over loopback on test sources, signal validation, connection statistics and the switch to the economy camera stream; skipped without GStreamer |
 | Golether.Core.Tests | PeerId, PlaybackState, DriftCorrector, addresses, data paths (including an installation "for all users") |
-| Golether.Localization.Tests | language packs: reading, the catalog, choosing a language by culture, the English fallback, the same keys and placeholders in every language, every requested key exists, no Russian text in the code |
+| Golether.Localization.Tests | language packs: reading, the catalog, choosing a language by culture, the English fallback, the same keys and placeholders in every language, the 64 distinct words of the verification code and a flag in every language, every requested key exists, no Russian text in the code |
 | Golether.Security.Tests | signatures, the key store, invitations (key and web link, lifetime, the shared invitation and the limit of requests), the sealed server address, the verification code, admission |
 | Golether.Transports.Tests | frames, mTLS over loopback, key pinning, NAT-PMP and UPnP with a fake router, messages and signature of the rendezvous server, TCP hole punching over loopback |
 | Golether.Sync.Tests | clocks at an RTT of 1240 ms, messages, authority, follower |
@@ -46,6 +47,7 @@ referenced in `Directory.Build.props` for every `*.Tests` project.
 | Golether.Session.Tests | the host and a participant as a whole: admission, the file, the joint start, pause, the shared invitation, removal of a participant and refusal, an expired invitation |
 | Golether.UI.Tests | the tunnel workflow on two databases, view models, volume (your own and every participant's), switching devices off, chat and reactions, tracks and subtitles, continuing where one stopped, the diagnostic report, updates, choosing and storing the language, texts in English, joining by link, the single instance, lookup of the rendezvous server, removal of a participant |
 | Golether.Web.Server.Tests | the rendezvous server: settings, limits, rooms and meetings, STUN, a whole meeting up to an mTLS stream over the punched connection, refusals (signature, somebody else's room, an empty room, a silent host) |
+| Golether.Web.Server.UI.Tests | the server monitor: the settings form and its file, the journal and its search, the service managers of Windows, Linux and macOS, the window in Avalonia Headless and the flags of its language selector |
 | Golether.UI.Headless.Tests | the main window in Avalonia Headless: the menu of a participant tile, the chat and event tabs, the volume popup, clicks on the video, the smooth timeline with the loaded indicator, reactions over the video, the list of languages and changing every text on the fly, the connection method and the "Advanced" block of the start screen, the invitation and settings windows |
 
 The tests (except `Golether.Localization.Tests`) run in Russian: `Tests/Shared/UseRussianTexts.cs` switches the
@@ -59,15 +61,24 @@ tests do not disturb each other.
    in `Language.Code` and `Language.Name` (the name of the language in that language) and translate the values. Keys
    and the placeholders `{0}`, `{1}` do not change; a translation that lost a key or a placeholder fails
    `Golether.Localization.Tests`.
-2. Put a flag into `Sources/Apps/Golether.UI/Assets/Flags/<code>.png` (60×40 or larger, a 3:2 ratio). Without a flag
-   the language is shown by its name alone. `Scripts/Assets/generate-flags.ps1` draws the `ru` and `en` flags.
-3. That is all: the pack is picked up automatically, the language appears in the list and is chosen by the system
-   language on the first start.
+   The 64 words of the verification code (`Verification.Word.00` … `Verification.Word.63`) are translations of the
+   same things in every language: two people with different interface languages compare words of the same meaning.
+   Keep them short, easy to say aloud and distinct from each other.
+2. Put a flag into `Sources/Apps/Golether.UI/Assets/Flags/<code>.png` (120×80, a 3:2 ratio): draw it in
+   `Scripts/Assets/generate-flags.ps1`, which draws every flag (`en`, `de`, `fr`, `es`, `pt`, `ru`). The server
+   monitor shows the same files. A test checks that every language has its flag.
+3. That is all for the application and the monitor: the pack is picked up automatically, the language appears in the
+   lists and is chosen by the system language on the first start.
 
-The language of the application is not everything a person reads. Translated separately are: the project page (the
-tables in `Sources/Apps/Golether.Pages/assets/site.js` and `join.js`), the setup wizards (`[Languages]`,
-`[Messages]` and `[CustomMessages]` in `Scripts/App/golether.iss` and `Scripts/Server/golether-server.iss`) and the
-documentation (see below).
+The language of the application is not everything a person reads. Translated separately are:
+
+- the project page: one more entry in the `list` of `Sources/Apps/Golether.Pages/assets/languages.js`, its flag in
+  `assets/flags/<code>.svg` and one more table in `assets/site.js` and `assets/join.js`;
+- the setup wizards: `[Languages]`, `[Messages]` and `[CustomMessages]` in `Scripts/App/golether.iss` and
+  `Scripts/Server/golether-server.iss` (Inno Setup ships the standard messages of every language used);
+- the notes of the packages: one more template in `Scripts/App/Notes` and `Scripts/Server/Notes`
+  (`README.<code>.txt`, see `Scripts/README.md`);
+- the documentation (see below).
 
 A new text: add the key to **every** `Languages/*.json` file and take it with `Texts.Get("Key")` in code or
 `{loc:Loc Key}` in XAML. There must be no human-language strings in the code (the `NoRussianTextIsLeftInTheCode`
@@ -75,31 +86,31 @@ test).
 
 ## Documentation
 
-The documents are kept by language: `Docs/En` is the main set, `Docs/Ru` the same set in Russian. The rules:
+The documents are kept by language: `Docs/En` is the main set, and `Docs/De`, `Docs/Es`, `Docs/Fr`, `Docs/Pt` and
+`Docs/Ru` hold the same set in German, Spanish, French, Portuguese and Russian. The rules:
 
 - the set of files and their names are the same in every language; a change of meaning goes into all languages at
   once;
-- links from outside (the README, the project page) lead to `Docs/En`; the project page opens the guide in the
-  language chosen on it, and the English one when there is no such translation (the `docs` table in
-  `assets/site.js`);
+- links from outside (the README) lead to `Docs/En`; the project page opens the guide in the language chosen on it,
+  and the English one when there is no such translation (the `docs` table in `assets/languages.js`);
 - pictures are shared and live in `Docs/images`;
 - a new language is a new folder `Docs/<Code>` with the same set, plus one more line in the `docs` table of the page.
 
 The administrator guide of the server lives next to the server, because it is part of its packages:
-`Sources/Apps/Golether.Web.Server/ADMIN-GUIDE.md` is the English one and `ADMIN-GUIDE.ru.md` the Russian one. The
-same rules apply: one content in every language; another language is `ADMIN-GUIDE.<code>.md`, which the project
-picks up by itself.
+`Sources/Apps/Golether.Web.Server/ADMIN-GUIDE.md` is the English one and `ADMIN-GUIDE.<code>.md` the others
+(`de`, `es`, `fr`, `pt`, `ru`). The same rules apply: one content in every language; another language is one more
+`ADMIN-GUIDE.<code>.md`, which the project picks up by itself.
 
 ## Running from VS Code
 
-`.vscode/launch.json` (the profile names are in Russian):
+`.vscode/launch.json`:
 
 | Profile | What it does |
 |---|---|
-| Golether: ведущий (host) | builds `Golether.UI` with its dependencies and starts it with the data in `.vscode/dev/host/data` |
-| Golether: участник (participant) | the same with the data in `.vscode/dev/guest/data` |
-| Golether: ведущий + участник (host + participant) | two independent devices on one computer; invite by the address `127.0.0.1`. The "single instance" rule does not get in their way: it applies within one data folder |
-| Сервер рукопожатий (rendezvous server) | builds and starts `Golether.Web.Server` on `127.0.0.1:47900`; choose "My own server" in the "Connection method" switch of the host and enter that address ([RendezvousServer.md](RendezvousServer.md)) |
+| Golether: host | builds `Golether.UI` with its dependencies and starts it with the data in `.vscode/dev/host/data` |
+| Golether: participant | the same with the data in `.vscode/dev/guest/data` |
+| Golether: host + participant | two independent devices on one computer; invite by the address `127.0.0.1`. The "single instance" rule does not get in their way: it applies within one data folder |
+| Rendezvous server | builds and starts `Golether.Web.Server` on `127.0.0.1:47900`; choose "My own server" in the "Connection method" switch of the host and enter that address ([RendezvousServer.md](RendezvousServer.md)) |
 | DbMigrator | builds and starts the migrator with arguments from a prompt |
 
 The build tasks (`.vscode/tasks.json`) call `dotnet build <csproj>`: only the chosen project and what it depends on
@@ -128,7 +139,9 @@ dotnet run --project Sources/Database/Golether.Dbs.SQLite.DbMigrator -- --databa
 
 ## Code rules
 
-See [AGENTS.md](../../AGENTS.md) (in Russian): XML comments on every member (CS1591 is an error), only GPL-compatible
+See [AGENTS.md](../../AGENTS.md): one public type per file, an XML comment on every member (CS1591 is an error),
+braces around every block, blank lines between the logical steps of a method, logical operators at the end of a line,
+enumerations in `Enums` folders, `using` directives in the blocks System, libraries, Golether, only GPL-compatible
 dependencies, time through `TimeProvider`/`IMonotonicClock`, untrusted input is always validated.
 
 ## Packaging
@@ -143,6 +156,7 @@ dependencies, time through `TimeProvider`/`IMonotonicClock`, untrusted input is 
 | `Scripts/Assets/generate-installer-art.ps1` | the pictures of the setup wizard (a dark panel with the logo and the logo for the header) in `artifacts/installer-art`; both installer build scripts call it themselves |
 | `Scripts/Assets/generate-icon.ps1` | `golether.ico`, PNG 256/512 from the geometry of `golether.svg` |
 | `Scripts/App/build-installer.ps1 [-SkipPublish]` (the archive is built by the same run) | `artifacts/publish/Golether-<version>-setup.exe` (needs Inno Setup 6 or newer; checked on 7.1) and a ready entry for the update file |
+| `Scripts/build-release.ps1 [-Skip <steps>] [-ContinueOnError]` | everything of a release that is made on Windows, one after another, and `artifacts/publish/SHA256SUMS-<version>.txt` (see below) |
 
 The build is self-contained; the target machine needs no .NET. The content of `Native/<RID>/` goes to `app/native`.
 The root of the Windows package holds `Golether.exe` with the application icon: it is the same .NET host (the
@@ -157,17 +171,23 @@ How to build them without a Linux machine or a Mac at hand:
   file system and built there, and the finished `Golether-<version>-linux-x64.tar.gz` comes back to
   `artifacts/publish`. The first run installs the .NET SDK into `~/.dotnet` of the distribution (with the official
   script, no `sudo`).
-- **macOS and Linux on GitHub.** The **Packages** workflow (`.github/workflows/packages.yml`) builds the Linux package
-  and the macOS packages for Apple silicon (`osx-arm64`) and Intel (`osx-x64`) on GitHub runners: the macOS package
-  needs `sips`, `iconutil` and `codesign`, which exist nowhere but on macOS. A run
-  by hand (Actions → Packages → Run workflow) gives the archives as artifacts of the run. A run by a version tag
-  (`git tag 0.3.0; git push origin 0.3.0`) also attaches them to the release of that tag; when there is no release,
-  a draft is created. The Windows installer is built locally (`build-installer.ps1`) and added to the same release.
-  The workflow replaces only the release files with the names of its own archives; the rest stays as it was.
+- **The whole release from Windows.** `./Scripts/build-release.ps1` runs `App/build-installer.ps1`,
+  `App/publish-linux.ps1`, `Server/build-server-installer.ps1`, `Server/publish-server-linux.ps1` and
+  `Server/publish-server-macos.ps1` one after another, each in a PowerShell process of its own. The first failure stops
+  it; `-ContinueOnError` runs the rest, `-Skip AppLinux,ServerMacOS` leaves steps out. At the end it lists the
+  packages of the version with their size and SHA-256 and writes `artifacts/publish/SHA256SUMS-<version>.txt` for the
+  release. The machine needs Inno Setup, WSL and Git for Windows; each step says what is missing.
+- **macOS on GitHub.** The **Packages** workflow (`.github/workflows/packages.yml`) builds only the macOS packages of
+  the application, for Apple silicon (`osx-arm64`) and Intel (`osx-x64`): they need `sips`, `iconutil` and
+  `codesign`, which exist nowhere but on macOS. A run by hand (Actions → Packages → Run workflow) gives the archives as
+  artifacts of the run. A run by a version tag (`git tag 0.3.0; git push origin 0.3.0`) also attaches them to the
+  release of that tag; when there is no release, a draft is created. The rest of the release comes from
+  `build-release.ps1` and is added to the same release; the workflow replaces only the files with the names of its own
+  archives.
 
 ## Debugging the network
 
-- Two instances on one machine: the "ведущий + участник" profile, with the address `127.0.0.1:47800` in the
+- Two instances on one machine: the "Golether: host + participant" profile, with the address `127.0.0.1:47800` in the
   invitation.
 - A large ping and losses: on Windows [clumsy](https://jagt.github.io/clumsy/), on Linux
   `tc qdisc add dev lo root netem delay 600ms loss 2%`.

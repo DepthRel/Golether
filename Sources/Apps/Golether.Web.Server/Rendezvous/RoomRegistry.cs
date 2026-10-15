@@ -1,3 +1,4 @@
+using Golether.Web.Server.Enums;
 using Golether.Web.Server.Options;
 
 namespace Golether.Web.Server.Rendezvous;

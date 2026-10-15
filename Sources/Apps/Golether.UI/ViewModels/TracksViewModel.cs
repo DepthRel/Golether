@@ -1,9 +1,9 @@
 using System.Collections.ObjectModel;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
-using Golether.Localization;
 using Golether.Core.Data.Enums;
 using Golether.Core.Data.Stores;
+using Golether.Localization;
 using Golether.Media.Player;
 using Golether.UI.Services;
 
@@ -21,17 +21,17 @@ public sealed partial class TracksViewModel : ObservableObject
     /// <summary>
     /// The setting with the preferred sound language.
     /// </summary>
-    public const string AudioLanguageSetting = "player.audioLanguage";
+    public const string AUDIO_LANGUAGE_SETTING = "player.audioLanguage";
 
     /// <summary>
-    /// The setting with the preferred subtitle language, or <see cref="SubtitlesOff"/>.
+    /// The setting with the preferred subtitle language, or <see cref="SUBTITLES_OFF"/>.
     /// </summary>
-    public const string SubtitleLanguageSetting = "player.subtitleLanguage";
+    public const string SUBTITLE_LANGUAGE_SETTING = "player.subtitleLanguage";
 
     /// <summary>
     /// The stored value meaning "no subtitles".
     /// </summary>
-    public const string SubtitlesOff = "off";
+    public const string SUBTITLES_OFF = "off";
 
     /// <summary>
     /// The player.
@@ -69,7 +69,7 @@ public sealed partial class TracksViewModel : ObservableObject
     private string _audioLanguage = string.Empty;
 
     /// <summary>
-    /// The preferred subtitle language, <see cref="SubtitlesOff"/>, or empty when not chosen.
+    /// The preferred subtitle language, <see cref="SUBTITLES_OFF"/>, or empty when not chosen.
     /// </summary>
     private string _subtitleLanguage = string.Empty;
 
@@ -129,8 +129,8 @@ public sealed partial class TracksViewModel : ObservableObject
     /// <returns>A task that completes when they are loaded.</returns>
     public async Task LoadAsync()
     {
-        _audioLanguage = await _settings.GetAsync(AudioLanguageSetting, CancellationToken.None).ConfigureAwait(true) ?? string.Empty;
-        _subtitleLanguage = await _settings.GetAsync(SubtitleLanguageSetting, CancellationToken.None).ConfigureAwait(true) ?? string.Empty;
+        _audioLanguage = await _settings.GetAsync(AUDIO_LANGUAGE_SETTING, CancellationToken.None).ConfigureAwait(true) ?? string.Empty;
+        _subtitleLanguage = await _settings.GetAsync(SUBTITLE_LANGUAGE_SETTING, CancellationToken.None).ConfigureAwait(true) ?? string.Empty;
         Refresh();
     }
 
@@ -178,12 +178,12 @@ public sealed partial class TracksViewModel : ObservableObject
         if (option.Kind == MediaTrackKind.Audio)
         {
             _audioLanguage = MediaTrack.Normalize(option.Track?.Language) ?? string.Empty;
-            _ = _settings.SetAsync(AudioLanguageSetting, _audioLanguage, CancellationToken.None);
+            _ = _settings.SetAsync(AUDIO_LANGUAGE_SETTING, _audioLanguage, CancellationToken.None);
         }
         else
         {
-            _subtitleLanguage = option.Track is null ? SubtitlesOff : MediaTrack.Normalize(option.Track.Language) ?? string.Empty;
-            _ = _settings.SetAsync(SubtitleLanguageSetting, _subtitleLanguage, CancellationToken.None);
+            _subtitleLanguage = option.Track is null ? SUBTITLES_OFF : MediaTrack.Normalize(option.Track.Language) ?? string.Empty;
+            _ = _settings.SetAsync(SUBTITLE_LANGUAGE_SETTING, _subtitleLanguage, CancellationToken.None);
         }
 
         // The choice is shown at once; the player confirms it with a track change, which refreshes the lists again.
@@ -244,24 +244,24 @@ public sealed partial class TracksViewModel : ObservableObject
     private bool ApplyPreferences(IReadOnlyList<MediaTrack> tracks)
     {
         var changed = false;
-        if (_audioLanguage.Length > 0
-            && !tracks.Any(t => t is { Kind: MediaTrackKind.Audio, IsSelected: true } && t.HasLanguage(_audioLanguage))
-            && tracks.FirstOrDefault(t => t.Kind == MediaTrackKind.Audio && t.HasLanguage(_audioLanguage)) is { } audio)
+        if (_audioLanguage.Length > 0 &&
+            !tracks.Any(t => t is { Kind: MediaTrackKind.Audio, IsSelected: true } && t.HasLanguage(_audioLanguage)) &&
+            tracks.FirstOrDefault(t => t.Kind == MediaTrackKind.Audio && t.HasLanguage(_audioLanguage)) is { } audio)
         {
             changed |= TrySelect(MediaTrackKind.Audio, audio.Id);
         }
 
         var subtitles = tracks.Where(t => t.Kind == MediaTrackKind.Subtitle).ToArray();
-        if (_subtitleLanguage == SubtitlesOff)
+        if (_subtitleLanguage == SUBTITLES_OFF)
         {
             if (subtitles.Any(t => t.IsSelected))
             {
                 changed |= TrySelect(MediaTrackKind.Subtitle, null);
             }
         }
-        else if (_subtitleLanguage.Length > 0
-            && !subtitles.Any(t => t.IsSelected && t.HasLanguage(_subtitleLanguage))
-            && subtitles.FirstOrDefault(t => t.HasLanguage(_subtitleLanguage)) is { } subtitle)
+        else if (_subtitleLanguage.Length > 0 &&
+            !subtitles.Any(t => t.IsSelected && t.HasLanguage(_subtitleLanguage)) &&
+            subtitles.FirstOrDefault(t => t.HasLanguage(_subtitleLanguage)) is { } subtitle)
         {
             changed |= TrySelect(MediaTrackKind.Subtitle, subtitle.Id);
         }

@@ -15,5 +15,5 @@ public sealed record ComponentMarker(ComponentId Id, string Version, string Runt
     /// <summary>
     /// The marker file name.
     /// </summary>
-    public const string FileName = "golether-component.json";
+    public const string FILE_NAME = "golether-component.json";
 }

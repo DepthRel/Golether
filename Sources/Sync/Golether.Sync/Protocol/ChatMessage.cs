@@ -18,12 +18,12 @@ public sealed record ChatMessage(string Id, ChatKind Kind, string Text, PeerId? 
     /// <summary>
     /// The maximum length of a text line, in characters.
     /// </summary>
-    public const int MaxTextLength = 100;
+    public const int MAX_TEXT_LENGTH = 100;
 
     /// <summary>
     /// The maximum length of an identifier.
     /// </summary>
-    public const int MaxIdLength = 32;
+    public const int MAX_ID_LENGTH = 32;
 
     /// <summary>
     /// The reactions that may be sent.
@@ -47,7 +47,7 @@ public sealed record ChatMessage(string Id, ChatKind Kind, string Text, PeerId? 
     /// <returns>The cleaned message, or <see langword="null"/> when it must be dropped.</returns>
     public ChatMessage? Sanitize()
     {
-        if (string.IsNullOrEmpty(Id) || Id.Length > MaxIdLength || !Id.All(char.IsAsciiHexDigit) || !Enum.IsDefined(Kind))
+        if (string.IsNullOrEmpty(Id) || Id.Length > MAX_ID_LENGTH || !Id.All(char.IsAsciiHexDigit) || !Enum.IsDefined(Kind))
         {
             return null;
         }
@@ -74,7 +74,7 @@ public sealed record ChatMessage(string Id, ChatKind Kind, string Text, PeerId? 
             return Reactions.Contains(text, StringComparer.Ordinal) ? text : null;
         }
 
-        if (kind != ChatKind.Text || text.Length > MaxTextLength * 4)
+        if (kind != ChatKind.Text || text.Length > MAX_TEXT_LENGTH * 4)
         {
             return null;
         }
@@ -91,8 +91,8 @@ public sealed record ChatMessage(string Id, ChatKind Kind, string Text, PeerId? 
             {
                 builder.Append(' ');
             }
-            else if (category is UnicodeCategory.Control or UnicodeCategory.Surrogate or UnicodeCategory.PrivateUse
-                || (category == UnicodeCategory.Format && rune.Value != 0x200D))
+            else if (category is UnicodeCategory.Control or UnicodeCategory.Surrogate or UnicodeCategory.PrivateUse ||
+                (category == UnicodeCategory.Format && rune.Value != 0x200D))
             {
                 // Bidirectional overrides and other invisible characters could disguise the text; the zero-width
                 // joiner stays for composite emoji.
@@ -110,9 +110,9 @@ public sealed record ChatMessage(string Id, ChatKind Kind, string Text, PeerId? 
             clean = clean.Replace("\n\n\n", "\n\n", StringComparison.Ordinal);
         }
 
-        if (clean.Length > MaxTextLength)
+        if (clean.Length > MAX_TEXT_LENGTH)
         {
-            var cut = MaxTextLength;
+            var cut = MAX_TEXT_LENGTH;
             if (char.IsHighSurrogate(clean[cut - 1]))
             {
                 cut--;

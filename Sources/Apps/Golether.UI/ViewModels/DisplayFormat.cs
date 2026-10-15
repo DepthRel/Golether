@@ -1,5 +1,6 @@
 using System.Globalization;
 using Golether.Localization;
+using Golether.UI.Enums;
 
 namespace Golether.UI.ViewModels;
 

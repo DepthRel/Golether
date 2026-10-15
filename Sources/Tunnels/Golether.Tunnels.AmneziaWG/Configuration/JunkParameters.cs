@@ -14,7 +14,7 @@ public sealed record JunkParameters(int Jc, int Jmin, int Jmax)
     /// <summary>
     /// The maximum junk packet size.
     /// </summary>
-    public const int MaxJunkSize = 1280;
+    public const int MAX_JUNK_SIZE = 1280;
 
     /// <summary>
     /// Generates random parameters in the range recommended by AmneziaWG.
@@ -38,9 +38,9 @@ public sealed record JunkParameters(int Jc, int Jmin, int Jmax)
             throw new FormatException(Texts.Get("Config.Error.JunkCount"));
         }
 
-        if (Jc > 0 && (Jmin < 0 || Jmin >= Jmax || Jmax > MaxJunkSize))
+        if (Jc > 0 && (Jmin < 0 || Jmin >= Jmax || Jmax > MAX_JUNK_SIZE))
         {
-            throw new FormatException(Texts.Format("Config.Error.JunkSizes", MaxJunkSize));
+            throw new FormatException(Texts.Format("Config.Error.JunkSizes", MAX_JUNK_SIZE));
         }
     }
 }

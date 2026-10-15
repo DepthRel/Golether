@@ -1,5 +1,4 @@
 using System.ComponentModel;
-using System.Diagnostics;
 using Avalonia.Controls;
 using Golether.UI.ViewModels;
 
@@ -11,9 +10,9 @@ namespace Golether.UI.Controls;
 public sealed class TimelineAnimator
 {
     /// <summary>
-    /// The clock of the animation.
+    /// The moment the animation clock starts from.
     /// </summary>
-    private readonly Stopwatch _clock = Stopwatch.StartNew();
+    private readonly long _start = TimeProvider.System.GetTimestamp();
 
     /// <summary>
     /// The shown position in seconds.
@@ -66,7 +65,7 @@ public sealed class TimelineAnimator
     /// <param name="seconds">The position.</param>
     public void JumpTo(double seconds)
     {
-        _motion.SetTarget(seconds, Rate, _clock.Elapsed.TotalSeconds, jump: true);
+        _motion.SetTarget(seconds, Rate, Seconds(), jump: true);
         RequestFrame();
     }
 
@@ -103,7 +102,7 @@ public sealed class TimelineAnimator
         }
 
         _motion.Maximum = viewModel.DurationSeconds;
-        _motion.SetTarget(viewModel.PositionSeconds, Rate, _clock.Elapsed.TotalSeconds, jump);
+        _motion.SetTarget(viewModel.PositionSeconds, Rate, Seconds(), jump);
         RequestFrame();
     }
 
@@ -118,7 +117,7 @@ public sealed class TimelineAnimator
             return;
         }
 
-        var now = _clock.Elapsed.TotalSeconds;
+        var now = Seconds();
         if (!viewModel.IsScrubbing)
         {
             _slider.Value = _motion.ValueAt(now);
@@ -145,7 +144,7 @@ public sealed class TimelineAnimator
             // Not shown yet: place the value once, frames start when the slider is on screen.
             if (_viewModel is { IsScrubbing: false })
             {
-                _slider.Value = _motion.ValueAt(_clock.Elapsed.TotalSeconds);
+                _slider.Value = _motion.ValueAt(Seconds());
             }
 
             return;
@@ -153,5 +152,14 @@ public sealed class TimelineAnimator
 
         _frameRequested = true;
         top.RequestAnimationFrame(_ => OnFrame());
+    }
+
+    /// <summary>
+    /// Tells the time of the animation clock.
+    /// </summary>
+    /// <returns>The seconds since the clock started.</returns>
+    private double Seconds()
+    {
+        return TimeProvider.System.GetElapsedTime(_start).TotalSeconds;
     }
 }

@@ -1,7 +1,7 @@
 using System.Globalization;
 using Avalonia.Data.Converters;
 using Avalonia.Media;
-using Golether.Web.Server.UI.ViewModels;
+using Golether.Web.Server.UI.Enums;
 
 namespace Golether.Web.Server.UI.Views;
 

@@ -82,9 +82,9 @@ public sealed class StrokeViewModel
         }
 
         _points.AddRange(points);
-        if (_points.Count > DrawingViewModel.MaxStrokePoints)
+        if (_points.Count > DrawingViewModel.MAX_STROKE_POINTS)
         {
-            _points.RemoveRange(0, _points.Count - DrawingViewModel.MaxStrokePoints);
+            _points.RemoveRange(0, _points.Count - DrawingViewModel.MAX_STROKE_POINTS);
         }
     }
 }

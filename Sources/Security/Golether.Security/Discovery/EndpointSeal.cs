@@ -20,42 +20,42 @@ public static class EndpointSeal
     /// <summary>
     /// The beginning of a sealed address; names the format, so a later one can be told apart.
     /// </summary>
-    public const string Prefix = "g1.";
+    public const string PREFIX = "g1.";
 
     /// <summary>
     /// The longest sealed text accepted.
     /// </summary>
-    public const int MaxLength = 512;
+    public const int MAX_LENGTH = 512;
 
     /// <summary>
     /// The size of the nonce of AES-GCM in bytes.
     /// </summary>
-    private const int NonceBytes = 12;
+    private const int NONCE_BYTES = 12;
 
     /// <summary>
     /// The size of the tag of AES-GCM in bytes.
     /// </summary>
-    private const int TagBytes = 16;
+    private const int TAG_BYTES = 16;
 
     /// <summary>
     /// The key: SHA-256 of a fixed phrase. The utility that seals addresses derives the same one.
     /// </summary>
-    private static readonly byte[] Key = SHA256.HashData(Encoding.UTF8.GetBytes("Golether server directory, seal 1"));
+    private static readonly byte[] _key = SHA256.HashData(Encoding.UTF8.GetBytes("Golether server directory, seal 1"));
 
     /// <summary>
     /// Seals an address. Every call gives a different text: the nonce is random.
     /// </summary>
     /// <param name="endpoint">The address.</param>
-    /// <returns>The sealed text: <see cref="Prefix"/> and base64url of nonce, tag and ciphertext.</returns>
+    /// <returns>The sealed text: <see cref="PREFIX"/> and base64url of nonce, tag and ciphertext.</returns>
     public static string Seal(PeerEndpoint endpoint)
     {
         var plain = Encoding.UTF8.GetBytes(endpoint.ToString());
-        var packed = new byte[NonceBytes + TagBytes + plain.Length];
-        var nonce = packed.AsSpan(0, NonceBytes);
+        var packed = new byte[NONCE_BYTES + TAG_BYTES + plain.Length];
+        var nonce = packed.AsSpan(0, NONCE_BYTES);
         RandomNumberGenerator.Fill(nonce);
-        using var aes = new AesGcm(Key, TagBytes);
-        aes.Encrypt(nonce, plain, packed.AsSpan(NonceBytes + TagBytes), packed.AsSpan(NonceBytes, TagBytes));
-        return Prefix + Base64Url.EncodeToString(packed);
+        using var aes = new AesGcm(_key, TAG_BYTES);
+        aes.Encrypt(nonce, plain, packed.AsSpan(NONCE_BYTES + TAG_BYTES), packed.AsSpan(NONCE_BYTES, TAG_BYTES));
+        return PREFIX + Base64Url.EncodeToString(packed);
     }
 
     /// <summary>
@@ -67,28 +67,28 @@ public static class EndpointSeal
     public static bool TryOpen([NotNullWhen(true)] string? text, out PeerEndpoint endpoint)
     {
         endpoint = default;
-        if (text is null || text.Length > MaxLength || !text.StartsWith(Prefix, StringComparison.Ordinal))
+        if (text is null || text.Length > MAX_LENGTH || !text.StartsWith(PREFIX, StringComparison.Ordinal))
         {
             return false;
         }
 
-        var encoded = text.AsSpan(Prefix.Length);
+        var encoded = text.AsSpan(PREFIX.Length);
         if (!Base64Url.IsValid(encoded))
         {
             return false;
         }
 
         var packed = Base64Url.DecodeFromChars(encoded);
-        if (packed.Length <= NonceBytes + TagBytes)
+        if (packed.Length <= NONCE_BYTES + TAG_BYTES)
         {
             return false;
         }
 
-        var plain = new byte[packed.Length - NonceBytes - TagBytes];
+        var plain = new byte[packed.Length - NONCE_BYTES - TAG_BYTES];
         try
         {
-            using var aes = new AesGcm(Key, TagBytes);
-            aes.Decrypt(packed.AsSpan(0, NonceBytes), packed.AsSpan(NonceBytes + TagBytes), packed.AsSpan(NonceBytes, TagBytes), plain);
+            using var aes = new AesGcm(_key, TAG_BYTES);
+            aes.Decrypt(packed.AsSpan(0, NONCE_BYTES), packed.AsSpan(NONCE_BYTES + TAG_BYTES), packed.AsSpan(NONCE_BYTES, TAG_BYTES), plain);
         }
         catch (CryptographicException)
         {

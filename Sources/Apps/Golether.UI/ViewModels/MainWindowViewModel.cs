@@ -5,8 +5,8 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Golether.Core.Data.Enums;
 using Golether.Core.Data.Stores;
+using Golether.Core.Enums;
 using Golether.Core.Identity;
-using Golether.Core.Playback;
 using Golether.Localization;
 using Golether.Media.Conference;
 using Golether.Media.Player;
@@ -14,6 +14,7 @@ using Golether.Security.Invites;
 using Golether.Session;
 using Golether.Sync.Protocol;
 using Golether.Transports.Tls;
+using Golether.UI.Enums;
 using Golether.UI.Services;
 using Golether.UI.ViewModels.Dialogs;
 
@@ -27,60 +28,60 @@ public sealed partial class MainWindowViewModel : ObservableObject
     /// <summary>
     /// The setting with the user name.
     /// </summary>
-    public const string DisplayNameSetting = "displayName";
+    public const string DISPLAY_NAME_SETTING = "displayName";
 
     /// <summary>
     /// The setting that keeps the event feed shown or hidden.
     /// </summary>
-    public const string EventsExpandedSetting = "ui.eventsExpanded";
+    public const string EVENTS_EXPANDED_SETTING = "ui.eventsExpanded";
 
     /// <summary>
     /// The setting with the open tab of the side panel (<c>chat</c> or <c>events</c>).
     /// </summary>
-    public const string SideTabSetting = "ui.sideTab";
+    public const string SIDE_TAB_SETTING = "ui.sideTab";
 
     /// <summary>
     /// The setting that lets the user drag the border between the video and the participants (<c>true</c> or
     /// <c>false</c>).
     /// </summary>
-    public const string LayoutResizableSetting = "ui.layout.resizable";
+    public const string LAYOUT_RESIZABLE_SETTING = "ui.layout.resizable";
 
     /// <summary>
     /// The setting with the width of the participants panel chosen by dragging the border.
     /// </summary>
-    public const string SidePanelWidthSetting = "ui.layout.sideWidth";
+    public const string SIDE_PANEL_WIDTH_SETTING = "ui.layout.sideWidth";
 
     /// <summary>
     /// The width of the participants panel the layout was designed with; a double click on the border and switching
     /// the adjustable layout off both come back to it. The panel is never narrower.
     /// </summary>
-    public const double DefaultSidePanelWidth = 300;
+    public const double DEFAULT_SIDE_PANEL_WIDTH = 300;
 
     /// <summary>
     /// The width the video always keeps, whatever the panel was dragged to.
     /// </summary>
-    public const double MinVideoWidth = 480;
+    public const double MIN_VIDEO_WIDTH = 480;
 
     /// <summary>
     /// The setting that keeps the top bar and the player bar in full screen instead of hiding them (<c>true</c> or
     /// <c>false</c>).
     /// </summary>
-    public const string AlwaysShowBarsSetting = "ui.fullscreen.alwaysShowBars";
+    public const string ALWAYS_SHOW_BARS_SETTING = "ui.fullscreen.alwaysShowBars";
 
     /// <summary>
     /// How many participants one column of tiles is kept for, however wide the panel is.
     /// </summary>
-    public const int SingleColumnParticipants = 3;
+    public const int SINGLE_COLUMN_PARTICIPANTS = 3;
 
     /// <summary>
     /// How many times wider than designed the participants panel must be before the tiles go in two columns.
     /// </summary>
-    public const double TwoColumnWidthFactor = 3;
+    public const double TWO_COLUMN_WIDTH_FACTOR = 3;
 
     /// <summary>
     /// The prefix of the settings with the local voice volume of a participant (by device identifier).
     /// </summary>
-    public const string VoiceVolumeSettingPrefix = "voice.volume.";
+    public const string VOICE_VOLUME_SETTING_PREFIX = "voice.volume.";
 
     /// <summary>
     /// How long a voice volume change waits before it is stored.
@@ -90,32 +91,32 @@ public sealed partial class MainWindowViewModel : ObservableObject
     /// <summary>
     /// The setting that allows opening the port on the router (<c>true</c> or <c>false</c>).
     /// </summary>
-    public const string OpenRouterPortSetting = "network.openRouterPort";
+    public const string OPEN_ROUTER_PORT_SETTING = "network.openRouterPort";
 
     /// <summary>
     /// The setting with the rendezvous server of hosted sessions (<c>host:port</c>, empty for none).
     /// </summary>
-    public const string RendezvousServerSetting = "network.rendezvousServer";
+    public const string RENDEZVOUS_SERVER_SETTING = "network.rendezvousServer";
 
     /// <summary>
-    /// The setting with the way hosted sessions find their rendezvous server: a name of <see cref="Services.RendezvousMode"/>.
+    /// The setting with the way hosted sessions find their rendezvous server: a name of <see cref="RendezvousMode"/>.
     /// </summary>
-    public const string RendezvousModeSetting = "network.rendezvousMode";
+    public const string RENDEZVOUS_MODE_SETTING = "network.rendezvousMode";
 
     /// <summary>
     /// The maximum number of event feed entries.
     /// </summary>
-    private const int MaxEvents = 50;
+    private const int MAX_EVENTS = 50;
 
     /// <summary>
     /// The seek step of the back/forward buttons.
     /// </summary>
-    private static readonly TimeSpan SeekStep = TimeSpan.FromSeconds(10);
+    private static readonly TimeSpan _seekStep = TimeSpan.FromSeconds(10);
 
     /// <summary>
     /// The readiness rules of the host, used to name the participants playback waits for.
     /// </summary>
-    private static readonly Golether.Sync.Engine.PlaybackAuthorityOptions ReadinessOptions = new();
+    private static readonly Golether.Sync.Engine.PlaybackAuthorityOptions _readinessOptions = new();
 
     /// <summary>
     /// The session service.
@@ -178,6 +179,11 @@ public sealed partial class MainWindowViewModel : ObservableObject
     private readonly ResumeTracker _resume;
 
     /// <summary>
+    /// The time source.
+    /// </summary>
+    private readonly TimeProvider _timeProvider;
+
+    /// <summary>
     /// The media whose stored position was looked up.
     /// </summary>
     private string? _resumeMedia;
@@ -228,6 +234,7 @@ public sealed partial class MainWindowViewModel : ObservableObject
     /// <param name="updates">Looks for new versions, or <see langword="null"/> when updates are not offered.</param>
     /// <param name="language">The language selector, or <see langword="null"/> when the language cannot be chosen.</param>
     /// <param name="avatarStore">Keeps the chosen avatar, or <see langword="null"/> when avatars are not offered.</param>
+    /// <param name="timeProvider">The time source, or <see langword="null"/> for the system clock.</param>
     public MainWindowViewModel(
         ISessionService session,
         IDialogService dialogs,
@@ -241,10 +248,12 @@ public sealed partial class MainWindowViewModel : ObservableObject
         IDiagnosticsWriter? diagnostics = null,
         IUpdateService? updates = null,
         LanguageViewModel? language = null,
-        IAvatarStore? avatarStore = null)
+        IAvatarStore? avatarStore = null,
+        TimeProvider? timeProvider = null)
     {
         ArgumentNullException.ThrowIfNull(components);
         _avatarStore = avatarStore;
+        _timeProvider = timeProvider ?? TimeProvider.System;
         Language = language;
         VideoComponent = new ComponentItemViewModel(ComponentId.Video, components, dialogs);
         ConferenceComponent = new ComponentItemViewModel(ComponentId.Conference, components, dialogs);
@@ -258,6 +267,7 @@ public sealed partial class MainWindowViewModel : ObservableObject
 
             OnPropertyChanged(nameof(HasMissingComponents));
             UpdateConferenceNotice();
+
             if (id == ComponentId.Conference && Devices is not null)
             {
                 _ = Devices.RefreshAsync();
@@ -271,14 +281,17 @@ public sealed partial class MainWindowViewModel : ObservableObject
         _dispatcher = dispatcher ?? throw new ArgumentNullException(nameof(dispatcher));
         _tunnelDialogFactory = tunnelDialogFactory ?? throw new ArgumentNullException(nameof(tunnelDialogFactory));
         _conference = conference ?? throw new ArgumentNullException(nameof(conference));
+
         _playerControls = playerControls;
         Volume = playerControls is null ? null : new VolumeViewModel(playerControls, _settings);
         Tracks = playerControls is null ? null : new TracksViewModel(playerControls, _settings, _dialogs, _dispatcher);
         _resume = new ResumeTracker(_settings);
         _diagnostics = diagnostics;
         _updates = updates;
+
         Chat = new ChatViewModel(_session, _dispatcher);
         Drawing = new DrawingViewModel(_session, _dispatcher);
+
         conference.MuteChanged += (_, _) => _dispatcher.Post(() =>
         {
             // The host may switch devices off; the toggles show what is really in effect.
@@ -586,8 +599,8 @@ public sealed partial class MainWindowViewModel : ObservableObject
     /// </summary>
     private void SaveSidePanel()
     {
-        _ = _settings.SetAsync(EventsExpandedSetting, EventsExpanded ? "true" : "false", CancellationToken.None);
-        _ = _settings.SetAsync(SideTabSetting, SideTab == SideTab.Events ? "events" : "chat", CancellationToken.None);
+        _ = _settings.SetAsync(EVENTS_EXPANDED_SETTING, EventsExpanded ? "true" : "false", CancellationToken.None);
+        _ = _settings.SetAsync(SIDE_TAB_SETTING, SideTab == SideTab.Events ? "events" : "chat", CancellationToken.None);
     }
 
     /// <summary>
@@ -598,14 +611,14 @@ public sealed partial class MainWindowViewModel : ObservableObject
 
     /// <summary>
     /// Gets or sets the width the participants panel was dragged to. The window narrows it when the video would get
-    /// less than <see cref="MinVideoWidth"/>.
+    /// less than <see cref="MIN_VIDEO_WIDTH"/>.
     /// </summary>
     [ObservableProperty]
-    public partial double SidePanelWidth { get; set; } = DefaultSidePanelWidth;
+    public partial double SidePanelWidth { get; set; } = DEFAULT_SIDE_PANEL_WIDTH;
 
     /// <summary>
     /// Fits a wanted width of the participants panel into the room there is: never narrower than the designed width,
-    /// never so wide that the video gets less than <see cref="MinVideoWidth"/>.
+    /// never so wide that the video gets less than <see cref="MIN_VIDEO_WIDTH"/>.
     /// </summary>
     /// <param name="wanted">The width asked for.</param>
     /// <param name="available">The width shared by the video and the panel.</param>
@@ -614,11 +627,11 @@ public sealed partial class MainWindowViewModel : ObservableObject
     {
         if (!double.IsFinite(wanted))
         {
-            return DefaultSidePanelWidth;
+            return DEFAULT_SIDE_PANEL_WIDTH;
         }
 
-        var widest = double.IsFinite(available) ? Math.Max(DefaultSidePanelWidth, available - MinVideoWidth) : DefaultSidePanelWidth;
-        return Math.Clamp(wanted, DefaultSidePanelWidth, widest);
+        var widest = double.IsFinite(available) ? Math.Max(DEFAULT_SIDE_PANEL_WIDTH, available - MIN_VIDEO_WIDTH) : DEFAULT_SIDE_PANEL_WIDTH;
+        return Math.Clamp(wanted, DEFAULT_SIDE_PANEL_WIDTH, widest);
     }
 
     /// <summary>
@@ -634,7 +647,7 @@ public sealed partial class MainWindowViewModel : ObservableObject
         }
 
         IsLayoutResizable = value;
-        _ = _settings.SetAsync(LayoutResizableSetting, value ? "true" : "false", CancellationToken.None);
+        _ = _settings.SetAsync(LAYOUT_RESIZABLE_SETTING, value ? "true" : "false", CancellationToken.None);
         if (!value)
         {
             ResetSidePanelWidth();
@@ -661,7 +674,7 @@ public sealed partial class MainWindowViewModel : ObservableObject
         }
 
         AlwaysShowBars = value;
-        _ = _settings.SetAsync(AlwaysShowBarsSetting, value ? "true" : "false", CancellationToken.None);
+        _ = _settings.SetAsync(ALWAYS_SHOW_BARS_SETTING, value ? "true" : "false", CancellationToken.None);
     }
 
     /// <summary>
@@ -672,7 +685,7 @@ public sealed partial class MainWindowViewModel : ObservableObject
     /// <param name="panelWidth">The width of the participants panel.</param>
     /// <returns>The number of columns.</returns>
     public static int TileColumnsFor(int participants, double panelWidth)
-        => participants > SingleColumnParticipants && panelWidth > DefaultSidePanelWidth * TwoColumnWidthFactor ? 2 : 1;
+        => participants > SINGLE_COLUMN_PARTICIPANTS && panelWidth > DEFAULT_SIDE_PANEL_WIDTH * TWO_COLUMN_WIDTH_FACTOR ? 2 : 1;
 
     /// <summary>
     /// Swaps the tiles of two participants. The order is only how this device shows them; nobody else sees it.
@@ -729,14 +742,14 @@ public sealed partial class MainWindowViewModel : ObservableObject
     /// <param name="width">The width.</param>
     public void StoreSidePanelWidth(double width)
     {
-        SidePanelWidth = double.IsFinite(width) ? Math.Max(DefaultSidePanelWidth, Math.Round(width)) : DefaultSidePanelWidth;
-        _ = _settings.SetAsync(SidePanelWidthSetting, SidePanelWidth.ToString("0", CultureInfo.InvariantCulture), CancellationToken.None);
+        SidePanelWidth = double.IsFinite(width) ? Math.Max(DEFAULT_SIDE_PANEL_WIDTH, Math.Round(width)) : DEFAULT_SIDE_PANEL_WIDTH;
+        _ = _settings.SetAsync(SIDE_PANEL_WIDTH_SETTING, SidePanelWidth.ToString("0", CultureInfo.InvariantCulture), CancellationToken.None);
     }
 
     /// <summary>
     /// Puts the border between the video and the participants back where the layout was designed.
     /// </summary>
-    public void ResetSidePanelWidth() => StoreSidePanelWidth(DefaultSidePanelWidth);
+    public void ResetSidePanelWidth() => StoreSidePanelWidth(DEFAULT_SIDE_PANEL_WIDTH);
 
     /// <summary>
     /// Keeps the chat informed whether it can be seen.
@@ -972,7 +985,7 @@ public sealed partial class MainWindowViewModel : ObservableObject
     /// Gets or sets the listening port of a new session.
     /// </summary>
     [ObservableProperty]
-    public partial decimal? Port { get; set; } = TlsTransportOptions.DefaultPort;
+    public partial decimal? Port { get; set; } = TlsTransportOptions.DEFAULT_PORT;
 
     /// <summary>
     /// Gets or sets a value indicating whether a new session asks the router to open its port.
@@ -987,7 +1000,7 @@ public sealed partial class MainWindowViewModel : ObservableObject
     partial void OnOpenRouterPortChanged(bool value)
     {
         _session.OpenRouterPort = value;
-        _ = _settings.SetAsync(OpenRouterPortSetting, value ? "true" : "false", CancellationToken.None);
+        _ = _settings.SetAsync(OPEN_ROUTER_PORT_SETTING, value ? "true" : "false", CancellationToken.None);
     }
 
     /// <summary>
@@ -1004,7 +1017,7 @@ public sealed partial class MainWindowViewModel : ObservableObject
     partial void OnRendezvousModeChanged(RendezvousMode value)
     {
         _session.RendezvousMode = value;
-        _ = _settings.SetAsync(RendezvousModeSetting, value.ToString(), CancellationToken.None);
+        _ = _settings.SetAsync(RENDEZVOUS_MODE_SETTING, value.ToString(), CancellationToken.None);
     }
 
     /// <summary>
@@ -1066,7 +1079,7 @@ public sealed partial class MainWindowViewModel : ObservableObject
         }
 
         _session.RendezvousServer = trimmed;
-        _ = _settings.SetAsync(RendezvousServerSetting, trimmed, CancellationToken.None);
+        _ = _settings.SetAsync(RENDEZVOUS_SERVER_SETTING, trimmed, CancellationToken.None);
     }
 
     /// <summary>
@@ -1391,40 +1404,40 @@ public sealed partial class MainWindowViewModel : ObservableObject
     /// <returns>A task that completes when the settings are loaded.</returns>
     public async Task LoadAsync()
     {
-        var name = await _settings.GetAsync(DisplayNameSetting, CancellationToken.None);
+        var name = await _settings.GetAsync(DISPLAY_NAME_SETTING, CancellationToken.None);
         if (!string.IsNullOrWhiteSpace(name))
         {
             DisplayName = name;
         }
 
-        OpenRouterPort = await _settings.GetAsync(OpenRouterPortSetting, CancellationToken.None) != "false";
-        RendezvousServer = await _settings.GetAsync(RendezvousServerSetting, CancellationToken.None) ?? string.Empty;
+        OpenRouterPort = await _settings.GetAsync(OPEN_ROUTER_PORT_SETTING, CancellationToken.None) != "false";
+        RendezvousServer = await _settings.GetAsync(RENDEZVOUS_SERVER_SETTING, CancellationToken.None) ?? string.Empty;
 
         // Before the choice existed, a typed address meant "use this server" and an empty one meant none; a device
         // that has an address keeps using it, everybody else gets the automatic search.
-        RendezvousMode = Enum.TryParse<RendezvousMode>(await _settings.GetAsync(RendezvousModeSetting, CancellationToken.None), out var mode)
-            && Enum.IsDefined(mode)
+        RendezvousMode = Enum.TryParse<RendezvousMode>(await _settings.GetAsync(RENDEZVOUS_MODE_SETTING, CancellationToken.None), out var mode) &&
+            Enum.IsDefined(mode)
                 ? mode
                 : RendezvousServer.Length > 0 ? RendezvousMode.Manual : RendezvousMode.Automatic;
         _session.RendezvousMode = RendezvousMode;
         if (_updates is not null)
         {
-            _updates.ManifestUrl = await _settings.GetAsync(UpdateService.UrlSetting, CancellationToken.None) ?? string.Empty;
-            _updates.Enabled = await _settings.GetAsync(UpdateService.EnabledSetting, CancellationToken.None) != "false";
+            _updates.ManifestUrl = await _settings.GetAsync(UpdateService.URL_SETTING, CancellationToken.None) ?? string.Empty;
+            _updates.Enabled = await _settings.GetAsync(UpdateService.ENABLED_SETTING, CancellationToken.None) != "false";
             _ = CheckUpdatesAsync();
         }
 
-        SideTab = await _settings.GetAsync(SideTabSetting, CancellationToken.None) == "events" ? SideTab.Events : SideTab.Chat;
-        EventsExpanded = await _settings.GetAsync(EventsExpandedSetting, CancellationToken.None) != "false";
-        IsLayoutResizable = await _settings.GetAsync(LayoutResizableSetting, CancellationToken.None) == "true";
-        AlwaysShowBars = await _settings.GetAsync(AlwaysShowBarsSetting, CancellationToken.None) == "true";
+        SideTab = await _settings.GetAsync(SIDE_TAB_SETTING, CancellationToken.None) == "events" ? SideTab.Events : SideTab.Chat;
+        EventsExpanded = await _settings.GetAsync(EVENTS_EXPANDED_SETTING, CancellationToken.None) != "false";
+        IsLayoutResizable = await _settings.GetAsync(LAYOUT_RESIZABLE_SETTING, CancellationToken.None) == "true";
+        AlwaysShowBars = await _settings.GetAsync(ALWAYS_SHOW_BARS_SETTING, CancellationToken.None) == "true";
 
         // A stored width means something only while the border can be dragged; a locked layout is the designed one.
-        if (IsLayoutResizable
-            && double.TryParse(await _settings.GetAsync(SidePanelWidthSetting, CancellationToken.None), NumberStyles.Float, CultureInfo.InvariantCulture, out var sideWidth)
-            && double.IsFinite(sideWidth))
+        if (IsLayoutResizable &&
+            double.TryParse(await _settings.GetAsync(SIDE_PANEL_WIDTH_SETTING, CancellationToken.None), NumberStyles.Float, CultureInfo.InvariantCulture, out var sideWidth) &&
+            double.IsFinite(sideWidth))
         {
-            SidePanelWidth = Math.Max(DefaultSidePanelWidth, sideWidth);
+            SidePanelWidth = Math.Max(DEFAULT_SIDE_PANEL_WIDTH, sideWidth);
         }
 
         if (Volume is not null)
@@ -1467,7 +1480,7 @@ public sealed partial class MainWindowViewModel : ObservableObject
             if (!_session.IsActive)
             {
                 await SaveNameAsync();
-                await _session.StartHostingAsync(Path.GetFileNameWithoutExtension(path), DisplayName, (int)(Port ?? TlsTransportOptions.DefaultPort), token);
+                await _session.StartHostingAsync(Path.GetFileNameWithoutExtension(path), DisplayName, (int)(Port ?? TlsTransportOptions.DEFAULT_PORT), token);
                 await SendStoredAvatarAsync(token);
             }
 
@@ -1497,8 +1510,8 @@ public sealed partial class MainWindowViewModel : ObservableObject
                 IsOpeningInvite = false;
             }
         }
-        else if (arguments.FirstOrDefault(a => !a.StartsWith('-') && File.Exists(a)) is { } file
-            && !IsBusy && (!_session.IsActive || _session.IsHost))
+        else if (arguments.FirstOrDefault(a => !a.StartsWith('-') && File.Exists(a)) is { } file &&
+            !IsBusy && (!_session.IsActive || _session.IsHost))
         {
             // "Open with Golether": host a session and show the file right away.
             _dialogs.BringToFront();
@@ -1680,7 +1693,7 @@ public sealed partial class MainWindowViewModel : ObservableObject
 
         UpdateParticipants(snapshot, duration);
         UpdateSyncChip(snapshot);
-        SecurityText = Texts.Format("Main.Security", Participants.Count, SessionOptions.MaxParticipantsLimit);
+        SecurityText = Texts.Format("Main.Security", Participants.Count, SessionOptions.MAX_PARTICIPANTS_LIMIT);
         var own = snapshot.Participants.FirstOrDefault(p => p.IsLocal)?.Status;
         SharingText = own is { BytesFromPeers: > 0 } or { BytesToPeers: > 0 }
             ? Texts.Format("Main.Sharing", DisplayFormat.Size(own.BytesFromPeers), DisplayFormat.Size(own.BytesToPeers))
@@ -1740,7 +1753,7 @@ public sealed partial class MainWindowViewModel : ObservableObject
 
         if (position is { } current)
         {
-            _resume.Report(id, current, duration, IsPlaying, DateTimeOffset.UtcNow);
+            _resume.Report(id, current, duration, IsPlaying, _timeProvider.GetUtcNow());
             if (current >= ResumeTracker.MinimumPosition)
             {
                 ResumeOffer = null;
@@ -1841,8 +1854,8 @@ public sealed partial class MainWindowViewModel : ObservableObject
 
         _updates.Enabled = enabled;
         _updates.ManifestUrl = url.Trim();
-        _ = _settings.SetAsync(UpdateService.EnabledSetting, enabled ? "true" : "false", CancellationToken.None);
-        _ = _settings.SetAsync(UpdateService.UrlSetting, _updates.ManifestUrl, CancellationToken.None);
+        _ = _settings.SetAsync(UpdateService.ENABLED_SETTING, enabled ? "true" : "false", CancellationToken.None);
+        _ = _settings.SetAsync(UpdateService.URL_SETTING, _updates.ManifestUrl, CancellationToken.None);
         _ = CheckUpdatesAsync();
     }
 
@@ -1858,7 +1871,7 @@ public sealed partial class MainWindowViewModel : ObservableObject
         }
 
         var found = await updates.CheckAsync(CancellationToken.None);
-        if (found is not null && found.Version == await _settings.GetAsync(UpdateService.IgnoredVersionSetting, CancellationToken.None))
+        if (found is not null && found.Version == await _settings.GetAsync(UpdateService.IGNORED_VERSION_SETTING, CancellationToken.None))
         {
             found = null;
         }
@@ -1890,7 +1903,7 @@ public sealed partial class MainWindowViewModel : ObservableObject
     {
         if (IgnoreUpdate && _update is { } update)
         {
-            _ = _settings.SetAsync(UpdateService.IgnoredVersionSetting, update.Version, CancellationToken.None);
+            _ = _settings.SetAsync(UpdateService.IGNORED_VERSION_SETTING, update.Version, CancellationToken.None);
         }
 
         UpdateText = string.Empty;
@@ -1961,7 +1974,7 @@ public sealed partial class MainWindowViewModel : ObservableObject
     private Task StartHostingAsync() => RunAsync(Texts.Get("Main.Busy.CreatingSession"), async token =>
     {
         await SaveNameAsync();
-        await _session.StartHostingAsync(NewSessionName, DisplayName, (int)(Port ?? TlsTransportOptions.DefaultPort), token);
+        await _session.StartHostingAsync(NewSessionName, DisplayName, (int)(Port ?? TlsTransportOptions.DEFAULT_PORT), token);
         await SendStoredAvatarAsync(token);
     });
 
@@ -2060,10 +2073,10 @@ public sealed partial class MainWindowViewModel : ObservableObject
     {
         var target = snapshot.Playback?.Position ?? TimeSpan.Zero;
         var names = snapshot.Participants
-            .Where(p => !p.Info.IsHost && (p.Status is not { } status
-                || !ReadinessOptions.IsReady(status, duration)
-                || status.Position is not { } position
-                || (position - target).Duration() > ReadinessOptions.WaitThreshold))
+            .Where(p => !p.Info.IsHost && (p.Status is not { } status ||
+                !_readinessOptions.IsReady(status, duration) ||
+                status.Position is not { } position ||
+                (position - target).Duration() > _readinessOptions.WaitThreshold))
             .Select(p => p.Info.DisplayName)
             .ToArray();
         return names.Length switch
@@ -2080,14 +2093,14 @@ public sealed partial class MainWindowViewModel : ObservableObject
     /// </summary>
     /// <returns>A task that completes when the intent was sent.</returns>
     [RelayCommand]
-    private Task SeekBackAsync() => SeekToAsync(Math.Max(0, PositionSeconds - SeekStep.TotalSeconds));
+    private Task SeekBackAsync() => SeekToAsync(Math.Max(0, PositionSeconds - _seekStep.TotalSeconds));
 
     /// <summary>
     /// Seeks forward by ten seconds.
     /// </summary>
     /// <returns>A task that completes when the intent was sent.</returns>
     [RelayCommand]
-    private Task SeekForwardAsync() => SeekToAsync(Math.Min(DurationSeconds, PositionSeconds + SeekStep.TotalSeconds));
+    private Task SeekForwardAsync() => SeekToAsync(Math.Min(DurationSeconds, PositionSeconds + _seekStep.TotalSeconds));
 
     /// <summary>
     /// Seeks to a position in seconds.
@@ -2205,7 +2218,7 @@ public sealed partial class MainWindowViewModel : ObservableObject
     private async Task SaveNameAsync()
     {
         DisplayName = Core.Session.ParticipantInfo.NormalizeDisplayName(DisplayName);
-        await _settings.SetAsync(DisplayNameSetting, DisplayName, CancellationToken.None);
+        await _settings.SetAsync(DISPLAY_NAME_SETTING, DisplayName, CancellationToken.None);
     }
 
     /// <summary>
@@ -2227,7 +2240,7 @@ public sealed partial class MainWindowViewModel : ObservableObject
     {
         var text = $"{sessionEvent.Time.ToString("HH:mm:ss", CultureInfo.InvariantCulture)}  {sessionEvent.Text}";
         Events.Insert(0, text);
-        while (Events.Count > MaxEvents)
+        while (Events.Count > MAX_EVENTS)
         {
             Events.RemoveAt(Events.Count - 1);
         }
@@ -2294,7 +2307,7 @@ public sealed partial class MainWindowViewModel : ObservableObject
         await Task.Delay(VoiceVolumeSaveDelay).ConfigureAwait(false);
         if (Interlocked.Read(ref _voiceVolumeVersion) == version)
         {
-            await _settings.SetAsync(VoiceVolumeSettingPrefix + peer.Value, percent.ToString(CultureInfo.InvariantCulture), CancellationToken.None).ConfigureAwait(false);
+            await _settings.SetAsync(VOICE_VOLUME_SETTING_PREFIX + peer.Value, percent.ToString(CultureInfo.InvariantCulture), CancellationToken.None).ConfigureAwait(false);
         }
     }
 
@@ -2305,7 +2318,7 @@ public sealed partial class MainWindowViewModel : ObservableObject
     /// <returns>A task that completes when the volume is applied.</returns>
     private async Task RestoreVoiceVolumeAsync(ParticipantItemViewModel item)
     {
-        var stored = await _settings.GetAsync(VoiceVolumeSettingPrefix + item.PeerId.Value, CancellationToken.None);
+        var stored = await _settings.GetAsync(VOICE_VOLUME_SETTING_PREFIX + item.PeerId.Value, CancellationToken.None);
         if (double.TryParse(stored, NumberStyles.Float, CultureInfo.InvariantCulture, out var percent) && percent != item.VoiceVolume)
         {
             item.RestoreVoiceVolume(percent);

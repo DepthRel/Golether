@@ -1,5 +1,6 @@
 using System.Net;
 using System.Net.Sockets;
+using Golether.Core.Enums;
 using Golether.Localization;
 using Golether.Web.Server.Infrastructure;
 using Golether.Web.Server.Options;
@@ -15,7 +16,7 @@ internal sealed class RendezvousListener : BackgroundService
     /// <summary>
     /// The wait after a failed accept before the next one.
     /// </summary>
-    private static readonly TimeSpan AcceptRetryDelay = TimeSpan.FromMilliseconds(200);
+    private static readonly TimeSpan _acceptRetryDelay = TimeSpan.FromMilliseconds(200);
 
     /// <summary>
     /// The options.
@@ -115,7 +116,7 @@ internal sealed class RendezvousListener : BackgroundService
 
         _listener = listener;
         _logger.LogInformation("Rendezvous server listening on tcp://{Endpoint}", listener.LocalEndpoint);
-        _journal?.Record(Contracts.JournalEvent.Listening, detail: "tcp://" + listener.LocalEndpoint);
+        _journal?.Record(JournalEvent.Listening, detail: "tcp://" + listener.LocalEndpoint);
         return base.StartAsync(cancellationToken);
     }
 
@@ -145,20 +146,20 @@ internal sealed class RendezvousListener : BackgroundService
             {
                 socket = await listener.AcceptSocketAsync(stoppingToken).ConfigureAwait(false);
             }
-            catch (Exception ex) when (ex is OperationCanceledException or ObjectDisposedException
-                                       || (ex is SocketException && stoppingToken.IsCancellationRequested))
+            catch (Exception ex) when (ex is OperationCanceledException or ObjectDisposedException ||
+                                       (ex is SocketException && stoppingToken.IsCancellationRequested))
             {
                 return;
             }
             catch (SocketException ex)
             {
                 _logger.LogWarning("Accepting a connection failed: {Error}", ex.SocketErrorCode);
-                _journal?.Record(Contracts.JournalEvent.AcceptFailed, detail: ex.SocketErrorCode.ToString());
+                _journal?.Record(JournalEvent.AcceptFailed, detail: ex.SocketErrorCode.ToString());
 
                 // A lasting failure (no free descriptors, for example) must not turn the loop into a busy one.
                 try
                 {
-                    await Task.Delay(AcceptRetryDelay, _timeProvider, stoppingToken).ConfigureAwait(false);
+                    await Task.Delay(_acceptRetryDelay, _timeProvider, stoppingToken).ConfigureAwait(false);
                 }
                 catch (OperationCanceledException)
                 {
@@ -174,7 +175,7 @@ internal sealed class RendezvousListener : BackgroundService
                 _statistics.Refused();
                 if (socket.RemoteEndPoint is IPEndPoint refused)
                 {
-                    _journal?.Record(Contracts.JournalEvent.ConnectionRefused, Golether.Transports.Rendezvous.Protocol.RendezvousProtocol.Normalize(refused));
+                    _journal?.Record(JournalEvent.ConnectionRefused, Golether.Transports.Rendezvous.Protocol.RendezvousProtocol.Normalize(refused));
                 }
 
                 socket.Dispose();
@@ -202,7 +203,7 @@ internal sealed class RendezvousListener : BackgroundService
         catch (Exception ex) when (ex is not OutOfMemoryException)
         {
             _logger.LogWarning(ex, "A connection failed unexpectedly");
-            _journal?.Record(Contracts.JournalEvent.ConnectionFailed, detail: ex.GetType().Name + ": " + ex.Message);
+            _journal?.Record(JournalEvent.ConnectionFailed, detail: ex.GetType().Name + ": " + ex.Message);
             socket.Dispose();
         }
         finally

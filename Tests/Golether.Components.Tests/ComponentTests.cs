@@ -1,11 +1,11 @@
 using System.Net;
 using System.Security.Cryptography;
+using Microsoft.Extensions.Time.Testing;
 using Golether.Components.Catalog;
 using Golether.Components.GStreamer;
 using Golether.Components.Installation;
 using Golether.Components.Pe;
 using Golether.Core.Data.Enums;
-using Microsoft.Extensions.Time.Testing;
 
 namespace Golether.Components.Tests;
 
@@ -101,7 +101,7 @@ public sealed class ComponentTests : IDisposable
         await installer.InstallAsync(package, null, TestContext.Current.CancellationToken);
 
         Assert.True(File.Exists(Path.Combine(target, "libmpv-2.dll")));
-        Assert.True(File.Exists(Path.Combine(target, ComponentMarker.FileName)));
+        Assert.True(File.Exists(Path.Combine(target, ComponentMarker.FILE_NAME)));
         Assert.Equal(1, handler.Requests);
         Assert.Contains(tools.Calls, call => call.EndsWith("tar.exe", StringComparison.OrdinalIgnoreCase));
 
@@ -180,7 +180,7 @@ public sealed class ComponentTests : IDisposable
         var bundled = Directory.CreateDirectory(Path.Combine(_directory.FullName, "native")).FullName;
         var installed = Directory.CreateDirectory(Path.Combine(_directory.FullName, "components", "video", "1")).FullName;
         File.WriteAllText(Path.Combine(installed, ComponentLocator.VideoLibraryNames[0]), "x");
-        File.WriteAllText(Path.Combine(installed, ComponentMarker.FileName), "{ broken");
+        File.WriteAllText(Path.Combine(installed, ComponentMarker.FILE_NAME), "{ broken");
         var locator = new ComponentLocator(bundled, Path.Combine(_directory.FullName, "components"), _ => false, () => "ID=debian");
 
         var missing = locator.GetStatus(ComponentId.Video);

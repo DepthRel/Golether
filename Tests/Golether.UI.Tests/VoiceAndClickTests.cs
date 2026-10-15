@@ -13,7 +13,7 @@ public sealed class VoiceAndClickTests
     /// <summary>
     /// A participant.
     /// </summary>
-    private static readonly PeerId Guest = PeerId.Parse(new string('b', 64));
+    private static readonly PeerId _guest = PeerId.Parse(new string('b', 64));
 
     /// <summary>
     /// The level of generated audio follows its amplitude.
@@ -39,22 +39,22 @@ public sealed class VoiceAndClickTests
         var loud = Square(8000, 20);
         var quiet = Square(20, 20);
 
-        Assert.Null(detector.Process(Guest, loud, block, T(0)));
-        Assert.Null(detector.Process(Guest, quiet, block, T(20)));
-        Assert.Null(detector.Process(Guest, loud, block, T(40)));
-        Assert.Null(detector.Process(Guest, loud, block, T(60)));
-        Assert.Equal(new SpeakingChange(Guest, true), detector.Process(Guest, loud, block, T(80)));
-        Assert.Null(detector.Process(Guest, loud, block, T(100)));
+        Assert.Null(detector.Process(_guest, loud, block, T(0)));
+        Assert.Null(detector.Process(_guest, quiet, block, T(20)));
+        Assert.Null(detector.Process(_guest, loud, block, T(40)));
+        Assert.Null(detector.Process(_guest, loud, block, T(60)));
+        Assert.Equal(new SpeakingChange(_guest, true), detector.Process(_guest, loud, block, T(80)));
+        Assert.Null(detector.Process(_guest, loud, block, T(100)));
 
         Assert.Empty(detector.Expire(T(300)));
-        Assert.Null(detector.Process(Guest, loud, block, T(320)));
+        Assert.Null(detector.Process(_guest, loud, block, T(320)));
         Assert.Empty(detector.Expire(T(700)));
-        Assert.Equal([new SpeakingChange(Guest, false)], detector.Expire(T(800)));
+        Assert.Equal([new SpeakingChange(_guest, false)], detector.Expire(T(800)));
         Assert.Empty(detector.Expire(T(900)));
 
         Assert.Null(detector.Process(default, loud, block, T(1000)));
         Assert.Null(detector.Forget(default));
-        Assert.Null(detector.Forget(Guest));
+        Assert.Null(detector.Forget(_guest));
     }
 
     /// <summary>

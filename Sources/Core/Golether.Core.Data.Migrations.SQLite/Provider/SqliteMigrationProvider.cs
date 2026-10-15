@@ -1,7 +1,7 @@
 using System.Reflection;
 using FluentMigrator.Runner;
-using Golether.Core.Data.Migrations.Runner;
 using Microsoft.Data.Sqlite;
+using Golether.Core.Data.Migrations.Runner;
 
 namespace Golether.Core.Data.Migrations.SQLite.Provider;
 

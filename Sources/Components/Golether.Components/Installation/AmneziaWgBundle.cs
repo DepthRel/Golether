@@ -9,21 +9,21 @@ public static class AmneziaWgBundle
     /// <summary>
     /// The folder the files are kept in inside the component directory.
     /// </summary>
-    public const string DirectoryName = "amneziawg";
+    public const string DIRECTORY_NAME = "amneziawg";
 
     /// <summary>
     /// The program that raises and drops tunnels.
     /// </summary>
-    public const string Executable = "amneziawg.exe";
+    public const string EXECUTABLE = "amneziawg.exe";
 
     /// <summary>
     /// The files taken out of the package: the tunnel program, the command-line tool and the virtual adapter driver.
     /// </summary>
-    public static IReadOnlyList<string> Files { get; } = [Executable, "awg.exe", "wintun.dll"];
+    public static IReadOnlyList<string> Files { get; } = [EXECUTABLE, "awg.exe", "wintun.dll"];
 
     /// <summary>
-    /// Returns the path of <see cref="Executable"/> inside an installed component, whether it lies in the component
-    /// directory itself or in the <see cref="DirectoryName"/> folder of it.
+    /// Returns the path of <see cref="EXECUTABLE"/> inside an installed component, whether it lies in the component
+    /// directory itself or in the <see cref="DIRECTORY_NAME"/> folder of it.
     /// </summary>
     /// <param name="componentDirectory">The directory of the installed component.</param>
     /// <returns>The path, or <see langword="null"/> when the program is not there.</returns>
@@ -34,13 +34,13 @@ public static class AmneziaWgBundle
             return null;
         }
 
-        var nested = Path.Combine(componentDirectory, DirectoryName, Executable);
+        var nested = Path.Combine(componentDirectory, DIRECTORY_NAME, EXECUTABLE);
         if (File.Exists(nested))
         {
             return nested;
         }
 
-        var direct = Path.Combine(componentDirectory, Executable);
+        var direct = Path.Combine(componentDirectory, EXECUTABLE);
         return File.Exists(direct) ? direct : null;
     }
 

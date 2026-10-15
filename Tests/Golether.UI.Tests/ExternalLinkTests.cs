@@ -1,3 +1,4 @@
+using NSubstitute;
 using Golether.Components.Installation;
 using Golether.Core.Data.Enums;
 using Golether.Core.Data.Stores;
@@ -5,9 +6,9 @@ using Golether.Core.Identity;
 using Golether.Core.Networking;
 using Golether.Media.Conference;
 using Golether.Security.Invites;
+using Golether.UI.Enums;
 using Golether.UI.Services;
 using Golether.UI.ViewModels;
-using NSubstitute;
 
 namespace Golether.UI.Tests;
 
@@ -142,7 +143,7 @@ public sealed class ExternalLinkTests
     {
         var viewModel = CreateViewModel();
 
-        await viewModel.OpenExternalAsync([Invite.WebLinkPrefix + "damaged"]);
+        await viewModel.OpenExternalAsync([Invite.WEB_LINK_PREFIX + "damaged"]);
 
         await _dialogs.Received(1).ShowErrorAsync(Arg.Any<string>(), Arg.Any<string>());
         await _dialogs.DidNotReceive().ConfirmAsync(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<string>());
@@ -185,12 +186,12 @@ public sealed class ExternalLinkTests
     {
         if (storedMode is not null)
         {
-            _settings.Values[MainWindowViewModel.RendezvousModeSetting] = storedMode;
+            _settings.Values[MainWindowViewModel.RENDEZVOUS_MODE_SETTING] = storedMode;
         }
 
         if (storedServer is not null)
         {
-            _settings.Values[MainWindowViewModel.RendezvousServerSetting] = storedServer;
+            _settings.Values[MainWindowViewModel.RENDEZVOUS_SERVER_SETTING] = storedServer;
         }
 
         var viewModel = CreateViewModel();
@@ -216,10 +217,10 @@ public sealed class ExternalLinkTests
 
         Assert.Equal(RendezvousMode.Manual, viewModel.RendezvousMode);
         Assert.Equal(RendezvousMode.Manual, _session.RendezvousMode);
-        Assert.Equal("Manual", _settings.Values[MainWindowViewModel.RendezvousModeSetting]);
+        Assert.Equal("Manual", _settings.Values[MainWindowViewModel.RENDEZVOUS_MODE_SETTING]);
 
         viewModel.IsRendezvousDirect = true;
-        Assert.Equal("Direct", _settings.Values[MainWindowViewModel.RendezvousModeSetting]);
+        Assert.Equal("Direct", _settings.Values[MainWindowViewModel.RENDEZVOUS_MODE_SETTING]);
         Assert.False(viewModel.IsRendezvousManual);
     }
 
@@ -246,13 +247,13 @@ public sealed class ExternalLinkTests
         // Closing the offer without the tick hides it for now only.
         viewModel.DismissUpdateCommand.Execute(null);
         Assert.False(viewModel.HasUpdate);
-        Assert.DoesNotContain(UpdateService.IgnoredVersionSetting, _settings.Values.Keys);
+        Assert.DoesNotContain(UpdateService.IGNORED_VERSION_SETTING, _settings.Values.Keys);
         await viewModel.CheckUpdatesAsync();
         Assert.True(viewModel.HasUpdate);
 
         viewModel.IgnoreUpdate = true;
         viewModel.DismissUpdateCommand.Execute(null);
-        Assert.Equal("9.9.9", _settings.Values[UpdateService.IgnoredVersionSetting]);
+        Assert.Equal("9.9.9", _settings.Values[UpdateService.IGNORED_VERSION_SETTING]);
         await viewModel.CheckUpdatesAsync();
         Assert.False(viewModel.HasUpdate);
 
@@ -275,8 +276,8 @@ public sealed class ExternalLinkTests
 
         Assert.False(_updates.Enabled);
         Assert.Equal("https://example.org/updates.json", _updates.ManifestUrl);
-        Assert.Equal("false", _settings.Values[UpdateService.EnabledSetting]);
-        Assert.Equal("https://example.org/updates.json", _settings.Values[UpdateService.UrlSetting]);
+        Assert.Equal("false", _settings.Values[UpdateService.ENABLED_SETTING]);
+        Assert.Equal("https://example.org/updates.json", _settings.Values[UpdateService.URL_SETTING]);
     }
 
     /// <summary>

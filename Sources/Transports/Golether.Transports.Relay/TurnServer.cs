@@ -23,7 +23,7 @@ public sealed class TurnServer : IRelayStreamServer, IAsyncDisposable
     /// <summary>
     /// The lifetime of a permission (RFC 5766).
     /// </summary>
-    private static readonly TimeSpan PermissionLifetime = TimeSpan.FromMinutes(5);
+    private static readonly TimeSpan _permissionLifetime = TimeSpan.FromMinutes(5);
 
     /// <summary>
     /// The options.
@@ -143,8 +143,8 @@ public sealed class TurnServer : IRelayStreamServer, IAsyncDisposable
             {
                 client = await _listener.AcceptTcpClientAsync(_stop.Token).ConfigureAwait(false);
             }
-            catch (Exception ex) when (ex is OperationCanceledException or ObjectDisposedException
-                                       || (ex is SocketException && _stop.IsCancellationRequested))
+            catch (Exception ex) when (ex is OperationCanceledException or ObjectDisposedException ||
+                                       (ex is SocketException && _stop.IsCancellationRequested))
             {
                 return;
             }
@@ -258,7 +258,7 @@ public sealed class TurnServer : IRelayStreamServer, IAsyncDisposable
         public async Task RunAsync(CancellationToken cancellationToken)
         {
             var header = new byte[4];
-            var body = new byte[StunMessage.MaxSize];
+            var body = new byte[StunMessage.MAX_SIZE];
             while (true)
             {
                 if (Allocation is { IsExpired: true })
@@ -290,7 +290,7 @@ public sealed class TurnServer : IRelayStreamServer, IAsyncDisposable
                 }
 
                 var size = StunMessage.MessageSize(header);
-                if (size < Stun.HeaderSize || size > StunMessage.MaxSize)
+                if (size < Stun.HEADER_SIZE || size > StunMessage.MAX_SIZE)
                 {
                     throw new InvalidDataException("Not a TURN stream.");
                 }
@@ -331,10 +331,10 @@ public sealed class TurnServer : IRelayStreamServer, IAsyncDisposable
         /// <returns>The encoded response, or <see langword="null"/> for indications.</returns>
         private async Task<byte[]?> HandleAsync(StunMessage message)
         {
-            if (message.Class == Stun.ClassIndication)
+            if (message.Class == Stun.CLASS_INDICATION)
             {
-                if (message.Method == Stun.Send && Allocation is { } allocation
-                    && message.GetXorAddress(Stun.AttrXorPeerAddress) is { } peer && message.Get(Stun.AttrData) is { } data)
+                if (message.Method == Stun.SEND && Allocation is { } allocation &&
+                    message.GetXorAddress(Stun.ATTR_XOR_PEER_ADDRESS) is { } peer && message.Get(Stun.ATTR_DATA) is { } data)
                 {
                     await allocation.SendAsync(peer, data).ConfigureAwait(false);
                 }
@@ -342,14 +342,14 @@ public sealed class TurnServer : IRelayStreamServer, IAsyncDisposable
                 return null;
             }
 
-            if (message.Class != Stun.ClassRequest)
+            if (message.Class != Stun.CLASS_REQUEST)
             {
                 return null;
             }
 
-            if (message.Method == Stun.Binding)
+            if (message.Method == Stun.BINDING)
             {
-                return Reply(message).AddXorAddress(Stun.AttrXorMappedAddress, Remote).Encode();
+                return Reply(message).AddXorAddress(Stun.ATTR_XOR_MAPPED_ADDRESS, Remote).Encode();
             }
 
             if (!Authenticate(message, out var challenge))
@@ -359,10 +359,10 @@ public sealed class TurnServer : IRelayStreamServer, IAsyncDisposable
 
             return message.Method switch
             {
-                Stun.Allocate => HandleAllocate(message),
-                Stun.Refresh => HandleRefresh(message),
-                Stun.CreatePermission => HandleCreatePermission(message),
-                Stun.ChannelBind => HandleChannelBind(message),
+                Stun.ALLOCATE => HandleAllocate(message),
+                Stun.REFRESH => HandleRefresh(message),
+                Stun.CREATE_PERMISSION => HandleCreatePermission(message),
+                Stun.CHANNEL_BIND => HandleChannelBind(message),
                 _ => Error(message, 400, "Bad Request", signed: true),
             };
         }
@@ -381,14 +381,14 @@ public sealed class TurnServer : IRelayStreamServer, IAsyncDisposable
         private bool Authenticate(StunMessage message, out byte[]? challenge)
         {
             challenge = null;
-            var username = message.GetText(Stun.AttrUsername);
+            var username = message.GetText(Stun.ATTR_USERNAME);
             if (message.IntegrityOffset < 0 || username is null)
             {
                 challenge = Challenge(message, 401, "Unauthorized");
                 return false;
             }
 
-            if (message.GetText(Stun.AttrNonce) != nonce || message.GetText(Stun.AttrRealm) != server._options.Realm)
+            if (message.GetText(Stun.ATTR_NONCE) != nonce || message.GetText(Stun.ATTR_REALM) != server._options.Realm)
             {
                 challenge = Challenge(message, 438, "Stale Nonce");
                 return false;
@@ -396,8 +396,8 @@ public sealed class TurnServer : IRelayStreamServer, IAsyncDisposable
 
             if (!CryptographicOperations.FixedTimeEquals(
                     System.Text.Encoding.UTF8.GetBytes(username),
-                    System.Text.Encoding.UTF8.GetBytes(server._options.Credentials.Username))
-                || !message.VerifyIntegrity(server._key))
+                    System.Text.Encoding.UTF8.GetBytes(server._options.Credentials.Username)) ||
+                !message.VerifyIntegrity(server._key))
             {
                 server._logger.LogWarning("TURN request from {Client} with wrong credentials", Remote);
                 challenge = Challenge(message, 401, "Unauthorized");
@@ -419,7 +419,7 @@ public sealed class TurnServer : IRelayStreamServer, IAsyncDisposable
                 return Error(message, 437, "Allocation Mismatch", signed: true);
             }
 
-            if (message.Get(Stun.AttrRequestedTransport) is not [17, 0, 0, 0])
+            if (message.Get(Stun.ATTR_REQUESTED_TRANSPORT) is not [17, 0, 0, 0])
             {
                 return Error(message, 442, "Unsupported Transport Protocol", signed: true);
             }
@@ -436,9 +436,9 @@ public sealed class TurnServer : IRelayStreamServer, IAsyncDisposable
             allocation.Start();
             server._logger.LogInformation("TURN relay {Relay} for {Client}", allocation.RelayAddress, Remote);
             return Reply(message)
-                .AddXorAddress(Stun.AttrXorRelayedAddress, allocation.RelayAddress)
-                .AddXorAddress(Stun.AttrXorMappedAddress, Remote)
-                .AddUInt32(Stun.AttrLifetime, (uint)allocation.Lifetime.TotalSeconds)
+                .AddXorAddress(Stun.ATTR_XOR_RELAYED_ADDRESS, allocation.RelayAddress)
+                .AddXorAddress(Stun.ATTR_XOR_MAPPED_ADDRESS, Remote)
+                .AddUInt32(Stun.ATTR_LIFETIME, (uint)allocation.Lifetime.TotalSeconds)
                 .Encode(server._key);
         }
 
@@ -463,7 +463,7 @@ public sealed class TurnServer : IRelayStreamServer, IAsyncDisposable
                 Allocation = null;
             }
 
-            return Reply(message).AddUInt32(Stun.AttrLifetime, (uint)lifetime.TotalSeconds).Encode(server._key);
+            return Reply(message).AddUInt32(Stun.ATTR_LIFETIME, (uint)lifetime.TotalSeconds).Encode(server._key);
         }
 
         /// <summary>
@@ -478,7 +478,7 @@ public sealed class TurnServer : IRelayStreamServer, IAsyncDisposable
                 return Error(message, 437, "Allocation Mismatch", signed: true);
             }
 
-            var peers = message.GetAll(Stun.AttrXorPeerAddress).Select(v => StunMessage.DecodeXorAddress(v, message.TransactionId)).ToArray();
+            var peers = message.GetAll(Stun.ATTR_XOR_PEER_ADDRESS).Select(v => StunMessage.DecodeXorAddress(v, message.TransactionId)).ToArray();
             if (peers.Length == 0 || peers.Any(p => p is null))
             {
                 return Error(message, 400, "Bad Request", signed: true);
@@ -509,14 +509,14 @@ public sealed class TurnServer : IRelayStreamServer, IAsyncDisposable
                 return Error(message, 437, "Allocation Mismatch", signed: true);
             }
 
-            var number = message.Get(Stun.AttrChannelNumber) is { Length: 4 } raw ? BinaryPrimitives.ReadUInt16BigEndian(raw) : (ushort)0;
-            var peer = message.GetXorAddress(Stun.AttrXorPeerAddress);
+            var number = message.Get(Stun.ATTR_CHANNEL_NUMBER) is { Length: 4 } raw ? BinaryPrimitives.ReadUInt16BigEndian(raw) : (ushort)0;
+            var peer = message.GetXorAddress(Stun.ATTR_XOR_PEER_ADDRESS);
             if (peer is not null && !server.IsRelayablePeer(peer.Address))
             {
                 return Error(message, 403, "Forbidden", signed: true);
             }
 
-            if (number is < Stun.FirstChannel or > Stun.LastChannel || peer is null || !allocation.Bind(number, peer))
+            if (number is < Stun.FIRST_CHANNEL or > Stun.LAST_CHANNEL || peer is null || !allocation.Bind(number, peer))
             {
                 return Error(message, 400, "Bad Request", signed: true);
             }
@@ -531,7 +531,7 @@ public sealed class TurnServer : IRelayStreamServer, IAsyncDisposable
         /// <returns>The lifetime.</returns>
         private TimeSpan Lifetime(StunMessage message)
         {
-            var requested = message.Get(Stun.AttrLifetime) is { Length: 4 } raw
+            var requested = message.Get(Stun.ATTR_LIFETIME) is { Length: 4 } raw
                 ? TimeSpan.FromSeconds(BinaryPrimitives.ReadUInt32BigEndian(raw))
                 : TimeSpan.FromMinutes(10);
             return requested > server._options.MaxLifetime ? server._options.MaxLifetime : requested;
@@ -542,7 +542,7 @@ public sealed class TurnServer : IRelayStreamServer, IAsyncDisposable
         /// </summary>
         /// <param name="request">The request.</param>
         /// <returns>The response.</returns>
-        private static StunMessage Reply(StunMessage request) => new(request.Method, Stun.ClassSuccess, request.TransactionId);
+        private static StunMessage Reply(StunMessage request) => new(request.Method, Stun.CLASS_SUCCESS, request.TransactionId);
 
         /// <summary>
         /// Creates an error response.
@@ -553,7 +553,7 @@ public sealed class TurnServer : IRelayStreamServer, IAsyncDisposable
         /// <param name="signed">Whether to add MESSAGE-INTEGRITY.</param>
         /// <returns>The encoded response.</returns>
         private byte[] Error(StunMessage request, int code, string reason, bool signed)
-            => new StunMessage(request.Method, Stun.ClassError, request.TransactionId)
+            => new StunMessage(request.Method, Stun.CLASS_ERROR, request.TransactionId)
                 .AddError(code, reason)
                 .Encode(signed ? server._key : null);
 
@@ -565,10 +565,10 @@ public sealed class TurnServer : IRelayStreamServer, IAsyncDisposable
         /// <param name="reason">The reason.</param>
         /// <returns>The encoded response.</returns>
         private byte[] Challenge(StunMessage request, int code, string reason)
-            => new StunMessage(request.Method, Stun.ClassError, request.TransactionId)
+            => new StunMessage(request.Method, Stun.CLASS_ERROR, request.TransactionId)
                 .AddError(code, reason)
-                .AddText(Stun.AttrRealm, server._options.Realm)
-                .AddText(Stun.AttrNonce, nonce)
+                .AddText(Stun.ATTR_REALM, server._options.Realm)
+                .AddText(Stun.ATTR_NONCE, nonce)
                 .Encode();
     }
 
@@ -696,7 +696,7 @@ public sealed class TurnServer : IRelayStreamServer, IAsyncDisposable
         /// Allows packets to and from an address.
         /// </summary>
         /// <param name="peer">The peer address.</param>
-        public void Permit(IPAddress peer) => _permissions[Normalize(peer)] = _timeProvider.GetUtcNow() + PermissionLifetime;
+        public void Permit(IPAddress peer) => _permissions[Normalize(peer)] = _timeProvider.GetUtcNow() + _permissionLifetime;
 
         /// <summary>
         /// Binds a channel; a channel stays with its first peer.
@@ -707,8 +707,8 @@ public sealed class TurnServer : IRelayStreamServer, IAsyncDisposable
         public bool Bind(ushort number, IPEndPoint peer)
         {
             peer = Normalize(peer);
-            if ((_channels.TryGetValue(number, out var existing) && !existing.Equals(peer))
-                || (_channelsByPeer.TryGetValue(peer, out var existingNumber) && existingNumber != number))
+            if ((_channels.TryGetValue(number, out var existing) && !existing.Equals(peer)) ||
+                (_channelsByPeer.TryGetValue(peer, out var existingNumber) && existingNumber != number))
             {
                 return false;
             }
@@ -773,7 +773,7 @@ public sealed class TurnServer : IRelayStreamServer, IAsyncDisposable
                 {
                     var packet = await _udp.ReceiveAsync(_stop.Token).ConfigureAwait(false);
                     var peer = Normalize(packet.RemoteEndPoint);
-                    if (!IsPermitted(peer.Address) || packet.Buffer.Length > StunMessage.MaxSize - 36)
+                    if (!IsPermitted(peer.Address) || packet.Buffer.Length > StunMessage.MAX_SIZE - 36)
                     {
                         continue;
                     }
@@ -804,9 +804,9 @@ public sealed class TurnServer : IRelayStreamServer, IAsyncDisposable
                 return frame;
             }
 
-            return new StunMessage(Stun.Data, Stun.ClassIndication, RandomNumberGenerator.GetBytes(12))
-                .AddXorAddress(Stun.AttrXorPeerAddress, peer)
-                .Add(Stun.AttrData, payload)
+            return new StunMessage(Stun.DATA, Stun.CLASS_INDICATION, RandomNumberGenerator.GetBytes(12))
+                .AddXorAddress(Stun.ATTR_XOR_PEER_ADDRESS, peer)
+                .Add(Stun.ATTR_DATA, payload)
                 .Encode();
         }
 
@@ -840,8 +840,8 @@ public sealed class TurnServer : IRelayStreamServer, IAsyncDisposable
     private bool IsRelayablePeer(IPAddress peer)
     {
         peer = Normalize(peer);
-        if (peer.Equals(IPAddress.Any) || peer.Equals(IPAddress.IPv6Any) || peer.Equals(IPAddress.Broadcast)
-            || peer.IsIPv6Multicast || (peer.AddressFamily == AddressFamily.InterNetwork && peer.GetAddressBytes()[0] is >= 224 and <= 239))
+        if (peer.Equals(IPAddress.Any) || peer.Equals(IPAddress.IPv6Any) || peer.Equals(IPAddress.Broadcast) ||
+            peer.IsIPv6Multicast || (peer.AddressFamily == AddressFamily.InterNetwork && peer.GetAddressBytes()[0] is >= 224 and <= 239))
         {
             return false;
         }

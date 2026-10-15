@@ -15,7 +15,7 @@ public sealed class RendezvousDirectoryTests
     /// <summary>
     /// The address the tests publish.
     /// </summary>
-    private static readonly PeerEndpoint Server = PeerEndpoint.Parse("203.0.113.7:47900");
+    private static readonly PeerEndpoint _server = PeerEndpoint.Parse("203.0.113.7:47900");
 
     /// <summary>
     /// The settings of the device.
@@ -30,11 +30,11 @@ public sealed class RendezvousDirectoryTests
     public async Task Find_ReadsThePublishedAddressAndRemembersIt()
     {
         var token = TestContext.Current.CancellationToken;
-        var published = EndpointSeal.Seal(Server);
+        var published = EndpointSeal.Seal(_server);
         var directory = Create(new StubHandler(HttpStatusCode.OK, $$"""{ "rendezvous": "{{published}}" }"""));
 
-        Assert.Equal(Server, await directory.FindAsync(token));
-        Assert.Equal(published, _settings.Values[RendezvousDirectory.CacheSetting]);
+        Assert.Equal(_server, await directory.FindAsync(token));
+        Assert.Equal(published, _settings.Values[RendezvousDirectory.CACHE_SETTING]);
     }
 
     /// <summary>
@@ -54,12 +54,12 @@ public sealed class RendezvousDirectoryTests
     public async Task Find_FallsBackToTheRememberedAddress(HttpStatusCode status, string body)
     {
         var token = TestContext.Current.CancellationToken;
-        var remembered = EndpointSeal.Seal(Server);
-        _settings.Values[RendezvousDirectory.CacheSetting] = remembered;
+        var remembered = EndpointSeal.Seal(_server);
+        _settings.Values[RendezvousDirectory.CACHE_SETTING] = remembered;
         var directory = Create(new StubHandler(status, body));
 
-        Assert.Equal(Server, await directory.FindAsync(token));
-        Assert.Equal(remembered, _settings.Values[RendezvousDirectory.CacheSetting]);
+        Assert.Equal(_server, await directory.FindAsync(token));
+        Assert.Equal(remembered, _settings.Values[RendezvousDirectory.CACHE_SETTING]);
     }
 
     /// <summary>
@@ -74,8 +74,8 @@ public sealed class RendezvousDirectoryTests
 
         Assert.Null(await directory.FindAsync(token));
 
-        _settings.Values[RendezvousDirectory.CacheSetting] = EndpointSeal.Seal(Server);
-        Assert.Equal(Server, await directory.FindAsync(token));
+        _settings.Values[RendezvousDirectory.CACHE_SETTING] = EndpointSeal.Seal(_server);
+        Assert.Equal(_server, await directory.FindAsync(token));
     }
 
     /// <summary>
@@ -86,7 +86,7 @@ public sealed class RendezvousDirectoryTests
     public async Task Find_RefusesAnOversizedFile()
     {
         var token = TestContext.Current.CancellationToken;
-        var padded = $$"""{ "rendezvous": "{{EndpointSeal.Seal(Server)}}", "padding": "{{new string('x', RendezvousDirectory.MaxFileBytes)}}" }""";
+        var padded = $$"""{ "rendezvous": "{{EndpointSeal.Seal(_server)}}", "padding": "{{new string('x', RendezvousDirectory.MAX_FILE_BYTES)}}" }""";
         var directory = Create(new StubHandler(HttpStatusCode.OK, padded));
 
         Assert.Null(await directory.FindAsync(token));

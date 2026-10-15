@@ -12,7 +12,7 @@ public static class MediaFiles
     /// <summary>
     /// The size of each sample used by the quick identifier: 1 MiB.
     /// </summary>
-    public const int SampleSize = 1024 * 1024;
+    public const int SAMPLE_SIZE = 1024 * 1024;
 
     /// <summary>
     /// Computes the quick identifier of a file: SHA-256 over the length and three 1 MiB samples (start, middle, end).
@@ -38,11 +38,11 @@ public static class MediaFiles
         BinaryPrimitives.WriteInt64LittleEndian(header, length);
         hash.AppendData(header);
 
-        var buffer = new byte[SampleSize];
+        var buffer = new byte[SAMPLE_SIZE];
         foreach (var offset in SampleOffsets(length))
         {
             stream.Position = offset;
-            var read = await stream.ReadAtLeastAsync(buffer, (int)Math.Min(SampleSize, length - offset), throwOnEndOfStream: false, cancellationToken)
+            var read = await stream.ReadAtLeastAsync(buffer, (int)Math.Min(SAMPLE_SIZE, length - offset), throwOnEndOfStream: false, cancellationToken)
                 .ConfigureAwait(false);
             hash.AppendData(buffer, 0, read);
         }
@@ -96,8 +96,8 @@ public static class MediaFiles
             return [];
         }
 
-        var middle = Math.Max(0, (length / 2) - (SampleSize / 2));
-        var end = Math.Max(0, length - SampleSize);
+        var middle = Math.Max(0, (length / 2) - (SAMPLE_SIZE / 2));
+        var end = Math.Max(0, length - SAMPLE_SIZE);
         return new[] { 0L, middle, end }.Distinct();
     }
 }

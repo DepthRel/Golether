@@ -1,8 +1,8 @@
+using Microsoft.EntityFrameworkCore;
 using Golether.Core.Data.Context;
 using Golether.Core.Data.Entities;
 using Golether.Core.Data.Enums;
 using Golether.Core.Identity;
-using Microsoft.EntityFrameworkCore;
 
 namespace Golether.Core.Data.Stores;
 

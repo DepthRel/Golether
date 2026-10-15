@@ -47,7 +47,7 @@ public sealed record AwgCliOptions
     public bool UseAppleScriptElevation { get; init; }
 
     /// <summary>
-    /// Gets the executable started with <see cref="TunnelHelper.Switch"/> through the UAC prompt on Windows, or
+    /// Gets the executable started with <see cref="TunnelHelper.SWITCH"/> through the UAC prompt on Windows, or
     /// <see langword="null"/> to call AmneziaWG directly (the application already runs as administrator).
     /// </summary>
     public string? HelperExecutable { get; init; }

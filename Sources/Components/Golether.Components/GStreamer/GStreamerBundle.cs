@@ -107,8 +107,8 @@ public static class GStreamerBundle
     /// <param name="root">The bundle or installation.</param>
     /// <returns><see langword="true"/> when the core library and all plugins are present.</returns>
     public static bool IsComplete(string root)
-        => File.Exists(Path.Combine(root, "bin", "gstreamer-1.0-0.dll"))
-           && Plugins.All(p => File.Exists(Path.Combine(root, PluginDirectory, p + ".dll")));
+        => File.Exists(Path.Combine(root, "bin", "gstreamer-1.0-0.dll")) &&
+           Plugins.All(p => File.Exists(Path.Combine(root, PluginDirectory, p + ".dll")));
 
     /// <summary>
     /// Throws when a file is missing.

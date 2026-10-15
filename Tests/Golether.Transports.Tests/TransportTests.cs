@@ -14,7 +14,7 @@ public sealed class TransportTests
     /// <summary>
     /// Transport options for tests: a free port and short timeouts.
     /// </summary>
-    private static readonly TlsTransportOptions Options = new() { Port = 0, HandshakeTimeout = TimeSpan.FromSeconds(10) };
+    private static readonly TlsTransportOptions _options = new() { Port = 0, HandshakeTimeout = TimeSpan.FromSeconds(10) };
 
     /// <summary>
     /// Frames of different sizes arrive intact and the end of the stream is reported as <see langword="null"/>.
@@ -64,9 +64,9 @@ public sealed class TransportTests
     {
         using var server = DeviceIdentity.CreateNew(TimeProvider.System);
         using var client = DeviceIdentity.CreateNew(TimeProvider.System);
-        await using var listener = new TlsPeerListener(server, Options);
+        await using var listener = new TlsPeerListener(server, _options);
         listener.Start();
-        var connector = new TlsPeerConnector(client, Options);
+        var connector = new TlsPeerConnector(client, _options);
         var token = TestContext.Current.CancellationToken;
 
         var accepting = listener.AcceptAsync(token).AsTask();
@@ -94,9 +94,9 @@ public sealed class TransportTests
     {
         using var server = DeviceIdentity.CreateNew(TimeProvider.System);
         using var client = DeviceIdentity.CreateNew(TimeProvider.System);
-        await using var listener = new TlsPeerListener(server, Options);
+        await using var listener = new TlsPeerListener(server, _options);
         listener.Start();
-        var connector = new TlsPeerConnector(client, Options);
+        var connector = new TlsPeerConnector(client, _options);
         var token = TestContext.Current.CancellationToken;
 
         var accepting = listener.AcceptAsync(token).AsTask();
@@ -117,9 +117,9 @@ public sealed class TransportTests
         using var server = DeviceIdentity.CreateNew(TimeProvider.System);
         using var impostorExpected = DeviceIdentity.CreateNew(TimeProvider.System);
         using var client = DeviceIdentity.CreateNew(TimeProvider.System);
-        await using var listener = new TlsPeerListener(server, Options);
+        await using var listener = new TlsPeerListener(server, _options);
         listener.Start();
-        var connector = new TlsPeerConnector(client, Options);
+        var connector = new TlsPeerConnector(client, _options);
 
         var error = await Assert.ThrowsAsync<PeerAuthenticationException>(() => connector.ConnectAsync(
             new PeerEndpoint("127.0.0.1", listener.Port), impostorExpected.PeerId, StreamPurpose.Control, TestContext.Current.CancellationToken));
@@ -135,13 +135,13 @@ public sealed class TransportTests
         using var client = DeviceIdentity.CreateNew(TimeProvider.System);
         using var server = DeviceIdentity.CreateNew(TimeProvider.System);
         int port;
-        await using (var probe = new TlsPeerListener(server, Options))
+        await using (var probe = new TlsPeerListener(server, _options))
         {
             probe.Start();
             port = probe.Port;
         }
 
-        var connector = new TlsPeerConnector(client, Options);
+        var connector = new TlsPeerConnector(client, _options);
         await Assert.ThrowsAsync<IOException>(() => connector.ConnectAsync(
             new PeerEndpoint("127.0.0.1", port), server.PeerId, StreamPurpose.Control, TestContext.Current.CancellationToken));
     }

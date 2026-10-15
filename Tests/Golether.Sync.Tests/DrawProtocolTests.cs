@@ -24,9 +24,9 @@ public sealed class DrawProtocolTests
         Assert.Null(DrawMessage.Create("AB12", StrokePhase.Continue, [new StrokePoint(float.NaN, 0)]));
         Assert.Null(DrawMessage.Create("zz", StrokePhase.Start, [new StrokePoint(0.5f, 0.5f)]));
         Assert.Null(DrawMessage.Create(string.Empty, StrokePhase.Start, [new StrokePoint(0.5f, 0.5f)]));
-        Assert.Null(DrawMessage.Create(new string('A', DrawMessage.MaxIdLength + 1), StrokePhase.Start, [new StrokePoint(0.5f, 0.5f)]));
+        Assert.Null(DrawMessage.Create(new string('A', DrawMessage.MAX_ID_LENGTH + 1), StrokePhase.Start, [new StrokePoint(0.5f, 0.5f)]));
         Assert.Null(DrawMessage.Create("AB12", (StrokePhase)9, [new StrokePoint(0.5f, 0.5f)]));
-        Assert.Null(DrawMessage.Create("AB12", StrokePhase.Start, new StrokePoint[DrawMessage.MaxPoints + 1]));
+        Assert.Null(DrawMessage.Create("AB12", StrokePhase.Start, new StrokePoint[DrawMessage.MAX_POINTS + 1]));
     }
 
     /// <summary>

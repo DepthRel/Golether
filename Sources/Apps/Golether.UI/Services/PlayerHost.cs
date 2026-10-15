@@ -1,11 +1,11 @@
+using Microsoft.Extensions.Logging;
 using Golether.Core.Data.Enums;
 using Golether.Core.Playback;
 using Golether.Core.Time;
 using Golether.Localization;
+using Golether.Media.Player;
 using Golether.Media.Player.Mpv;
 using Golether.Media.Player.Simulation;
-using Golether.Media.Player;
-using Microsoft.Extensions.Logging;
 
 namespace Golether.UI.Services;
 
@@ -21,7 +21,7 @@ public sealed class PlayerHost : IPlaybackController, ILocalPlayerControls
     /// <summary>
     /// The simulated player.
     /// </summary>
-    private readonly SimulatedPlayer _simulated = new(StopwatchMonotonicClock.Instance, TimeSpan.FromHours(3));
+    private readonly SimulatedPlayer _simulated = new(SystemMonotonicClock.Instance, TimeSpan.FromHours(3));
 
     /// <summary>
     /// The logger factory.

@@ -15,15 +15,19 @@
 
 ## Interface language
 
-Golether speaks English and Russian. On the first start the language follows the operating system: a Russian system
-gets the Russian interface, any other gets English. The choice is remembered, and later starts use it instead of the
-system language.
+Golether speaks English, German, French, Spanish, Portuguese and Russian. On the first start the language follows the
+operating system: a system in one of these languages gets it, whatever the region (Swiss German, Canadian French,
+Brazilian Portuguese and so on), and any other language gets English. The choice is remembered, and later starts use
+it instead of the system language.
 
 To change the language, open **Settings** (the button at the top right), section **General settings**: the list
 shows the flag and the name of every language. After **Apply** every text changes at once, no restart is needed, and
 the choice is stored. Error messages use the same language. The reasons of a refusal sent by the host are shown in
-your language even when the host uses another one. The words of the verification code are always Russian: they are
-read aloud, and both sides must see exactly the same.
+your language even when the host uses another one.
+
+The words of the verification code are shown in your language too. Every language names the same 64 things, so when
+the host uses another language, their words are translations of yours: *owl · lighthouse · wind · 47* on one screen is
+*Eule · Leuchtturm · Wind · 47* on the other. Compare the meaning of the words and the number.
 
 ## Show a film (you are the host)
 

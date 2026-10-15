@@ -14,7 +14,7 @@ public sealed class FilePermissionSecretProtector : ISecretProtector
     /// <summary>
     /// The header that marks unencrypted blobs.
     /// </summary>
-    private static readonly byte[] Header = "GLTPLAIN1"u8.ToArray();
+    private static readonly byte[] _header = "GLTPLAIN1"u8.ToArray();
 
     /// <inheritdoc />
     public string Description => "file permissions (owner only)";
@@ -22,20 +22,20 @@ public sealed class FilePermissionSecretProtector : ISecretProtector
     /// <inheritdoc />
     public byte[] Protect(ReadOnlySpan<byte> plain)
     {
-        var result = new byte[Header.Length + plain.Length];
-        Header.CopyTo(result, 0);
-        plain.CopyTo(result.AsSpan(Header.Length));
+        var result = new byte[_header.Length + plain.Length];
+        _header.CopyTo(result, 0);
+        plain.CopyTo(result.AsSpan(_header.Length));
         return result;
     }
 
     /// <inheritdoc />
     public byte[] Unprotect(ReadOnlySpan<byte> protectedData)
     {
-        if (!protectedData.StartsWith(Header))
+        if (!protectedData.StartsWith(_header))
         {
             throw new CryptographicException("The secret was not written by this protector.");
         }
 
-        return protectedData[Header.Length..].ToArray();
+        return protectedData[_header.Length..].ToArray();
     }
 }

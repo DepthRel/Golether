@@ -1,11 +1,11 @@
 using System.Security.Cryptography;
 using System.Text.Json;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 using Golether.Components.Catalog;
 using Golether.Components.GStreamer;
 using Golether.Core.Data.Enums;
 using Golether.Localization;
-using Microsoft.Extensions.Logging.Abstractions;
-using Microsoft.Extensions.Logging;
 
 namespace Golether.Components.Installation;
 
@@ -149,7 +149,7 @@ public sealed class ComponentInstaller
 
             progress?.Report(new InstallProgress(InstallStage.Finishing, package.Size, package.Size));
             var marker = new ComponentMarker(package.Id, package.Version, package.RuntimeIdentifier, package.Sha256, _timeProvider.GetUtcNow());
-            await File.WriteAllBytesAsync(Path.Combine(staging, ComponentMarker.FileName), JsonSerializer.SerializeToUtf8Bytes(marker, MarkerJson), cancellationToken)
+            await File.WriteAllBytesAsync(Path.Combine(staging, ComponentMarker.FILE_NAME), JsonSerializer.SerializeToUtf8Bytes(marker, MarkerJson), cancellationToken)
                 .ConfigureAwait(false);
 
             if (Directory.Exists(target))
@@ -210,32 +210,35 @@ public sealed class ComponentInstaller
             response.EnsureSuccessStatusCode();
             using var hash = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
             await using (var source = await response.Content.ReadAsStreamAsync(cancellationToken).ConfigureAwait(false))
-            await using (var target = new FileStream(partial, FileMode.Create, FileAccess.Write, FileShare.None, 1 << 16, useAsync: true))
             {
-                var buffer = new byte[1 << 16];
-                long total = 0;
-                int read;
-                while ((read = await source.ReadAsync(buffer, cancellationToken).ConfigureAwait(false)) > 0)
+                await using (var target = new FileStream(partial, FileMode.Create, FileAccess.Write, FileShare.None, 1 << 16, useAsync: true))
                 {
-                    total += read;
-                    if (total > package.Size)
+                    var buffer = new byte[1 << 16];
+                    long total = 0;
+                    int read;
+                    while ((read = await source.ReadAsync(buffer, cancellationToken).ConfigureAwait(false)) > 0)
                     {
-                        throw new ComponentInstallException(Texts.Get("Install.Error.DownloadTooLarge"));
+                        total += read;
+                        if (total > package.Size)
+                        {
+                            throw new ComponentInstallException(Texts.Get("Install.Error.DownloadTooLarge"));
+                        }
+
+                        hash.AppendData(buffer, 0, read);
+                        await target.WriteAsync(buffer.AsMemory(0, read), cancellationToken).ConfigureAwait(false);
+                        progress?.Report(new InstallProgress(InstallStage.Downloading, total, package.Size));
                     }
 
-                    hash.AppendData(buffer, 0, read);
-                    await target.WriteAsync(buffer.AsMemory(0, read), cancellationToken).ConfigureAwait(false);
-                    progress?.Report(new InstallProgress(InstallStage.Downloading, total, package.Size));
-                }
-
-                progress?.Report(new InstallProgress(InstallStage.Verifying, total, package.Size));
-                var actual = Convert.ToHexStringLower(hash.GetHashAndReset());
-                if (total != package.Size || actual != package.Sha256)
-                {
-                    throw new ComponentInstallException(Texts.Get("Install.Error.ChecksumMismatch"));
+                    progress?.Report(new InstallProgress(InstallStage.Verifying, total, package.Size));
+                    var actual = Convert.ToHexStringLower(hash.GetHashAndReset());
+                    if (total != package.Size || actual != package.Sha256)
+                    {
+                        throw new ComponentInstallException(Texts.Get("Install.Error.ChecksumMismatch"));
+                    }
                 }
             }
 
+            // The file is closed only now, so it can be moved into place.
             File.Move(partial, file, overwrite: true);
             return file;
         }
@@ -337,7 +340,7 @@ public sealed class ComponentInstaller
 
         // The package puts the files into an AmneziaWG folder and leaves a copy of the .msi beside it; only the
         // three files are kept.
-        var target = Path.Combine(staging, AmneziaWgBundle.DirectoryName);
+        var target = Path.Combine(staging, AmneziaWgBundle.DIRECTORY_NAME);
         Directory.CreateDirectory(target);
         foreach (var name in AmneziaWgBundle.Files)
         {

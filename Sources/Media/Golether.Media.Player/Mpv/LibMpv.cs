@@ -1,5 +1,6 @@
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
+using Golether.Media.Player.Enums;
 
 namespace Golether.Media.Player.Mpv;
 
@@ -11,13 +12,13 @@ internal static unsafe partial class LibMpv
     /// <summary>
     /// The logical library name resolved by <see cref="MpvLibraryResolver"/>.
     /// </summary>
-    public const string LibraryName = "golether-libmpv";
+    public const string LIBRARY_NAME = "golether-libmpv";
 
     /// <summary>
     /// <c>mpv_client_api_version</c>.
     /// </summary>
     /// <returns>The API version: major in the upper 16 bits.</returns>
-    [LibraryImport(LibraryName, EntryPoint = "mpv_client_api_version")]
+    [LibraryImport(LIBRARY_NAME, EntryPoint = "mpv_client_api_version")]
     [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
     public static partial ulong ClientApiVersion();
 
@@ -25,7 +26,7 @@ internal static unsafe partial class LibMpv
     /// <c>mpv_create</c>.
     /// </summary>
     /// <returns>The handle, or zero on failure.</returns>
-    [LibraryImport(LibraryName, EntryPoint = "mpv_create")]
+    [LibraryImport(LIBRARY_NAME, EntryPoint = "mpv_create")]
     [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
     public static partial nint Create();
 
@@ -34,7 +35,7 @@ internal static unsafe partial class LibMpv
     /// </summary>
     /// <param name="handle">The handle.</param>
     /// <returns>An error code.</returns>
-    [LibraryImport(LibraryName, EntryPoint = "mpv_initialize")]
+    [LibraryImport(LIBRARY_NAME, EntryPoint = "mpv_initialize")]
     [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
     public static partial int Initialize(nint handle);
 
@@ -42,7 +43,7 @@ internal static unsafe partial class LibMpv
     /// <c>mpv_terminate_destroy</c>.
     /// </summary>
     /// <param name="handle">The handle.</param>
-    [LibraryImport(LibraryName, EntryPoint = "mpv_terminate_destroy")]
+    [LibraryImport(LIBRARY_NAME, EntryPoint = "mpv_terminate_destroy")]
     [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
     public static partial void TerminateDestroy(nint handle);
 
@@ -53,7 +54,7 @@ internal static unsafe partial class LibMpv
     /// <param name="name">The option name.</param>
     /// <param name="value">The value.</param>
     /// <returns>An error code.</returns>
-    [LibraryImport(LibraryName, EntryPoint = "mpv_set_option_string", StringMarshalling = StringMarshalling.Utf8)]
+    [LibraryImport(LIBRARY_NAME, EntryPoint = "mpv_set_option_string", StringMarshalling = StringMarshalling.Utf8)]
     [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
     public static partial int SetOptionString(nint handle, string name, string value);
 
@@ -64,7 +65,7 @@ internal static unsafe partial class LibMpv
     /// <param name="name">The property name.</param>
     /// <param name="value">The value.</param>
     /// <returns>An error code.</returns>
-    [LibraryImport(LibraryName, EntryPoint = "mpv_set_property_string", StringMarshalling = StringMarshalling.Utf8)]
+    [LibraryImport(LIBRARY_NAME, EntryPoint = "mpv_set_property_string", StringMarshalling = StringMarshalling.Utf8)]
     [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
     public static partial int SetPropertyString(nint handle, string name, string value);
 
@@ -74,7 +75,7 @@ internal static unsafe partial class LibMpv
     /// <param name="handle">The handle.</param>
     /// <param name="name">The property name.</param>
     /// <returns>A UTF-8 string to release with <see cref="Free"/>, or zero when the property is unavailable.</returns>
-    [LibraryImport(LibraryName, EntryPoint = "mpv_get_property_string", StringMarshalling = StringMarshalling.Utf8)]
+    [LibraryImport(LIBRARY_NAME, EntryPoint = "mpv_get_property_string", StringMarshalling = StringMarshalling.Utf8)]
     [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
     public static partial nint GetPropertyString(nint handle, string name);
 
@@ -82,7 +83,7 @@ internal static unsafe partial class LibMpv
     /// <c>mpv_free</c>.
     /// </summary>
     /// <param name="data">Memory returned by libmpv.</param>
-    [LibraryImport(LibraryName, EntryPoint = "mpv_free")]
+    [LibraryImport(LIBRARY_NAME, EntryPoint = "mpv_free")]
     [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
     public static partial void Free(nint data);
 
@@ -118,7 +119,7 @@ internal static unsafe partial class LibMpv
     /// <param name="format">Must be <see cref="MpvFormat.Double"/>.</param>
     /// <param name="value">The value.</param>
     /// <returns>An error code.</returns>
-    [LibraryImport(LibraryName, EntryPoint = "mpv_set_property", StringMarshalling = StringMarshalling.Utf8)]
+    [LibraryImport(LIBRARY_NAME, EntryPoint = "mpv_set_property", StringMarshalling = StringMarshalling.Utf8)]
     [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
     public static partial int SetPropertyDouble(nint handle, string name, MpvFormat format, ref double value);
 
@@ -130,7 +131,7 @@ internal static unsafe partial class LibMpv
     /// <param name="format">Must be <see cref="MpvFormat.Flag"/>.</param>
     /// <param name="value">The value, 0 or 1.</param>
     /// <returns>An error code.</returns>
-    [LibraryImport(LibraryName, EntryPoint = "mpv_set_property", StringMarshalling = StringMarshalling.Utf8)]
+    [LibraryImport(LIBRARY_NAME, EntryPoint = "mpv_set_property", StringMarshalling = StringMarshalling.Utf8)]
     [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
     public static partial int SetPropertyFlag(nint handle, string name, MpvFormat format, ref int value);
 
@@ -140,7 +141,7 @@ internal static unsafe partial class LibMpv
     /// <param name="handle">The handle.</param>
     /// <param name="args">A null-terminated array of UTF-8 strings.</param>
     /// <returns>An error code.</returns>
-    [LibraryImport(LibraryName, EntryPoint = "mpv_command")]
+    [LibraryImport(LIBRARY_NAME, EntryPoint = "mpv_command")]
     [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
     public static partial int Command(nint handle, byte** args);
 
@@ -152,7 +153,7 @@ internal static unsafe partial class LibMpv
     /// <param name="name">The property name.</param>
     /// <param name="format">The value format.</param>
     /// <returns>An error code.</returns>
-    [LibraryImport(LibraryName, EntryPoint = "mpv_observe_property", StringMarshalling = StringMarshalling.Utf8)]
+    [LibraryImport(LIBRARY_NAME, EntryPoint = "mpv_observe_property", StringMarshalling = StringMarshalling.Utf8)]
     [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
     public static partial int ObserveProperty(nint handle, ulong userData, string name, MpvFormat format);
 
@@ -162,7 +163,7 @@ internal static unsafe partial class LibMpv
     /// <param name="handle">The handle.</param>
     /// <param name="minLevel">The minimal level, for example <c>warn</c>.</param>
     /// <returns>An error code.</returns>
-    [LibraryImport(LibraryName, EntryPoint = "mpv_request_log_messages", StringMarshalling = StringMarshalling.Utf8)]
+    [LibraryImport(LIBRARY_NAME, EntryPoint = "mpv_request_log_messages", StringMarshalling = StringMarshalling.Utf8)]
     [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
     public static partial int RequestLogMessages(nint handle, string minLevel);
 
@@ -172,7 +173,7 @@ internal static unsafe partial class LibMpv
     /// <param name="handle">The handle.</param>
     /// <param name="timeout">The timeout in seconds; negative waits forever.</param>
     /// <returns>A pointer to the event, valid until the next call.</returns>
-    [LibraryImport(LibraryName, EntryPoint = "mpv_wait_event")]
+    [LibraryImport(LIBRARY_NAME, EntryPoint = "mpv_wait_event")]
     [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
     public static partial MpvEvent* WaitEvent(nint handle, double timeout);
 
@@ -180,7 +181,7 @@ internal static unsafe partial class LibMpv
     /// <c>mpv_wakeup</c>.
     /// </summary>
     /// <param name="handle">The handle.</param>
-    [LibraryImport(LibraryName, EntryPoint = "mpv_wakeup")]
+    [LibraryImport(LIBRARY_NAME, EntryPoint = "mpv_wakeup")]
     [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
     public static partial void Wakeup(nint handle);
 
@@ -189,7 +190,7 @@ internal static unsafe partial class LibMpv
     /// </summary>
     /// <param name="error">The error code.</param>
     /// <returns>A static UTF-8 string.</returns>
-    [LibraryImport(LibraryName, EntryPoint = "mpv_error_string")]
+    [LibraryImport(LIBRARY_NAME, EntryPoint = "mpv_error_string")]
     [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
     public static partial nint ErrorString(int error);
 
@@ -201,7 +202,7 @@ internal static unsafe partial class LibMpv
     /// <param name="userData">The user data passed to <paramref name="open"/>.</param>
     /// <param name="open"><c>int open(void *user_data, char *uri, mpv_stream_cb_info *info)</c>.</param>
     /// <returns>An error code.</returns>
-    [LibraryImport(LibraryName, EntryPoint = "mpv_stream_cb_add_ro", StringMarshalling = StringMarshalling.Utf8)]
+    [LibraryImport(LIBRARY_NAME, EntryPoint = "mpv_stream_cb_add_ro", StringMarshalling = StringMarshalling.Utf8)]
     [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
     public static partial int StreamCbAddRo(nint handle, string protocol, nint userData, delegate* unmanaged[Cdecl]<nint, byte*, MpvStreamCallbacks*, int> open);
 

@@ -22,12 +22,12 @@ public sealed class TimelineSlider : Slider
     /// <summary>
     /// The height of the track line, the same as the Fluent slider uses.
     /// </summary>
-    private const double TrackHeight = 4;
+    private const double TRACK_HEIGHT = 4;
 
     /// <summary>
     /// The bar under the track: the parts that can be played without waiting.
     /// </summary>
-    private readonly RangeBar _bar = new() { IsHitTestVisible = false, VerticalAlignment = VerticalAlignment.Center, Height = TrackHeight };
+    private readonly RangeBar _bar = new() { IsHitTestVisible = false, VerticalAlignment = VerticalAlignment.Center, Height = TRACK_HEIGHT };
 
     /// <summary>
     /// The track of the slider, or <see langword="null"/> before the template is applied.
@@ -99,9 +99,9 @@ public sealed class TimelineSlider : Slider
     /// <param name="e">The event data.</param>
     private void OnPressedBeside(object? sender, PointerPressedEventArgs e)
     {
-        if (_track is not { } track
-            || !e.GetCurrentPoint(this).Properties.IsLeftButtonPressed
-            || (e.Source as Visual)?.GetSelfAndVisualAncestors().Contains(track) == true)
+        if (_track is not { } track ||
+            !e.GetCurrentPoint(this).Properties.IsLeftButtonPressed ||
+            (e.Source as Visual)?.GetSelfAndVisualAncestors().Contains(track) == true)
         {
             return;
         }

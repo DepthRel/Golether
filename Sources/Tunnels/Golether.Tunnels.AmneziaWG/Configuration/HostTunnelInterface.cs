@@ -18,12 +18,12 @@ public sealed record HostTunnelInterface
     /// <summary>
     /// The prefix length of the tunnel subnet.
     /// </summary>
-    public const int SubnetPrefix = 24;
+    public const int SUBNET_PREFIX = 24;
 
     /// <summary>
     /// The default keepalive interval in seconds; it also keeps NAT mappings open.
     /// </summary>
-    public const int KeepaliveSeconds = 25;
+    public const int KEEPALIVE_SECONDS = 25;
 
     /// <summary>
     /// Gets the interface name (at most 15 characters), for example <c>golether0</c>.
@@ -167,7 +167,7 @@ public sealed record HostTunnelInterface
             new AwgInterface
             {
                 PrivateKey = Keys.PrivateKey,
-                Address = $"{HostAddress}/{SubnetPrefix}",
+                Address = $"{HostAddress}/{SUBNET_PREFIX}",
                 ListenPort = ListenPort,
                 Junk = Junk,
                 Obfuscation = Obfuscation,

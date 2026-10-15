@@ -2,6 +2,7 @@ using System.Net;
 using System.Net.Sockets;
 using System.Threading.Channels;
 using Golether.Core.Data.Enums;
+using Golether.Core.Enums;
 using Golether.Core.Networking;
 using Golether.Security.Identity;
 using Golether.Transports;
@@ -20,7 +21,7 @@ public sealed class MeetingTests
     /// <summary>
     /// Short client timeouts, so a failing test does not hang.
     /// </summary>
-    private static readonly RendezvousClientOptions ClientOptions = new()
+    private static readonly RendezvousClientOptions _clientOptions = new()
     {
         ConnectTimeout = TimeSpan.FromSeconds(5),
         AnswerTimeout = TimeSpan.FromSeconds(10),
@@ -31,7 +32,7 @@ public sealed class MeetingTests
     /// <summary>
     /// TLS options for tests: a free port and a short handshake.
     /// </summary>
-    private static readonly TlsTransportOptions TlsOptions = new() { Port = 0, HandshakeTimeout = TimeSpan.FromSeconds(10) };
+    private static readonly TlsTransportOptions _tlsOptions = new() { Port = 0, HandshakeTimeout = TimeSpan.FromSeconds(10) };
 
     /// <summary>
     /// The participant gets a socket connected straight to the host (not to the server), and the host gets the
@@ -45,10 +46,10 @@ public sealed class MeetingTests
         using var identity = DeviceIdentity.CreateNew(TimeProvider.System);
         var point = server.NewPoint();
         var punched = Channel.CreateUnbounded<Socket>();
-        await using var host = new RendezvousHost(point, Owner(identity), socket => punched.Writer.TryWrite(socket), ClientOptions);
+        await using var host = new RendezvousHost(point, Owner(identity), socket => punched.Writer.TryWrite(socket), _clientOptions);
         await StartAndWaitAsync(host, token);
 
-        using var outgoing = await new RendezvousDialer(ClientOptions).DialAsync(point, token);
+        using var outgoing = await new RendezvousDialer(_clientOptions).DialAsync(point, token);
         await outgoing.SendAsync("hello"u8.ToArray(), SocketFlags.None, token);
         using var incoming = await punched.Reader.ReadAsync(token).AsTask().WaitAsync(TimeSpan.FromSeconds(20), token);
 
@@ -71,12 +72,12 @@ public sealed class MeetingTests
         await using var server = await TestServer.StartAsync();
         using var hostIdentity = DeviceIdentity.CreateNew(TimeProvider.System);
         using var guestIdentity = DeviceIdentity.CreateNew(TimeProvider.System);
-        await using var listener = new TlsPeerListener(hostIdentity, TlsOptions);
+        await using var listener = new TlsPeerListener(hostIdentity, _tlsOptions);
         listener.Start();
         var point = server.NewPoint();
-        await using var host = new RendezvousHost(point, Owner(hostIdentity), socket => listener.Adopt(socket), ClientOptions);
+        await using var host = new RendezvousHost(point, Owner(hostIdentity), socket => listener.Adopt(socket), _clientOptions);
         await StartAndWaitAsync(host, token);
-        var connector = new RendezvousPeerConnector(new TlsPeerConnector(guestIdentity, TlsOptions), new RendezvousDialer(ClientOptions));
+        var connector = new RendezvousPeerConnector(new TlsPeerConnector(guestIdentity, _tlsOptions), new RendezvousDialer(_clientOptions));
 
         var accepting = listener.AcceptAsync(token).AsTask();
         await using var outgoing = await connector.ConnectAsync(point, hostIdentity.PeerId, StreamPurpose.Control, token);
@@ -103,12 +104,12 @@ public sealed class MeetingTests
         using var hostIdentity = DeviceIdentity.CreateNew(TimeProvider.System);
         using var guestIdentity = DeviceIdentity.CreateNew(TimeProvider.System);
         using var expectedIdentity = DeviceIdentity.CreateNew(TimeProvider.System);
-        await using var listener = new TlsPeerListener(hostIdentity, TlsOptions);
+        await using var listener = new TlsPeerListener(hostIdentity, _tlsOptions);
         listener.Start();
         var point = server.NewPoint();
-        await using var host = new RendezvousHost(point, Owner(hostIdentity), socket => listener.Adopt(socket), ClientOptions);
+        await using var host = new RendezvousHost(point, Owner(hostIdentity), socket => listener.Adopt(socket), _clientOptions);
         await StartAndWaitAsync(host, token);
-        var connector = new RendezvousPeerConnector(new TlsPeerConnector(guestIdentity, TlsOptions), new RendezvousDialer(ClientOptions));
+        var connector = new RendezvousPeerConnector(new TlsPeerConnector(guestIdentity, _tlsOptions), new RendezvousDialer(_clientOptions));
 
         await Assert.ThrowsAsync<PeerAuthenticationException>(() => connector.ConnectAsync(point, expectedIdentity.PeerId, StreamPurpose.Control, token));
     }
@@ -124,12 +125,12 @@ public sealed class MeetingTests
         await using var server = await TestServer.StartAsync();
         using var hostIdentity = DeviceIdentity.CreateNew(TimeProvider.System);
         using var guestIdentity = DeviceIdentity.CreateNew(TimeProvider.System);
-        await using var listener = new TlsPeerListener(hostIdentity, TlsOptions);
+        await using var listener = new TlsPeerListener(hostIdentity, _tlsOptions);
         listener.Start();
         var point = server.NewPoint();
-        await using var host = new RendezvousHost(point, Owner(hostIdentity), socket => listener.Adopt(socket), ClientOptions);
+        await using var host = new RendezvousHost(point, Owner(hostIdentity), socket => listener.Adopt(socket), _clientOptions);
         await StartAndWaitAsync(host, token);
-        var connector = new RendezvousPeerConnector(new TlsPeerConnector(guestIdentity, TlsOptions), new RendezvousDialer(ClientOptions));
+        var connector = new RendezvousPeerConnector(new TlsPeerConnector(guestIdentity, _tlsOptions), new RendezvousDialer(_clientOptions));
 
         var streams = await Task.WhenAll(Enumerable.Range(0, 3).Select(_ => connector.ConnectAsync(point, hostIdentity.PeerId, StreamPurpose.MediaData, token)));
         for (var i = 0; i < streams.Length; i++)
@@ -158,23 +159,23 @@ public sealed class MeetingTests
         await using var server = await TestServer.StartAsync();
         using var hostIdentity = DeviceIdentity.CreateNew(TimeProvider.System);
         using var guestIdentity = DeviceIdentity.CreateNew(TimeProvider.System);
-        await using var listener = new TlsPeerListener(hostIdentity, TlsOptions);
+        await using var listener = new TlsPeerListener(hostIdentity, _tlsOptions);
         listener.Start();
         var point = server.NewPoint();
-        var hostOptions = ClientOptions with { MaxConcurrentAnswers = 4 };
+        var hostOptions = _clientOptions with { MaxConcurrentAnswers = 4 };
         await using var host = new RendezvousHost(point, Owner(hostIdentity), socket => listener.Adopt(socket), hostOptions);
         await StartAndWaitAsync(host, token);
-        var connector = new RendezvousPeerConnector(new TlsPeerConnector(guestIdentity, TlsOptions), new RendezvousDialer(ClientOptions));
+        var connector = new RendezvousPeerConnector(new TlsPeerConnector(guestIdentity, _tlsOptions), new RendezvousDialer(_clientOptions));
 
-        const int Wanted = 12;
+        const int WANTED = 12;
         var accepting = Task.Run(async () =>
         {
-            for (var i = 0; i < Wanted; i++)
+            for (var i = 0; i < WANTED; i++)
             {
                 await using var accepted = await listener.AcceptAsync(token).AsTask().WaitAsync(TimeSpan.FromSeconds(30), token);
             }
         }, token);
-        var streams = await Task.WhenAll(Enumerable.Range(0, Wanted).Select(_ => connector.ConnectAsync(point, hostIdentity.PeerId, StreamPurpose.MediaData, token)));
+        var streams = await Task.WhenAll(Enumerable.Range(0, WANTED).Select(_ => connector.ConnectAsync(point, hostIdentity.PeerId, StreamPurpose.MediaData, token)));
         await accepting;
 
         foreach (var stream in streams)
@@ -182,7 +183,7 @@ public sealed class MeetingTests
             await stream.DisposeAsync();
         }
 
-        Assert.Equal(Wanted, server.Statistics.Snapshot().MeetingsIntroduced);
+        Assert.Equal(WANTED, server.Statistics.Snapshot().MeetingsIntroduced);
     }
 
     /// <summary>
@@ -198,24 +199,24 @@ public sealed class MeetingTests
         using var identity = DeviceIdentity.CreateNew(TimeProvider.System);
         var point = server.NewPoint();
         var punched = Channel.CreateUnbounded<Socket>();
-        await using var host = new RendezvousHost(point, Owner(identity), socket => punched.Writer.TryWrite(socket), ClientOptions);
+        await using var host = new RendezvousHost(point, Owner(identity), socket => punched.Writer.TryWrite(socket), _clientOptions);
         await StartAndWaitAsync(host, token);
 
-        using var outgoing = await new RendezvousDialer(ClientOptions).DialAsync(point, token);
+        using var outgoing = await new RendezvousDialer(_clientOptions).DialAsync(point, token);
         await outgoing.SendAsync("hello"u8.ToArray(), SocketFlags.None, token);
         using var incoming = await punched.Reader.ReadAsync(token).AsTask().WaitAsync(TimeSpan.FromSeconds(20), token);
         var unknown = server.NewPoint();
-        await Assert.ThrowsAsync<RendezvousException>(() => new RendezvousDialer(ClientOptions).DialAsync(unknown, token));
+        await Assert.ThrowsAsync<RendezvousException>(() => new RendezvousDialer(_clientOptions).DialAsync(unknown, token));
 
         var events = server.Journal.Read(0).Entries;
         var tag = Golether.Web.Server.Infrastructure.ServerJournal.TagOf(point.Room);
-        var registered = Assert.Single(events, e => e.Event == Golether.Web.Server.Contracts.JournalEvent.HostRegistered);
+        var registered = Assert.Single(events, e => e.Event == JournalEvent.HostRegistered);
         Assert.Equal(identity.PeerId.ToShortString(), registered.Host);
         Assert.Equal(tag, registered.Room);
         Assert.StartsWith("127.0.0.1:", registered.Address, StringComparison.Ordinal);
-        Assert.Contains(events, e => e.Event == Golether.Web.Server.Contracts.JournalEvent.MeetingRequested && e.Room == tag);
-        Assert.Contains(events, e => e.Event == Golether.Web.Server.Contracts.JournalEvent.MeetingIntroduced && e.Room == tag && e.Host == registered.Host);
-        var failed = Assert.Single(events, e => e.Event == Golether.Web.Server.Contracts.JournalEvent.MeetingFailed);
+        Assert.Contains(events, e => e.Event == JournalEvent.MeetingRequested && e.Room == tag);
+        Assert.Contains(events, e => e.Event == JournalEvent.MeetingIntroduced && e.Room == tag && e.Host == registered.Host);
+        var failed = Assert.Single(events, e => e.Event == JournalEvent.MeetingFailed);
         Assert.Equal(RendezvousError.RoomNotFound, failed.Reason);
         Assert.DoesNotContain(events, e => (e.Room ?? string.Empty).Contains(point.Room, StringComparison.Ordinal) || (e.Detail ?? string.Empty).Contains(point.Room, StringComparison.Ordinal));
         Assert.Equal(events.Select(e => e.Sequence), events.Select(e => e.Sequence).Order());
@@ -229,7 +230,7 @@ public sealed class MeetingTests
     {
         await using var server = await TestServer.StartAsync();
 
-        var error = await Assert.ThrowsAsync<RendezvousException>(() => new RendezvousDialer(ClientOptions).DialAsync(server.NewPoint(), TestContext.Current.CancellationToken));
+        var error = await Assert.ThrowsAsync<RendezvousException>(() => new RendezvousDialer(_clientOptions).DialAsync(server.NewPoint(), TestContext.Current.CancellationToken));
 
         Assert.Equal(RendezvousError.RoomNotFound, error.Error);
         Assert.False(string.IsNullOrWhiteSpace(error.Message));
@@ -247,7 +248,7 @@ public sealed class MeetingTests
         probe.Stop();
         var point = new RendezvousPoint(new PeerEndpoint("127.0.0.1", port), RendezvousPoint.CreateRoom());
 
-        var error = await Assert.ThrowsAsync<RendezvousException>(() => new RendezvousDialer(ClientOptions).DialAsync(point, TestContext.Current.CancellationToken));
+        var error = await Assert.ThrowsAsync<RendezvousException>(() => new RendezvousDialer(_clientOptions).DialAsync(point, TestContext.Current.CancellationToken));
 
         Assert.Equal(RendezvousError.Unreachable, error.Error);
     }
@@ -263,7 +264,7 @@ public sealed class MeetingTests
         using var identity = DeviceIdentity.CreateNew(TimeProvider.System);
         using var other = DeviceIdentity.CreateNew(TimeProvider.System);
         var forged = new RendezvousOwner(identity.PublicCertificateDer, data => other.Sign(data));
-        await using var host = new RendezvousHost(server.NewPoint(), forged, socket => socket.Dispose(), ClientOptions);
+        await using var host = new RendezvousHost(server.NewPoint(), forged, socket => socket.Dispose(), _clientOptions);
 
         var error = await WaitForErrorAsync(host, token);
 
@@ -282,9 +283,9 @@ public sealed class MeetingTests
         using var first = DeviceIdentity.CreateNew(TimeProvider.System);
         using var second = DeviceIdentity.CreateNew(TimeProvider.System);
         var point = server.NewPoint();
-        await using var owner = new RendezvousHost(point, Owner(first), socket => socket.Dispose(), ClientOptions);
+        await using var owner = new RendezvousHost(point, Owner(first), socket => socket.Dispose(), _clientOptions);
         await StartAndWaitAsync(owner, token);
-        await using var intruder = new RendezvousHost(point, Owner(second), socket => socket.Dispose(), ClientOptions);
+        await using var intruder = new RendezvousHost(point, Owner(second), socket => socket.Dispose(), _clientOptions);
 
         var error = await WaitForErrorAsync(intruder, token);
 
@@ -304,7 +305,7 @@ public sealed class MeetingTests
         using var identity = DeviceIdentity.CreateNew(TimeProvider.System);
         var point = server.NewPoint();
         await using var silent = await SilentHost.RegisterAsync(point, identity, token);
-        var dialer = new RendezvousDialer(ClientOptions);
+        var dialer = new RendezvousDialer(_clientOptions);
 
         var waiting = dialer.DialAsync(point, token);
         await Task.Delay(300, token);
@@ -332,17 +333,17 @@ public sealed class MeetingTests
         using var giveUp = CancellationTokenSource.CreateLinkedTokenSource(token);
         giveUp.CancelAfter(TimeSpan.FromMilliseconds(500));
 
-        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => new RendezvousDialer(ClientOptions).DialAsync(point, giveUp.Token));
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => new RendezvousDialer(_clientOptions).DialAsync(point, giveUp.Token));
 
         var deadline = DateTime.UtcNow.AddSeconds(5);
-        while (!server.Journal.Read(0).Entries.Any(e => e.Event == Golether.Web.Server.Contracts.JournalEvent.MeetingCancelled) && DateTime.UtcNow < deadline)
+        while (!server.Journal.Read(0).Entries.Any(e => e.Event == JournalEvent.MeetingCancelled) && DateTime.UtcNow < deadline)
         {
             await Task.Delay(50, token);
         }
 
         var events = server.Journal.Read(0).Entries;
-        Assert.Contains(events, e => e.Event == Golether.Web.Server.Contracts.JournalEvent.MeetingCancelled);
-        Assert.DoesNotContain(events, e => e.Event == Golether.Web.Server.Contracts.JournalEvent.MeetingFailed);
+        Assert.Contains(events, e => e.Event == JournalEvent.MeetingCancelled);
+        Assert.DoesNotContain(events, e => e.Event == JournalEvent.MeetingFailed);
     }
 
     /// <summary>
@@ -355,7 +356,7 @@ public sealed class MeetingTests
         await using var server = await TestServer.StartAsync();
         using var identity = DeviceIdentity.CreateNew(TimeProvider.System);
         var point = server.NewPoint();
-        var host = new RendezvousHost(point, Owner(identity), socket => socket.Dispose(), ClientOptions);
+        var host = new RendezvousHost(point, Owner(identity), socket => socket.Dispose(), _clientOptions);
         await StartAndWaitAsync(host, token);
         Assert.Equal(1, server.Rooms.Count);
 
@@ -366,7 +367,7 @@ public sealed class MeetingTests
         }
 
         Assert.Equal(0, server.Rooms.Count);
-        var error = await Assert.ThrowsAsync<RendezvousException>(() => new RendezvousDialer(ClientOptions).DialAsync(point, token));
+        var error = await Assert.ThrowsAsync<RendezvousException>(() => new RendezvousDialer(_clientOptions).DialAsync(point, token));
         Assert.Equal(RendezvousError.RoomNotFound, error.Error);
     }
 

@@ -1,7 +1,7 @@
 using System.Globalization;
 using Avalonia.Data.Converters;
 using Avalonia.Media;
-using Golether.UI.ViewModels;
+using Golether.UI.Enums;
 
 namespace Golether.UI.Controls;
 
@@ -18,31 +18,31 @@ public sealed class IndicatorLevelBrushConverter : IValueConverter
     /// <summary>
     /// The brush of healthy values.
     /// </summary>
-    private static readonly IBrush Good = new SolidColorBrush(Color.Parse("#62C28E"));
+    private static readonly IBrush _good = new SolidColorBrush(Color.Parse("#62C28E"));
 
     /// <summary>
     /// The brush of values that need attention.
     /// </summary>
-    private static readonly IBrush Warning = new SolidColorBrush(Color.Parse("#E6C34A"));
+    private static readonly IBrush _warning = new SolidColorBrush(Color.Parse("#E6C34A"));
 
     /// <summary>
     /// The brush of critical values.
     /// </summary>
-    private static readonly IBrush Critical = new SolidColorBrush(Color.Parse("#E0685A"));
+    private static readonly IBrush _critical = new SolidColorBrush(Color.Parse("#E0685A"));
 
     /// <summary>
     /// The brush of neutral values.
     /// </summary>
-    private static readonly IBrush Neutral = new SolidColorBrush(Color.Parse("#DDE7E5"));
+    private static readonly IBrush _neutral = new SolidColorBrush(Color.Parse("#DDE7E5"));
 
     /// <inheritdoc />
     public object Convert(object? value, Type targetType, object? parameter, CultureInfo culture)
         => value switch
         {
-            IndicatorLevel.Good => Good,
-            IndicatorLevel.Warning => Warning,
-            IndicatorLevel.Critical => Critical,
-            _ => Neutral,
+            IndicatorLevel.Good => _good,
+            IndicatorLevel.Warning => _warning,
+            IndicatorLevel.Critical => _critical,
+            _ => _neutral,
         };
 
     /// <inheritdoc />

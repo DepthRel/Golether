@@ -9,7 +9,7 @@ public sealed record ServerPaths(string SettingsFile)
     /// <summary>
     /// The settings file inside the folder of the server.
     /// </summary>
-    private static readonly string Relative = Path.Combine("config", "appsettings.json");
+    private static readonly string _relative = Path.Combine("config", "appsettings.json");
 
     /// <summary>
     /// Finds the settings of the server. The monitor lies in <c>monitor/</c> of the server folder (in every package
@@ -25,7 +25,7 @@ public sealed record ServerPaths(string SettingsFile)
         exists ??= File.Exists;
         for (var folder = new DirectoryInfo(baseDirectory); folder is not null; folder = folder.Parent)
         {
-            var candidate = Path.Combine(folder.FullName, Relative);
+            var candidate = Path.Combine(folder.FullName, _relative);
             if (exists(candidate))
             {
                 return new ServerPaths(candidate);
@@ -35,6 +35,6 @@ public sealed record ServerPaths(string SettingsFile)
         var installed = OperatingSystem.IsWindows()
             ? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles), "Golether Server")
             : OperatingSystem.IsMacOS() ? "/usr/local/golether-server" : "/opt/golether-server";
-        return new ServerPaths(Path.Combine(installed, Relative));
+        return new ServerPaths(Path.Combine(installed, _relative));
     }
 }

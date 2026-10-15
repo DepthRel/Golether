@@ -36,7 +36,7 @@ names are in camelCase. H is the host, P a participant.
 | `chat` | P → H → all | `id`, `kind` (`0` text, `1` reaction), `text`, `sender` | a chat message or a reaction; the host fills `sender` with the verified identifier, the value that was sent is discarded |
 | `draw` | P → H → all | `strokeId`, `phase` (`0` begin, `1` continue, `2` end), `points[]` (`x`, `y` as fractions of the picture), `sender` | a pen stroke over the video; the host fills `sender` with the verified identifier |
 | `avatar` | P → H → all | `image` (PNG, base64; empty resets), `sender` | a participant's picture, shown while the camera is off; the host fills `sender`; a new participant gets the avatars already chosen from the host |
-| `bye` | any | `reason` | leaving |
+| `bye` | any | `reason` | leaving; `reason` is always empty and is ignored by the receiver |
 
 `PlaybackState`: `state` (`0` paused, `1` playing), `position` (`hh:mm:ss.fffffff`), `referenceTime` (µs by the
 host's clock), `rate`, `version`, `origin`, `cause` (`0` initial, `1` play, `2` pause, `3` seek, `4` waiting for
@@ -62,7 +62,8 @@ a session: that is how the host removes an admitted participant.
 
 The `message` field of `rejected` is a short note for the log (the name of the reason in English); the participant
 does not show it but words the reason in the language of their own interface from the `reason` field. The host sends
-`bye` without `reason` for the same reason: texts for people do not travel over the network.
+`bye` without `reason` for the same reason: texts for people do not travel over the network. A participant ignores
+the field even when a host of another build fills it, and words the end of the session itself.
 
 The order of a connection: `hello` → (`pending`) → `welcome` | `rejected`. The token of an invitation works until
 its lifetime ends and serves everybody who was invited, but brings at most 16 join requests; trusted contacts may
@@ -198,6 +199,24 @@ The `meet` and `room` fields are optional and come only together: the host's ren
 Old versions do not read these fields. The protocol of the server itself is described in
 [RendezvousServer.md](RendezvousServer.md#protocol-version-1).
 
+## Verification code
+
+Both sides compute the code on their own; it never travels over the network.
+
+```
+hash   = SHA-256(UTF-8("golether-sas-v1|" + low + "|" + high + "|" + context))
+words  = the 24 bits of hash[0..2] (big-endian), cut into three numbers of 6 bits (0–63), the highest first
+number = uint16 little-endian of hash[3..4] mod 100
+```
+
+`low` and `high` are the two `PeerId`s in ordinal order, so the result does not depend on who computes it. The
+context of an entry is the token the participant presents in `hello`: the invitation token, or the
+`reconnectTicket` when coming back. The context of a tunnel is the `offerId` of its offer (see below).
+
+A word number is turned into a word only on the screen, by the language pack (`Verification.Word.00` …
+`Verification.Word.63`). Every language names the same 64 things in the same order, so the code is the same in every
+language, and two people with different interface languages see translations of each other's words.
+
 ## AmneziaWG packages
 
 `golether-awg:<offer|answer>:v1:<base64url(JSON body)>.<base64url(signature)>`.
@@ -214,4 +233,4 @@ The body of an answer: `offerId`, `participantName`, `participantCertificate`, `
 PSK = base64(SHA-256(ECDH(ephemeral P-256 keys))): the shared secret of two single-use keys, passed through SHA-256.
 A package with an incomplete body or with a key that is not on the P-256 curve counts as damaged.
 
-Verification code = `VerificationCode(hostPeerId, participantPeerId, "awg:" + offerId)`.
+Verification code = `VerificationCode(hostPeerId, participantPeerId, offerId)`.

@@ -1,4 +1,3 @@
-using System.IO;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Input;
@@ -96,7 +95,7 @@ public sealed partial class AvatarDialog : Window
             return;
         }
 
-        model.Zoom = Math.Clamp(model.Zoom + (e.Delta.Y > 0 ? 0.1 : -0.1), AvatarDialogViewModel.MinZoom, AvatarDialogViewModel.MaxZoom);
+        model.Zoom = Math.Clamp(model.Zoom + (e.Delta.Y > 0 ? 0.1 : -0.1), AvatarDialogViewModel.MIN_ZOOM, AvatarDialogViewModel.MAX_ZOOM);
         e.Handled = true;
     }
 
@@ -112,7 +111,7 @@ public sealed partial class AvatarDialog : Window
             return;
         }
 
-        var size = AvatarDialogViewModel.CropSize;
+        var size = AvatarDialogViewModel.CROP_SIZE;
         using var target = new RenderTargetBitmap(new PixelSize(size, size), new Vector(96, 96));
         target.Render(CropArea);
         using var stream = new MemoryStream();

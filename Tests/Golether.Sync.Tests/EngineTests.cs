@@ -1,4 +1,5 @@
 using Golether.Core.Data.Enums;
+using Golether.Core.Enums;
 using Golether.Core.Identity;
 using Golether.Core.Playback;
 using Golether.Core.Session;
@@ -15,12 +16,12 @@ public sealed class EngineTests
     /// <summary>
     /// The host.
     /// </summary>
-    private static readonly PeerId Host = PeerId.Parse(new string('a', 64));
+    private static readonly PeerId _host = PeerId.Parse(new string('a', 64));
 
     /// <summary>
     /// A participant.
     /// </summary>
-    private static readonly PeerId Guest = PeerId.Parse(new string('b', 64));
+    private static readonly PeerId _guest = PeerId.Parse(new string('b', 64));
 
     /// <summary>
     /// The clock of the test.
@@ -33,14 +34,14 @@ public sealed class EngineTests
     [Fact]
     public void Authority_PlaySchedulesStart()
     {
-        var authority = new PlaybackAuthority(Host, _clock);
+        var authority = new PlaybackAuthority(_host, _clock);
 
-        var state = authority.Apply(Guest, new PlaybackRequest(PlaybackRequestKind.Play, null), TimeSpan.FromMilliseconds(1200));
+        var state = authority.Apply(_guest, new PlaybackRequest(PlaybackRequestKind.Play, null), TimeSpan.FromMilliseconds(1200));
 
         Assert.NotNull(state);
         Assert.Equal(PlayState.Playing, state.State);
         Assert.Equal(1, state.Version);
-        Assert.Equal(Guest, state.Origin);
+        Assert.Equal(_guest, state.Origin);
         Assert.Equal(_clock.NowMicroseconds + 2_700_000, state.ReferenceTime);
         Assert.True(state.IsScheduledAfter(_clock.NowMicroseconds));
     }
@@ -51,9 +52,9 @@ public sealed class EngineTests
     [Fact]
     public void Authority_StartDelayIsCapped()
     {
-        var authority = new PlaybackAuthority(Host, _clock);
+        var authority = new PlaybackAuthority(_host, _clock);
 
-        var state = authority.Apply(Guest, new PlaybackRequest(PlaybackRequestKind.Play, null), TimeSpan.FromSeconds(60))!;
+        var state = authority.Apply(_guest, new PlaybackRequest(PlaybackRequestKind.Play, null), TimeSpan.FromSeconds(60))!;
 
         Assert.Equal(_clock.NowMicroseconds + 8_000_000, state.ReferenceTime);
     }
@@ -64,11 +65,11 @@ public sealed class EngineTests
     [Fact]
     public void Authority_PauseUsesRequestedFrame()
     {
-        var authority = new PlaybackAuthority(Host, _clock);
-        authority.Apply(Host, new PlaybackRequest(PlaybackRequestKind.Play, null), TimeSpan.Zero);
+        var authority = new PlaybackAuthority(_host, _clock);
+        authority.Apply(_host, new PlaybackRequest(PlaybackRequestKind.Play, null), TimeSpan.Zero);
         _clock.Advance(TimeSpan.FromMinutes(10));
 
-        var state = authority.Apply(Guest, new PlaybackRequest(PlaybackRequestKind.Pause, TimeSpan.FromSeconds(597)), TimeSpan.Zero)!;
+        var state = authority.Apply(_guest, new PlaybackRequest(PlaybackRequestKind.Pause, TimeSpan.FromSeconds(597)), TimeSpan.Zero)!;
 
         Assert.Equal(PlayState.Paused, state.State);
         Assert.Equal(TimeSpan.FromSeconds(597), state.Position);
@@ -81,16 +82,16 @@ public sealed class EngineTests
     [Fact]
     public void Authority_IgnoresNoOpsAndClampsSeeks()
     {
-        var authority = new PlaybackAuthority(Host, _clock) { Duration = TimeSpan.FromHours(2) };
+        var authority = new PlaybackAuthority(_host, _clock) { Duration = TimeSpan.FromHours(2) };
 
-        Assert.Null(authority.Apply(Guest, new PlaybackRequest(PlaybackRequestKind.Pause, null), TimeSpan.Zero));
-        var seek = authority.Apply(Guest, new PlaybackRequest(PlaybackRequestKind.Seek, TimeSpan.FromHours(3)), TimeSpan.Zero)!;
-        var back = authority.Apply(Guest, new PlaybackRequest(PlaybackRequestKind.Seek, TimeSpan.FromSeconds(-5)), TimeSpan.Zero)!;
+        Assert.Null(authority.Apply(_guest, new PlaybackRequest(PlaybackRequestKind.Pause, null), TimeSpan.Zero));
+        var seek = authority.Apply(_guest, new PlaybackRequest(PlaybackRequestKind.Seek, TimeSpan.FromHours(3)), TimeSpan.Zero)!;
+        var back = authority.Apply(_guest, new PlaybackRequest(PlaybackRequestKind.Seek, TimeSpan.FromSeconds(-5)), TimeSpan.Zero)!;
 
         Assert.Equal(TimeSpan.FromHours(2), seek.Position);
         Assert.Equal(TimeSpan.Zero, back.Position);
         Assert.Equal(PlayState.Paused, back.State);
-        Assert.Throws<ArgumentException>(() => authority.Apply(Guest, new PlaybackRequest(PlaybackRequestKind.Seek, null), TimeSpan.Zero));
+        Assert.Throws<ArgumentException>(() => authority.Apply(_guest, new PlaybackRequest(PlaybackRequestKind.Seek, null), TimeSpan.Zero));
     }
 
     /// <summary>
@@ -99,15 +100,15 @@ public sealed class EngineTests
     [Fact]
     public void Authority_WaitsForLaggingParticipants()
     {
-        var authority = new PlaybackAuthority(Host, _clock);
-        authority.Apply(Host, new PlaybackRequest(PlaybackRequestKind.Play, null), TimeSpan.Zero);
+        var authority = new PlaybackAuthority(_host, _clock);
+        authority.Apply(_host, new PlaybackRequest(PlaybackRequestKind.Play, null), TimeSpan.Zero);
         _clock.Advance(TimeSpan.FromMinutes(1));
-        var lagging = new ParticipantStatus { PeerId = Guest, IsBuffering = true, Drift = TimeSpan.FromSeconds(-3) };
+        var lagging = new ParticipantStatus { PeerId = _guest, IsBuffering = true, Drift = TimeSpan.FromSeconds(-3) };
 
         var hold = authority.EvaluateBuffering([lagging], TimeSpan.Zero);
         var stillWaiting = authority.EvaluateBuffering([lagging with { CacheAhead = TimeSpan.FromSeconds(2) }], TimeSpan.Zero);
         var elsewhere = authority.EvaluateBuffering([lagging with { IsBuffering = false, CacheAhead = TimeSpan.FromSeconds(6), Position = TimeSpan.FromSeconds(50) }], TimeSpan.Zero);
-        Assert.Equal([Guest], authority.WaitingFor());
+        Assert.Equal([_guest], authority.WaitingFor());
         var resume = authority.EvaluateBuffering([lagging with { IsBuffering = false, CacheAhead = TimeSpan.FromSeconds(6), Position = hold!.Position }], TimeSpan.Zero);
 
         Assert.Null(elsewhere);
@@ -128,16 +129,16 @@ public sealed class EngineTests
     [Fact]
     public void Authority_PlayWaitsUntilEverybodyIsReady()
     {
-        var authority = new PlaybackAuthority(Host, _clock) { Duration = TimeSpan.FromHours(2) };
-        var loading = new ParticipantStatus { PeerId = Guest, IsBuffering = true };
+        var authority = new PlaybackAuthority(_host, _clock) { Duration = TimeSpan.FromHours(2) };
+        var loading = new ParticipantStatus { PeerId = _guest, IsBuffering = true };
         authority.EvaluateBuffering([loading], TimeSpan.Zero);
 
-        var hold = authority.Apply(Host, new PlaybackRequest(PlaybackRequestKind.Play, null), TimeSpan.Zero)!;
+        var hold = authority.Apply(_host, new PlaybackRequest(PlaybackRequestKind.Play, null), TimeSpan.Zero)!;
         Assert.Equal(PlayState.Paused, hold.State);
         Assert.Equal(PlaybackCause.WaitingForParticipants, hold.Cause);
-        Assert.Equal(Host, hold.Origin);
-        Assert.Null(authority.Apply(Guest, new PlaybackRequest(PlaybackRequestKind.Play, null), TimeSpan.Zero));
-        Assert.Equal([Guest], authority.WaitingFor());
+        Assert.Equal(_host, hold.Origin);
+        Assert.Null(authority.Apply(_guest, new PlaybackRequest(PlaybackRequestKind.Play, null), TimeSpan.Zero));
+        Assert.Equal([_guest], authority.WaitingFor());
 
         _clock.Advance(TimeSpan.FromSeconds(3));
         Assert.Null(authority.EvaluateBuffering([loading with { Position = TimeSpan.Zero, CacheAhead = TimeSpan.FromSeconds(2) }], TimeSpan.Zero));
@@ -150,10 +151,10 @@ public sealed class EngineTests
         Assert.Equal(_clock.NowMicroseconds + 2_000_000, start.ReferenceTime);
 
         // Everybody ready: play starts at once.
-        authority.Apply(Host, new PlaybackRequest(PlaybackRequestKind.Pause, TimeSpan.FromMinutes(5)), TimeSpan.Zero);
-        var ready = new ParticipantStatus { PeerId = Guest, Position = TimeSpan.FromMinutes(5), CacheAhead = TimeSpan.FromSeconds(30) };
+        authority.Apply(_host, new PlaybackRequest(PlaybackRequestKind.Pause, TimeSpan.FromMinutes(5)), TimeSpan.Zero);
+        var ready = new ParticipantStatus { PeerId = _guest, Position = TimeSpan.FromMinutes(5), CacheAhead = TimeSpan.FromSeconds(30) };
         authority.EvaluateBuffering([ready], TimeSpan.Zero);
-        Assert.Equal(PlaybackCause.Play, authority.Apply(Guest, new PlaybackRequest(PlaybackRequestKind.Play, null), TimeSpan.Zero)!.Cause);
+        Assert.Equal(PlaybackCause.Play, authority.Apply(_guest, new PlaybackRequest(PlaybackRequestKind.Play, null), TimeSpan.Zero)!.Cause);
     }
 
     /// <summary>
@@ -162,18 +163,18 @@ public sealed class EngineTests
     [Fact]
     public void Authority_WaitingEndsOnRequestOrTimeout()
     {
-        var authority = new PlaybackAuthority(Host, _clock, new PlaybackAuthorityOptions { MaxReadyWait = TimeSpan.FromSeconds(30) });
-        var absent = new ParticipantStatus { PeerId = Guest };
+        var authority = new PlaybackAuthority(_host, _clock, new PlaybackAuthorityOptions { MaxReadyWait = TimeSpan.FromSeconds(30) });
+        var absent = new ParticipantStatus { PeerId = _guest };
         authority.EvaluateBuffering([absent], TimeSpan.Zero);
 
-        authority.Apply(Host, new PlaybackRequest(PlaybackRequestKind.Play, null), TimeSpan.Zero);
-        var now = authority.Apply(Host, new PlaybackRequest(PlaybackRequestKind.PlayNow, null), TimeSpan.Zero)!;
+        authority.Apply(_host, new PlaybackRequest(PlaybackRequestKind.Play, null), TimeSpan.Zero);
+        var now = authority.Apply(_host, new PlaybackRequest(PlaybackRequestKind.PlayNow, null), TimeSpan.Zero)!;
         Assert.Equal(PlayState.Playing, now.State);
         Assert.Equal(PlaybackCause.StartedWithoutWaiting, now.Cause);
         Assert.Empty(authority.WaitingFor());
 
-        authority.Apply(Host, new PlaybackRequest(PlaybackRequestKind.Pause, TimeSpan.FromMinutes(1)), TimeSpan.Zero);
-        authority.Apply(Host, new PlaybackRequest(PlaybackRequestKind.Play, null), TimeSpan.Zero);
+        authority.Apply(_host, new PlaybackRequest(PlaybackRequestKind.Pause, TimeSpan.FromMinutes(1)), TimeSpan.Zero);
+        authority.Apply(_host, new PlaybackRequest(PlaybackRequestKind.Play, null), TimeSpan.Zero);
         _clock.Advance(TimeSpan.FromSeconds(29));
         Assert.Null(authority.EvaluateBuffering([absent], TimeSpan.Zero));
         _clock.Advance(TimeSpan.FromSeconds(1));
@@ -182,9 +183,9 @@ public sealed class EngineTests
         Assert.Equal(TimeSpan.FromMinutes(1), timedOut.Position);
 
         // Pausing cancels waiting.
-        authority.Apply(Host, new PlaybackRequest(PlaybackRequestKind.Pause, TimeSpan.FromMinutes(2)), TimeSpan.Zero);
-        authority.Apply(Host, new PlaybackRequest(PlaybackRequestKind.Play, null), TimeSpan.Zero);
-        authority.Apply(Guest, new PlaybackRequest(PlaybackRequestKind.Pause, TimeSpan.FromMinutes(2)), TimeSpan.Zero);
+        authority.Apply(_host, new PlaybackRequest(PlaybackRequestKind.Pause, TimeSpan.FromMinutes(2)), TimeSpan.Zero);
+        authority.Apply(_host, new PlaybackRequest(PlaybackRequestKind.Play, null), TimeSpan.Zero);
+        authority.Apply(_guest, new PlaybackRequest(PlaybackRequestKind.Pause, TimeSpan.FromMinutes(2)), TimeSpan.Zero);
         Assert.Empty(authority.WaitingFor());
         _clock.Advance(TimeSpan.FromMinutes(5));
         Assert.Null(authority.EvaluateBuffering([absent], TimeSpan.Zero));
@@ -198,7 +199,7 @@ public sealed class EngineTests
     {
         var options = new PlaybackAuthorityOptions();
         var duration = TimeSpan.FromMinutes(100);
-        var status = new ParticipantStatus { PeerId = Guest, Position = duration - TimeSpan.FromSeconds(3), CacheAhead = TimeSpan.FromSeconds(2) };
+        var status = new ParticipantStatus { PeerId = _guest, Position = duration - TimeSpan.FromSeconds(3), CacheAhead = TimeSpan.FromSeconds(2) };
 
         Assert.True(options.IsReady(status, duration));
         Assert.False(options.IsReady(status, null));
@@ -212,11 +213,11 @@ public sealed class EngineTests
     [Fact]
     public void Authority_CatchUpPolicyDoesNotPause()
     {
-        var authority = new PlaybackAuthority(Host, _clock) { BufferingPolicy = BufferingPolicy.LetLaggardsCatchUp };
-        authority.Apply(Host, new PlaybackRequest(PlaybackRequestKind.Play, null), TimeSpan.Zero);
+        var authority = new PlaybackAuthority(_host, _clock) { BufferingPolicy = BufferingPolicy.LetLaggardsCatchUp };
+        authority.Apply(_host, new PlaybackRequest(PlaybackRequestKind.Play, null), TimeSpan.Zero);
         _clock.Advance(TimeSpan.FromMinutes(1));
 
-        var hold = authority.EvaluateBuffering([new ParticipantStatus { PeerId = Guest, IsBuffering = true, Drift = TimeSpan.FromSeconds(-10) }], TimeSpan.Zero);
+        var hold = authority.EvaluateBuffering([new ParticipantStatus { PeerId = _guest, IsBuffering = true, Drift = TimeSpan.FromSeconds(-10) }], TimeSpan.Zero);
 
         Assert.Null(hold);
     }
@@ -227,9 +228,9 @@ public sealed class EngineTests
     [Fact]
     public void Authority_EndsAtDuration()
     {
-        var authority = new PlaybackAuthority(Host, _clock) { Duration = TimeSpan.FromSeconds(10) };
+        var authority = new PlaybackAuthority(_host, _clock) { Duration = TimeSpan.FromSeconds(10) };
         Assert.Null(authority.EvaluateEnd());
-        authority.Apply(Guest, new PlaybackRequest(PlaybackRequestKind.Play, TimeSpan.FromSeconds(8)), TimeSpan.Zero);
+        authority.Apply(_guest, new PlaybackRequest(PlaybackRequestKind.Play, TimeSpan.FromSeconds(8)), TimeSpan.Zero);
 
         _clock.Advance(TimeSpan.FromSeconds(3));
         Assert.Null(authority.EvaluateEnd());
@@ -237,12 +238,12 @@ public sealed class EngineTests
         var ended = authority.EvaluateEnd();
 
         Assert.NotNull(ended);
-        Assert.Equal((PlayState.Paused, TimeSpan.FromSeconds(10), PlaybackCause.Ended, Host), (ended.State, ended.Position, ended.Cause, ended.Origin));
+        Assert.Equal((PlayState.Paused, TimeSpan.FromSeconds(10), PlaybackCause.Ended, _host), (ended.State, ended.Position, ended.Cause, ended.Origin));
         _clock.Advance(TimeSpan.FromMinutes(5));
         Assert.Null(authority.EvaluateEnd());
         Assert.Equal(TimeSpan.FromSeconds(10), authority.Current.ExpectedPositionAt(_clock.NowMicroseconds));
 
-        var again = authority.Apply(Guest, new PlaybackRequest(PlaybackRequestKind.Play, null), TimeSpan.Zero);
+        var again = authority.Apply(_guest, new PlaybackRequest(PlaybackRequestKind.Play, null), TimeSpan.Zero);
         Assert.Equal((PlayState.Playing, TimeSpan.Zero), (again!.State, again.Position));
     }
 
@@ -262,7 +263,7 @@ public sealed class EngineTests
             Position = TimeSpan.FromSeconds(5),
             ReferenceTime = _clock.NowMicroseconds,
             Version = 1,
-            Origin = Host,
+            Origin = _host,
         }, token);
         await follower.TickAsync(token);
         _clock.Advance(TimeSpan.FromSeconds(6));
@@ -286,7 +287,7 @@ public sealed class EngineTests
             Position = TimeSpan.Zero,
             ReferenceTime = _clock.NowMicroseconds,
             Version = 2,
-            Origin = Host,
+            Origin = _host,
         }, token);
         Assert.Contains("seek 0", player.Commands);
         Assert.Equal(TimeSpan.Zero, player.Position);
@@ -307,7 +308,7 @@ public sealed class EngineTests
             Position = TimeSpan.FromSeconds(30),
             ReferenceTime = _clock.NowMicroseconds + 2_000_000,
             Version = 1,
-            Origin = Guest,
+            Origin = _guest,
         };
 
         await follower.ApplyAsync(state, token);
@@ -332,7 +333,7 @@ public sealed class EngineTests
         var player = new FakePlayer(_clock);
         var follower = new PlaybackFollower(player, _clock, new DriftCorrector());
         var token = TestContext.Current.CancellationToken;
-        var newer = PlaybackState.Initial(Host, _clock.NowMicroseconds) with { Version = 5, Position = TimeSpan.FromSeconds(10) };
+        var newer = PlaybackState.Initial(_host, _clock.NowMicroseconds) with { Version = 5, Position = TimeSpan.FromSeconds(10) };
 
         Assert.True(await follower.ApplyAsync(newer, token));
         Assert.False(await follower.ApplyAsync(newer with { Version = 4, Position = TimeSpan.FromSeconds(99) }, token));
@@ -354,7 +355,7 @@ public sealed class EngineTests
             Position = TimeSpan.FromSeconds(100),
             ReferenceTime = _clock.NowMicroseconds,
             Version = 1,
-            Origin = Host,
+            Origin = _host,
         };
         await follower.ApplyAsync(state, token);
         _clock.Advance(TimeSpan.FromSeconds(3));
@@ -383,7 +384,7 @@ public sealed class EngineTests
         var player = new FakePlayer(_clock) { Loaded = false };
         var follower = new PlaybackFollower(player, _clock, new DriftCorrector());
         var token = TestContext.Current.CancellationToken;
-        var state = PlaybackState.Initial(Host, _clock.NowMicroseconds) with { Version = 3, Position = TimeSpan.FromMinutes(40) };
+        var state = PlaybackState.Initial(_host, _clock.NowMicroseconds) with { Version = 3, Position = TimeSpan.FromMinutes(40) };
 
         await follower.ApplyAsync(state, token);
         Assert.Empty(player.Commands);
@@ -421,10 +422,10 @@ public sealed class EngineTests
     [Fact]
     public void Authority_RefusesUnknownRequestKind()
     {
-        var authority = new PlaybackAuthority(Host, _clock);
+        var authority = new PlaybackAuthority(_host, _clock);
 
-        Assert.Throws<ArgumentException>(() => authority.Apply(Guest, new PlaybackRequest((PlaybackRequestKind)99, null), TimeSpan.Zero));
-        Assert.Throws<ArgumentException>(() => authority.Apply(Guest, new PlaybackRequest((PlaybackRequestKind)99, TimeSpan.FromSeconds(5)), TimeSpan.Zero));
+        Assert.Throws<ArgumentException>(() => authority.Apply(_guest, new PlaybackRequest((PlaybackRequestKind)99, null), TimeSpan.Zero));
+        Assert.Throws<ArgumentException>(() => authority.Apply(_guest, new PlaybackRequest((PlaybackRequestKind)99, TimeSpan.FromSeconds(5)), TimeSpan.Zero));
         Assert.Equal(0, authority.Current.Version);
     }
 
@@ -435,16 +436,16 @@ public sealed class EngineTests
     [Fact]
     public void Authority_KeepsRequestedPositionInsideTheLimit()
     {
-        var authority = new PlaybackAuthority(Host, _clock);
+        var authority = new PlaybackAuthority(_host, _clock);
 
-        var state = authority.Apply(Guest, new PlaybackRequest(PlaybackRequestKind.Seek, TimeSpan.MaxValue), TimeSpan.Zero)!;
+        var state = authority.Apply(_guest, new PlaybackRequest(PlaybackRequestKind.Seek, TimeSpan.MaxValue), TimeSpan.Zero)!;
 
         Assert.Equal(PlaybackState.MaxPosition, state.Position);
         Assert.True(state.IsValid());
-        var playing = authority.Apply(Guest, new PlaybackRequest(PlaybackRequestKind.PlayNow, null), TimeSpan.Zero)!;
+        var playing = authority.Apply(_guest, new PlaybackRequest(PlaybackRequestKind.PlayNow, null), TimeSpan.Zero)!;
         _clock.Advance(TimeSpan.FromHours(1));
         Assert.True(playing.ExpectedPositionAt(_clock.NowMicroseconds) > PlaybackState.MaxPosition);
-        var status = new ParticipantStatus { PeerId = Guest, Position = TimeSpan.Zero, IsBuffering = true, Drift = -ParticipantStatus.MaxSpan };
+        var status = new ParticipantStatus { PeerId = _guest, Position = TimeSpan.Zero, IsBuffering = true, Drift = -ParticipantStatus.MaxSpan };
         Assert.NotNull(authority.EvaluateBuffering([status], TimeSpan.Zero));
     }
 }

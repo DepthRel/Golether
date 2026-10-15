@@ -1,5 +1,6 @@
 using System.Runtime.InteropServices;
 using System.Runtime.Versioning;
+using Golether.Web.Server.UI.Enums;
 
 namespace Golether.Web.Server.UI.Services;
 
@@ -12,17 +13,17 @@ public static partial class WindowsServiceControl
     /// <summary>
     /// The right to connect to the service control manager.
     /// </summary>
-    private const uint ManagerConnect = 0x0001;
+    private const uint MANAGER_CONNECT = 0x0001;
 
     /// <summary>
     /// The right to ask a service for its state.
     /// </summary>
-    private const uint ServiceQueryStatus = 0x0004;
+    private const uint SERVICE_QUERY_STATUS = 0x0004;
 
     /// <summary>
     /// The error of Windows for a service that does not exist.
     /// </summary>
-    private const int ServiceDoesNotExist = 1060;
+    private const int SERVICE_DOES_NOT_EXIST = 1060;
 
     /// <summary>
     /// Asks for the state of a service.
@@ -57,7 +58,7 @@ public static partial class WindowsServiceControl
     [SupportedOSPlatform("windows")]
     private static ServiceState QueryOnWindows(string name)
     {
-        var manager = OpenSCManager(null, null, ManagerConnect);
+        var manager = OpenSCManager(null, null, MANAGER_CONNECT);
         if (manager == 0)
         {
             return ServiceState.Unknown;
@@ -65,10 +66,10 @@ public static partial class WindowsServiceControl
 
         try
         {
-            var service = OpenService(manager, name, ServiceQueryStatus);
+            var service = OpenService(manager, name, SERVICE_QUERY_STATUS);
             if (service == 0)
             {
-                return Marshal.GetLastPInvokeError() == ServiceDoesNotExist ? ServiceState.NotInstalled : ServiceState.Unknown;
+                return Marshal.GetLastPInvokeError() == SERVICE_DOES_NOT_EXIST ? ServiceState.NotInstalled : ServiceState.Unknown;
             }
 
             try

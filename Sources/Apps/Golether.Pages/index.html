@@ -22,10 +22,8 @@
         <a class="hide-small" href="#join" data-t="nav.join">How to join</a>
         <a class="hide-small" href="#host" data-t="nav.host">How to invite</a>
         <a href="#download" data-t="nav.download">Download</a>
-        <span class="lang" role="group" aria-label="Language">
-          <button type="button" data-lang="en" aria-pressed="true">EN</button>
-          <button type="button" data-lang="ru" aria-pressed="false">RU</button>
-        </span>
+        <!-- The language picker: languages.js fills it in; without scripts the page simply stays in English. -->
+        <div class="lang" data-root="" aria-label="Language"></div>
       </nav>
     </div>
   </header>
@@ -77,7 +75,7 @@
           <li>
             <h3 data-t="join.3.title">Compare the code</h3>
             <p data-t="join.3.text">You and the host see the same three words and a number. Say them to each other aloud.</p>
-            <div class="code" aria-hidden="true"><span>maple</span><span>river</span><span>stone</span><span>42</span></div>
+            <div class="code" aria-hidden="true"><span data-t="code.1">maple</span><span data-t="code.2">river</span><span data-t="code.3">stone</span><span>42</span></div>
           </li>
           <li>
             <h3 data-t="join.4.title">Enjoy</h3>
@@ -166,6 +164,7 @@
     </div>
   </footer>
 
+  <script src="assets/languages.js"></script>
   <script src="assets/site.js"></script>
 </body>
 </html>

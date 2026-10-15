@@ -1,6 +1,7 @@
 using System.Buffers.Binary;
 using System.Net;
 using System.Net.Sockets;
+using Golether.Core.Enums;
 using Golether.Core.Networking;
 using Golether.Localization;
 using Golether.Security.Identity;
@@ -73,7 +74,7 @@ public sealed class RendezvousProtocolTests
         Assert.Throws<InvalidDataException>(() => RendezvousChannel.Deserialize("{\"$t\":\"launch\"}"u8));
         Assert.Throws<InvalidDataException>(() => RendezvousChannel.Deserialize("not json"u8));
 
-        foreach (var length in new[] { 0, RendezvousProtocol.MaxFrameSize + 1, -1 })
+        foreach (var length in new[] { 0, RendezvousProtocol.MAX_FRAME_SIZE + 1, -1 })
         {
             var header = new byte[4];
             BinaryPrimitives.WriteInt32BigEndian(header, length);
@@ -104,7 +105,7 @@ public sealed class RendezvousProtocolTests
         Assert.False(RendezvousSignature.TryVerify(identity.PublicCertificateDer, RendezvousSignature.BuildPayload(nonce, RendezvousPoint.CreateRoom()), signature, out _));
         Assert.False(RendezvousSignature.TryVerify(other.PublicCertificateDer, payload, signature, out _));
         Assert.False(RendezvousSignature.TryVerify([1, 2, 3], payload, signature, out _));
-        Assert.False(RendezvousSignature.TryVerify(identity.PublicCertificateDer, payload, new byte[RendezvousSignature.MaxSignatureSize + 1], out _));
+        Assert.False(RendezvousSignature.TryVerify(identity.PublicCertificateDer, payload, new byte[RendezvousSignature.MAX_SIGNATURE_SIZE + 1], out _));
     }
 
     /// <summary>
@@ -136,7 +137,7 @@ public sealed class RendezvousProtocolTests
         }
 
         var many = Enumerable.Range(1, 20).Select(i => $"10.0.0.{i}:1000").Append("junk").ToArray();
-        Assert.Equal(RendezvousProtocol.MaxLocals, RendezvousProtocol.ParseLocals(many).Count);
+        Assert.Equal(RendezvousProtocol.MAX_LOCALS, RendezvousProtocol.ParseLocals(many).Count);
         Assert.Empty(RendezvousProtocol.ParseLocals(null));
         Assert.Equal("1.2.3.4:5", RendezvousProtocol.Format(new IPEndPoint(IPAddress.Parse("1.2.3.4").MapToIPv6(), 5)));
     }
@@ -152,7 +153,7 @@ public sealed class RendezvousProtocolTests
         Assert.NotEqual(room, RendezvousPoint.CreateRoom());
         Assert.True(RendezvousProtocol.IsValidRandomId(RendezvousProtocol.CreateRandomId()));
         Assert.False(RendezvousPoint.IsValidRoom("short"));
-        Assert.False(RendezvousPoint.IsValidRoom(new string('!', RendezvousPoint.RoomLength)));
+        Assert.False(RendezvousPoint.IsValidRoom(new string('!', RendezvousPoint.ROOM_LENGTH)));
         Assert.Equal("stun://203.0.113.7:47900", new RendezvousPoint(PeerEndpoint.Parse("203.0.113.7:47900"), room).StunUri);
     }
 

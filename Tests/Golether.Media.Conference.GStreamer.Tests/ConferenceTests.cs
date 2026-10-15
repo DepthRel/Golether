@@ -18,22 +18,22 @@ public sealed class ConferenceTests
     /// <summary>
     /// The first participant.
     /// </summary>
-    private static readonly PeerId Alice = PeerId.Parse(new string('1', 64));
+    private static readonly PeerId _alice = PeerId.Parse(new string('1', 64));
 
     /// <summary>
     /// The second participant.
     /// </summary>
-    private static readonly PeerId Bob = PeerId.Parse(new string('2', 64));
+    private static readonly PeerId _bob = PeerId.Parse(new string('2', 64));
 
     /// <summary>
     /// The shared media instances (GStreamer is initialized once per process).
     /// </summary>
-    private static readonly Lazy<(GStreamerConferenceMedia? A, GStreamerConferenceMedia? B, string? Skip)> Pair = new(() => CreatePair(relayOnly: false));
+    private static readonly Lazy<(GStreamerConferenceMedia? A, GStreamerConferenceMedia? B, string? Skip)> _pair = new(() => CreatePair(relayOnly: false));
 
     /// <summary>
     /// Two media instances that may connect only through a TURN relay.
     /// </summary>
-    private static readonly Lazy<(GStreamerConferenceMedia? A, GStreamerConferenceMedia? B, string? Skip)> RelayPair = new(() => CreatePair(relayOnly: true));
+    private static readonly Lazy<(GStreamerConferenceMedia? A, GStreamerConferenceMedia? B, string? Skip)> _relayPair = new(() => CreatePair(relayOnly: true));
 
     /// <summary>
     /// Both sides negotiate and receive the other's camera; the preview works.
@@ -41,7 +41,7 @@ public sealed class ConferenceTests
     [Fact]
     public async Task TwoPeers_ExchangeVideo()
     {
-        var (a, b, skip) = Pair.Value;
+        var (a, b, skip) = _pair.Value;
         Assert.SkipWhen(skip is not null, skip ?? string.Empty);
         var token = TestContext.Current.CancellationToken;
 
@@ -52,8 +52,8 @@ public sealed class ConferenceTests
         var errors = new ConcurrentQueue<Exception>();
         var speakingAtA = new ConcurrentQueue<SpeakingChange>();
         a.SpeakingChanged += (_, change) => speakingAtA.Enqueue(change);
-        a.SignalReady += (_, s) => Track(b.HandleSignalAsync(s with { PeerId = Alice }, token), errors, s.Payload);
-        b.SignalReady += (_, s) => Track(a.HandleSignalAsync(s with { PeerId = Bob }, token), errors, s.Payload);
+        a.SignalReady += (_, s) => Track(b.HandleSignalAsync(s with { PeerId = _alice }, token), errors, s.Payload);
+        b.SignalReady += (_, s) => Track(a.HandleSignalAsync(s with { PeerId = _bob }, token), errors, s.Payload);
 
         // The instances are shared: a test that ran before leaves Alice's tone playing and her counted as speaking,
         // and a state that does not change raises no event. A pause longer than the hold of the detector ends it.
@@ -63,18 +63,18 @@ public sealed class ConferenceTests
 
         await a.StartCaptureAsync(null, null, token);
         await b.StartCaptureAsync(null, null, token);
-        await a.ConnectAsync(Bob, isOfferer: true, token);
+        await a.ConnectAsync(_bob, isOfferer: true, token);
 
         var deadline = DateTime.UtcNow.AddSeconds(30);
-        while (!(framesAtA.ContainsKey(Bob) && framesAtB.ContainsKey(Alice)) && DateTime.UtcNow < deadline)
+        while (!(framesAtA.ContainsKey(_bob) && framesAtB.ContainsKey(_alice)) && DateTime.UtcNow < deadline)
         {
             await Task.Delay(200, token);
         }
 
         Assert.Empty(errors);
         Assert.True(framesAtA.ContainsKey(default), "Alice sees her own preview.");
-        Assert.True(framesAtA.TryGetValue(Bob, out var fromBob), "Alice receives Bob's camera.");
-        Assert.True(framesAtB.ContainsKey(Alice), "Bob receives Alice's camera.");
+        Assert.True(framesAtA.TryGetValue(_bob, out var fromBob), "Alice receives Bob's camera.");
+        Assert.True(framesAtB.ContainsKey(_alice), "Bob receives Alice's camera.");
         Assert.Equal(640, fromBob.Width);
         Assert.Equal(360, fromBob.Height);
         Assert.Equal(640 * 360 * 4, fromBob.Pixels.Length);
@@ -84,7 +84,7 @@ public sealed class ConferenceTests
 
         // The report must be able to say what a connection really carries: both directions, on both sides.
         var linkAtA = Assert.Single(a.GetPeerDiagnostics());
-        Assert.Equal((Bob, true, VideoQuality.High), (linkAtA.Peer, linkAtA.Verified, linkAtA.Quality));
+        Assert.Equal((_bob, true, VideoQuality.High), (linkAtA.Peer, linkAtA.Verified, linkAtA.Quality));
         Assert.True(linkAtA.VideoSent > 0, "Алиса отдаёт кадры камеры.");
         Assert.True(linkAtA.VideoReceived > 0, "Алиса принимает кадры камеры.");
         Assert.True(linkAtA.AudioSent > 0, "Алиса отдаёт голос.");
@@ -92,36 +92,36 @@ public sealed class ConferenceTests
         Assert.True(linkAtB.VideoSent > 0 && linkAtB.VideoReceived > 0, "Боб отдаёт и принимает кадры камеры.");
 
         // The steady test tone counts as speech: Alice sees herself and Bob speaking.
-        for (var i = 0; i < 50 && !(speakingAtA.Contains(new SpeakingChange(Bob, true)) && speakingAtA.Contains(new SpeakingChange(default, true))); i++)
+        for (var i = 0; i < 50 && !(speakingAtA.Contains(new SpeakingChange(_bob, true)) && speakingAtA.Contains(new SpeakingChange(default, true))); i++)
         {
             await Task.Delay(100, token);
         }
 
         Assert.Contains(new SpeakingChange(default, true), speakingAtA);
-        Assert.Contains(new SpeakingChange(Bob, true), speakingAtA);
+        Assert.Contains(new SpeakingChange(_bob, true), speakingAtA);
 
         // The data channel opens on both sides and carries messages in order.
         var atB = new ConcurrentQueue<(PeerId Peer, byte[] Data)>();
         b.DataReceived += (_, peer, data) => atB.Enqueue((peer, data.ToArray()));
-        for (var i = 0; i < 100 && !(a.DataPeers.Contains(Bob) && b.DataPeers.Contains(Alice)); i++)
+        for (var i = 0; i < 100 && !(a.DataPeers.Contains(_bob) && b.DataPeers.Contains(_alice)); i++)
         {
             await Task.Delay(100, token);
         }
 
-        Assert.Contains(Bob, a.DataPeers);
-        Assert.Contains(Alice, b.DataPeers);
+        Assert.Contains(_bob, a.DataPeers);
+        Assert.Contains(_alice, b.DataPeers);
         var big = System.Security.Cryptography.RandomNumberGenerator.GetBytes(16 * 1024 + 13);
-        Assert.True(a.TrySendData(Bob, [1, 2, 3]));
-        Assert.True(a.TrySendData(Bob, big));
+        Assert.True(a.TrySendData(_bob, [1, 2, 3]));
+        Assert.True(a.TrySendData(_bob, big));
         Assert.False(a.TrySendData(PeerId.Parse(new string('7', 64)), [1]));
         for (var i = 0; i < 50 && atB.Count < 2; i++)
         {
             await Task.Delay(100, token);
         }
 
-        Assert.Equal([(Alice, new byte[] { 1, 2, 3 }), (Alice, big)], atB.Select(m => (m.Peer, m.Data)).ToArray(), MessageComparer.Instance);
+        Assert.Equal([(_alice, new byte[] { 1, 2, 3 }), (_alice, big)], atB.Select(m => (m.Peer, m.Data)).ToArray(), MessageComparer.Instance);
 
-        await a.DisconnectAsync(Bob);
+        await a.DisconnectAsync(_bob);
         Assert.Equal(0, a.PeerCount);
     }
 
@@ -132,7 +132,7 @@ public sealed class ConferenceTests
     [Fact]
     public async Task EconomyStream_SwitchesResolution()
     {
-        var (a, b, skip) = Pair.Value;
+        var (a, b, skip) = _pair.Value;
         Assert.SkipWhen(skip is not null, skip ?? string.Empty);
         var token = TestContext.Current.CancellationToken;
         var gina = PeerId.Parse(new string('9', 64));
@@ -191,7 +191,7 @@ public sealed class ConferenceTests
     [Fact]
     public async Task ForgedFingerprint_GetsNoMedia()
     {
-        var (a, b, skip) = Pair.Value;
+        var (a, b, skip) = _pair.Value;
         Assert.SkipWhen(skip is not null, skip ?? string.Empty);
         var token = TestContext.Current.CancellationToken;
         var carol = PeerId.Parse(new string('3', 64));
@@ -237,7 +237,7 @@ public sealed class ConferenceTests
     [Fact]
     public async Task RelayOnly_ExchangesVideoThroughTurn()
     {
-        var (a, b, skip) = RelayPair.Value;
+        var (a, b, skip) = _relayPair.Value;
         Assert.SkipWhen(skip is not null, skip ?? string.Empty);
         var token = TestContext.Current.CancellationToken;
         await using var relay = new TurnServer(new TurnServerOptions { Credentials = RelayCredentials.CreateRandom(0), ListenAddress = System.Net.IPAddress.Loopback });
@@ -253,8 +253,8 @@ public sealed class ConferenceTests
         a!.VideoFrameReceived += (_, f) => framesAtA[f.PeerId] = f.Frame;
         b!.VideoFrameReceived += (_, f) => framesAtB[f.PeerId] = f.Frame;
         var errors = new ConcurrentQueue<Exception>();
-        a.SignalReady += (_, s) => Track(b.HandleSignalAsync(s with { PeerId = s.PeerId == dave ? carol : Alice }, token), errors, s.Payload);
-        b.SignalReady += (_, s) => Track(a.HandleSignalAsync(s with { PeerId = s.PeerId == carol ? dave : Bob }, token), errors, s.Payload);
+        a.SignalReady += (_, s) => Track(b.HandleSignalAsync(s with { PeerId = s.PeerId == dave ? carol : _alice }, token), errors, s.Payload);
+        b.SignalReady += (_, s) => Track(a.HandleSignalAsync(s with { PeerId = s.PeerId == carol ? dave : _bob }, token), errors, s.Payload);
         a.SetRelay(uri);
         b.SetRelay(uri);
         await a.StartCaptureAsync(null, null, token);
@@ -272,20 +272,20 @@ public sealed class ConferenceTests
         var credentials = sessionRelay.Credentials;
         a.SetRelay(credentials.ToTurnUri("127.0.0.1"));
         b.SetRelay(credentials.ToTurnUri("127.0.0.1"));
-        await a.ConnectAsync(Bob, isOfferer: true, token);
+        await a.ConnectAsync(_bob, isOfferer: true, token);
 
         var deadline = DateTime.UtcNow.AddSeconds(40);
-        while (!(framesAtA.ContainsKey(Bob) && framesAtB.ContainsKey(Alice)) && DateTime.UtcNow < deadline)
+        while (!(framesAtA.ContainsKey(_bob) && framesAtB.ContainsKey(_alice)) && DateTime.UtcNow < deadline)
         {
             await Task.Delay(200, token);
         }
 
         Assert.Empty(errors);
-        Assert.True(framesAtA.ContainsKey(Bob), "Alice receives Bob's camera through the relay.");
-        Assert.True(framesAtB.ContainsKey(Alice), "Bob receives Alice's camera through the relay.");
+        Assert.True(framesAtA.ContainsKey(_bob), "Alice receives Bob's camera through the relay.");
+        Assert.True(framesAtB.ContainsKey(_alice), "Bob receives Alice's camera through the relay.");
         Assert.True(sessionRelay.AllocationCount >= 2, $"Both sides allocate a relay ({sessionRelay.AllocationCount}).");
-        await a.DisconnectAsync(Bob);
-        await b.DisconnectAsync(Alice);
+        await a.DisconnectAsync(_bob);
+        await b.DisconnectAsync(_alice);
 
         // The route of the session: this relay listens nowhere, the cameras reach it only through local tunnels
         // whose far ends are handed to it as streams.
@@ -296,20 +296,20 @@ public sealed class ConferenceTests
         framesAtB.Clear();
         a.SetRelay((streamRelay.Credentials with { Port = tunnelA.Port }).ToTurnUri("127.0.0.1"));
         b.SetRelay((streamRelay.Credentials with { Port = tunnelB.Port }).ToTurnUri("127.0.0.1"));
-        await a.ConnectAsync(Bob, isOfferer: true, token);
+        await a.ConnectAsync(_bob, isOfferer: true, token);
 
         deadline = DateTime.UtcNow.AddSeconds(40);
-        while (!(framesAtA.ContainsKey(Bob) && framesAtB.ContainsKey(Alice)) && DateTime.UtcNow < deadline)
+        while (!(framesAtA.ContainsKey(_bob) && framesAtB.ContainsKey(_alice)) && DateTime.UtcNow < deadline)
         {
             await Task.Delay(200, token);
         }
 
         Assert.Empty(errors);
-        Assert.True(framesAtA.ContainsKey(Bob), "Alice receives Bob's camera through the tunnel.");
-        Assert.True(framesAtB.ContainsKey(Alice), "Bob receives Alice's camera through the tunnel.");
+        Assert.True(framesAtA.ContainsKey(_bob), "Alice receives Bob's camera through the tunnel.");
+        Assert.True(framesAtB.ContainsKey(_alice), "Bob receives Alice's camera through the tunnel.");
         Assert.True(streamRelay.AllocationCount >= 2, $"Both sides allocate a relay through the tunnel ({streamRelay.AllocationCount}).");
-        await a.DisconnectAsync(Bob);
-        await b.DisconnectAsync(Alice);
+        await a.DisconnectAsync(_bob);
+        await b.DisconnectAsync(_alice);
     }
 
     /// <summary>
@@ -350,7 +350,7 @@ public sealed class ConferenceTests
     [Fact]
     public async Task DataChannel_TransfersChunk()
     {
-        var (a, b, skip) = Pair.Value;
+        var (a, b, skip) = _pair.Value;
         Assert.SkipWhen(skip is not null, skip ?? string.Empty);
         var token = TestContext.Current.CancellationToken;
         var erin = PeerId.Parse(new string('e', 64));
@@ -412,7 +412,7 @@ public sealed class ConferenceTests
     [InlineData(true, true, true, true)]
     public async Task Voice_IsHeard_WhateverWasOffWhenConnecting(bool offererMicrophoneOff, bool offererCameraOff, bool answererMicrophoneOff, bool answererCameraOff)
     {
-        var (a, b, skip) = Pair.Value;
+        var (a, b, skip) = _pair.Value;
         Assert.SkipWhen(skip is not null, skip ?? string.Empty);
         var token = TestContext.Current.CancellationToken;
         var ivan = PeerId.Parse(new string('a', 64));
@@ -471,7 +471,7 @@ public sealed class ConferenceTests
     [Fact]
     public async Task Microphone_ThatFails_IsRestarted()
     {
-        var (a, b, skip) = Pair.Value;
+        var (a, b, skip) = _pair.Value;
         Assert.SkipWhen(skip is not null, skip ?? string.Empty);
         var token = TestContext.Current.CancellationToken;
         var kate = PeerId.Parse(new string('c', 64));
@@ -521,7 +521,7 @@ public sealed class ConferenceTests
     [Fact]
     public async Task Microphone_ThatKeepsFailing_IsSwitchedOffAndReported()
     {
-        var (a, _, skip) = Pair.Value;
+        var (a, _, skip) = _pair.Value;
         Assert.SkipWhen(skip is not null, skip ?? string.Empty);
         var token = TestContext.Current.CancellationToken;
         var reported = 0;
@@ -648,7 +648,7 @@ public sealed class ConferenceTests
     [Fact]
     public async Task InvalidSignals_AreRejected()
     {
-        var (a, _, skip) = Pair.Value;
+        var (a, _, skip) = _pair.Value;
         Assert.SkipWhen(skip is not null, skip ?? string.Empty);
         var stranger = PeerId.Parse(new string('9', 64));
         var token = TestContext.Current.CancellationToken;

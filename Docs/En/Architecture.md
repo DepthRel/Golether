@@ -54,6 +54,8 @@ Sources/
   Session/Golether.Session                 HostSession and ParticipantSession
   Apps/Golether.UI                         Avalonia: window, dialogs, composition of dependencies
   Apps/Golether.Web.Server                 the rendezvous server (a separate application, see RendezvousServer.md)
+  Apps/Golether.Web.Server.Contracts       what the server and its monitor share: settings, service names, health, journal
+  Apps/Golether.Web.Server.UI              Golether Server Monitor: the state, the journal, the service and the settings
   Apps/Golether.Pages                      the project page on GitHub Pages: landing page, invitations by link, the
                                            files with the latest version and the rendezvous server address (static files)
 ```
@@ -214,6 +216,7 @@ and the rate `Rate`". Every node computes the needed position itself: `Position 
 - **Connection:** the participant pins the host's key during the TLS handshake. The host accepts any certificate,
   computes the `PeerId`, checks the token (trusted contacts do not need one) and asks the user.
 - **Verification code:** three words and a number from both `PeerId`s and the context; the sides compare it by voice.
+  The words are shown in the language of each side (see "Interface languages").
 - **The file** is given only to admitted participants; when a participant leaves, is removed or connects again, their
   data streams are closed.
 - **Cameras and voice** are encrypted with DTLS-SRTP. `webrtcbin` does not check the peer's certificate against the
@@ -268,9 +271,10 @@ and the rate `Rate`". Every node computes the needed position itself: `Position 
 
 Everything the user reads (screens, dialogs, error messages, session events, the diagnostic report) comes from the
 language packs `Sources/Core/Golether.Localization/Languages/<code>.json`: a flat "key → text" object in which
-`Language.Code` and `Language.Name` name the language (`ru` is "Русский", `en` is "English"). The packs are embedded
-in the assembly; `LanguageCatalog` finds them by itself. English is the default language and the source of the texts
-another language lacks.
+`Language.Code` and `Language.Name` name the language (`en` is "English", `de` is "Deutsch", `ru` is "Русский"). The
+application carries English, German, Spanish, French, Portuguese and Russian. The packs are embedded in the assembly;
+`LanguageCatalog` finds them by itself. English is the default language and the source of the texts another language
+lacks.
 
 How it is built:
 
@@ -289,16 +293,22 @@ How it is built:
 Choosing the language (`LanguageService`, the `ui.language` setting in the `Settings` table):
 
 1. First start: the database has no language, so the language of the operating system
-   (`CultureInfo.CurrentUICulture`) is taken when there is a pack for it (currently Russian), otherwise English. The
-   result is stored and shown at once in the list of languages.
+   (`CultureInfo.CurrentUICulture`) is taken when there is a pack for it, whatever the region (`de-CH` gets German,
+   `pt-BR` Portuguese), otherwise English. The result is stored and shown at once in the list of languages.
 2. Later starts: the language is read from the database; the system is not asked any more.
 3. The user chooses the language in the settings window (the flag `Assets/Flags/<code>.png` and the name of the
    language in that language); the choice is applied with the "Apply" button, at once for every text, and stored.
 
+The server monitor uses the same packs (the `Monitor.*` keys) and the same flags; it keeps its choice in
+`config/monitor.json` of the server folder.
+
+The words of the verification code are translated: `VerificationCode` holds three word numbers (0–63) and a number,
+and every pack names the same 64 things in the same order (`Verification.Word.00` … `Verification.Word.63`). The code
+is therefore the same on both sides whatever their languages, and two people with different interface languages see
+translations of each other's words.
+
 What does not depend on the interface language:
 
-- the words of the verification code (`VerificationCode`): both sides of a session must see the same, so the word
-  list is shared (64 Russian nouns) and is not translated;
 - reasons travel over the network, not texts: `rejected` carries a `RejectReason`, `bye` has no text; the reader
   words the reason in their own language (the host and a participant may use different languages);
 - the tunnel and firewall helper (a separate process with administrator rights) knows no language: it reports facts
@@ -358,10 +368,10 @@ dependency: a key works without it, the rendezvous server can be typed by hand, 
   "for everyone" goes to `C:\Program Files\Golether`, puts `golether.shared` next to `golether.install`, and each
   user's data lies in `%LOCALAPPDATA%\Golether`. The choice is a page of the wizard: Inno Setup cannot change its
   rights half way, so "for everyone" starts the setup again with administrator rights (`/ALLUSERS`). The wizard
-  speaks English and Russian (English is offered first); the pictures with the logo are drawn by
-  `Scripts/Assets/generate-installer-art.ps1`. Personal data is never overwritten and is removed only with separate consent.
-  The installer of the rendezvous server (`Scripts/Server/golether-server.iss`) is built the same way but always installs
-  for all users.
+  speaks English, German, Spanish, French, Portuguese and Russian: the language of Windows is preselected, English
+  when the wizard does not speak it. The pictures with the logo are drawn by `Scripts/Assets/generate-installer-art.ps1`.
+  Personal data is never overwritten and is removed only with separate consent. The installer of the rendezvous server
+  (`Scripts/Server/golether-server.iss`) is built the same way but always installs for all users.
 
 ## Data
 
@@ -404,6 +414,7 @@ The schema is created by migrations when the application starts or through `Gole
 | Rendezvous server: host and participant meet without open ports, TCP hole punching, STUN for cameras | **done** |
 | Project page, invitation link that opens the application, single instance, automatic lookup of the rendezvous server | **done** |
 | One invitation for the whole company, removal of a participant by the host | **done** |
+| Six languages (English, German, Spanish, French, Portuguese, Russian) in the application, the monitor, the installers, the page and the documentation; translated words of the verification code | **done** |
 | libmpv render API for macOS and Wayland, QUIC for Windows 11/Linux | planned |
 | Keychain / libsecret secret storage, signed installers | planned |
 

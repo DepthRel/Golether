@@ -19,14 +19,14 @@ public static class Texts
     /// <summary>
     /// The localizer of the current flow of work, or <see langword="null"/> when it uses the one of the process.
     /// </summary>
-    private static readonly AsyncLocal<ILocalizer?> Scoped = new();
+    private static readonly AsyncLocal<ILocalizer?> _scoped = new();
 
     /// <summary>
     /// Gets or sets the localizer in use: the one of the current <see cref="Scope"/>, otherwise the one of the process.
     /// </summary>
     public static ILocalizer Localizer
     {
-        get => Scoped.Value ?? _localizer;
+        get => _scoped.Value ?? _localizer;
         set => _localizer = value ?? throw new ArgumentNullException(nameof(value));
     }
 
@@ -39,8 +39,8 @@ public static class Texts
     public static IDisposable Scope(ILocalizer localizer)
     {
         ArgumentNullException.ThrowIfNull(localizer);
-        var previous = Scoped.Value;
-        Scoped.Value = localizer;
+        var previous = _scoped.Value;
+        _scoped.Value = localizer;
         return new Restore(previous);
     }
 
@@ -76,6 +76,6 @@ public static class Texts
         public Restore(ILocalizer? previous) => _previous = previous;
 
         /// <inheritdoc />
-        public void Dispose() => Scoped.Value = _previous;
+        public void Dispose() => _scoped.Value = _previous;
     }
 }

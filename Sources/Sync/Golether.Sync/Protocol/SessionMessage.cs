@@ -28,5 +28,5 @@ public abstract record SessionMessage
     /// <summary>
     /// The protocol version implemented by this build.
     /// </summary>
-    public const int ProtocolVersion = 1;
+    public const int PROTOCOL_VERSION = 1;
 }

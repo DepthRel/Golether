@@ -1,17 +1,18 @@
 using System.Net;
-using Golether.Core.Identity;
-using Golether.Core.Networking;
-using Golether.Transports.Relay;
-using Golether.Transports.Rendezvous.Protocol;
-using Golether.Web.Server.Infrastructure;
-using Golether.Web.Server.Options;
-using Golether.Web.Server.Rendezvous;
-using Golether.Web.Server.Stun;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Logging.Console;
 using Microsoft.Extensions.Options;
 using Microsoft.Extensions.Time.Testing;
+using Golether.Core.Identity;
+using Golether.Core.Networking;
+using Golether.Transports.Relay;
+using Golether.Transports.Rendezvous.Protocol;
+using Golether.Web.Server.Enums;
+using Golether.Web.Server.Infrastructure;
+using Golether.Web.Server.Options;
+using Golether.Web.Server.Rendezvous;
+using Golether.Web.Server.Stun;
 
 namespace Golether.Web.Server.Tests;
 
@@ -155,11 +156,19 @@ public sealed class ServerPartsTests
             using var socket = NatTraversal.Open(0);
             var server = "127.0.0.1:" + responder.LocalEndpoint!.Port;
 
-            var found = await NatTraversal.DiscoverAsync(socket, [server, server], token);
+            var found = await NatTraversal.DiscoverAsync(socket, [server, server], TimeProvider.System, token);
 
             Assert.NotNull(found);
             Assert.Equal(((IPEndPoint)socket.LocalEndPoint!).Port, found.Endpoint.Port);
             Assert.True(found.IsPredictable);
+
+            // The server counts an answer after sending it, so the count may trail the answers for a moment.
+            var deadline = DateTime.UtcNow.AddSeconds(5);
+            while (statistics.Snapshot().StunAnswered < 2 && DateTime.UtcNow < deadline)
+            {
+                await Task.Delay(50, token);
+            }
+
             Assert.True(statistics.Snapshot().StunAnswered >= 2);
         }
         finally
@@ -175,13 +184,13 @@ public sealed class ServerPartsTests
     public void Stun_AnswersOnlyBindingRequests()
     {
         var remote = new IPEndPoint(IPAddress.Parse("203.0.113.9"), 40000);
-        var request = new StunMessage(Transports.Relay.Stun.Binding, Transports.Relay.Stun.ClassRequest, new byte[12]).Encode();
-        var allocate = new StunMessage(Transports.Relay.Stun.Allocate, Transports.Relay.Stun.ClassRequest, new byte[12]).Encode();
+        var request = new StunMessage(Transports.Relay.Stun.BINDING, Transports.Relay.Stun.CLASS_REQUEST, new byte[12]).Encode();
+        var allocate = new StunMessage(Transports.Relay.Stun.ALLOCATE, Transports.Relay.Stun.CLASS_REQUEST, new byte[12]).Encode();
 
         var answer = StunResponder.Answer(request, remote);
 
         Assert.NotNull(answer);
-        Assert.Equal(remote, StunMessage.Parse(answer).GetXorAddress(Transports.Relay.Stun.AttrXorMappedAddress));
+        Assert.Equal(remote, StunMessage.Parse(answer).GetXorAddress(Transports.Relay.Stun.ATTR_XOR_MAPPED_ADDRESS));
         Assert.Null(StunResponder.Answer(allocate, remote));
         Assert.Null(StunResponder.Answer("GET / HTTP/1.1\r\n\r\n"u8, remote));
         Assert.Null(StunResponder.Answer(new byte[600], remote));
@@ -236,7 +245,7 @@ public sealed class ServerPartsTests
         var time = new FakeTimeProvider(DateTimeOffset.Parse("2026-09-24T12:00:00Z", System.Globalization.CultureInfo.InvariantCulture));
         var limiter = new AddressRateLimiter(2, time);
         var bytes = new byte[4];
-        for (var i = 0; i < AddressRateLimiter.MaxTracked; i++)
+        for (var i = 0; i < AddressRateLimiter.MAX_TRACKED; i++)
         {
             System.Buffers.Binary.BinaryPrimitives.WriteInt32BigEndian(bytes, 0x0A000000 + i);
             Assert.True(limiter.TryAcquire(new IPAddress(bytes)));

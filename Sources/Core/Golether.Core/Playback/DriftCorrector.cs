@@ -1,3 +1,5 @@
+using Golether.Core.Enums;
+
 namespace Golether.Core.Playback;
 
 /// <summary>
@@ -9,7 +11,7 @@ public sealed class DriftCorrector
     /// <summary>
     /// The minimal rate difference worth sending to the player.
     /// </summary>
-    private const double RateEpsilon = 0.001;
+    private const double RATE_EPSILON = 0.001;
 
     /// <summary>
     /// The validated options.
@@ -44,7 +46,7 @@ public sealed class DriftCorrector
     {
         var drift = actual - expected;
         var magnitude = drift.Duration();
-        var correcting = Math.Abs(currentRate - nominalRate) > RateEpsilon;
+        var correcting = Math.Abs(currentRate - nominalRate) > RATE_EPSILON;
 
         if (magnitude >= _options.SeekThreshold)
         {
@@ -62,7 +64,7 @@ public sealed class DriftCorrector
         // Ahead of the session (positive drift) -> slow down; behind -> speed up.
         var adjustment = Math.Clamp(drift / _options.CorrectionHorizon, -_options.MaxRateAdjustment, _options.MaxRateAdjustment);
         var rate = nominalRate * (1 - adjustment);
-        return Math.Abs(rate - currentRate) < RateEpsilon
+        return Math.Abs(rate - currentRate) < RATE_EPSILON
             ? new DriftDecision(DriftAction.None, currentRate, expected, drift)
             : new DriftDecision(DriftAction.AdjustRate, rate, expected, drift);
     }

@@ -1,11 +1,13 @@
 using System.Collections.Concurrent;
 using System.Globalization;
+using Microsoft.Extensions.Logging;
+using NSubstitute;
 using Golether.Components.Catalog;
 using Golether.Components.Installation;
 using Golether.Core.Data.Enums;
 using Golether.Core.Data.Stores;
+using Golether.Core.Enums;
 using Golether.Core.Identity;
-using Golether.Core.Media;
 using Golether.Core.Playback;
 using Golether.Core.Session;
 using Golether.Localization;
@@ -13,11 +15,8 @@ using Golether.Media.Conference;
 using Golether.Media.Player;
 using Golether.Security.Invites;
 using Golether.Session;
-using Golether.Sync.Engine;
 using Golether.UI.Services;
 using Golether.UI.ViewModels;
-using Microsoft.Extensions.Logging;
-using NSubstitute;
 
 namespace Golether.UI.Tests;
 
@@ -29,12 +28,12 @@ public sealed class LocalizationTests
     /// <summary>
     /// A device that hosts the session.
     /// </summary>
-    private static readonly PeerId Host = PeerId.Parse(new string('a', 64));
+    private static readonly PeerId _host = PeerId.Parse(new string('a', 64));
 
     /// <summary>
     /// A participant.
     /// </summary>
-    private static readonly PeerId Guest = PeerId.Parse(new string('b', 64));
+    private static readonly PeerId _guest = PeerId.Parse(new string('b', 64));
 
     /// <summary>
     /// Creates a localizer over the languages the application carries.
@@ -68,18 +67,42 @@ public sealed class LocalizationTests
 
         Assert.Equal("ru", service.Current.Code);
         Assert.Equal("ru", localizer.Current.Code);
-        Assert.Equal("ru", settings.Values[LanguageService.Setting]);
+        Assert.Equal("ru", settings.Values[LanguageService.SETTING]);
     }
 
     /// <summary>
-    /// On the first start any other operating system language gets English, and the choice is stored.
+    /// On the first start a system in another language the application has gets that language, and the choice is
+    /// stored.
+    /// </summary>
+    /// <param name="systemCulture">The culture of the operating system.</param>
+    /// <param name="expected">The language chosen.</param>
+    /// <returns>A task that completes when the test is done.</returns>
+    [Theory]
+    [InlineData("de-DE", "de")]
+    [InlineData("fr-CA", "fr")]
+    [InlineData("es-MX", "es")]
+    [InlineData("pt-BR", "pt")]
+    public async Task FirstStart_OnASystemWithAPack_UsesItsLanguage(string systemCulture, string expected)
+    {
+        var settings = new MemorySettings();
+        var localizer = NewLocalizer("ru");
+        var service = NewService(settings, localizer, systemCulture);
+
+        await service.InitializeAsync(CancellationToken.None);
+
+        Assert.Equal(expected, service.Current.Code);
+        Assert.Equal(expected, settings.Values[LanguageService.SETTING]);
+    }
+
+    /// <summary>
+    /// On the first start any operating system language the application does not have gets English, and the choice is
+    /// stored.
     /// </summary>
     /// <param name="systemCulture">The culture of the operating system.</param>
     /// <returns>A task that completes when the test is done.</returns>
     [Theory]
     [InlineData("en-US")]
-    [InlineData("de-DE")]
-    [InlineData("fr-FR")]
+    [InlineData("it-IT")]
     [InlineData("ja-JP")]
     [InlineData("zh-CN")]
     public async Task FirstStart_OnOtherSystems_UsesEnglishAndStoresIt(string systemCulture)
@@ -91,7 +114,7 @@ public sealed class LocalizationTests
         await service.InitializeAsync(CancellationToken.None);
 
         Assert.Equal("en", service.Current.Code);
-        Assert.Equal("en", settings.Values[LanguageService.Setting]);
+        Assert.Equal("en", settings.Values[LanguageService.SETTING]);
     }
 
     /// <summary>
@@ -108,14 +131,14 @@ public sealed class LocalizationTests
     public async Task LaterStarts_UseTheStoredLanguage(string stored, string systemCulture)
     {
         var settings = new MemorySettings();
-        settings.Values[LanguageService.Setting] = stored;
+        settings.Values[LanguageService.SETTING] = stored;
         var localizer = NewLocalizer();
         var service = NewService(settings, localizer, systemCulture);
 
         await service.InitializeAsync(CancellationToken.None);
 
         Assert.Equal(stored.ToLowerInvariant(), service.Current.Code);
-        Assert.Equal(stored, settings.Values[LanguageService.Setting]);
+        Assert.Equal(stored, settings.Values[LanguageService.SETTING]);
     }
 
     /// <summary>
@@ -126,13 +149,13 @@ public sealed class LocalizationTests
     public async Task UnknownStoredLanguage_IsChosenAgainBySystem()
     {
         var settings = new MemorySettings();
-        settings.Values[LanguageService.Setting] = "xx";
+        settings.Values[LanguageService.SETTING] = "xx";
         var service = NewService(settings, NewLocalizer(), "ru-RU");
 
         await service.InitializeAsync(CancellationToken.None);
 
         Assert.Equal("ru", service.Current.Code);
-        Assert.Equal("ru", settings.Values[LanguageService.Setting]);
+        Assert.Equal("ru", settings.Values[LanguageService.SETTING]);
     }
 
     /// <summary>
@@ -150,9 +173,9 @@ public sealed class LocalizationTests
         await service.SelectAsync("ru", CancellationToken.None);
 
         Assert.Equal("ru", localizer.Current.Code);
-        Assert.Equal("ru", settings.Values[LanguageService.Setting]);
+        Assert.Equal("ru", settings.Values[LanguageService.SETTING]);
         await Assert.ThrowsAsync<ArgumentException>(() => service.SelectAsync("xx", CancellationToken.None));
-        Assert.Equal("ru", settings.Values[LanguageService.Setting]);
+        Assert.Equal("ru", settings.Values[LanguageService.SETTING]);
     }
 
     /// <summary>
@@ -169,7 +192,7 @@ public sealed class LocalizationTests
 
         var selector = new LanguageViewModel(service, code => code == "en" ? null : Substitute.For<Avalonia.Media.IImage>());
 
-        Assert.Equal(["English", "Русский"], selector.Options.Select(o => o.Name));
+        Assert.Equal(["Deutsch", "English", "Español", "Français", "Português", "Русский"], selector.Options.Select(o => o.Name));
         Assert.Equal("ru", selector.Selected.Code);
         Assert.Null(selector.Options.Single(o => o.Code == "en").Flag);
         Assert.NotNull(selector.Options.Single(o => o.Code == "ru").Flag);
@@ -189,7 +212,7 @@ public sealed class LocalizationTests
         var selector = new LanguageViewModel(service);
 
         selector.Selected = selector.Options.Single(o => o.Code == "en");
-        await Eventually(() => settings.Values[LanguageService.Setting] == "en");
+        await Eventually(() => settings.Values[LanguageService.SETTING] == "en");
 
         Assert.Equal("en", localizer.Current.Code);
     }
@@ -231,7 +254,7 @@ public sealed class LocalizationTests
     public void SessionTexts_AreEnglishInEnglish()
     {
         using var scope = Texts.Scope(NewLocalizer("en"));
-        var state = PlaybackState.Initial(Host, 0) with { Cause = PlaybackCause.Seek, Position = TimeSpan.FromSeconds(3905) };
+        var state = PlaybackState.Initial(_host, 0) with { Cause = PlaybackCause.Seek, Position = TimeSpan.FromSeconds(3905) };
 
         Assert.Equal("Marina seeks to 1:05:05", SessionTexts.Describe(state, "Marina"));
         Assert.Equal("The host declined the request. To try again, ask them for a new invitation.", SessionTexts.DescribeRejection(RejectReason.Declined));
@@ -269,7 +292,7 @@ public sealed class LocalizationTests
         using (Texts.Scope(NewLocalizer("en")))
         {
             Assert.Equal("This is not a Golether invitation.", Assert.Throws<FormatException>(() => Invite.ParseLink("hello")).Message);
-            Assert.Equal("The invitation is damaged.", Assert.Throws<FormatException>(() => Invite.ParseLink(Invite.LinkPrefix + "!!!")).Message);
+            Assert.Equal("The invitation is damaged.", Assert.Throws<FormatException>(() => Invite.ParseLink(Invite.LINK_PREFIX + "!!!")).Message);
         }
 
         using (Texts.Scope(NewLocalizer("ru")))
@@ -326,13 +349,13 @@ public sealed class LocalizationTests
     public void ParticipantTexts_AreEnglishInEnglish()
     {
         using var scope = Texts.Scope(NewLocalizer("en"));
-        var tile = new ParticipantItemViewModel(Host, (_, _, _) => Task.CompletedTask, (_, _) => { });
-        tile.Update(new ParticipantView(new ParticipantInfo(Host, "Anna", true), new ParticipantStatus { PeerId = Host }, true), null);
+        var tile = new ParticipantItemViewModel(_host, (_, _, _) => Task.CompletedTask, (_, _) => { });
+        tile.Update(new ParticipantView(new ParticipantInfo(_host, "Anna", true), new ParticipantStatus { PeerId = _host }, true), null);
 
         Assert.Equal("host · you", tile.RoleText);
-        Assert.Equal("Restore sound", new ParticipantItemViewModel(Guest, (_, _, _) => Task.CompletedTask, (_, _) => { }) { VoiceVolume = 0 }.VoiceMuteText);
+        Assert.Equal("Restore sound", new ParticipantItemViewModel(_guest, (_, _, _) => Task.CompletedTask, (_, _) => { }) { VoiceVolume = 0 }.VoiceMuteText);
         Assert.Equal("Waiting for the participants to be ready…", MainWindowViewModel.DescribeWaiting(
-            new SessionSnapshot { IsHost = true, State = SessionState.Active, SessionName = "Movie night", HostPeerId = Host, Participants = [] },
+            new SessionSnapshot { IsHost = true, State = SessionState.Active, SessionName = "Movie night", HostPeerId = _host, Participants = [] },
             null));
     }
 

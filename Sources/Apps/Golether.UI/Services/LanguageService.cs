@@ -12,7 +12,7 @@ public sealed class LanguageService : ILanguageService
     /// <summary>
     /// The setting with the language code.
     /// </summary>
-    public const string Setting = "ui.language";
+    public const string SETTING = "ui.language";
 
     /// <summary>
     /// The localizer that switches the texts.
@@ -51,7 +51,7 @@ public sealed class LanguageService : ILanguageService
     /// <inheritdoc />
     public async Task InitializeAsync(CancellationToken cancellationToken)
     {
-        var stored = await _settings.GetAsync(Setting, cancellationToken).ConfigureAwait(true);
+        var stored = await _settings.GetAsync(SETTING, cancellationToken).ConfigureAwait(true);
         var known = _localizer.Languages.FirstOrDefault(l => string.Equals(l.Code, stored?.Trim(), StringComparison.OrdinalIgnoreCase));
         if (known is not null)
         {
@@ -68,6 +68,6 @@ public sealed class LanguageService : ILanguageService
     public async Task SelectAsync(string code, CancellationToken cancellationToken)
     {
         _localizer.SetLanguage(code);
-        await _settings.SetAsync(Setting, _localizer.Current.Code, cancellationToken).ConfigureAwait(true);
+        await _settings.SetAsync(SETTING, _localizer.Current.Code, cancellationToken).ConfigureAwait(true);
     }
 }

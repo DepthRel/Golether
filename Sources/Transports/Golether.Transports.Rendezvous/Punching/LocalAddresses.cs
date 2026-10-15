@@ -15,7 +15,7 @@ public static class LocalAddresses
     /// Lists the addresses of the active interfaces with a port, as texts for a message.
     /// </summary>
     /// <param name="port">The local port.</param>
-    /// <returns>At most <see cref="RendezvousProtocol.MaxLocals"/> addresses; empty when the system does not tell.</returns>
+    /// <returns>At most <see cref="RendezvousProtocol.MAX_LOCALS"/> addresses; empty when the system does not tell.</returns>
     public static string[] Describe(int port)
     {
         try
@@ -26,10 +26,10 @@ public static class LocalAddresses
                     .Where(nic => nic.OperationalStatus == OperationalStatus.Up && nic.NetworkInterfaceType != NetworkInterfaceType.Loopback)
                     .SelectMany(nic => nic.GetIPProperties().UnicastAddresses)
                     .Select(unicast => unicast.Address)
-                    .Where(address => address.AddressFamily == AddressFamily.InterNetwork && !IPAddress.IsLoopback(address)
-                        && address.GetAddressBytes() is not [169, 254, ..])
+                    .Where(address => address.AddressFamily == AddressFamily.InterNetwork && !IPAddress.IsLoopback(address) &&
+                        address.GetAddressBytes() is not [169, 254, ..])
                     .Distinct()
-                    .Take(RendezvousProtocol.MaxLocals)
+                    .Take(RendezvousProtocol.MAX_LOCALS)
                     .Select(address => RendezvousProtocol.Format(new IPEndPoint(address, port))),
             ];
         }

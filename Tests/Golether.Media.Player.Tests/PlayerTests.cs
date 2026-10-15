@@ -46,8 +46,8 @@ public sealed class PlayerTests
         var second = new MpvMediaUriRegistry().Register(() => new MemoryStream());
 
         Assert.NotEqual(first, second);
-        Assert.StartsWith(MpvStreamRegistry.UriPrefix, first.OriginalString, StringComparison.Ordinal);
-        Assert.Equal(MpvStreamRegistry.Protocol, first.Scheme);
+        Assert.StartsWith(MpvStreamRegistry.URI_PREFIX, first.OriginalString, StringComparison.Ordinal);
+        Assert.Equal(MpvStreamRegistry.PROTOCOL, first.Scheme);
         MpvStreamRegistry.Unregister(first);
         MpvStreamRegistry.Unregister(second);
     }

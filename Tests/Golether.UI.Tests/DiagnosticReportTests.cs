@@ -1,12 +1,13 @@
+using Microsoft.Extensions.Logging;
 using Golether.Components.Installation;
 using Golether.Core.Data.Enums;
+using Golether.Core.Enums;
 using Golether.Core.Identity;
 using Golether.Core.Media;
 using Golether.Core.Playback;
 using Golether.Core.Session;
 using Golether.Session;
 using Golether.UI.Services;
-using Microsoft.Extensions.Logging;
 
 namespace Golether.UI.Tests;
 
@@ -18,7 +19,7 @@ public sealed class DiagnosticReportTests
     /// <summary>
     /// The host device.
     /// </summary>
-    private static readonly PeerId Host = PeerId.Parse(new string('a', 64));
+    private static readonly PeerId _host = PeerId.Parse(new string('a', 64));
 
     /// <summary>
     /// Keys, tokens and relay passwords never reach the report.
@@ -45,13 +46,13 @@ public sealed class DiagnosticReportTests
             IsHost = true,
             State = SessionState.Active,
             SessionName = "Вечер кино",
-            HostPeerId = Host,
+            HostPeerId = _host,
             Participants =
             [
-                new ParticipantView(new ParticipantInfo(Host, "Вы", true), new ParticipantStatus { PeerId = Host, Position = TimeSpan.FromMinutes(5) }, true),
+                new ParticipantView(new ParticipantInfo(_host, "Вы", true), new ParticipantStatus { PeerId = _host, Position = TimeSpan.FromMinutes(5) }, true),
                 new ParticipantView(new ParticipantInfo(guest, "Марина", false), new ParticipantStatus { PeerId = guest, Drift = TimeSpan.FromMilliseconds(-120), CameraOff = true }, false),
             ],
-            Playback = PlaybackState.Initial(Host, 0) with { State = PlayState.Playing, Position = TimeSpan.FromMinutes(5) },
+            Playback = PlaybackState.Initial(_host, 0) with { State = PlayState.Playing, Position = TimeSpan.FromMinutes(5) },
             Media = new MediaDescriptor { FileName = "Очень личное название.mkv", Length = 1234, QuickId = new string('c', 64) },
             RoundTrip = TimeSpan.FromMilliseconds(42),
         };
@@ -150,7 +151,7 @@ public sealed class DiagnosticReportTests
                 File.WriteAllText(file, "x");
             }
 
-            var stale = DateTime.UtcNow - TimeSpan.FromDays(FileLogProvider.KeepDays + 1);
+            var stale = DateTime.UtcNow - TimeSpan.FromDays(FileLogProvider.KEEP_DAYS + 1);
             File.SetLastWriteTimeUtc(oldLog, stale);
             File.SetLastWriteTimeUtc(oldReport, stale);
 

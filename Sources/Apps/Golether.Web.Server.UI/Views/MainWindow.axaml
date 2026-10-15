@@ -34,7 +34,11 @@
                     ToolTip.Tip="{loc:Loc Monitor.Language}">
             <ComboBox.ItemTemplate>
               <DataTemplate x:DataType="l:LanguageInfo">
-                <TextBlock Text="{Binding NativeName}" />
+                <StackPanel Orientation="Horizontal" Spacing="8">
+                  <Image Source="{Binding Converter={x:Static views:FlagImageConverter.Instance}}" Width="20" Height="14"
+                         Stretch="Uniform" VerticalAlignment="Center" />
+                  <TextBlock Text="{Binding NativeName}" VerticalAlignment="Center" />
+                </StackPanel>
               </DataTemplate>
             </ComboBox.ItemTemplate>
           </ComboBox>

@@ -1,4 +1,5 @@
 using System.Globalization;
+using Golether.Core.Enums;
 using Golether.Localization;
 using Golether.Web.Server.Contracts;
 
@@ -67,11 +68,11 @@ public sealed class JournalRowViewModel
     /// <param name="text">The text, already trimmed.</param>
     /// <returns><see langword="true"/> when it does.</returns>
     public bool Matches(string text)
-        => text.Length == 0
-           || Time.Contains(text, StringComparison.OrdinalIgnoreCase)
-           || Address.Contains(text, StringComparison.OrdinalIgnoreCase)
-           || Event.Contains(text, StringComparison.OrdinalIgnoreCase)
-           || Details.Contains(text, StringComparison.OrdinalIgnoreCase);
+        => text.Length == 0 ||
+           Time.Contains(text, StringComparison.OrdinalIgnoreCase) ||
+           Address.Contains(text, StringComparison.OrdinalIgnoreCase) ||
+           Event.Contains(text, StringComparison.OrdinalIgnoreCase) ||
+           Details.Contains(text, StringComparison.OrdinalIgnoreCase);
 
     /// <summary>
     /// Writes the row as one line of an exported journal, with the time zone so that it can be read anywhere.

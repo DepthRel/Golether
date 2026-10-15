@@ -161,14 +161,14 @@ public sealed class ComponentLocator
             return (ComponentSource.Missing, null);
         }
 
-        var bundled = Path.Combine(_bundledDirectory, AmneziaWgBundle.DirectoryName);
+        var bundled = Path.Combine(_bundledDirectory, AmneziaWgBundle.DIRECTORY_NAME);
         if (AmneziaWgBundle.IsComplete(bundled))
         {
-            return (ComponentSource.Bundled, Path.Combine(bundled, AmneziaWgBundle.Executable));
+            return (ComponentSource.Bundled, Path.Combine(bundled, AmneziaWgBundle.EXECUTABLE));
         }
 
-        if (FindInstalled(ComponentId.Tunnel) is { } installed
-            && AmneziaWgBundle.IsComplete(Path.Combine(installed, AmneziaWgBundle.DirectoryName)))
+        if (FindInstalled(ComponentId.Tunnel) is { } installed &&
+            AmneziaWgBundle.IsComplete(Path.Combine(installed, AmneziaWgBundle.DIRECTORY_NAME)))
         {
             return (ComponentSource.Installed, AmneziaWgBundle.FindExecutable(installed));
         }
@@ -204,7 +204,7 @@ public sealed class ComponentLocator
     /// <returns>The marker, or <see langword="null"/> when absent or damaged.</returns>
     private static ComponentMarker? ReadMarker(string directory)
     {
-        var file = Path.Combine(directory, ComponentMarker.FileName);
+        var file = Path.Combine(directory, ComponentMarker.FILE_NAME);
         try
         {
             return File.Exists(file) ? JsonSerializer.Deserialize<ComponentMarker>(File.ReadAllBytes(file), ComponentInstaller.MarkerJson) : null;

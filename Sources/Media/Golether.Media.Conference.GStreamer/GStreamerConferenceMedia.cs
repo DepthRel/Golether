@@ -1,12 +1,12 @@
 using System.Collections.Concurrent;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 using Golether.Core.Data.Enums;
 using Golether.Core.Identity;
 using Golether.Localization;
 using Golether.Media.Conference.GStreamer.Native;
-using Microsoft.Extensions.Logging.Abstractions;
-using Microsoft.Extensions.Logging;
 
 namespace Golether.Media.Conference.GStreamer;
 
@@ -28,17 +28,17 @@ public sealed class GStreamerConferenceMedia : IConferenceMedia, IPeerHost
     /// <summary>
     /// The number of remote voices the mixer accepts.
     /// </summary>
-    public const int MaxRemotePeers = 4;
+    public const int MAX_REMOTE_PEERS = 4;
 
     /// <summary>
     /// How many times in a row a microphone that stopped by itself is restarted.
     /// </summary>
-    private const int MaxMicrophoneRestarts = 3;
+    private const int MAX_MICROPHONE_RESTARTS = 3;
 
     /// <summary>
     /// The pause before a failed microphone is started again.
     /// </summary>
-    private static readonly TimeSpan MicrophoneRestartDelay = TimeSpan.FromSeconds(1);
+    private static readonly TimeSpan _microphoneRestartDelay = TimeSpan.FromSeconds(1);
 
     /// <summary>
     /// The options.
@@ -137,9 +137,9 @@ public sealed class GStreamerConferenceMedia : IConferenceMedia, IPeerHost
     private readonly VoiceActivityDetector _voices = new();
 
     /// <summary>
-    /// Measures time for the voice detector.
+    /// The moment the voice detector counts its time from.
     /// </summary>
-    private readonly System.Diagnostics.Stopwatch _clock = System.Diagnostics.Stopwatch.StartNew();
+    private readonly long _start = TimeProvider.System.GetTimestamp();
 
     /// <summary>
     /// Ends the speaking state of silent participants.
@@ -468,7 +468,7 @@ public sealed class GStreamerConferenceMedia : IConferenceMedia, IPeerHost
             // The echo canceller is the first suspect and is dropped at once; a device needs a moment.
             if (!echoCancellation)
             {
-                await Task.Delay(MicrophoneRestartDelay).ConfigureAwait(false);
+                await Task.Delay(_microphoneRestartDelay).ConfigureAwait(false);
             }
 
             lock (_gate)
@@ -479,10 +479,10 @@ public sealed class GStreamerConferenceMedia : IConferenceMedia, IPeerHost
                     return;
                 }
 
-                if (_microphoneRestarts < MaxMicrophoneRestarts)
+                if (_microphoneRestarts < MAX_MICROPHONE_RESTARTS)
                 {
                     _microphoneRestarts++;
-                    _logger.LogWarning("The microphone stopped; restarting it without echo cancellation ({Attempt} of {Limit})", _microphoneRestarts, MaxMicrophoneRestarts);
+                    _logger.LogWarning("The microphone stopped; restarting it without echo cancellation ({Attempt} of {Limit})", _microphoneRestarts, MAX_MICROPHONE_RESTARTS);
                     StartAudio(echoCancellation: false);
                     return;
                 }
@@ -625,7 +625,7 @@ public sealed class GStreamerConferenceMedia : IConferenceMedia, IPeerHost
     private void DetectVoice(PeerId peer, ReadOnlySpan<byte> pcm)
     {
         var duration = TimeSpan.FromSeconds(pcm.Length / 2 / 48000.0);
-        if (_voices.Process(peer, pcm, duration, _clock.Elapsed) is { } change)
+        if (_voices.Process(peer, pcm, duration, TimeProvider.System.GetElapsedTime(_start)) is { } change)
         {
             RaiseSpeaking(change);
         }
@@ -636,7 +636,7 @@ public sealed class GStreamerConferenceMedia : IConferenceMedia, IPeerHost
     /// </summary>
     private void ExpireVoices()
     {
-        foreach (var change in _voices.Expire(_clock.Elapsed))
+        foreach (var change in _voices.Expire(TimeProvider.System.GetElapsedTime(_start)))
         {
             RaiseSpeaking(change);
         }
@@ -677,7 +677,7 @@ public sealed class GStreamerConferenceMedia : IConferenceMedia, IPeerHost
     /// </summary>
     /// <param name="sink">The appsink.</param>
     /// <param name="data">The media handle.</param>
-    /// <returns><see cref="Samples.FlowOk"/>.</returns>
+    /// <returns><see cref="Samples.FLOW_OK"/>.</returns>
     [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
     private static unsafe int OnPreviewSample(nint sink, nint data)
     {
@@ -693,7 +693,7 @@ public sealed class GStreamerConferenceMedia : IConferenceMedia, IPeerHost
             });
         }
 
-        return Samples.FlowOk;
+        return Samples.FLOW_OK;
     }
 
     /// <summary>
@@ -701,7 +701,7 @@ public sealed class GStreamerConferenceMedia : IConferenceMedia, IPeerHost
     /// </summary>
     /// <param name="sink">The appsink.</param>
     /// <param name="data">The media handle.</param>
-    /// <returns><see cref="Samples.FlowOk"/>.</returns>
+    /// <returns><see cref="Samples.FLOW_OK"/>.</returns>
     [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
     private static int OnEncodedVideo(nint sink, nint data)
     {
@@ -721,7 +721,7 @@ public sealed class GStreamerConferenceMedia : IConferenceMedia, IPeerHost
             });
         }
 
-        return Samples.FlowOk;
+        return Samples.FLOW_OK;
     }
 
     /// <summary>
@@ -729,7 +729,7 @@ public sealed class GStreamerConferenceMedia : IConferenceMedia, IPeerHost
     /// </summary>
     /// <param name="sink">The appsink.</param>
     /// <param name="data">The media handle.</param>
-    /// <returns><see cref="Samples.FlowOk"/>.</returns>
+    /// <returns><see cref="Samples.FLOW_OK"/>.</returns>
     [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
     private static int OnEncodedVideoLow(nint sink, nint data)
     {
@@ -749,7 +749,7 @@ public sealed class GStreamerConferenceMedia : IConferenceMedia, IPeerHost
             });
         }
 
-        return Samples.FlowOk;
+        return Samples.FLOW_OK;
     }
 
     /// <summary>
@@ -847,7 +847,7 @@ public sealed class GStreamerConferenceMedia : IConferenceMedia, IPeerHost
     /// </summary>
     /// <param name="sink">The appsink.</param>
     /// <param name="data">The media handle.</param>
-    /// <returns><see cref="Samples.FlowOk"/>.</returns>
+    /// <returns><see cref="Samples.FLOW_OK"/>.</returns>
     [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
     private static int OnEncodedAudio(nint sink, nint data)
     {
@@ -867,7 +867,7 @@ public sealed class GStreamerConferenceMedia : IConferenceMedia, IPeerHost
             });
         }
 
-        return Samples.FlowOk;
+        return Samples.FLOW_OK;
     }
 
     /// <summary>
@@ -875,7 +875,7 @@ public sealed class GStreamerConferenceMedia : IConferenceMedia, IPeerHost
     /// </summary>
     /// <param name="sink">The appsink.</param>
     /// <param name="data">The media handle.</param>
-    /// <returns><see cref="Samples.FlowOk"/>.</returns>
+    /// <returns><see cref="Samples.FLOW_OK"/>.</returns>
     [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
     private static int OnMicrophoneLevel(nint sink, nint data)
     {
@@ -890,7 +890,7 @@ public sealed class GStreamerConferenceMedia : IConferenceMedia, IPeerHost
             });
         }
 
-        return Samples.FlowOk;
+        return Samples.FLOW_OK;
     }
 
     /// <summary>
@@ -1020,7 +1020,7 @@ public sealed class GStreamerConferenceMedia : IConferenceMedia, IPeerHost
     private static string BuildPlayback()
     {
         var sink = OperatingSystem.IsWindows() ? "wasapi2sink low-latency=true" : "autoaudiosink";
-        var slots = string.Concat(Enumerable.Range(0, MaxRemotePeers).Select(i =>
+        var slots = string.Concat(Enumerable.Range(0, MAX_REMOTE_PEERS).Select(i =>
             $" appsrc name=slot{i} is-live=true do-timestamp=true format=time " +
             "caps=\"audio/x-raw,format=S16LE,rate=48000,channels=1,layout=interleaved\" ! queue ! mix."));
         return $"audiomixer name=mix latency=60000000 ! audioconvert ! audioresample ! webrtcechoprobe name=golether-echo ! " +
@@ -1077,7 +1077,7 @@ public sealed class GStreamerConferenceMedia : IConferenceMedia, IPeerHost
             }
 
             var used = _peers.Values.Select(p => p.AudioSlot).ToHashSet();
-            var slot = Enumerable.Range(0, MaxRemotePeers).FirstOrDefault(i => !used.Contains(i), -1);
+            var slot = Enumerable.Range(0, MAX_REMOTE_PEERS).FirstOrDefault(i => !used.Contains(i), -1);
             if (slot < 0)
             {
                 _logger.LogWarning("No free slot for {Peer}", peer.ToShortString());

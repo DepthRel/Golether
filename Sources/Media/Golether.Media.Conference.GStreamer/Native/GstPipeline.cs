@@ -1,5 +1,6 @@
 using System.Runtime.InteropServices;
 using Microsoft.Extensions.Logging;
+using Golether.Media.Conference.GStreamer.Enums;
 
 namespace Golether.Media.Conference.GStreamer.Native;
 
@@ -11,7 +12,7 @@ internal sealed unsafe class GstPipeline : IDisposable
     /// <summary>
     /// The bus poll interval in nanoseconds.
     /// </summary>
-    private const ulong PollNanoseconds = 100_000_000;
+    private const ulong POLL_NANOSECONDS = 100_000_000;
 
     /// <summary>
     /// Element references by name.
@@ -148,7 +149,7 @@ internal sealed unsafe class GstPipeline : IDisposable
         }
 
         // Without a start time the pipeline keeps the base time it is given instead of choosing its own.
-        Gst.ElementSetStartTime(Handle, Gst.ClockTimeNone);
+        Gst.ElementSetStartTime(Handle, Gst.CLOCK_TIME_NONE);
         Gst.ElementSetBaseTime(Handle, origin);
     }
 
@@ -208,7 +209,7 @@ internal sealed unsafe class GstPipeline : IDisposable
     {
         while (!_disposed)
         {
-            var message = Gst.BusTimedPopFiltered(_bus, PollNanoseconds, Gst.MessageError | Gst.MessageWarning);
+            var message = Gst.BusTimedPopFiltered(_bus, POLL_NANOSECONDS, Gst.MESSAGE_ERROR | Gst.MESSAGE_WARNING);
             if (message == 0)
             {
                 continue;
@@ -216,10 +217,10 @@ internal sealed unsafe class GstPipeline : IDisposable
 
             try
             {
-                var type = Marshal.ReadInt32(message, Gst.MessageTypeOffset);
+                var type = Marshal.ReadInt32(message, Gst.MESSAGE_TYPE_OFFSET);
                 GError* error = null;
                 nint debug = 0;
-                if (type == Gst.MessageError)
+                if (type == Gst.MESSAGE_ERROR)
                 {
                     Gst.MessageParseError(message, &error, &debug);
                     var text = Gst.TakeError(error);

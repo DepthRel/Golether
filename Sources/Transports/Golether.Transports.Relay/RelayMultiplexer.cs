@@ -14,13 +14,13 @@ namespace Golether.Transports.Relay;
 /// <remarks>
 /// <para>
 /// A frame is a header of 7 bytes (the channel number, 4 bytes big-endian; the kind, 1 byte; the length of the
-/// payload, 2 bytes big-endian) and the payload of at most <see cref="MaxPayload"/> bytes. Kinds: <c>1</c> open (the
+/// payload, 2 bytes big-endian) and the payload of at most <see cref="MAX_PAYLOAD"/> bytes. Kinds: <c>1</c> open (the
 /// side that opened the stream starts a channel), <c>2</c> data, <c>3</c> close (either side; nothing more follows on
 /// that channel).
 /// </para>
 /// <para>
 /// What arrives is not trusted: a frame of an unknown kind or with an oversized payload ends the whole stream, a
-/// channel beyond <see cref="MaxChannels"/> is closed at once, data for a channel that does not exist is dropped.
+/// channel beyond <see cref="MAX_CHANNELS"/> is closed at once, data for a channel that does not exist is dropped.
 /// A channel whose reader is slow holds the others back instead of taking memory without a limit.
 /// </para>
 /// </remarks>
@@ -29,32 +29,32 @@ public sealed class RelayMultiplexer : IAsyncDisposable
     /// <summary>
     /// The largest number of channels at once: the relay of the host does not grant more allocations.
     /// </summary>
-    public const int MaxChannels = 16;
+    public const int MAX_CHANNELS = 16;
 
     /// <summary>
     /// The largest payload of a frame, in bytes.
     /// </summary>
-    public const int MaxPayload = 16 * 1024;
+    public const int MAX_PAYLOAD = 16 * 1024;
 
     /// <summary>
     /// The length of a frame header.
     /// </summary>
-    private const int HeaderLength = 7;
+    private const int HEADER_LENGTH = 7;
 
     /// <summary>
     /// The frame that starts a channel.
     /// </summary>
-    private const byte KindOpen = 1;
+    private const byte KIND_OPEN = 1;
 
     /// <summary>
     /// The frame that carries bytes of a channel.
     /// </summary>
-    private const byte KindData = 2;
+    private const byte KIND_DATA = 2;
 
     /// <summary>
     /// The frame that ends a channel.
     /// </summary>
-    private const byte KindClose = 3;
+    private const byte KIND_CLOSE = 3;
 
     /// <summary>
     /// The shared stream.
@@ -140,7 +140,7 @@ public sealed class RelayMultiplexer : IAsyncDisposable
             throw new IOException("The shared relay stream has ended.");
         }
 
-        if (_channels.Count >= MaxChannels)
+        if (_channels.Count >= MAX_CHANNELS)
         {
             throw new IOException("Too many relay channels are open.");
         }
@@ -149,7 +149,7 @@ public sealed class RelayMultiplexer : IAsyncDisposable
         _channels[channel.Id] = channel;
         try
         {
-            await SendAsync(channel.Id, KindOpen, ReadOnlyMemory<byte>.Empty, cancellationToken).ConfigureAwait(false);
+            await SendAsync(channel.Id, KIND_OPEN, ReadOnlyMemory<byte>.Empty, cancellationToken).ConfigureAwait(false);
         }
         catch
         {
@@ -201,17 +201,17 @@ public sealed class RelayMultiplexer : IAsyncDisposable
     /// </summary>
     /// <param name="channel">The channel number.</param>
     /// <param name="kind">The kind of the frame.</param>
-    /// <param name="payload">The payload, at most <see cref="MaxPayload"/> bytes.</param>
+    /// <param name="payload">The payload, at most <see cref="MAX_PAYLOAD"/> bytes.</param>
     /// <param name="cancellationToken">The cancellation token.</param>
     /// <returns>A task that completes when the frame is flushed.</returns>
     /// <exception cref="IOException">The shared stream has ended.</exception>
     private async Task SendAsync(uint channel, byte kind, ReadOnlyMemory<byte> payload, CancellationToken cancellationToken)
     {
-        var frame = new byte[HeaderLength + payload.Length];
+        var frame = new byte[HEADER_LENGTH + payload.Length];
         BinaryPrimitives.WriteUInt32BigEndian(frame, channel);
         frame[4] = kind;
         BinaryPrimitives.WriteUInt16BigEndian(frame.AsSpan(5), (ushort)payload.Length);
-        payload.CopyTo(frame.AsMemory(HeaderLength));
+        payload.CopyTo(frame.AsMemory(HEADER_LENGTH));
         using var linked = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, _ending.Token);
         try
         {
@@ -244,19 +244,19 @@ public sealed class RelayMultiplexer : IAsyncDisposable
     private async Task ReadLoopAsync()
     {
         var token = _ending.Token;
-        var header = new byte[HeaderLength];
-        var payload = new byte[MaxPayload];
+        var header = new byte[HEADER_LENGTH];
+        var payload = new byte[MAX_PAYLOAD];
         try
         {
             while (true)
             {
-                var read = await _stream.ReadAtLeastAsync(header, HeaderLength, throwOnEndOfStream: false, token).ConfigureAwait(false);
+                var read = await _stream.ReadAtLeastAsync(header, HEADER_LENGTH, throwOnEndOfStream: false, token).ConfigureAwait(false);
                 if (read == 0)
                 {
                     return;
                 }
 
-                if (read < HeaderLength)
+                if (read < HEADER_LENGTH)
                 {
                     throw new InvalidDataException("The relay stream ended inside a frame header.");
                 }
@@ -264,7 +264,7 @@ public sealed class RelayMultiplexer : IAsyncDisposable
                 var id = BinaryPrimitives.ReadUInt32BigEndian(header);
                 var kind = header[4];
                 var length = BinaryPrimitives.ReadUInt16BigEndian(header.AsSpan(5));
-                if (length > MaxPayload || kind is not (KindOpen or KindData or KindClose) || (kind != KindData && length != 0))
+                if (length > MAX_PAYLOAD || kind is not (KIND_OPEN or KIND_DATA or KIND_CLOSE) || (kind != KIND_DATA && length != 0))
                 {
                     throw new InvalidDataException($"A relay frame of kind {kind} with {length} bytes is not valid.");
                 }
@@ -276,13 +276,13 @@ public sealed class RelayMultiplexer : IAsyncDisposable
 
                 switch (kind)
                 {
-                    case KindOpen:
+                    case KIND_OPEN:
                         await AcceptAsync(id, token).ConfigureAwait(false);
                         break;
-                    case KindData when _channels.TryGetValue(id, out var channel):
+                    case KIND_DATA when _channels.TryGetValue(id, out var channel):
                         await channel.ReceiveAsync(payload.AsMemory(0, length), token).ConfigureAwait(false);
                         break;
-                    case KindClose when _channels.TryRemove(id, out var closed):
+                    case KIND_CLOSE when _channels.TryRemove(id, out var closed):
                         closed.EndInbound();
                         break;
                 }
@@ -309,10 +309,10 @@ public sealed class RelayMultiplexer : IAsyncDisposable
     /// <returns>A task that completes when the channel is being served or was refused.</returns>
     private async Task AcceptAsync(uint id, CancellationToken cancellationToken)
     {
-        if (_accept is not { } accept || _channels.Count >= MaxChannels || _channels.ContainsKey(id))
+        if (_accept is not { } accept || _channels.Count >= MAX_CHANNELS || _channels.ContainsKey(id))
         {
             // Nobody serves channels here, there are too many, or the number is taken: the other side is told.
-            await SendAsync(id, KindClose, ReadOnlyMemory<byte>.Empty, cancellationToken).ConfigureAwait(false);
+            await SendAsync(id, KIND_CLOSE, ReadOnlyMemory<byte>.Empty, cancellationToken).ConfigureAwait(false);
             return;
         }
 
@@ -447,8 +447,8 @@ public sealed class RelayMultiplexer : IAsyncDisposable
                     throw new IOException("The relay channel is closed.");
                 }
 
-                var part = buffer[..Math.Min(buffer.Length, MaxPayload)];
-                await _owner.SendAsync(Id, KindData, part, cancellationToken).ConfigureAwait(false);
+                var part = buffer[..Math.Min(buffer.Length, MAX_PAYLOAD)];
+                await _owner.SendAsync(Id, KIND_DATA, part, cancellationToken).ConfigureAwait(false);
                 buffer = buffer[part.Length..];
             }
         }
@@ -487,7 +487,7 @@ public sealed class RelayMultiplexer : IAsyncDisposable
             {
                 try
                 {
-                    await _owner.SendAsync(Id, KindClose, ReadOnlyMemory<byte>.Empty, CancellationToken.None).ConfigureAwait(false);
+                    await _owner.SendAsync(Id, KIND_CLOSE, ReadOnlyMemory<byte>.Empty, CancellationToken.None).ConfigureAwait(false);
                 }
                 catch (IOException)
                 {

@@ -14,7 +14,7 @@ public sealed class SharedRelayRoute : IAsyncDisposable
     /// How long a failure to open the shared stream is remembered. The cameras ask for all their connections at once:
     /// without this each of them would repeat the whole failed attempt in turn.
     /// </summary>
-    private static readonly TimeSpan FailureMemory = TimeSpan.FromSeconds(5);
+    private static readonly TimeSpan _failureMemory = TimeSpan.FromSeconds(5);
 
     /// <summary>
     /// Opens the shared stream to the host.
@@ -84,7 +84,7 @@ public sealed class SharedRelayRoute : IAsyncDisposable
             ObjectDisposedException.ThrowIf(_disposed, this);
             if (_current is not { IsAlive: true })
             {
-                if (_failure is { } failure && _timeProvider.GetElapsedTime(_failedAt) < FailureMemory)
+                if (_failure is { } failure && _timeProvider.GetElapsedTime(_failedAt) < _failureMemory)
                 {
                     throw new IOException(failure);
                 }

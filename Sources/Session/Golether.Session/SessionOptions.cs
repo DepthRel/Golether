@@ -11,12 +11,12 @@ public sealed record SessionOptions
     /// <summary>
     /// The largest supported number of participants, host included.
     /// </summary>
-    public const int MaxParticipantsLimit = 5;
+    public const int MAX_PARTICIPANTS_LIMIT = 5;
 
     /// <summary>
     /// Gets the maximum number of participants, host included (default and upper limit 5).
     /// </summary>
-    public int MaxParticipants { get; init; } = MaxParticipantsLimit;
+    public int MaxParticipants { get; init; } = MAX_PARTICIPANTS_LIMIT;
 
     /// <summary>
     /// Gets the number of parallel media streams per participant (default 4).
@@ -65,7 +65,7 @@ public sealed record SessionOptions
     public void Validate()
     {
         ArgumentOutOfRangeException.ThrowIfLessThan(MaxParticipants, 2);
-        ArgumentOutOfRangeException.ThrowIfGreaterThan(MaxParticipants, MaxParticipantsLimit);
+        ArgumentOutOfRangeException.ThrowIfGreaterThan(MaxParticipants, MAX_PARTICIPANTS_LIMIT);
         ArgumentOutOfRangeException.ThrowIfLessThan(MediaDataStreams, 1);
         ArgumentOutOfRangeException.ThrowIfGreaterThan(MediaDataStreams, 16);
         DriftCorrection.Validate();

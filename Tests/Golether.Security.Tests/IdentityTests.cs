@@ -1,7 +1,7 @@
 using System.Security.Cryptography;
+using Microsoft.Extensions.Time.Testing;
 using Golether.Security.Identity;
 using Golether.Security.Secrets;
-using Microsoft.Extensions.Time.Testing;
 
 namespace Golether.Security.Tests;
 

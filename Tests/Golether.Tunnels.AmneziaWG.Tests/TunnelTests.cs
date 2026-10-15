@@ -1,11 +1,11 @@
+using Microsoft.Extensions.Time.Testing;
+using NSubstitute;
 using Golether.Core.Networking;
 using Golether.Security.Identity;
 using Golether.Tunnels.AmneziaWG.Configuration;
 using Golether.Tunnels.AmneziaWG.Control;
 using Golether.Tunnels.AmneziaWG.Keys;
 using Golether.Tunnels.AmneziaWG.Packages;
-using Microsoft.Extensions.Time.Testing;
-using NSubstitute;
 
 namespace Golether.Tunnels.AmneziaWG.Tests;
 
@@ -204,7 +204,7 @@ public sealed class TunnelTests
             EphemeralKey = "AAAA",
             ExpiresAt = time.GetUtcNow().AddHours(1).ToUnixTimeSeconds(),
         };
-        Func<TunnelOfferBody, string> signed = damaged => TunnelPackageCodec.Encode(TunnelPackageCodec.OfferKind, damaged, hostIdentity);
+        Func<TunnelOfferBody, string> signed = damaged => TunnelPackageCodec.Encode(TunnelPackageCodec.OFFER_KIND, damaged, hostIdentity);
         Assert.Throws<FormatException>(() => guestSide.AcceptOffer(signed(body), "g", [], 40000));
         Assert.Throws<FormatException>(() => guestSide.AcceptOffer(signed(body with { Headers = [5, 6, 7, 8], HostEndpoints = null! }), "g", [], 40000));
         Assert.Throws<FormatException>(() => guestSide.AcceptOffer(signed(body with { Headers = [5, 6, 7, 8] }), "g", [], 40000));

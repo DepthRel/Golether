@@ -21,29 +21,29 @@ internal static class TlsProtocol
     /// <summary>
     /// The preamble version.
     /// </summary>
-    public const byte Version = 1;
+    public const byte VERSION = 1;
 
     /// <summary>
     /// The byte the listener sends when it accepts the preamble.
     /// </summary>
-    public const byte Accepted = 0x01;
+    public const byte ACCEPTED = 0x01;
 
     /// <summary>
     /// The SNI name sent by connectors; certificates are pinned, so the name carries no meaning.
     /// </summary>
-    public const string TargetHost = "golether";
+    public const string TARGET_HOST = "golether";
 
     /// <summary>
     /// The TLS versions: TLS 1.3 where the system supports it, TLS 1.2 for Windows 10.
     /// </summary>
-    public const SslProtocols Protocols = SslProtocols.Tls12 | SslProtocols.Tls13;
+    public const SslProtocols PROTOCOLS = SslProtocols.Tls12 | SslProtocols.Tls13;
 
     /// <summary>
     /// Builds the preamble.
     /// </summary>
     /// <param name="purpose">The stream purpose.</param>
     /// <returns>The six preamble bytes.</returns>
-    public static byte[] BuildPreamble(StreamPurpose purpose) => [.. Magic, Version, (byte)purpose];
+    public static byte[] BuildPreamble(StreamPurpose purpose) => [.. Magic, VERSION, (byte)purpose];
 
     /// <summary>
     /// Parses a preamble.
@@ -54,7 +54,7 @@ internal static class TlsProtocol
     public static bool TryParsePreamble(ReadOnlySpan<byte> preamble, out StreamPurpose purpose)
     {
         purpose = default;
-        if (preamble.Length != 6 || !preamble[..4].SequenceEqual(Magic) || preamble[4] != Version)
+        if (preamble.Length != 6 || !preamble[..4].SequenceEqual(Magic) || preamble[4] != VERSION)
         {
             return false;
         }

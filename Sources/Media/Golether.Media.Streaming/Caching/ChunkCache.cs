@@ -11,7 +11,7 @@ public sealed class ChunkCache
     /// <summary>
     /// The default capacity: 1 GiB.
     /// </summary>
-    public const long DefaultCapacity = 1024L * 1024 * 1024;
+    public const long DEFAULT_CAPACITY = 1024L * 1024 * 1024;
 
     /// <summary>
     /// Chunks by index.
@@ -37,7 +37,7 @@ public sealed class ChunkCache
     /// Initializes a new instance of the <see cref="ChunkCache"/> class.
     /// </summary>
     /// <param name="capacity">The capacity in bytes.</param>
-    public ChunkCache(long capacity = DefaultCapacity)
+    public ChunkCache(long capacity = DEFAULT_CAPACITY)
     {
         ArgumentOutOfRangeException.ThrowIfLessThan(capacity, 1);
         Capacity = capacity;

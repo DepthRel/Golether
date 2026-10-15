@@ -26,7 +26,7 @@ public sealed class UpdateServiceTests
         Assert.Null(UpdateService.Choose(good with { Url = "file:///C:/x.exe" }, current));
         Assert.Null(UpdateService.Choose(good with { Sha256 = "короткая" }, current));
         Assert.Null(UpdateService.Choose(good with { Sha256 = new string('z', 64) }, current));
-        Assert.Null(UpdateService.Choose(good with { Size = UpdateService.MaxPackageBytes + 1 }, current));
+        Assert.Null(UpdateService.Choose(good with { Size = UpdateService.MAX_PACKAGE_BYTES + 1 }, current));
         Assert.Null(UpdateService.Choose(null, current));
         Assert.NotNull(UpdateService.Choose(good with { Url = "http://127.0.0.1:8080/x.exe" }, current));
 
@@ -66,7 +66,7 @@ public sealed class UpdateServiceTests
 
         // Without an address of its own the service reads the manifest of the project page.
         service.ManifestUrl = string.Empty;
-        Assert.Equal(UpdateService.DefaultManifestUrl, service.EffectiveManifestUrl);
+        Assert.Equal(UpdateService.DEFAULT_MANIFEST_URL, service.EffectiveManifestUrl);
         Assert.NotNull(await service.CheckAsync(token));
 
         // The check can be switched off, and a broken address or a broken answer is not an error either.

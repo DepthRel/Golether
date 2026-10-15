@@ -1,6 +1,7 @@
 using System.Buffers.Binary;
 using System.Net;
 using System.Net.Sockets;
+using Golether.Core.Enums;
 using Golether.Localization;
 using Golether.Transports.Relay;
 using Golether.Web.Server.Infrastructure;
@@ -22,7 +23,7 @@ internal sealed class StunResponder : BackgroundService
     /// <summary>
     /// The largest request answered; a binding request of a browser or of libnice is well under it.
     /// </summary>
-    private const int MaxRequestSize = 548;
+    private const int MAX_REQUEST_SIZE = 548;
 
     /// <summary>
     /// The options.
@@ -103,7 +104,7 @@ internal sealed class StunResponder : BackgroundService
 
         _socket = socket;
         _logger.LogInformation("STUN answering on udp://{Endpoint}", socket.LocalEndPoint);
-        _journal?.Record(Contracts.JournalEvent.StunListening, detail: "udp://" + socket.LocalEndPoint);
+        _journal?.Record(JournalEvent.StunListening, detail: "udp://" + socket.LocalEndPoint);
         return base.StartAsync(cancellationToken);
     }
 
@@ -123,10 +124,10 @@ internal sealed class StunResponder : BackgroundService
     internal static byte[]? Answer(ReadOnlySpan<byte> request, IPEndPoint remote)
     {
         // A STUN message: type with the two top bits clear, length a multiple of four, the magic cookie.
-        if (request.Length < StunConstants.HeaderSize || request.Length > MaxRequestSize
-            || (request[0] & 0xC0) != 0
-            || BinaryPrimitives.ReadUInt32BigEndian(request[4..]) != StunConstants.MagicCookie
-            || StunMessage.MessageSize(request) != request.Length)
+        if (request.Length < StunConstants.HEADER_SIZE || request.Length > MAX_REQUEST_SIZE ||
+            (request[0] & 0xC0) != 0 ||
+            BinaryPrimitives.ReadUInt32BigEndian(request[4..]) != StunConstants.MAGIC_COOKIE ||
+            StunMessage.MessageSize(request) != request.Length)
         {
             return null;
         }
@@ -143,13 +144,13 @@ internal sealed class StunResponder : BackgroundService
             return null;
         }
 
-        if (message.Method != StunConstants.Binding || message.Class != StunConstants.ClassRequest)
+        if (message.Method != StunConstants.BINDING || message.Class != StunConstants.CLASS_REQUEST)
         {
             return null;
         }
 
-        return new StunMessage(StunConstants.Binding, StunConstants.ClassSuccess, message.TransactionId)
-            .AddXorAddress(StunConstants.AttrXorMappedAddress, remote)
+        return new StunMessage(StunConstants.BINDING, StunConstants.CLASS_SUCCESS, message.TransactionId)
+            .AddXorAddress(StunConstants.ATTR_XOR_MAPPED_ADDRESS, remote)
             .Encode();
     }
 

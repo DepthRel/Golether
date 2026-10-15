@@ -1,4 +1,5 @@
 using Golether.Core.Data.Enums;
+using Golether.Core.Enums;
 using Golether.Core.Identity;
 using Golether.Core.Playback;
 using Golether.Core.Session;
@@ -19,7 +20,7 @@ public sealed class PlaybackAuthority
     /// <summary>
     /// How close to the duration a position counts as the end.
     /// </summary>
-    private static readonly TimeSpan EndTolerance = TimeSpan.FromMilliseconds(500);
+    private static readonly TimeSpan _endTolerance = TimeSpan.FromMilliseconds(500);
 
     /// <summary>
     /// The host identifier used for automatic changes.
@@ -147,9 +148,9 @@ public sealed class PlaybackAuthority
                     }
 
                     var from = Clamp(request.Position ?? (IsAtEnd(expected) ? TimeSpan.Zero : expected));
-                    if (request.Kind == PlaybackRequestKind.Play
-                        && BufferingPolicy == BufferingPolicy.WaitForAll
-                        && _statuses.Any(s => !_options.IsReady(s, Duration)))
+                    if (request.Kind == PlaybackRequestKind.Play &&
+                        BufferingPolicy == BufferingPolicy.WaitForAll &&
+                        _statuses.Any(s => !_options.IsReady(s, Duration)))
                     {
                         if (_holding && request.Position is null)
                         {
@@ -217,8 +218,8 @@ public sealed class PlaybackAuthority
         lock (_gate)
         {
             var now = _clock.NowMicroseconds;
-            if (_current.State != PlayState.Playing || Duration is not { } duration || duration <= TimeSpan.Zero
-                || _current.IsScheduledAfter(now) || _current.ExpectedPositionAt(now) < duration)
+            if (_current.State != PlayState.Playing || Duration is not { } duration || duration <= TimeSpan.Zero ||
+                _current.IsScheduledAfter(now) || _current.ExpectedPositionAt(now) < duration)
             {
                 return null;
             }
@@ -268,10 +269,10 @@ public sealed class PlaybackAuthority
                     _host);
             }
 
-            if (BufferingPolicy != BufferingPolicy.WaitForAll
-                || _current.State != PlayState.Playing
-                || _current.IsScheduledAfter(now)
-                || !statuses.Any(s => s.IsBuffering && -s.Drift >= _options.WaitThreshold))
+            if (BufferingPolicy != BufferingPolicy.WaitForAll ||
+                _current.State != PlayState.Playing ||
+                _current.IsScheduledAfter(now) ||
+                !statuses.Any(s => s.IsBuffering && -s.Drift >= _options.WaitThreshold))
             {
                 return null;
             }
@@ -310,9 +311,9 @@ public sealed class PlaybackAuthority
     private IEnumerable<ParticipantStatus> NotReady(IEnumerable<ParticipantStatus> statuses)
     {
         var target = _current.Position;
-        return statuses.Where(s => !_options.IsReady(s, Duration)
-            || s.Position is not { } position
-            || (position - target).Duration() > _options.WaitThreshold);
+        return statuses.Where(s => !_options.IsReady(s, Duration) ||
+            s.Position is not { } position ||
+            (position - target).Duration() > _options.WaitThreshold);
     }
 
     /// <summary>
@@ -332,7 +333,7 @@ public sealed class PlaybackAuthority
     /// <param name="position">The position.</param>
     /// <returns><see langword="true"/> at the end.</returns>
     private bool IsAtEnd(TimeSpan position)
-        => Duration is { } duration && duration > TimeSpan.Zero && position >= duration - EndTolerance;
+        => Duration is { } duration && duration > TimeSpan.Zero && position >= duration - _endTolerance;
 
     /// <summary>
     /// Clamps a position to the media.

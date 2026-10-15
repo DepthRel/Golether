@@ -19,17 +19,17 @@ public static class RendezvousSignature
     /// <summary>
     /// The largest accepted certificate: 8 KiB (a device certificate is well under 1 KiB).
     /// </summary>
-    public const int MaxCertificateSize = 8 * 1024;
+    public const int MAX_CERTIFICATE_SIZE = 8 * 1024;
 
     /// <summary>
     /// The largest accepted signature (an ECDSA P-256 signature takes 64–72 bytes).
     /// </summary>
-    public const int MaxSignatureSize = 256;
+    public const int MAX_SIGNATURE_SIZE = 256;
 
     /// <summary>
     /// The context string that keeps these signatures apart from the other signatures of the device key.
     /// </summary>
-    private const string Context = "golether-rendezvous-v1";
+    private const string CONTEXT = "golether-rendezvous-v1";
 
     /// <summary>
     /// Builds the bytes the host signs.
@@ -41,7 +41,7 @@ public static class RendezvousSignature
     {
         ArgumentNullException.ThrowIfNull(nonce);
         ArgumentNullException.ThrowIfNull(room);
-        return Encoding.UTF8.GetBytes($"{Context}\n{nonce}\n{room}");
+        return Encoding.UTF8.GetBytes($"{CONTEXT}\n{nonce}\n{room}");
     }
 
     /// <summary>
@@ -55,7 +55,7 @@ public static class RendezvousSignature
     public static bool TryVerify(ReadOnlySpan<byte> certificateDer, ReadOnlySpan<byte> payload, ReadOnlySpan<byte> signature, out PeerId owner)
     {
         owner = default;
-        if (certificateDer.IsEmpty || certificateDer.Length > MaxCertificateSize || signature.IsEmpty || signature.Length > MaxSignatureSize)
+        if (certificateDer.IsEmpty || certificateDer.Length > MAX_CERTIFICATE_SIZE || signature.IsEmpty || signature.Length > MAX_SIGNATURE_SIZE)
         {
             return false;
         }

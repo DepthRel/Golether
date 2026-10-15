@@ -11,17 +11,17 @@ public sealed class AvatarStore : IAvatarStore
     /// <summary>
     /// The round avatar shown in calls.
     /// </summary>
-    private const string AvatarFileName = "avatar.png";
+    private const string AVATAR_FILE_NAME = "avatar.png";
 
     /// <summary>
     /// The original image the avatar was cropped from.
     /// </summary>
-    private const string OriginalFileName = "original";
+    private const string ORIGINAL_FILE_NAME = "original";
 
     /// <summary>
     /// The framing of the original inside the round avatar.
     /// </summary>
-    private const string FramingFileName = "framing.json";
+    private const string FRAMING_FILE_NAME = "framing.json";
 
     /// <summary>
     /// The avatars directory.
@@ -39,12 +39,12 @@ public sealed class AvatarStore : IAvatarStore
     }
 
     /// <inheritdoc />
-    public async Task<byte[]?> LoadCurrentAsync() => await ReadAsync(AvatarFileName).ConfigureAwait(false);
+    public async Task<byte[]?> LoadCurrentAsync() => await ReadAsync(AVATAR_FILE_NAME).ConfigureAwait(false);
 
     /// <inheritdoc />
     public async Task<StoredAvatar?> LoadForEditingAsync()
     {
-        var original = await ReadAsync(OriginalFileName).ConfigureAwait(false);
+        var original = await ReadAsync(ORIGINAL_FILE_NAME).ConfigureAwait(false);
         if (original is null)
         {
             return null;
@@ -59,15 +59,15 @@ public sealed class AvatarStore : IAvatarStore
     {
         ArgumentNullException.ThrowIfNull(selection);
         Directory.CreateDirectory(_directory);
-        await File.WriteAllBytesAsync(Path.Combine(_directory, AvatarFileName), selection.Avatar).ConfigureAwait(false);
-        await File.WriteAllBytesAsync(Path.Combine(_directory, OriginalFileName), selection.Original).ConfigureAwait(false);
-        await File.WriteAllTextAsync(Path.Combine(_directory, FramingFileName), JsonSerializer.Serialize(selection.Framing)).ConfigureAwait(false);
+        await File.WriteAllBytesAsync(Path.Combine(_directory, AVATAR_FILE_NAME), selection.Avatar).ConfigureAwait(false);
+        await File.WriteAllBytesAsync(Path.Combine(_directory, ORIGINAL_FILE_NAME), selection.Original).ConfigureAwait(false);
+        await File.WriteAllTextAsync(Path.Combine(_directory, FRAMING_FILE_NAME), JsonSerializer.Serialize(selection.Framing)).ConfigureAwait(false);
     }
 
     /// <inheritdoc />
     public Task ClearAsync()
     {
-        foreach (var name in new[] { AvatarFileName, OriginalFileName, FramingFileName })
+        foreach (var name in new[] { AVATAR_FILE_NAME, ORIGINAL_FILE_NAME, FRAMING_FILE_NAME })
         {
             try
             {
@@ -110,7 +110,7 @@ public sealed class AvatarStore : IAvatarStore
     /// <returns>The framing, or <see langword="null"/> when it is missing or unreadable.</returns>
     private async Task<AvatarFraming?> ReadFramingAsync()
     {
-        var bytes = await ReadAsync(FramingFileName).ConfigureAwait(false);
+        var bytes = await ReadAsync(FRAMING_FILE_NAME).ConfigureAwait(false);
         if (bytes is null)
         {
             return null;

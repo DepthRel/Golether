@@ -14,32 +14,32 @@ public sealed class VideoQualityPolicy
     /// <summary>
     /// The packet loss that counts as bad.
     /// </summary>
-    public const double BadLoss = 0.05;
+    public const double BAD_LOSS = 0.05;
 
     /// <summary>
     /// The packet loss that counts as good.
     /// </summary>
-    public const double GoodLoss = 0.01;
+    public const double GOOD_LOSS = 0.01;
 
     /// <summary>
     /// The round trip that counts as bad, in seconds.
     /// </summary>
-    public const double BadRoundTrip = 0.5;
+    public const double BAD_ROUND_TRIP = 0.5;
 
     /// <summary>
     /// The round trip that counts as good, in seconds.
     /// </summary>
-    public const double GoodRoundTrip = 0.3;
+    public const double GOOD_ROUND_TRIP = 0.3;
 
     /// <summary>
     /// Consecutive bad samples before lowering the quality.
     /// </summary>
-    public const int SamplesToLower = 2;
+    public const int SAMPLES_TO_LOWER = 2;
 
     /// <summary>
     /// Consecutive good samples before raising the quality.
     /// </summary>
-    public const int SamplesToRaise = 5;
+    public const int SAMPLES_TO_RAISE = 5;
 
     /// <summary>
     /// The consecutive bad samples.
@@ -69,14 +69,14 @@ public sealed class VideoQualityPolicy
             return false;
         }
 
-        var bad = fractionLost >= BadLoss || roundTrip >= BadRoundTrip;
-        var good = (fractionLost ?? 0) <= GoodLoss && (roundTrip ?? 0) < GoodRoundTrip;
+        var bad = fractionLost >= BAD_LOSS || roundTrip >= BAD_ROUND_TRIP;
+        var good = (fractionLost ?? 0) <= GOOD_LOSS && (roundTrip ?? 0) < GOOD_ROUND_TRIP;
         _bad = bad ? _bad + 1 : 0;
         _good = good ? _good + 1 : 0;
         var next = Quality switch
         {
-            VideoQuality.High when _bad >= SamplesToLower => VideoQuality.Low,
-            VideoQuality.Low when _good >= SamplesToRaise => VideoQuality.High,
+            VideoQuality.High when _bad >= SAMPLES_TO_LOWER => VideoQuality.Low,
+            VideoQuality.Low when _good >= SAMPLES_TO_RAISE => VideoQuality.High,
             _ => Quality,
         };
         if (next == Quality)

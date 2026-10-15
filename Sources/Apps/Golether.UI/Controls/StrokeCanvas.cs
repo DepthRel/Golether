@@ -15,7 +15,7 @@ public sealed class StrokeCanvas : Control
     /// <summary>
     /// The width of a stroke.
     /// </summary>
-    private const double Thickness = 4;
+    private const double THICKNESS = 4;
 
     /// <summary>
     /// Defines the <see cref="Source"/> property.
@@ -310,12 +310,12 @@ public sealed class StrokeCanvas : Control
         var opacity = Math.Clamp(stroke.Opacity, 0, 1);
 
         // A dark halo under the stroke keeps it readable over a bright picture.
-        var halo = new Pen(new SolidColorBrush(Colors.Black, opacity * 0.35), Thickness + 3)
+        var halo = new Pen(new SolidColorBrush(Colors.Black, opacity * 0.35), THICKNESS + 3)
         {
             LineCap = PenLineCap.Round,
             LineJoin = PenLineJoin.Round,
         };
-        var pen = new Pen(new SolidColorBrush(color, opacity), Thickness)
+        var pen = new Pen(new SolidColorBrush(color, opacity), THICKNESS)
         {
             LineCap = PenLineCap.Round,
             LineJoin = PenLineJoin.Round,
@@ -324,7 +324,7 @@ public sealed class StrokeCanvas : Control
         if (points.Count == 1)
         {
             var only = Map(points[0], picture);
-            context.DrawEllipse(new SolidColorBrush(color, opacity), null, only, Thickness / 2, Thickness / 2);
+            context.DrawEllipse(new SolidColorBrush(color, opacity), null, only, THICKNESS / 2, THICKNESS / 2);
             return;
         }
 

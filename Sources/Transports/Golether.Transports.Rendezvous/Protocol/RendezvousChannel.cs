@@ -5,7 +5,7 @@ namespace Golether.Transports.Rendezvous.Protocol;
 
 /// <summary>
 /// Sends and receives <see cref="RendezvousMessage"/> objects over a stream: a 4-byte big-endian length followed by
-/// UTF-8 JSON of at most <see cref="RendezvousProtocol.MaxFrameSize"/> bytes.
+/// UTF-8 JSON of at most <see cref="RendezvousProtocol.MAX_FRAME_SIZE"/> bytes.
 /// </summary>
 /// <remarks>
 /// Sends are serialized, so several tasks may send concurrently; receiving must be done by one task.
@@ -79,9 +79,9 @@ public sealed class RendezvousChannel : IAsyncDisposable
     {
         ArgumentNullException.ThrowIfNull(message);
         var payload = Serialize(message);
-        if (payload.Length > RendezvousProtocol.MaxFrameSize)
+        if (payload.Length > RendezvousProtocol.MAX_FRAME_SIZE)
         {
-            throw new ArgumentException($"The message of {payload.Length} bytes exceeds the limit of {RendezvousProtocol.MaxFrameSize} bytes.", nameof(message));
+            throw new ArgumentException($"The message of {payload.Length} bytes exceeds the limit of {RendezvousProtocol.MAX_FRAME_SIZE} bytes.", nameof(message));
         }
 
         var frame = new byte[4 + payload.Length];
@@ -120,7 +120,7 @@ public sealed class RendezvousChannel : IAsyncDisposable
         }
 
         var length = BinaryPrimitives.ReadInt32BigEndian(header);
-        if (length is < 1 or > RendezvousProtocol.MaxFrameSize)
+        if (length is < 1 or > RendezvousProtocol.MAX_FRAME_SIZE)
         {
             throw new InvalidDataException($"The frame length {length} is out of range.");
         }

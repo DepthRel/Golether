@@ -13,9 +13,9 @@ public static class TunnelNames
     /// <param name="name">The name.</param>
     /// <returns><see langword="true"/> when valid.</returns>
     public static bool IsValid(string? name)
-        => name is { Length: >= 1 and <= 15 }
-           && name.All(c => char.IsAsciiLetterOrDigit(c) || c is '_' or '=' or '+' or '.' or '-')
-           && name is not ("." or "..");
+        => name is { Length: >= 1 and <= 15 } &&
+           name.All(c => char.IsAsciiLetterOrDigit(c) || c is '_' or '=' or '+' or '.' or '-') &&
+           name is not ("." or "..");
 
     /// <summary>
     /// Throws when a name is invalid.

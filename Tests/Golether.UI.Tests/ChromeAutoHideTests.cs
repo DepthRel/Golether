@@ -1,4 +1,5 @@
 using Golether.UI.Controls;
+using Golether.UI.Enums;
 
 namespace Golether.UI.Tests;
 
@@ -10,7 +11,7 @@ public sealed class ChromeAutoHideTests
     /// <summary>
     /// The delay used by the tests.
     /// </summary>
-    private static readonly TimeSpan Delay = TimeSpan.FromSeconds(3);
+    private static readonly TimeSpan _delay = TimeSpan.FromSeconds(3);
 
     /// <summary>
     /// The clock moved by the tests.
@@ -23,7 +24,7 @@ public sealed class ChromeAutoHideTests
     /// <returns>The object.</returns>
     private ChromeAutoHide CreateActive()
     {
-        var chrome = new ChromeAutoHide(_time, Delay);
+        var chrome = new ChromeAutoHide(_time, _delay);
         chrome.SetCursorHiding(true);
         chrome.SetBarsHiding(true);
         return chrome;
@@ -46,7 +47,7 @@ public sealed class ChromeAutoHideTests
     [Fact]
     public void OutsideFullScreen_EverythingStays()
     {
-        var chrome = new ChromeAutoHide(_time, Delay);
+        var chrome = new ChromeAutoHide(_time, _delay);
         chrome.PointerMoved(PointerZone.Video);
         Wait(chrome, 60);
 
@@ -60,7 +61,7 @@ public sealed class ChromeAutoHideTests
     [Fact]
     public void CursorHidingAlone_LeavesTheBars()
     {
-        var chrome = new ChromeAutoHide(_time, Delay);
+        var chrome = new ChromeAutoHide(_time, _delay);
         chrome.SetCursorHiding(true);
         chrome.PointerMoved(PointerZone.Video);
         Wait(chrome, 3.1);

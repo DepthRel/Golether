@@ -1,4 +1,6 @@
 using System.Collections.Concurrent;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 using Golether.Core.Data.Entities;
 using Golether.Core.Data.Enums;
 using Golether.Core.Data.Stores;
@@ -19,8 +21,6 @@ using Golether.Security.Verification;
 using Golether.Sync.Engine;
 using Golether.Sync.Protocol;
 using Golether.Transports;
-using Microsoft.Extensions.Logging.Abstractions;
-using Microsoft.Extensions.Logging;
 
 namespace Golether.Session;
 
@@ -113,7 +113,7 @@ public sealed class HostSession : IAsyncDisposable
     /// <summary>
     /// How long the end of the session waits for the farewell to reach the participants.
     /// </summary>
-    private static readonly TimeSpan FarewellTime = TimeSpan.FromSeconds(3);
+    private static readonly TimeSpan _farewellTime = TimeSpan.FromSeconds(3);
 
     /// <summary>
     /// The devices the host turned away (removed from the session or declined at the door) and are not to be let in
@@ -327,7 +327,7 @@ public sealed class HostSession : IAsyncDisposable
             HostPeerId = _identity.PeerId,
             HostName = DisplayName,
             SessionName = SessionName,
-            Endpoints = endpoints.Take(Invite.MaxEndpoints).ToArray(),
+            Endpoints = endpoints.Take(Invite.MAX_ENDPOINTS).ToArray(),
             Token = token,
             ExpiresAt = expires,
             Rendezvous = Rendezvous,
@@ -556,7 +556,7 @@ public sealed class HostSession : IAsyncDisposable
         // Everybody is told that the session is over, so their screens go back to the start instead of trying to
         // come back. The farewell is given a short time: a participant on a stuck connection must not keep the
         // host from ending the session or closing the application.
-        await Task.WhenAny(BroadcastAsync(new ByeMessage(null)), Task.Delay(FarewellTime, _timeProvider)).ConfigureAwait(false);
+        await Task.WhenAny(BroadcastAsync(new ByeMessage(null)), Task.Delay(_farewellTime, _timeProvider)).ConfigureAwait(false);
         await _stopping.CancelAsync().ConfigureAwait(false);
         foreach (var connection in _participants.Values)
         {
@@ -758,7 +758,7 @@ public sealed class HostSession : IAsyncDisposable
             return null;
         }
 
-        if (hello.Version != SessionMessage.ProtocolVersion)
+        if (hello.Version != SessionMessage.PROTOCOL_VERSION)
         {
             await channel.SendAsync(new RejectedMessage(RejectReason.IncompatibleVersion, nameof(RejectReason.IncompatibleVersion)), cancellationToken).ConfigureAwait(false);
             return null;
@@ -771,9 +771,9 @@ public sealed class HostSession : IAsyncDisposable
         }
 
         var contact = await FindContactAsync(peer, cancellationToken).ConfigureAwait(false);
-        var returning = hello.InviteToken is { Length: > 0 } ticket
-            && _reconnectTickets.TryGetValue(peer, out var known)
-            && System.Security.Cryptography.CryptographicOperations.FixedTimeEquals(
+        var returning = hello.InviteToken is { Length: > 0 } ticket &&
+            _reconnectTickets.TryGetValue(peer, out var known) &&
+            System.Security.Cryptography.CryptographicOperations.FixedTimeEquals(
                 System.Text.Encoding.UTF8.GetBytes(known), System.Text.Encoding.UTF8.GetBytes(ticket));
         var trusted = contact?.IsTrusted == true || returning;
         var turnedAway = _turnedAway.TryGetValue(peer, out var barred);
@@ -964,8 +964,8 @@ public sealed class HostSession : IAsyncDisposable
                 break;
 
             case ChatMessage chat:
-                if (chat.Sanitize() is { } clean
-                    && connection.ChatLimiter.TryAcquire(clean.Kind, _timeProvider.GetTimestamp(), _timeProvider))
+                if (chat.Sanitize() is { } clean &&
+                    connection.ChatLimiter.TryAcquire(clean.Kind, _timeProvider.GetTimestamp(), _timeProvider))
                 {
                     // The sender is the authenticated connection, never taken from the message.
                     var relayed = clean with { Sender = connection.Info.PeerId };
@@ -976,8 +976,8 @@ public sealed class HostSession : IAsyncDisposable
                 break;
 
             case DrawMessage stroke:
-                if (stroke.Sanitize() is { } cleanStroke
-                    && connection.DrawLimiter.TryAcquire(_timeProvider.GetTimestamp(), _timeProvider))
+                if (stroke.Sanitize() is { } cleanStroke &&
+                    connection.DrawLimiter.TryAcquire(_timeProvider.GetTimestamp(), _timeProvider))
                 {
                     var relayed = cleanStroke with { Sender = connection.Info.PeerId };
                     RaiseDraw(relayed);
@@ -989,8 +989,8 @@ public sealed class HostSession : IAsyncDisposable
             case AvatarMessage avatar:
                 // A picture is the largest message a participant can make the host send to everybody, so it is
                 // limited like the chat and the strokes.
-                if (avatar.Sanitize() is { } cleanAvatar
-                    && connection.AvatarLimiter.TryAcquire(_timeProvider.GetTimestamp(), _timeProvider))
+                if (avatar.Sanitize() is { } cleanAvatar &&
+                    connection.AvatarLimiter.TryAcquire(_timeProvider.GetTimestamp(), _timeProvider))
                 {
                     // The owner is the authenticated connection, never taken from the message.
                     var signedAvatar = cleanAvatar with { Sender = connection.Info.PeerId };

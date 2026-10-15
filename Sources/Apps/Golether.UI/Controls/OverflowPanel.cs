@@ -41,7 +41,7 @@ public sealed class OverflowPanel : Panel
     /// The state the item was last told to reach. Kept apart from <see cref="FoldProperty"/>, which is mid-animation
     /// most of the time, so the target is set once per change instead of on every layout pass.
     /// </summary>
-    private static readonly AttachedProperty<bool> FoldedProperty =
+    private static readonly AttachedProperty<bool> _foldedProperty =
         AvaloniaProperty.RegisterAttached<OverflowPanel, Control, bool>("Folded");
 
     /// <summary>
@@ -65,13 +65,13 @@ public sealed class OverflowPanel : Panel
     /// <summary>
     /// The class given to folded items.
     /// </summary>
-    public const string OverflowedClass = "overflowed";
+    public const string OVERFLOWED_CLASS = "overflowed";
 
     /// <summary>
     /// The extra room the row must win back before folded items return. Folding and unfolding at the very same width
     /// makes the toolbar flicker while the window is dragged across the threshold; this dead band keeps it still.
     /// </summary>
-    private const double Hysteresis = 24;
+    private const double HYSTERESIS = 24;
 
     /// <summary>
     /// Gets or sets how long folding and unfolding takes. Tests set it to zero to get the settled row at once.
@@ -248,19 +248,19 @@ public sealed class OverflowPanel : Panel
 
         // Folded rows need a little more room than they gave up before they unfold again, so a width that hovers
         // around the threshold does not make the toolbar jump back and forth.
-        var overflowing = _isOverflowing ? needed > available - Hysteresis : needed > available;
+        var overflowing = _isOverflowing ? needed > available - HYSTERESIS : needed > available;
         IsOverflowing = overflowing;
         foreach (var child in Children)
         {
             // The class only hides items from the pointer and the keyboard; the fold takes care of size and opacity.
             var folded = GetIsOverflowButton(child) ? !overflowing : overflowing && GetCanOverflow(child);
-            child.Classes.Set(OverflowedClass, folded);
-            if (child.GetValue(FoldedProperty) == folded)
+            child.Classes.Set(OVERFLOWED_CLASS, folded);
+            if (child.GetValue(_foldedProperty) == folded)
             {
                 continue;
             }
 
-            child.SetValue(FoldedProperty, folded);
+            child.SetValue(_foldedProperty, folded);
             if (_laidOut)
             {
                 EnsureFoldAnimated(child);

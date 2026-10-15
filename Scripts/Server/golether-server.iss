@@ -57,9 +57,10 @@ WizardSmallImageFile={#InstallerArt}\server-wizard-small.bmp
 #endif
 ; The wizard opens with a greeting that shows the logo, not with the choice of a folder.
 DisableWelcomePage=no
-; The language is asked first. English is offered whatever the language of Windows is: it is the first in [Languages].
+; The language is asked first, with the language of Windows preselected; a Windows in a language the wizard does not
+; speak gets English, the first in [Languages].
 ShowLanguageDialog=yes
-LanguageDetectionMethod=none
+LanguageDetectionMethod=uilanguage
 ; The root keeps only the launcher and the folders.
 UninstallFilesDir={app}\uninstall
 OutputDir={#ServerOutputDir}
@@ -68,14 +69,27 @@ OutputBaseFilename=GoletherServer-{#ServerVersion}-setup
 [Languages]
 ; The first language is the one offered by default. A new language is one more line here and one more block in
 ; [Messages] and [CustomMessages].
-; The note shown after the installation comes in the language of the wizard (publish-server-win.ps1 writes both).
+; The note shown after the installation comes in the language of the wizard (publish-server-win.ps1 writes them all
+; from Scripts/Server/Notes).
 Name: "english"; MessagesFile: "compiler:Default.isl"; InfoAfterFile: "{#ServerSource}\docs\README.txt"
+Name: "german"; MessagesFile: "compiler:Languages\German.isl"; InfoAfterFile: "{#ServerSource}\docs\README.de.txt"
+Name: "spanish"; MessagesFile: "compiler:Languages\Spanish.isl"; InfoAfterFile: "{#ServerSource}\docs\README.es.txt"
+Name: "french"; MessagesFile: "compiler:Languages\French.isl"; InfoAfterFile: "{#ServerSource}\docs\README.fr.txt"
+Name: "portuguese"; MessagesFile: "compiler:Languages\Portuguese.isl"; InfoAfterFile: "{#ServerSource}\docs\README.pt.txt"
 Name: "russian"; MessagesFile: "compiler:Languages\Russian.isl"; InfoAfterFile: "{#ServerSource}\docs\README.ru.txt"
 
 [Messages]
 ; The greeting of the first page; [name] and [name/ver] are filled in by Inno Setup.
 english.WelcomeLabel1=Welcome to the [name] setup
 english.WelcomeLabel2=The rendezvous server introduces Golether hosts and their guests behind routers. The sessions themselves go directly between them and never pass through the server.%n%nThis wizard installs [name/ver] on your computer.
+german.WelcomeLabel1=Willkommen bei der Installation von [name]
+german.WelcomeLabel2=Der Vermittlungsserver stellt Golether-Gastgeber und ihre Gäste hinter Routern einander vor. Die Sitzungen selbst laufen direkt zwischen ihnen und nie über den Server.%n%nDieser Assistent installiert [name/ver] auf Ihrem Computer.
+spanish.WelcomeLabel1=Te damos la bienvenida a la instalación de [name]
+spanish.WelcomeLabel2=El servidor de encuentro presenta a los anfitriones de Golether y a sus invitados que están detrás de routers. Las sesiones van directamente entre ellos y nunca pasan por el servidor.%n%nEste asistente instalará [name/ver] en tu equipo.
+french.WelcomeLabel1=Bienvenue dans l'installation de [name]
+french.WelcomeLabel2=Le serveur de rendez-vous présente les hôtes Golether à leurs invités situés derrière des routeurs. Les séances elles-mêmes passent directement entre eux, jamais par le serveur.%n%nCet assistant va installer [name/ver] sur votre ordinateur.
+portuguese.WelcomeLabel1=Bem-vindo à instalação do [name]
+portuguese.WelcomeLabel2=O servidor de encontro apresenta os anfitriões do Golether aos convidados que estão atrás de routers. As sessões em si decorrem diretamente entre eles e nunca passam pelo servidor.%n%nEste assistente vai instalar o [name/ver] no seu computador.
 russian.WelcomeLabel1=Добро пожаловать в установку [name]
 russian.WelcomeLabel2=Сервер рукопожатий знакомит ведущих Golether с гостями, которые сидят за роутерами. Сами сеансы идут напрямую между ними и через сервер не проходят.%n%nМастер установит [name/ver] на ваш компьютер.
 
@@ -93,6 +107,54 @@ english.RunMonitor=Open Golether Server Monitor
 english.RunGuide=Open the administrator guide
 english.RunHealth=Open the server status page
 english.GuideFile=ADMIN-GUIDE.md
+german.TaskService=Als Windows-Dienst mit dem Computer starten
+german.TaskServiceGroup=Dienst:
+german.TaskFirewall=Eingehende Verbindungen in der Windows-Firewall zulassen
+german.TaskFirewallGroup=Netzwerk:
+german.IconSettings=Servereinstellungen (appsettings.json)
+german.IconGuide=Administratorhandbuch
+german.IconHealth=Serverstatus
+german.IconMonitor=Golether Server Monitor
+german.RunMonitor=Golether Server Monitor öffnen
+german.RunGuide=Administratorhandbuch öffnen
+german.RunHealth=Statusseite des Servers öffnen
+german.GuideFile=ADMIN-GUIDE.de.md
+spanish.TaskService=Ejecutar como servicio de Windows al iniciar el equipo
+spanish.TaskServiceGroup=Servicio:
+spanish.TaskFirewall=Permitir las conexiones entrantes en el firewall de Windows
+spanish.TaskFirewallGroup=Red:
+spanish.IconSettings=Ajustes del servidor (appsettings.json)
+spanish.IconGuide=Guía del administrador
+spanish.IconHealth=Estado del servidor
+spanish.IconMonitor=Golether Server Monitor
+spanish.RunMonitor=Abrir Golether Server Monitor
+spanish.RunGuide=Abrir la guía del administrador
+spanish.RunHealth=Abrir la página de estado del servidor
+spanish.GuideFile=ADMIN-GUIDE.es.md
+french.TaskService=Lancer comme service Windows au démarrage de l'ordinateur
+french.TaskServiceGroup=Service :
+french.TaskFirewall=Autoriser les connexions entrantes dans le pare-feu Windows
+french.TaskFirewallGroup=Réseau :
+french.IconSettings=Réglages du serveur (appsettings.json)
+french.IconGuide=Guide de l'administrateur
+french.IconHealth=État du serveur
+french.IconMonitor=Golether Server Monitor
+french.RunMonitor=Ouvrir Golether Server Monitor
+french.RunGuide=Ouvrir le guide de l'administrateur
+french.RunHealth=Ouvrir la page d'état du serveur
+french.GuideFile=ADMIN-GUIDE.fr.md
+portuguese.TaskService=Executar como serviço do Windows ao iniciar o computador
+portuguese.TaskServiceGroup=Serviço:
+portuguese.TaskFirewall=Permitir ligações de entrada na firewall do Windows
+portuguese.TaskFirewallGroup=Rede:
+portuguese.IconSettings=Definições do servidor (appsettings.json)
+portuguese.IconGuide=Guia do administrador
+portuguese.IconHealth=Estado do servidor
+portuguese.IconMonitor=Golether Server Monitor
+portuguese.RunMonitor=Abrir o Golether Server Monitor
+portuguese.RunGuide=Abrir o guia do administrador
+portuguese.RunHealth=Abrir a página de estado do servidor
+portuguese.GuideFile=ADMIN-GUIDE.pt.md
 russian.TaskService=Запускать как службу Windows вместе с компьютером
 russian.TaskServiceGroup=Служба:
 russian.TaskFirewall=Разрешить входящие подключения в брандмауэре Windows

@@ -14,7 +14,7 @@ public sealed record RendezvousServerOptions
     /// <summary>
     /// The name of the configuration section.
     /// </summary>
-    public const string Section = "Rendezvous";
+    public const string SECTION = "Rendezvous";
 
     /// <summary>
     /// Gets the IP address to listen on: <c>0.0.0.0</c> for every IPv4 interface (default) or the address of one
@@ -25,7 +25,7 @@ public sealed record RendezvousServerOptions
     /// <summary>
     /// Gets the port: TCP for meetings and, when <see cref="EnableStun"/>, UDP for STUN (default 47900).
     /// </summary>
-    public int Port { get; init; } = RendezvousProtocol.DefaultPort;
+    public int Port { get; init; } = RendezvousProtocol.DEFAULT_PORT;
 
     /// <summary>
     /// Gets a value indicating whether the server answers STUN binding requests on the UDP port, so the cameras and
@@ -111,7 +111,7 @@ public sealed record RendezvousServerOptions
     /// </summary>
     /// <param name="name">The property name.</param>
     /// <returns>The key, for example <c>Rendezvous:Port</c>.</returns>
-    private static string Key(string name) => Section + ":" + name;
+    private static string Key(string name) => SECTION + ":" + name;
 
     /// <summary>
     /// Adds a problem when a number is out of range.

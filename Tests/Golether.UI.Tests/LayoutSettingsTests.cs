@@ -1,3 +1,4 @@
+using NSubstitute;
 using Golether.Components.Installation;
 using Golether.Core.Data.Enums;
 using Golether.Core.Data.Stores;
@@ -9,7 +10,6 @@ using Golether.Session;
 using Golether.UI.Services;
 using Golether.UI.ViewModels;
 using Golether.UI.ViewModels.Dialogs;
-using NSubstitute;
 
 namespace Golether.UI.Tests;
 
@@ -74,7 +74,7 @@ public sealed class LayoutSettingsTests
         await viewModel.LoadAsync();
 
         Assert.False(viewModel.IsLayoutResizable);
-        Assert.Equal(MainWindowViewModel.DefaultSidePanelWidth, viewModel.SidePanelWidth);
+        Assert.Equal(MainWindowViewModel.DEFAULT_SIDE_PANEL_WIDTH, viewModel.SidePanelWidth);
     }
 
     /// <summary>
@@ -88,8 +88,8 @@ public sealed class LayoutSettingsTests
     [InlineData("false", 300)]
     public async Task StoredWidth_IsUsedOnlyWithTheAdjustableLayout(string resizable, double expected)
     {
-        _settings.GetAsync(MainWindowViewModel.LayoutResizableSetting, Arg.Any<CancellationToken>()).Returns(resizable);
-        _settings.GetAsync(MainWindowViewModel.SidePanelWidthSetting, Arg.Any<CancellationToken>()).Returns("460");
+        _settings.GetAsync(MainWindowViewModel.LAYOUT_RESIZABLE_SETTING, Arg.Any<CancellationToken>()).Returns(resizable);
+        _settings.GetAsync(MainWindowViewModel.SIDE_PANEL_WIDTH_SETTING, Arg.Any<CancellationToken>()).Returns("460");
         var viewModel = CreateViewModel();
 
         await viewModel.LoadAsync();
@@ -108,11 +108,11 @@ public sealed class LayoutSettingsTests
     {
         var viewModel = CreateViewModel();
         viewModel.SetLayoutResizable(true);
-        await _settings.Received(1).SetAsync(MainWindowViewModel.LayoutResizableSetting, "true", Arg.Any<CancellationToken>());
+        await _settings.Received(1).SetAsync(MainWindowViewModel.LAYOUT_RESIZABLE_SETTING, "true", Arg.Any<CancellationToken>());
 
         viewModel.StoreSidePanelWidth(452.4);
         Assert.Equal(452, viewModel.SidePanelWidth);
-        await _settings.Received(1).SetAsync(MainWindowViewModel.SidePanelWidthSetting, "452", Arg.Any<CancellationToken>());
+        await _settings.Received(1).SetAsync(MainWindowViewModel.SIDE_PANEL_WIDTH_SETTING, "452", Arg.Any<CancellationToken>());
 
         viewModel.ResetSidePanelWidth();
         Assert.Equal(300, viewModel.SidePanelWidth);
@@ -121,8 +121,8 @@ public sealed class LayoutSettingsTests
         viewModel.SetLayoutResizable(false);
         Assert.False(viewModel.IsLayoutResizable);
         Assert.Equal(300, viewModel.SidePanelWidth);
-        await _settings.Received(1).SetAsync(MainWindowViewModel.LayoutResizableSetting, "false", Arg.Any<CancellationToken>());
-        await _settings.Received(2).SetAsync(MainWindowViewModel.SidePanelWidthSetting, "300", Arg.Any<CancellationToken>());
+        await _settings.Received(1).SetAsync(MainWindowViewModel.LAYOUT_RESIZABLE_SETTING, "false", Arg.Any<CancellationToken>());
+        await _settings.Received(2).SetAsync(MainWindowViewModel.SIDE_PANEL_WIDTH_SETTING, "300", Arg.Any<CancellationToken>());
     }
 
     /// <summary>
@@ -198,9 +198,9 @@ public sealed class LayoutSettingsTests
 
         viewModel.SetAlwaysShowBars(true);
         Assert.True(viewModel.AlwaysShowBars);
-        await _settings.Received(1).SetAsync(MainWindowViewModel.AlwaysShowBarsSetting, "true", Arg.Any<CancellationToken>());
+        await _settings.Received(1).SetAsync(MainWindowViewModel.ALWAYS_SHOW_BARS_SETTING, "true", Arg.Any<CancellationToken>());
 
-        _settings.GetAsync(MainWindowViewModel.AlwaysShowBarsSetting, Arg.Any<CancellationToken>()).Returns("true");
+        _settings.GetAsync(MainWindowViewModel.ALWAYS_SHOW_BARS_SETTING, Arg.Any<CancellationToken>()).Returns("true");
         var again = CreateViewModel();
         await again.LoadAsync();
         Assert.True(again.AlwaysShowBars);

@@ -16,42 +16,42 @@ public static partial class ClickThroughWindow
     /// <summary>
     /// <c>GWLP_WNDPROC</c>.
     /// </summary>
-    private const int WindowProcIndex = -4;
+    private const int WINDOW_PROC_INDEX = -4;
 
     /// <summary>
     /// <c>WM_NCHITTEST</c>.
     /// </summary>
-    private const uint HitTest = 0x0084;
+    private const uint HIT_TEST = 0x0084;
 
     /// <summary>
     /// <c>WM_MOUSEACTIVATE</c>.
     /// </summary>
-    private const uint MouseActivate = 0x0021;
+    private const uint MOUSE_ACTIVATE = 0x0021;
 
     /// <summary>
     /// <c>WM_NCDESTROY</c>.
     /// </summary>
-    private const uint NonClientDestroy = 0x0082;
+    private const uint NON_CLIENT_DESTROY = 0x0082;
 
     /// <summary>
     /// <c>HTTRANSPARENT</c>.
     /// </summary>
-    private const nint Transparent = -1;
+    private const nint TRANSPARENT = -1;
 
     /// <summary>
     /// <c>MA_NOACTIVATE</c>.
     /// </summary>
-    private const nint NoActivate = 3;
+    private const nint NO_ACTIVATE = 3;
 
     /// <summary>
     /// The original window procedures.
     /// </summary>
-    private static readonly ConcurrentDictionary<nint, nint> Previous = new();
+    private static readonly ConcurrentDictionary<nint, nint> _previous = new();
 
     /// <summary>
     /// The windows that take the mouse for the moment: the overlay does while the pen is picked up.
     /// </summary>
-    private static readonly ConcurrentDictionary<nint, bool> Holding = new();
+    private static readonly ConcurrentDictionary<nint, bool> _holding = new();
 
     /// <summary>
     /// Makes a window created on the UI thread transparent for the mouse. Does nothing on other systems or when the
@@ -66,19 +66,19 @@ public static partial class ClickThroughWindow
             return false;
         }
 
-        if (Previous.ContainsKey(window))
+        if (_previous.ContainsKey(window))
         {
             return true;
         }
 
         var procedure = (nint)(delegate* unmanaged[Stdcall]<nint, uint, nint, nint, nint>)&WindowProc;
-        var previous = SetWindowLongPtr(window, WindowProcIndex, procedure);
+        var previous = SetWindowLongPtr(window, WINDOW_PROC_INDEX, procedure);
         if (previous == 0)
         {
             return false;
         }
 
-        Previous[window] = previous;
+        _previous[window] = previous;
         return true;
     }
 
@@ -97,11 +97,11 @@ public static partial class ClickThroughWindow
 
         if (clickThrough)
         {
-            Holding.TryRemove(window, out _);
+            _holding.TryRemove(window, out _);
         }
         else
         {
-            Holding[window] = true;
+            _holding[window] = true;
         }
     }
 
@@ -114,13 +114,13 @@ public static partial class ClickThroughWindow
     public static nint? Intercept(uint message, bool clickThrough = true) => clickThrough
         ? message switch
         {
-            HitTest => Transparent,
-            MouseActivate => NoActivate,
+            HIT_TEST => TRANSPARENT,
+            MOUSE_ACTIVATE => NO_ACTIVATE,
             _ => null,
         }
         : message switch
         {
-            MouseActivate => NoActivate,
+            MOUSE_ACTIVATE => NO_ACTIVATE,
             _ => null,
         };
 
@@ -153,21 +153,21 @@ public static partial class ClickThroughWindow
     [UnmanagedCallersOnly(CallConvs = [typeof(CallConvStdcall)])]
     private static nint WindowProc(nint window, uint message, nint wParam, nint lParam)
     {
-        if (!Previous.TryGetValue(window, out var previous))
+        if (!_previous.TryGetValue(window, out var previous))
         {
             return 0;
         }
 
-        if (Intercept(message, !Holding.ContainsKey(window)) is { } result)
+        if (Intercept(message, !_holding.ContainsKey(window)) is { } result)
         {
             return result;
         }
 
         var value = CallWindowProc(previous, window, message, wParam, lParam);
-        if (message == NonClientDestroy)
+        if (message == NON_CLIENT_DESTROY)
         {
-            Previous.TryRemove(window, out _);
-            Holding.TryRemove(window, out _);
+            _previous.TryRemove(window, out _);
+            _holding.TryRemove(window, out _);
         }
 
         return value;

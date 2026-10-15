@@ -1,7 +1,7 @@
 using System.Globalization;
 using System.Text;
-using Golether.Localization;
 using Microsoft.Extensions.Logging;
+using Golether.Localization;
 
 namespace Golether.UI.Services;
 
@@ -9,19 +9,19 @@ namespace Golether.UI.Services;
 /// Writes the application log into <c>data/logs</c>, one file per day, so a problem can be looked at later and put
 /// into a diagnostic report. Keys and tokens never reach the log: see <see cref="DiagnosticReport.Redact"/>. On start
 /// it clears everything in the folder (daily logs and saved diagnostic reports alike) not touched for
-/// <see cref="KeepDays"/> days, so the directory does not fill up.
+/// <see cref="KEEP_DAYS"/> days, so the directory does not fill up.
 /// </summary>
 public sealed class FileLogProvider : ILoggerProvider
 {
     /// <summary>
     /// How many days a log or report is kept before it is removed on the next start.
     /// </summary>
-    public const int KeepDays = 7;
+    public const int KEEP_DAYS = 7;
 
     /// <summary>
     /// The largest size of a daily file; after it the log stops growing.
     /// </summary>
-    public const long MaxFileBytes = 8 * 1024 * 1024;
+    public const long MAX_FILE_BYTES = 8 * 1024 * 1024;
 
     /// <summary>
     /// The log directory.
@@ -67,13 +67,13 @@ public sealed class FileLogProvider : ILoggerProvider
     }
 
     /// <summary>
-    /// Removes every file in the log directory not written to for longer than <see cref="KeepDays"/> days: old daily
+    /// Removes every file in the log directory not written to for longer than <see cref="KEEP_DAYS"/> days: old daily
     /// logs and diagnostic reports alike. The current day's log keeps its recent write time, so it stays. A file that
     /// cannot be removed (locked or read-only) is left behind and never stops logging.
     /// </summary>
     private void CleanUpOldFiles()
     {
-        var cutoff = TimeSpan.FromDays(KeepDays);
+        var cutoff = TimeSpan.FromDays(KEEP_DAYS);
         IEnumerable<string> files;
         try
         {
@@ -129,7 +129,7 @@ public sealed class FileLogProvider : ILoggerProvider
             try
             {
                 var file = CurrentFile;
-                if (File.Exists(file) && new FileInfo(file).Length > MaxFileBytes)
+                if (File.Exists(file) && new FileInfo(file).Length > MAX_FILE_BYTES)
                 {
                     return;
                 }

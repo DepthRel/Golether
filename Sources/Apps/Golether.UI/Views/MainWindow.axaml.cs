@@ -5,6 +5,7 @@ using Avalonia.Interactivity;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
 using Golether.Core.Data.Enums;
+using Golether.UI.Enums;
 using Golether.UI.Services;
 using Golether.UI.ViewModels;
 
@@ -44,12 +45,12 @@ public sealed partial class MainWindow : Window
     /// <summary>
     /// How long a click on the video waits for a second click before it toggles playback.
     /// </summary>
-    private static readonly TimeSpan DoubleClickWindow = TimeSpan.FromMilliseconds(320);
+    private static readonly TimeSpan _doubleClickWindow = TimeSpan.FromMilliseconds(320);
 
     /// <summary>
     /// Toggles playback after a single click on the video.
     /// </summary>
-    private readonly DispatcherTimer _clickTimer = new() { Interval = DoubleClickWindow };
+    private readonly DispatcherTimer _clickTimer = new() { Interval = _doubleClickWindow };
 
     /// <summary>
     /// Closes the volume popup shortly after the pointer left the speaker and the popup.
@@ -74,12 +75,12 @@ public sealed partial class MainWindow : Window
     /// <summary>
     /// How close to the top or bottom of the full-screen window the pointer brings the hidden bars back.
     /// </summary>
-    private const double RevealEdge = 24;
+    private const double REVEAL_EDGE = 24;
 
     /// <summary>
     /// The cursor over the video while it is hidden.
     /// </summary>
-    private static readonly Cursor HiddenCursor = new(StandardCursorType.None);
+    private static readonly Cursor _hiddenCursor = new(StandardCursorType.None);
 
     /// <summary>
     /// Decides when the bars and the cursor are shown in full screen.
@@ -105,7 +106,7 @@ public sealed partial class MainWindow : Window
     /// <summary>
     /// How far the pointer must go with the button down before a tile is being dragged and not clicked.
     /// </summary>
-    private const double DragThreshold = 6;
+    private const double DRAG_THRESHOLD = 6;
 
     /// <summary>
     /// The tile under the pressed pointer and where it was pressed, or <see langword="null"/>.
@@ -140,13 +141,13 @@ public sealed partial class MainWindow : Window
     {
         InitializeComponent();
         AddHandler(PointerMovedEvent, (_, e) => ReportPointer(e.GetPosition(this)), RoutingStrategies.Tunnel, handledEventsToo: true);
-        PointerExited += (_, _) => ReportZone(Controls.PointerZone.Elsewhere);
+        PointerExited += (_, _) => ReportZone(PointerZone.Elsewhere);
         _chrome.Changed += (_, _) => ApplyChrome();
         foreach (var (bar, popup) in new[] { (TopBar, TopBarPopup), (PlayerBar, PlayerBarPopup) })
         {
             // The pointer over a layer is not over this window, so the bar reports it itself.
-            bar.PointerMoved += (_, _) => ReportZone(Controls.PointerZone.Bars);
-            bar.PointerExited += (_, _) => ReportZone(Controls.PointerZone.Elsewhere);
+            bar.PointerMoved += (_, _) => ReportZone(PointerZone.Bars);
+            bar.PointerExited += (_, _) => ReportZone(PointerZone.Elsewhere);
             bar.PropertyChanged += (_, e) =>
             {
                 // The layer goes away once the bar has slid out of it, so it does not catch the clicks on the video.
@@ -253,8 +254,8 @@ public sealed partial class MainWindow : Window
             // hidden bars back.
             player.VideoPointer += (_, action) => Dispatcher.UIThread.Post(() =>
             {
-                ReportZone(Controls.PointerZone.Bars);
-                ReportZone(Controls.PointerZone.Video);
+                ReportZone(PointerZone.Bars);
+                ReportZone(PointerZone.Video);
                 OnVideoPointer(action);
             });
         }
@@ -460,11 +461,11 @@ public sealed partial class MainWindow : Window
     /// </summary>
     /// <returns><see langword="true"/> while the bars must stay.</returns>
     private bool IsChromeHeld()
-        => VolumePopup.IsOpen
-            || TracksButton.Flyout?.IsOpen == true
-            || ReactionsButton.Flyout?.IsOpen == true
-            || MoreActions.Flyout?.IsOpen == true
-            || ViewModel is { IsScrubbing: true } or { IsReconnecting: true } or { Drawing.IsPenActive: true };
+        => VolumePopup.IsOpen ||
+            TracksButton.Flyout?.IsOpen == true ||
+            ReactionsButton.Flyout?.IsOpen == true ||
+            MoreActions.Flyout?.IsOpen == true ||
+            ViewModel is { IsScrubbing: true } or { IsReconnecting: true } or { Drawing.IsPenActive: true };
 
     /// <summary>
     /// Shows or hides the bars and the cursor as the hiding logic decided.
@@ -485,7 +486,7 @@ public sealed partial class MainWindow : Window
 
         // Over the picture the cursor belongs to the native video window, over the placeholder to the panel.
         Video.CursorHidden = !_chrome.CursorVisible;
-        VideoArea.Cursor = _chrome.CursorVisible ? null : HiddenCursor;
+        VideoArea.Cursor = _chrome.CursorVisible ? null : _hiddenCursor;
     }
 
     /// <summary>
@@ -507,7 +508,7 @@ public sealed partial class MainWindow : Window
     /// Tells the full-screen logic that the pointer moved.
     /// </summary>
     /// <param name="zone">Where the pointer is.</param>
-    private void ReportZone(Controls.PointerZone zone)
+    private void ReportZone(PointerZone zone)
     {
         if (_chrome.IsActive)
         {
@@ -520,20 +521,20 @@ public sealed partial class MainWindow : Window
     /// </summary>
     /// <param name="position">The point in window coordinates.</param>
     /// <returns>The zone.</returns>
-    private Controls.PointerZone ZoneAt(Avalonia.Point position)
+    private PointerZone ZoneAt(Avalonia.Point position)
     {
         var video = BoundsInWindow(VideoArea);
 
         // The top bar spans the window; the player bar lies under the video only, and the chat is beside it.
-        if (position.Y < RevealEdge
-            || (position.Y > Bounds.Height - RevealEdge && position.X < video.Right)
-            || BoundsInWindow(TopBar).Contains(position)
-            || BoundsInWindow(PlayerBar).Contains(position))
+        if (position.Y < REVEAL_EDGE ||
+            (position.Y > Bounds.Height - REVEAL_EDGE && position.X < video.Right) ||
+            BoundsInWindow(TopBar).Contains(position) ||
+            BoundsInWindow(PlayerBar).Contains(position))
         {
-            return Controls.PointerZone.Bars;
+            return PointerZone.Bars;
         }
 
-        return video.Contains(position) ? Controls.PointerZone.Video : Controls.PointerZone.Elsewhere;
+        return video.Contains(position) ? PointerZone.Video : PointerZone.Elsewhere;
     }
 
     /// <summary>
@@ -571,11 +572,11 @@ public sealed partial class MainWindow : Window
     {
         var side = SessionGrid.ColumnDefinitions[2];
         var available = SessionGrid.Bounds.Width - SessionGrid.ColumnDefinitions[1].ActualWidth;
-        var wanted = ViewModel?.SidePanelWidth ?? MainWindowViewModel.DefaultSidePanelWidth;
+        var wanted = ViewModel?.SidePanelWidth ?? MainWindowViewModel.DEFAULT_SIDE_PANEL_WIDTH;
 
         // Before the first layout the grid has no width yet; the wanted width is fitted in when it gets one.
         var width = available > 0 ? MainWindowViewModel.ClampSidePanelWidth(wanted, available) : wanted;
-        side.MinWidth = MainWindowViewModel.DefaultSidePanelWidth;
+        side.MinWidth = MainWindowViewModel.DEFAULT_SIDE_PANEL_WIDTH;
         side.MaxWidth = available > 0
             ? MainWindowViewModel.ClampSidePanelWidth(double.MaxValue, available)
             : double.PositiveInfinity;
@@ -613,9 +614,9 @@ public sealed partial class MainWindow : Window
     private void OnTilePressed(object? sender, PointerPressedEventArgs e)
     {
         EndTileDrag();
-        if (ViewModel is { IsLayoutResizable: true }
-            && e.GetCurrentPoint(ParticipantList).Properties.IsLeftButtonPressed
-            && TileOf(e.Source as Visual) is { } tile)
+        if (ViewModel is { IsLayoutResizable: true } &&
+            e.GetCurrentPoint(ParticipantList).Properties.IsLeftButtonPressed &&
+            TileOf(e.Source as Visual) is { } tile)
         {
             _pressedTile = (tile, e.GetPosition(ParticipantList));
         }
@@ -638,7 +639,7 @@ public sealed partial class MainWindow : Window
         if (!_draggingTile)
         {
             var moved = position - pressed.Start;
-            if (Math.Abs(moved.X) < DragThreshold && Math.Abs(moved.Y) < DragThreshold)
+            if (Math.Abs(moved.X) < DRAG_THRESHOLD && Math.Abs(moved.Y) < DRAG_THRESHOLD)
             {
                 return;
             }
@@ -671,9 +672,9 @@ public sealed partial class MainWindow : Window
     /// <param name="e">The event data.</param>
     private void OnTileReleased(object? sender, PointerReleasedEventArgs e)
     {
-        if (_draggingTile
-            && _pressedTile?.Tile.DataContext is ParticipantItemViewModel dragged
-            && _dropTile?.DataContext is ParticipantItemViewModel target)
+        if (_draggingTile &&
+            _pressedTile?.Tile.DataContext is ParticipantItemViewModel dragged &&
+            _dropTile?.DataContext is ParticipantItemViewModel target)
         {
             ViewModel?.SwapParticipants(dragged, target);
         }
@@ -795,14 +796,14 @@ public sealed partial class MainWindow : Window
     /// <param name="action">The mouse action reported by the player.</param>
     private void OnVideoPointer(VideoPointerAction action)
     {
-        var now = DateTimeOffset.UtcNow;
+        var now = TimeProvider.System.GetUtcNow();
         if (action == VideoPointerAction.DoubleClick)
         {
             _clickTimer.Stop();
             _lastDoubleClick = now;
             ToggleFullScreen();
         }
-        else if (now - _lastDoubleClick > DoubleClickWindow)
+        else if (now - _lastDoubleClick > _doubleClickWindow)
         {
             _clickTimer.Stop();
             _clickTimer.Start();

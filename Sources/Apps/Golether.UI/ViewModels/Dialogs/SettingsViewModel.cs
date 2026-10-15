@@ -238,7 +238,7 @@ public sealed partial class SettingsViewModel : ObservableObject
     /// <summary>
     /// Gets the update source used when none is typed, shown as the hint of the field.
     /// </summary>
-    public string DefaultUpdateUrl => UpdateService.DefaultManifestUrl;
+    public string DefaultUpdateUrl => UpdateService.DEFAULT_MANIFEST_URL;
 
     /// <summary>
     /// Gets or sets the avatar shown in the window: the one waiting to be applied, or the current one.

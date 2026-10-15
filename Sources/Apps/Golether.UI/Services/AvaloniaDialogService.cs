@@ -70,8 +70,8 @@ public sealed class AvaloniaDialogService : IDialogService
 
     /// <inheritdoc />
     public async Task<bool> OpenLinkAsync(string url)
-        => Uri.TryCreate(url, UriKind.Absolute, out var uri) && uri.Scheme == Uri.UriSchemeHttps
-            && await _owner.Launcher.LaunchUriAsync(uri);
+        => Uri.TryCreate(url, UriKind.Absolute, out var uri) && uri.Scheme == Uri.UriSchemeHttps &&
+            await _owner.Launcher.LaunchUriAsync(uri);
 
     /// <inheritdoc />
     public void BringToFront()

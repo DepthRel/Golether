@@ -33,7 +33,7 @@ public sealed class AvatarProtocolTests
         Assert.Null(new AvatarMessage(null, sender).Sanitize()!.Image);
 
         // Too large, or not a PNG: dropped.
-        Assert.Null(new AvatarMessage(Png(AvatarMessage.MaxImageBytes + 1), sender).Sanitize());
+        Assert.Null(new AvatarMessage(Png(AvatarMessage.MAX_IMAGE_BYTES + 1), sender).Sanitize());
         Assert.Null(new AvatarMessage([1, 2, 3, 4, 5, 6, 7, 8, 9, 10], sender).Sanitize());
     }
 
@@ -62,8 +62,8 @@ public sealed class AvatarProtocolTests
         var sender = PeerId.Parse(new string('a', 64));
 
         Assert.NotNull(new AvatarMessage(PngWithSize(256, 256), sender).Sanitize());
-        Assert.NotNull(new AvatarMessage(PngWithSize(AvatarMessage.MaxDimension, AvatarMessage.MaxDimension), sender).Sanitize());
-        Assert.Null(new AvatarMessage(PngWithSize(AvatarMessage.MaxDimension + 1, 16), sender).Sanitize());
+        Assert.NotNull(new AvatarMessage(PngWithSize(AvatarMessage.MAX_DIMENSION, AvatarMessage.MAX_DIMENSION), sender).Sanitize());
+        Assert.Null(new AvatarMessage(PngWithSize(AvatarMessage.MAX_DIMENSION + 1, 16), sender).Sanitize());
         Assert.Null(new AvatarMessage(PngWithSize(16, 60000), sender).Sanitize());
         Assert.Null(new AvatarMessage(PngWithSize(0, 16), sender).Sanitize());
         Assert.Null(new AvatarMessage(PngWithSize(uint.MaxValue, uint.MaxValue), sender).Sanitize());

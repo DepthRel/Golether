@@ -20,12 +20,12 @@ public sealed record DrawMessage(
     /// <summary>
     /// The largest number of points in one message.
     /// </summary>
-    public const int MaxPoints = 128;
+    public const int MAX_POINTS = 128;
 
     /// <summary>
     /// The largest length of a stroke identifier.
     /// </summary>
-    public const int MaxIdLength = 32;
+    public const int MAX_ID_LENGTH = 32;
 
     /// <summary>
     /// Checks a received message and brings its points into the picture.
@@ -33,8 +33,8 @@ public sealed record DrawMessage(
     /// <returns>The clean message, or <see langword="null"/> when it must be dropped.</returns>
     public DrawMessage? Sanitize()
     {
-        if (string.IsNullOrEmpty(StrokeId) || StrokeId.Length > MaxIdLength || !StrokeId.All(char.IsAsciiHexDigit)
-            || !Enum.IsDefined(Phase) || Points is null || Points.Count > MaxPoints)
+        if (string.IsNullOrEmpty(StrokeId) || StrokeId.Length > MAX_ID_LENGTH || !StrokeId.All(char.IsAsciiHexDigit) ||
+            !Enum.IsDefined(Phase) || Points is null || Points.Count > MAX_POINTS)
         {
             return null;
         }

@@ -18,7 +18,7 @@ public readonly record struct PeerId
     /// <summary>
     /// The number of hexadecimal characters in an identifier (SHA-256, 32 bytes).
     /// </summary>
-    public const int HexLength = 64;
+    public const int HEX_LENGTH = 64;
 
     /// <summary>
     /// The identifier value; <see langword="null"/> for <see langword="default"/> instances.
@@ -67,7 +67,7 @@ public readonly record struct PeerId
     public static PeerId Parse(string value)
         => TryParse(value, out var id)
             ? id
-            : throw new FormatException($"A peer identifier must consist of {HexLength} hexadecimal characters.");
+            : throw new FormatException($"A peer identifier must consist of {HEX_LENGTH} hexadecimal characters.");
 
     /// <summary>
     /// Tries to parse an identifier.
@@ -78,7 +78,7 @@ public readonly record struct PeerId
     public static bool TryParse([NotNullWhen(true)] string? value, out PeerId id)
     {
         id = default;
-        if (value is null || value.Length != HexLength || !value.All(char.IsAsciiHexDigit))
+        if (value is null || value.Length != HEX_LENGTH || !value.All(char.IsAsciiHexDigit))
         {
             return false;
         }

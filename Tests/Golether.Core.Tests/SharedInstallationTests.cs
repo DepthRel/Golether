@@ -22,15 +22,15 @@ public sealed class SharedInstallationTests
         try
         {
             var app = Directory.CreateDirectory(Path.Combine(install.FullName, "app"));
-            File.WriteAllText(Path.Combine(install.FullName, AppDataPaths.InstallationMarkerFileName), "installation");
+            File.WriteAllText(Path.Combine(install.FullName, AppDataPaths.INSTALLATION_MARKER_FILE_NAME), "installation");
             if (shared)
             {
-                File.WriteAllText(Path.Combine(install.FullName, AppDataPaths.SharedInstallationMarkerFileName), "shared");
+                File.WriteAllText(Path.Combine(install.FullName, AppDataPaths.SHARED_INSTALLATION_MARKER_FILE_NAME), "shared");
             }
 
             var paths = AppDataPaths.Resolve(app.FullName, _ => null, () => profile);
 
-            Assert.Equal(shared ? profile : Path.Combine(install.FullName, AppDataPaths.DataFolderName), paths.Root);
+            Assert.Equal(shared ? profile : Path.Combine(install.FullName, AppDataPaths.DATA_FOLDER_NAME), paths.Root);
         }
         finally
         {
@@ -47,11 +47,11 @@ public sealed class SharedInstallationTests
         var install = Directory.CreateTempSubdirectory("golether-install-");
         try
         {
-            File.WriteAllText(Path.Combine(install.FullName, AppDataPaths.InstallationMarkerFileName), "installation");
-            File.WriteAllText(Path.Combine(install.FullName, AppDataPaths.SharedInstallationMarkerFileName), "shared");
+            File.WriteAllText(Path.Combine(install.FullName, AppDataPaths.INSTALLATION_MARKER_FILE_NAME), "installation");
+            File.WriteAllText(Path.Combine(install.FullName, AppDataPaths.SHARED_INSTALLATION_MARKER_FILE_NAME), "shared");
             var chosen = Path.Combine(install.FullName, "chosen");
 
-            var paths = AppDataPaths.Resolve(install.FullName, name => name == AppDataPaths.DataDirectoryVariable ? chosen : null, () => "unused");
+            var paths = AppDataPaths.Resolve(install.FullName, name => name == AppDataPaths.DATA_DIRECTORY_VARIABLE ? chosen : null, () => "unused");
 
             Assert.Equal(chosen, paths.Root);
         }

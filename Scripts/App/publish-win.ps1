@@ -9,7 +9,7 @@
         app/                  the application with native libraries in app/native
         tools/dbmigrator/     the console database migrator
         golether.install      marks the installation root: all data (keys, database, components) is kept in Golether/data
-        README.txt            first start notes
+        README.txt            first start notes in English, README.<code>.txt in the other languages (Notes/)
 
     The video (libmpv) and camera (GStreamer) components are downloaded, verified and included automatically.
 
@@ -100,16 +100,10 @@ Set-Content -Path (Join-Path $stage 'golether.install') -Encoding ascii `
     -Value 'Golether installation root: all data (keys, database, tunnels, components) is stored in the data folder here.'
 
 $hasMpv = Test-Path (Join-Path $stage 'app\native\libmpv-2.dll')
-$readme = @(
-    "Golether $version ($Runtime)",
-    '',
-    'Запуск: Golether.exe в этой папке (на него можно сделать ярлык или закрепить на панели задач).',
-    'Все данные (ключи, база, туннели, компоненты) хранятся в папке data рядом с приложением. Переносите и удаляйте папку Golether целиком.',
-    $(if ($hasMpv) { 'libmpv включена в пакет.' } else { 'libmpv не включена: положите libmpv-2.dll в app\native, иначе видео не будет показано (синхронизация работает).' }),
-    'Туннели AmneziaWG: устанавливать AmneziaWG для Windows не нужно. При первом открытии окна «Туннели AWG» Golether сам скачает свой движок (около 4 МБ, нужен интернет). При подъёме туннеля Windows спросит разрешение администратора.',
-    'Windows покажет предупреждение SmartScreen, пока сборка не подписана.'
-)
-[System.IO.File]::WriteAllLines((Join-Path $stage 'README.txt'), $readme, (New-Object System.Text.UTF8Encoding $true))
+
+# The note of the package in every language of the application, from the templates in Notes.
+. (Join-Path (Split-Path -Parent $PSScriptRoot) 'Shared/package-notes.ps1')
+Write-PackageNotes -Notes (Join-Path $PSScriptRoot 'Notes') -Target $stage -Platform win -Version $version -Runtime $Runtime
 
 Add-Type -AssemblyName System.IO.Compression, System.IO.Compression.FileSystem
 $package = Join-Path (Resolve-Path $Output).Path "Golether-$version-$Runtime.zip"

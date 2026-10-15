@@ -1,8 +1,8 @@
+using Microsoft.Extensions.Logging.Abstractions;
 using Golether.Core.Networking;
 using Golether.Web.Server.Infrastructure;
 using Golether.Web.Server.Options;
 using Golether.Web.Server.Rendezvous;
-using Microsoft.Extensions.Logging.Abstractions;
 
 namespace Golether.Web.Server.Tests;
 

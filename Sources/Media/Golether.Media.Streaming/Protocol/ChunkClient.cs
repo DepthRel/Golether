@@ -94,12 +94,12 @@ public sealed class ChunkClient : IAsyncDisposable
     {
         ArgumentNullException.ThrowIfNull(media);
         var expectedLength = media.GetChunkLength(index);
-        var request = new byte[ChunkProtocol.RequestSize];
+        var request = new byte[ChunkProtocol.REQUEST_SIZE];
         ChunkProtocol.WriteRequest(request, index, ChunkProtocol.GetMediaKey(media));
         await _stream.WriteAsync(request, cancellationToken).ConfigureAwait(false);
         await _stream.FlushAsync(cancellationToken).ConfigureAwait(false);
 
-        var header = new byte[ChunkProtocol.ResponseHeaderSize];
+        var header = new byte[ChunkProtocol.RESPONSE_HEADER_SIZE];
         await ReadAsync(header, cancellationToken).ConfigureAwait(false);
         var status = (ChunkStatus)header[0];
         var answeredIndex = BinaryPrimitives.ReadInt64BigEndian(header.AsSpan(1));
@@ -145,12 +145,12 @@ public sealed class ChunkClient : IAsyncDisposable
     public async Task<byte[]> FetchHashAsync(MediaDescriptor media, long index, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(media);
-        var request = new byte[ChunkProtocol.RequestSize];
-        ChunkProtocol.WriteRequest(request, index, ChunkProtocol.GetMediaKey(media), ChunkProtocol.GetHash);
+        var request = new byte[ChunkProtocol.REQUEST_SIZE];
+        ChunkProtocol.WriteRequest(request, index, ChunkProtocol.GetMediaKey(media), ChunkProtocol.GET_HASH);
         await _stream.WriteAsync(request, cancellationToken).ConfigureAwait(false);
         await _stream.FlushAsync(cancellationToken).ConfigureAwait(false);
 
-        var header = new byte[ChunkProtocol.ResponseHeaderSize];
+        var header = new byte[ChunkProtocol.RESPONSE_HEADER_SIZE];
         await ReadAsync(header, cancellationToken).ConfigureAwait(false);
         var status = (ChunkStatus)header[0];
         if (BinaryPrimitives.ReadInt64BigEndian(header.AsSpan(1)) != index)

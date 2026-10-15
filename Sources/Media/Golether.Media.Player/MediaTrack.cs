@@ -88,10 +88,10 @@ public sealed record MediaTrack(
         var trimmed = code.Trim();
         foreach (var culture in CultureInfo.GetCultures(CultureTypes.NeutralCultures))
         {
-            if (culture.TwoLetterISOLanguageName.Equals(trimmed, StringComparison.OrdinalIgnoreCase)
-                || culture.ThreeLetterISOLanguageName.Equals(trimmed, StringComparison.OrdinalIgnoreCase)
-                || (trimmed.Length == 3 && BibliographicCodes.TryGetValue(trimmed, out var two)
-                    && culture.TwoLetterISOLanguageName.Equals(two, StringComparison.OrdinalIgnoreCase)))
+            if (culture.TwoLetterISOLanguageName.Equals(trimmed, StringComparison.OrdinalIgnoreCase) ||
+                culture.ThreeLetterISOLanguageName.Equals(trimmed, StringComparison.OrdinalIgnoreCase) ||
+                (trimmed.Length == 3 && _bibliographicCodes.TryGetValue(trimmed, out var two) &&
+                    culture.TwoLetterISOLanguageName.Equals(two, StringComparison.OrdinalIgnoreCase)))
             {
                 if (culture.Name.Length == 0)
                 {
@@ -129,7 +129,7 @@ public sealed record MediaTrack(
         var trimmed = code.Trim().ToLowerInvariant();
         if (trimmed.Length == 3)
         {
-            if (BibliographicCodes.TryGetValue(trimmed, out var two))
+            if (_bibliographicCodes.TryGetValue(trimmed, out var two))
             {
                 return two;
             }
@@ -149,7 +149,7 @@ public sealed record MediaTrack(
     /// <summary>
     /// ISO 639-2/B codes that differ from the terminology codes .NET knows (common in Matroska files).
     /// </summary>
-    private static readonly Dictionary<string, string> BibliographicCodes = new(StringComparer.OrdinalIgnoreCase)
+    private static readonly Dictionary<string, string> _bibliographicCodes = new(StringComparer.OrdinalIgnoreCase)
     {
         ["ger"] = "de",
         ["fre"] = "fr",

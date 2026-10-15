@@ -13,7 +13,7 @@ public sealed class MonitorPreferences(string path)
     /// <summary>
     /// The name of the file.
     /// </summary>
-    public const string FileName = "monitor.json";
+    public const string FILE_NAME = "monitor.json";
 
     /// <summary>
     /// Returns the settings file of the monitor next to the settings file of the server.
@@ -23,7 +23,7 @@ public sealed class MonitorPreferences(string path)
     public static MonitorPreferences NextTo(ServerPaths paths)
     {
         ArgumentNullException.ThrowIfNull(paths);
-        return new MonitorPreferences(System.IO.Path.Combine(System.IO.Path.GetDirectoryName(paths.SettingsFile)!, FileName));
+        return new MonitorPreferences(System.IO.Path.Combine(System.IO.Path.GetDirectoryName(paths.SettingsFile)!, FILE_NAME));
     }
 
     /// <summary>
@@ -40,8 +40,8 @@ public sealed class MonitorPreferences(string path)
         try
         {
             using var document = JsonDocument.Parse(File.ReadAllText(Path));
-            return document.RootElement.TryGetProperty("language", out var language) && language.ValueKind == JsonValueKind.String
-                && language.GetString() is { Length: > 0 } code
+            return document.RootElement.TryGetProperty("language", out var language) && language.ValueKind == JsonValueKind.String &&
+                language.GetString() is { Length: > 0 } code
                 ? code
                 : null;
         }
@@ -64,7 +64,7 @@ public sealed class MonitorPreferences(string path)
         try
         {
             Directory.CreateDirectory(System.IO.Path.GetDirectoryName(Path)!);
-            File.WriteAllText(Path, JsonSerializer.Serialize(new Dictionary<string, string> { ["language"] = code }, Indented) + Environment.NewLine);
+            File.WriteAllText(Path, JsonSerializer.Serialize(new Dictionary<string, string> { ["language"] = code }, _indented) + Environment.NewLine);
             return true;
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
@@ -76,5 +76,5 @@ public sealed class MonitorPreferences(string path)
     /// <summary>
     /// The format of the file: indented, so it reads like the settings of the server.
     /// </summary>
-    private static readonly JsonSerializerOptions Indented = new() { WriteIndented = true };
+    private static readonly JsonSerializerOptions _indented = new() { WriteIndented = true };
 }

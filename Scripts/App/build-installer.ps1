@@ -65,7 +65,7 @@ if ($LASTEXITCODE -ne 0 -or -not $projectUrl) {
 
 $iscc = (Get-Command 'ISCC.exe' -ErrorAction SilentlyContinue).Source
 if (-not $iscc) {
-    # Любая установленная версия Inno Setup (6, 7 и новее), включая установку в профиль пользователя.
+    # Any installed version of Inno Setup (6, 7 and newer), including an installation into the user profile.
     $roots = @("${env:ProgramFiles(x86)}", "$env:ProgramFiles", "$env:LOCALAPPDATA\Programs") | Where-Object { $_ -and (Test-Path $_) }
     $iscc = $roots |
         ForEach-Object { Get-ChildItem -Path $_ -Filter "Inno Setup*" -Directory -ErrorAction SilentlyContinue } |
@@ -77,9 +77,9 @@ if (-not $iscc) {
 
 if (-not $iscc) {
     throw @'
-Inno Setup не найден. Установите его (бесплатно, https://jrsoftware.org/isdl.php)
-или добавьте ISCC.exe в PATH, затем запустите скрипт снова.
-Пакет уже готов в artifacts/publish/<runtime>/Golether — им можно пользоваться и без установщика.
+Inno Setup was not found. Install it (free, https://jrsoftware.org/isdl.php)
+or add ISCC.exe to PATH, then run the script again.
+The package is ready in artifacts/publish/<runtime>/Golether: it can be used without the installer.
 '@
 }
 
@@ -107,8 +107,8 @@ if (-not (Test-Path $setup)) {
 $hash = (Get-FileHash -Algorithm SHA256 $setup).Hash
 $size = (Get-Item $setup).Length
 Write-Host ''
-Write-Host "Установщик: $setup"
-Write-Host ("Размер: {0:N1} МБ" -f ($size / 1MB))
+Write-Host "Installer: $setup"
+Write-Host ("Size: {0:N1} MB" -f ($size / 1MB))
 Write-Host "SHA-256: $hash"
 Write-Host ''
 if (-not $UpdateUrlPrefix) {
@@ -116,11 +116,11 @@ if (-not $UpdateUrlPrefix) {
     $UpdateUrlPrefix = "https://github.com/DepthRel/Golether/releases/download/$version/"
 }
 
-Write-Host 'Запись для Sources/Apps/Golether.Pages/updates.json (страница проекта и проверка обновлений читают этот файл):'
+Write-Host 'The entry for Sources/Apps/Golether.Pages/updates.json (the project page and the update check read this file):'
 $entry = [ordered]@{
     windows = [ordered]@{
         version = $version
-        notes   = "Что нового в $version"
+        notes   = "What is new in $version"
         url     = ($UpdateUrlPrefix.TrimEnd('/') + '/' + (Split-Path -Leaf $setup))
         sha256  = $hash
         size    = $size

@@ -144,11 +144,11 @@ internal static unsafe class Signals
         {
             var value = &values[i + 1];
             Gst.ValueInit(value, args[i].Type);
-            if (args[i].Type == Gst.TypeUInt)
+            if (args[i].Type == Gst.TYPE_U_INT)
             {
                 Gst.ValueSetUInt(value, args[i].Number);
             }
-            else if (args[i].Type == Gst.TypeInt)
+            else if (args[i].Type == Gst.TYPE_INT)
             {
                 Gst.ValueSetInt(value, unchecked((int)args[i].Number));
             }
@@ -156,7 +156,7 @@ internal static unsafe class Signals
             {
                 Gst.ValueSetObject(value, args[i].Pointer);
             }
-            else if (args[i].Type == Gst.TypeString)
+            else if (args[i].Type == Gst.TYPE_STRING)
             {
                 Gst.ValueSetString(value, args[i].Text ?? string.Empty);
             }

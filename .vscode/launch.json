@@ -2,11 +2,11 @@
   // Pick a profile in "Run and Debug" and press F5. Every profile runs its own "build: <project>" task, which builds
   // only that project and its references (not the whole solution).
   // Each local node keeps its database, keys and tunnel configurations in .vscode/dev/<node>/data (ignored by git),
-  // so "Host + Guest" runs two independent devices on one computer: invite with the 127.0.0.1 address.
+  // so "Golether: host + participant" runs two independent devices on one computer: invite with the 127.0.0.1 address.
   "version": "0.2.0",
   "configurations": [
     {
-      "name": "Golether: ведущий",
+      "name": "Golether: host",
       "type": "coreclr",
       "request": "launch",
       "preLaunchTask": "build: Golether",
@@ -18,7 +18,7 @@
       "justMyCode": true
     },
     {
-      "name": "Golether: участник",
+      "name": "Golether: participant",
       "type": "coreclr",
       "request": "launch",
       "preLaunchTask": "build: Golether",
@@ -30,7 +30,7 @@
       "justMyCode": true
     },
     {
-      "name": "Сервер рукопожатий",
+      "name": "Rendezvous server",
       "type": "coreclr",
       "request": "launch",
       "preLaunchTask": "build: Golether.Web.Server",
@@ -54,7 +54,7 @@
       "justMyCode": true
     },
     {
-      "name": "Golether: ведущий (без сборки)",
+      "name": "Golether: host (no build)",
       "type": "coreclr",
       "request": "launch",
       "program": "${workspaceFolder}/Sources/Apps/Golether.UI/bin/Debug/net10.0/Golether.dll",
@@ -64,7 +64,7 @@
       "presentation": { "hidden": true }
     },
     {
-      "name": "Golether: участник (без сборки)",
+      "name": "Golether: participant (no build)",
       "type": "coreclr",
       "request": "launch",
       "program": "${workspaceFolder}/Sources/Apps/Golether.UI/bin/Debug/net10.0/Golether.dll",
@@ -76,8 +76,8 @@
   ],
   "compounds": [
     {
-      "name": "Golether: ведущий + участник",
-      "configurations": [ "Golether: ведущий (без сборки)", "Golether: участник (без сборки)" ],
+      "name": "Golether: host + participant",
+      "configurations": [ "Golether: host (no build)", "Golether: participant (no build)" ],
       "preLaunchTask": "build: Golether",
       "stopAll": true
     }

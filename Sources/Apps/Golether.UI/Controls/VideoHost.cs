@@ -32,57 +32,57 @@ public sealed partial class VideoHost : NativeControlHost
     /// <summary>
     /// <c>GWLP_WNDPROC</c>.
     /// </summary>
-    private const int WindowProcIndex = -4;
+    private const int WINDOW_PROC_INDEX = -4;
 
     /// <summary>
     /// <c>WM_LBUTTONDOWN</c>.
     /// </summary>
-    private const uint LeftButtonDown = 0x0201;
+    private const uint LEFT_BUTTON_DOWN = 0x0201;
 
     /// <summary>
     /// <c>WM_LBUTTONDBLCLK</c>.
     /// </summary>
-    private const uint LeftButtonDoubleClick = 0x0203;
+    private const uint LEFT_BUTTON_DOUBLE_CLICK = 0x0203;
 
     /// <summary>
     /// <c>WM_NCDESTROY</c>.
     /// </summary>
-    private const uint NonClientDestroy = 0x0082;
+    private const uint NON_CLIENT_DESTROY = 0x0082;
 
     /// <summary>
     /// <c>WM_MOUSEMOVE</c>.
     /// </summary>
-    private const uint MouseMove = 0x0200;
+    private const uint MOUSE_MOVE = 0x0200;
 
     /// <summary>
     /// <c>WM_SETCURSOR</c>.
     /// </summary>
-    private const uint SetCursorMessage = 0x0020;
+    private const uint SET_CURSOR_MESSAGE = 0x0020;
 
     /// <summary>
     /// <c>HTCLIENT</c>: the pointer is over the client area.
     /// </summary>
-    private const int HitClient = 1;
+    private const int HIT_CLIENT = 1;
 
     /// <summary>
     /// <c>IDC_ARROW</c>.
     /// </summary>
-    private const nint ArrowCursor = 32512;
+    private const nint ARROW_CURSOR = 32512;
 
     /// <summary>
     /// <c>SM_CXDOUBLECLK</c>.
     /// </summary>
-    private const int DoubleClickWidthMetric = 36;
+    private const int DOUBLE_CLICK_WIDTH_METRIC = 36;
 
     /// <summary>
     /// <c>SM_CYDOUBLECLK</c>.
     /// </summary>
-    private const int DoubleClickHeightMetric = 37;
+    private const int DOUBLE_CLICK_HEIGHT_METRIC = 37;
 
     /// <summary>
     /// The hosts by subclassed window.
     /// </summary>
-    private static readonly ConcurrentDictionary<nint, Subclass> Subclasses = new();
+    private static readonly ConcurrentDictionary<nint, Subclass> _subclasses = new();
 
     /// <summary>
     /// Raised on the UI thread when the user clicks the video (Windows).
@@ -129,7 +129,7 @@ public sealed partial class VideoHost : NativeControlHost
             if (OperatingSystem.IsWindows())
             {
                 // The system asks for the cursor only when the pointer moves, so a resting pointer is changed here.
-                SetCursor(value ? 0 : LoadCursor(0, ArrowCursor));
+                SetCursor(value ? 0 : LoadCursor(0, ARROW_CURSOR));
             }
         }
     }
@@ -148,8 +148,8 @@ public sealed partial class VideoHost : NativeControlHost
     public static (VideoPointerAction Action, (long Time, int X, int Y)? Remember) ClassifyPress(
         (long Time, int X, int Y)? previous, long time, int x, int y, int doubleClickTime, int width, int height)
     {
-        if (previous is { } last && time >= last.Time && time - last.Time <= doubleClickTime
-            && Math.Abs(x - last.X) <= width / 2 && Math.Abs(y - last.Y) <= height / 2)
+        if (previous is { } last && time >= last.Time && time - last.Time <= doubleClickTime &&
+            Math.Abs(x - last.X) <= width / 2 && Math.Abs(y - last.Y) <= height / 2)
         {
             return (VideoPointerAction.DoubleClick, null);
         }
@@ -304,10 +304,10 @@ public sealed partial class VideoHost : NativeControlHost
         public static unsafe void Install(nint window, VideoHost host)
         {
             var procedure = (nint)(delegate* unmanaged[Stdcall]<nint, uint, nint, nint, nint>)&WindowProc;
-            var previous = SetWindowLongPtr(window, WindowProcIndex, procedure);
+            var previous = SetWindowLongPtr(window, WINDOW_PROC_INDEX, procedure);
             if (previous != 0)
             {
-                Subclasses[window] = new Subclass(host, previous);
+                _subclasses[window] = new Subclass(host, previous);
             }
         }
 
@@ -317,9 +317,9 @@ public sealed partial class VideoHost : NativeControlHost
         /// <param name="window">The window.</param>
         public static void Remove(nint window)
         {
-            if (Subclasses.TryRemove(window, out var subclass))
+            if (_subclasses.TryRemove(window, out var subclass))
             {
-                SetWindowLongPtr(window, WindowProcIndex, subclass.Previous);
+                SetWindowLongPtr(window, WINDOW_PROC_INDEX, subclass.Previous);
             }
         }
 
@@ -334,18 +334,18 @@ public sealed partial class VideoHost : NativeControlHost
         [UnmanagedCallersOnly(CallConvs = [typeof(CallConvStdcall)])]
         private static nint WindowProc(nint window, uint message, nint wParam, nint lParam)
         {
-            if (!Subclasses.TryGetValue(window, out var subclass))
+            if (!_subclasses.TryGetValue(window, out var subclass))
             {
                 return 0;
             }
 
-            if (message is LeftButtonDown or LeftButtonDoubleClick)
+            if (message is LEFT_BUTTON_DOWN or LEFT_BUTTON_DOUBLE_CLICK)
             {
                 var x = (short)(lParam & 0xFFFF);
                 var y = (short)((lParam >> 16) & 0xFFFF);
                 var (action, remember) = ClassifyPress(
                     subclass.LastPress, (uint)GetMessageTime(), x, y, (int)GetDoubleClickTime(),
-                    GetSystemMetrics(DoubleClickWidthMetric), GetSystemMetrics(DoubleClickHeightMetric));
+                    GetSystemMetrics(DOUBLE_CLICK_WIDTH_METRIC), GetSystemMetrics(DOUBLE_CLICK_HEIGHT_METRIC));
                 subclass.LastPress = remember;
                 try
                 {
@@ -357,7 +357,7 @@ public sealed partial class VideoHost : NativeControlHost
                 }
             }
 
-            if (message == MouseMove)
+            if (message == MOUSE_MOVE)
             {
                 try
                 {
@@ -369,7 +369,7 @@ public sealed partial class VideoHost : NativeControlHost
                 }
             }
 
-            if (message == SetCursorMessage && subclass.Host.CursorHidden && (short)(lParam & 0xFFFF) == HitClient)
+            if (message == SET_CURSOR_MESSAGE && subclass.Host.CursorHidden && (short)(lParam & 0xFFFF) == HIT_CLIENT)
             {
                 // Answering here keeps the parent window from putting the arrow back.
                 SetCursor(0);
@@ -377,9 +377,9 @@ public sealed partial class VideoHost : NativeControlHost
             }
 
             var result = CallWindowProc(subclass.Previous, window, message, wParam, lParam);
-            if (message == NonClientDestroy)
+            if (message == NON_CLIENT_DESTROY)
             {
-                Subclasses.TryRemove(window, out _);
+                _subclasses.TryRemove(window, out _);
             }
 
             return result;

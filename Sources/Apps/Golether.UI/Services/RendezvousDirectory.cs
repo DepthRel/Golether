@@ -1,10 +1,10 @@
 using System.Text.Json;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 using Golether.Core.Configuration;
 using Golether.Core.Data.Stores;
 using Golether.Core.Networking;
 using Golether.Security.Discovery;
-using Microsoft.Extensions.Logging;
-using Microsoft.Extensions.Logging.Abstractions;
 
 namespace Golether.UI.Services;
 
@@ -22,12 +22,12 @@ public sealed class RendezvousDirectory : IRendezvousDirectory
     /// <summary>
     /// The setting that keeps the last sealed address the page gave.
     /// </summary>
-    public const string CacheSetting = "network.rendezvousDirectory";
+    public const string CACHE_SETTING = "network.rendezvousDirectory";
 
     /// <summary>
     /// The largest file accepted, in bytes.
     /// </summary>
-    public const int MaxFileBytes = 4096;
+    public const int MAX_FILE_BYTES = 4096;
 
     /// <summary>
     /// How long the page may take to answer before the stored address is used.
@@ -59,13 +59,13 @@ public sealed class RendezvousDirectory : IRendezvousDirectory
     /// </summary>
     /// <param name="http">The HTTP client.</param>
     /// <param name="settings">The settings.</param>
-    /// <param name="url">The address of the file; <see cref="ProjectSite.ConfigUrl"/> when <see langword="null"/>.</param>
+    /// <param name="url">The address of the file; <see cref="ProjectSite.CONFIG_URL"/> when <see langword="null"/>.</param>
     /// <param name="logger">The logger.</param>
     public RendezvousDirectory(HttpClient http, ISettingsStore settings, string? url = null, ILogger<RendezvousDirectory>? logger = null)
     {
         _http = http ?? throw new ArgumentNullException(nameof(http));
         _settings = settings ?? throw new ArgumentNullException(nameof(settings));
-        _url = url ?? ProjectSite.ConfigUrl;
+        _url = url ?? ProjectSite.CONFIG_URL;
         _logger = logger ?? NullLogger<RendezvousDirectory>.Instance;
     }
 
@@ -75,11 +75,11 @@ public sealed class RendezvousDirectory : IRendezvousDirectory
         var fresh = await DownloadAsync(cancellationToken).ConfigureAwait(false);
         if (EndpointSeal.TryOpen(fresh, out var endpoint))
         {
-            await _settings.SetAsync(CacheSetting, fresh, cancellationToken).ConfigureAwait(false);
+            await _settings.SetAsync(CACHE_SETTING, fresh, cancellationToken).ConfigureAwait(false);
             return endpoint;
         }
 
-        var stored = await _settings.GetAsync(CacheSetting, cancellationToken).ConfigureAwait(false);
+        var stored = await _settings.GetAsync(CACHE_SETTING, cancellationToken).ConfigureAwait(false);
         if (EndpointSeal.TryOpen(stored, out endpoint))
         {
             _logger.LogInformation("The project page gave no rendezvous server; the stored address is used");
@@ -100,9 +100,9 @@ public sealed class RendezvousDirectory : IRendezvousDirectory
         {
             var reader = new Utf8JsonReader(json, new JsonReaderOptions { MaxDepth = 4 });
             using var document = JsonDocument.ParseValue(ref reader);
-            return document.RootElement.ValueKind == JsonValueKind.Object
-                && document.RootElement.TryGetProperty("rendezvous", out var value)
-                && value.ValueKind == JsonValueKind.String
+            return document.RootElement.ValueKind == JsonValueKind.Object &&
+                document.RootElement.TryGetProperty("rendezvous", out var value) &&
+                value.ValueKind == JsonValueKind.String
                     ? value.GetString()
                     : null;
         }
@@ -124,19 +124,19 @@ public sealed class RendezvousDirectory : IRendezvousDirectory
         try
         {
             using var response = await _http.GetAsync(_url, HttpCompletionOption.ResponseHeadersRead, timeout.Token).ConfigureAwait(false);
-            if (!response.IsSuccessStatusCode || response.Content.Headers.ContentLength > MaxFileBytes)
+            if (!response.IsSuccessStatusCode || response.Content.Headers.ContentLength > MAX_FILE_BYTES)
             {
                 _logger.LogInformation("The project page answered {Status} to the request for the rendezvous server", (int)response.StatusCode);
                 return null;
             }
 
             await using var stream = await response.Content.ReadAsStreamAsync(timeout.Token).ConfigureAwait(false);
-            var buffer = new byte[MaxFileBytes + 1];
+            var buffer = new byte[MAX_FILE_BYTES + 1];
             var read = await stream.ReadAtLeastAsync(buffer, buffer.Length, throwOnEndOfStream: false, timeout.Token).ConfigureAwait(false);
-            return read > MaxFileBytes ? null : ReadSealed(buffer.AsSpan(0, read));
+            return read > MAX_FILE_BYTES ? null : ReadSealed(buffer.AsSpan(0, read));
         }
-        catch (Exception ex) when (ex is HttpRequestException or IOException
-            || (ex is OperationCanceledException && !cancellationToken.IsCancellationRequested))
+        catch (Exception ex) when (ex is HttpRequestException or IOException ||
+            (ex is OperationCanceledException && !cancellationToken.IsCancellationRequested))
         {
             // The page is a convenience: without it the session still starts, with the stored address or without a
             // rendezvous server at all.

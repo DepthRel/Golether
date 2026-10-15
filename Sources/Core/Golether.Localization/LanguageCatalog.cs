@@ -10,12 +10,12 @@ public sealed class LanguageCatalog
     /// <summary>
     /// The code of the language used when nothing better is known, and for texts a language lacks.
     /// </summary>
-    public const string DefaultCode = "en";
+    public const string DEFAULT_CODE = "en";
 
     /// <summary>
     /// The prefix of the embedded language files.
     /// </summary>
-    private const string ResourcePrefix = "Golether.Localization.Languages.";
+    private const string RESOURCE_PREFIX = "Golether.Localization.Languages.";
 
     /// <summary>
     /// The packs by language code.
@@ -25,7 +25,7 @@ public sealed class LanguageCatalog
     /// <summary>
     /// Initializes a new instance of the <see cref="LanguageCatalog"/> class.
     /// </summary>
-    /// <param name="packs">The language packs; one of them is <see cref="DefaultCode"/>.</param>
+    /// <param name="packs">The language packs; one of them is <see cref="DEFAULT_CODE"/>.</param>
     /// <exception cref="ArgumentException">Two packs share a code or the default language is missing.</exception>
     public LanguageCatalog(IEnumerable<ILanguagePack> packs)
     {
@@ -39,9 +39,9 @@ public sealed class LanguageCatalog
             }
         }
 
-        if (!_packs.ContainsKey(DefaultCode))
+        if (!_packs.ContainsKey(DEFAULT_CODE))
         {
-            throw new ArgumentException($"The default language '{DefaultCode}' is missing.", nameof(packs));
+            throw new ArgumentException($"The default language '{DEFAULT_CODE}' is missing.", nameof(packs));
         }
 
         Languages = [.. _packs.Values.Select(p => p.Language).OrderBy(l => l.NativeName, StringComparer.Ordinal)];
@@ -55,7 +55,7 @@ public sealed class LanguageCatalog
     /// <summary>
     /// Gets the default language pack, the source of texts a language lacks.
     /// </summary>
-    public ILanguagePack Default => _packs[DefaultCode];
+    public ILanguagePack Default => _packs[DEFAULT_CODE];
 
     /// <summary>
     /// Reads every language file embedded in this assembly.
@@ -65,7 +65,7 @@ public sealed class LanguageCatalog
     {
         var assembly = typeof(LanguageCatalog).Assembly;
         var packs = new List<ILanguagePack>();
-        foreach (var name in assembly.GetManifestResourceNames().Where(n => n.StartsWith(ResourcePrefix, StringComparison.Ordinal) && n.EndsWith(".json", StringComparison.Ordinal)))
+        foreach (var name in assembly.GetManifestResourceNames().Where(n => n.StartsWith(RESOURCE_PREFIX, StringComparison.Ordinal) && n.EndsWith(".json", StringComparison.Ordinal)))
         {
             using var stream = assembly.GetManifestResourceStream(name)!;
             using var reader = new StreamReader(stream);

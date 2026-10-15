@@ -3,6 +3,7 @@ using CommunityToolkit.Mvvm.Input;
 using Golether.Core.Identity;
 using Golether.Localization;
 using Golether.Session;
+using Golether.UI.Enums;
 
 namespace Golether.UI.ViewModels;
 
@@ -71,7 +72,7 @@ public sealed partial class ParticipantItemViewModel : ObservableObject
     /// <summary>
     /// The loudest a voice is played: the original level. Above it the voice only starts to clip.
     /// </summary>
-    public const double MaxVoiceVolume = 100;
+    public const double MAX_VOICE_VOLUME = 100;
 
     /// <summary>
     /// Gets or sets how loud the participant's voice is played on this device, 0–100 %. Only this device hears the
@@ -79,7 +80,7 @@ public sealed partial class ParticipantItemViewModel : ObservableObject
     /// </summary>
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(VoiceVolumeText), nameof(IsVoiceMuted), nameof(VoiceMuteText))]
-    public partial double VoiceVolume { get; set; } = MaxVoiceVolume;
+    public partial double VoiceVolume { get; set; } = MAX_VOICE_VOLUME;
 
     /// <summary>
     /// Gets the voice volume text.
@@ -131,7 +132,7 @@ public sealed partial class ParticipantItemViewModel : ObservableObject
     partial void OnVoiceVolumeChanged(double value)
     {
         // Louder than the original would only clip the voice, so 100 % is the top.
-        var clamped = Math.Clamp(Math.Round(value), 0, MaxVoiceVolume);
+        var clamped = Math.Clamp(Math.Round(value), 0, MAX_VOICE_VOLUME);
         if (clamped != value)
         {
             VoiceVolume = clamped;
@@ -159,7 +160,7 @@ public sealed partial class ParticipantItemViewModel : ObservableObject
     /// Restores the normal volume.
     /// </summary>
     [RelayCommand]
-    private void ResetVoiceVolume() => VoiceVolume = MaxVoiceVolume;
+    private void ResetVoiceVolume() => VoiceVolume = MAX_VOICE_VOLUME;
 
     /// <summary>
     /// Gets or sets a value indicating whether the participant is speaking now.
@@ -255,7 +256,7 @@ public sealed partial class ParticipantItemViewModel : ObservableObject
     public partial string Initial { get; set; } = "?";
 
     /// <summary>
-    /// Gets or sets the role caption, for example <c>ведущий · вы</c>.
+    /// Gets or sets the role caption, for example <c>host · you</c>.
     /// </summary>
     [ObservableProperty]
     public partial string RoleText { get; set; } = string.Empty;

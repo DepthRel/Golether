@@ -23,7 +23,7 @@ public sealed class NatTraversalTests
         await using var second = new FakeStunServer(seen);
         using var socket = NatTraversal.Open(0);
 
-        var found = await NatTraversal.DiscoverAsync(socket, [first.Address, second.Address], token);
+        var found = await NatTraversal.DiscoverAsync(socket, [first.Address, second.Address], TimeProvider.System, token);
 
         Assert.NotNull(found);
         Assert.Equal(seen, found.Endpoint);
@@ -43,7 +43,7 @@ public sealed class NatTraversalTests
         await using var second = new FakeStunServer(new IPEndPoint(IPAddress.Parse("203.0.113.7"), 51999));
         using var socket = NatTraversal.Open(0);
 
-        var found = await NatTraversal.DiscoverAsync(socket, [first.Address, second.Address], token);
+        var found = await NatTraversal.DiscoverAsync(socket, [first.Address, second.Address], TimeProvider.System, token);
 
         Assert.NotNull(found);
         Assert.False(found.IsPredictable);
@@ -62,7 +62,7 @@ public sealed class NatTraversalTests
         await using var good = new FakeStunServer(new IPEndPoint(IPAddress.Parse("198.51.100.4"), 3000));
         using var socket = NatTraversal.Open(0);
 
-        var found = await NatTraversal.DiscoverAsync(socket, [silent.Address, good.Address], token);
+        var found = await NatTraversal.DiscoverAsync(socket, [silent.Address, good.Address], TimeProvider.System, token);
 
         Assert.NotNull(found);
         Assert.Equal(3000, found.Endpoint.Port);
@@ -70,8 +70,8 @@ public sealed class NatTraversalTests
         // Nothing usable: no address, and no exception.
         await using var alsoSilent = new FakeStunServer(null);
         using var another = NatTraversal.Open(0);
-        Assert.Null(await NatTraversal.DiscoverAsync(another, [silent.Address, alsoSilent.Address], token));
-        Assert.Null(await NatTraversal.DiscoverAsync(another, ["not-an-address", "host-without-port"], token));
+        Assert.Null(await NatTraversal.DiscoverAsync(another, [silent.Address, alsoSilent.Address], TimeProvider.System, token));
+        Assert.Null(await NatTraversal.DiscoverAsync(another, ["not-an-address", "host-without-port"], TimeProvider.System, token));
     }
 
     /// <summary>
@@ -91,7 +91,7 @@ public sealed class NatTraversalTests
         var port = ((IPEndPoint)socket.LocalEndPoint!).Port;
         await stranger.SendToAsync(new byte[64], SocketFlags.None, new IPEndPoint(IPAddress.Loopback, port), token);
 
-        var found = await NatTraversal.DiscoverAsync(socket, [first.Address, second.Address], token);
+        var found = await NatTraversal.DiscoverAsync(socket, [first.Address, second.Address], TimeProvider.System, token);
 
         Assert.NotNull(found);
         Assert.Equal(seen, found.Endpoint);
@@ -140,7 +140,7 @@ public sealed class NatTraversalTests
         for (var i = 0; i < 50; i++)
         {
             using var socket = NatTraversal.Open(0);
-            var found = await NatTraversal.DiscoverAsync(socket, [first.Address, second.Address], token);
+            var found = await NatTraversal.DiscoverAsync(socket, [first.Address, second.Address], TimeProvider.System, token);
             if (found is not { IsPredictable: true })
             {
                 misses++;
@@ -210,7 +210,7 @@ public sealed class NatTraversalTests
         /// <returns>A task that completes when the server stops.</returns>
         private async Task RunAsync(IPEndPoint? reply, CancellationToken cancellationToken)
         {
-            var buffer = new byte[StunMessage.MaxSize];
+            var buffer = new byte[StunMessage.MAX_SIZE];
             while (!cancellationToken.IsCancellationRequested)
             {
                 SocketReceiveFromResult received;
@@ -223,14 +223,14 @@ public sealed class NatTraversalTests
                     return;
                 }
 
-                if (reply is null || received.ReceivedBytes < Stun.HeaderSize)
+                if (reply is null || received.ReceivedBytes < Stun.HEADER_SIZE)
                 {
                     continue;
                 }
 
                 var request = StunMessage.Parse(buffer.AsSpan(0, received.ReceivedBytes));
-                var response = new StunMessage(Stun.Binding, Stun.ClassSuccess, request.TransactionId);
-                response.AddXorAddress(Stun.AttrXorMappedAddress, reply);
+                var response = new StunMessage(Stun.BINDING, Stun.CLASS_SUCCESS, request.TransactionId);
+                response.AddXorAddress(Stun.ATTR_XOR_MAPPED_ADDRESS, reply);
                 await _socket.SendToAsync(response.Encode(), SocketFlags.None, received.RemoteEndPoint, cancellationToken);
             }
         }

@@ -4,8 +4,8 @@ using System.Text.Json;
 using System.Text.Json.Serialization;
 using Golether.Core.Configuration;
 using Golether.Core.Identity;
-using Golether.Localization;
 using Golether.Core.Networking;
+using Golether.Localization;
 
 namespace Golether.Security.Invites;
 
@@ -16,8 +16,8 @@ namespace Golether.Security.Invites;
 /// The link carries the host identifier (pinned by the participant during the TLS handshake), candidate addresses and a
 /// one-time token. A token alone is not enough: the host approves every newcomer.
 /// <para>
-/// One invitation has two spellings with the same content: the key (<see cref="LinkPrefix"/>), which is pasted into
-/// the application, and the web link (<see cref="WebLinkPrefix"/>), which any messenger makes clickable and whose
+/// One invitation has two spellings with the same content: the key (<see cref="LINK_PREFIX"/>), which is pasted into
+/// the application, and the web link (<see cref="WEB_LINK_PREFIX"/>), which any messenger makes clickable and whose
 /// page hands the key over to the application.
 /// </para>
 /// </remarks>
@@ -26,38 +26,38 @@ public sealed record Invite
     /// <summary>
     /// The link prefix.
     /// </summary>
-    public const string LinkPrefix = "golether://join/v1/";
+    public const string LINK_PREFIX = "golether://join/v1/";
 
     /// <summary>
     /// The prefix of the web link: the page of the project, with the invitation after the <c>#</c>.
     /// </summary>
-    public const string WebLinkPrefix = ProjectSite.JoinUrlPrefix;
+    public const string WEB_LINK_PREFIX = ProjectSite.JOIN_URL_PREFIX;
 
     /// <summary>
     /// The maximum length of a link.
     /// </summary>
-    public const int MaxLinkLength = 4096;
+    public const int MAX_LINK_LENGTH = 4096;
 
     /// <summary>
     /// The maximum number of candidate endpoints.
     /// </summary>
-    public const int MaxEndpoints = 16;
+    public const int MAX_ENDPOINTS = 16;
 
     /// <summary>
     /// The number of random bytes in a token (128 bits).
     /// </summary>
-    public const int TokenBytes = 16;
+    public const int TOKEN_BYTES = 16;
 
     /// <summary>
     /// The latest expiry time a link may carry, in Unix seconds (the end of year 9999): a larger number cannot be
     /// turned into a date and would fail instead of being reported as a damaged link.
     /// </summary>
-    private const long MaxExpiresSeconds = 253_402_300_799;
+    private const long MAX_EXPIRES_SECONDS = 253_402_300_799;
 
     /// <summary>
     /// The JSON options of the link payload.
     /// </summary>
-    private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
+    private static readonly JsonSerializerOptions _jsonOptions = new(JsonSerializerDefaults.Web);
 
     /// <summary>
     /// Gets the host identifier.
@@ -86,7 +86,7 @@ public sealed record Invite
     public RendezvousPoint? Rendezvous { get; init; }
 
     /// <summary>
-    /// Gets the one-time token (base64url, <see cref="TokenBytes"/> bytes).
+    /// Gets the one-time token (base64url, <see cref="TOKEN_BYTES"/> bytes).
     /// </summary>
     public required string Token { get; init; }
 
@@ -99,7 +99,7 @@ public sealed record Invite
     /// Creates a random token.
     /// </summary>
     /// <returns>The base64url token.</returns>
-    public static string CreateToken() => Base64Url.EncodeToString(RandomNumberGenerator.GetBytes(TokenBytes));
+    public static string CreateToken() => Base64Url.EncodeToString(RandomNumberGenerator.GetBytes(TOKEN_BYTES));
 
     /// <summary>
     /// Formats the invitation as a link.
@@ -116,14 +116,14 @@ public sealed record Invite
             ExpiresAt.ToUnixTimeSeconds(),
             Rendezvous?.Server.ToString(),
             Rendezvous?.Room);
-        return LinkPrefix + Base64Url.EncodeToString(JsonSerializer.SerializeToUtf8Bytes(payload, JsonOptions));
+        return LINK_PREFIX + Base64Url.EncodeToString(JsonSerializer.SerializeToUtf8Bytes(payload, _jsonOptions));
     }
 
     /// <summary>
     /// Formats the invitation as a web link that opens the application from a browser.
     /// </summary>
     /// <returns>The <c>https://…/join/#…</c> link with the same content as <see cref="ToLink"/>.</returns>
-    public string ToWebLink() => WebLinkPrefix + ToLink()[LinkPrefix.Length..];
+    public string ToWebLink() => WEB_LINK_PREFIX + ToLink()[LINK_PREFIX.Length..];
 
     /// <summary>
     /// Tells whether a text looks like an invitation in either spelling, without checking its content.
@@ -139,8 +139,8 @@ public sealed record Invite
     /// <param name="text">The trimmed link.</param>
     /// <returns>The prefix, or <see langword="null"/> when the text is no invitation.</returns>
     private static string? FindPrefix(ReadOnlySpan<char> text)
-        => text.StartsWith(LinkPrefix, StringComparison.Ordinal) ? LinkPrefix
-            : text.StartsWith(WebLinkPrefix, StringComparison.Ordinal) ? WebLinkPrefix
+        => text.StartsWith(LINK_PREFIX, StringComparison.Ordinal) ? LINK_PREFIX
+            : text.StartsWith(WEB_LINK_PREFIX, StringComparison.Ordinal) ? WEB_LINK_PREFIX
             : null;
 
     /// <summary>
@@ -152,7 +152,7 @@ public sealed record Invite
     public static Invite ParseLink(string link)
     {
         var text = (link ?? string.Empty).Trim();
-        if (text.Length > MaxLinkLength || FindPrefix(text) is not { } prefix)
+        if (text.Length > MAX_LINK_LENGTH || FindPrefix(text) is not { } prefix)
         {
             throw new FormatException(Texts.Get("Invite.Error.NotInvite"));
         }
@@ -161,18 +161,18 @@ public sealed record Invite
         try
         {
             var bytes = Base64Url.DecodeFromChars(text.AsSpan(prefix.Length));
-            payload = JsonSerializer.Deserialize<InvitePayload>(bytes, JsonOptions);
+            payload = JsonSerializer.Deserialize<InvitePayload>(bytes, _jsonOptions);
         }
         catch (Exception ex) when (ex is FormatException or JsonException)
         {
             throw new FormatException(Texts.Get("Invite.Error.Damaged"), ex);
         }
 
-        if (payload is null
-            || !PeerId.TryParse(payload.Host, out var host)
-            || payload.Endpoints is null || payload.Endpoints.Length is 0 or > MaxEndpoints
-            || !IsValidToken(payload.Token)
-            || payload.Expires is < 0 or > MaxExpiresSeconds)
+        if (payload is null ||
+            !PeerId.TryParse(payload.Host, out var host) ||
+            payload.Endpoints is null || payload.Endpoints.Length is 0 or > MAX_ENDPOINTS ||
+            !IsValidToken(payload.Token) ||
+            payload.Expires is < 0 or > MAX_EXPIRES_SECONDS)
         {
             throw new FormatException(Texts.Get("Invite.Error.Damaged"));
         }
@@ -210,7 +210,7 @@ public sealed record Invite
     /// Checks the token format.
     /// </summary>
     /// <param name="token">The token.</param>
-    /// <returns><see langword="true"/> when the token decodes to <see cref="TokenBytes"/> bytes.</returns>
+    /// <returns><see langword="true"/> when the token decodes to <see cref="TOKEN_BYTES"/> bytes.</returns>
     public static bool IsValidToken(string? token)
     {
         // 16 bytes are 22 base64url characters without padding. Base64Url throws on malformed input, so the alphabet
@@ -221,7 +221,7 @@ public sealed record Invite
         }
 
         Span<byte> buffer = stackalloc byte[32];
-        return Base64Url.TryDecodeFromChars(token, buffer, out var written) && written == TokenBytes;
+        return Base64Url.TryDecodeFromChars(token, buffer, out var written) && written == TOKEN_BYTES;
     }
 
     /// <summary>

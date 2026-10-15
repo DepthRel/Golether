@@ -1,4 +1,5 @@
 using System.Net;
+using Golether.Core.Enums;
 using Golether.Web.Server.Contracts;
 using Golether.Web.Server.Infrastructure;
 
@@ -40,15 +41,15 @@ public sealed class ServerJournalTests
     public void Journal_IsBounded()
     {
         var journal = new ServerJournal(TimeProvider.System);
-        for (var i = 0; i < ServerJournal.Capacity + 10; i++)
+        for (var i = 0; i < ServerJournal.CAPACITY + 10; i++)
         {
             journal.Record(JournalEvent.MeetingRequested);
         }
 
         var first = journal.Read(0);
-        Assert.Equal(ServerContract.JournalPageSize, first.Entries.Count);
+        Assert.Equal(ServerContract.JOURNAL_PAGE_SIZE, first.Entries.Count);
         Assert.Equal(11, first.Entries[0].Sequence);
-        Assert.Equal(ServerJournal.Capacity + 10, first.Last);
+        Assert.Equal(ServerJournal.CAPACITY + 10, first.Last);
     }
 
     /// <summary>
@@ -70,7 +71,7 @@ public sealed class ServerJournalTests
     public void Page_TravelsAsJsonWithNames()
     {
         var journal = new ServerJournal(TimeProvider.System);
-        journal.Record(JournalEvent.MeetingFailed, reason: Golether.Transports.Rendezvous.Protocol.RendezvousError.Timeout);
+        journal.Record(JournalEvent.MeetingFailed, reason: RendezvousError.Timeout);
 
         var json = System.Text.Json.JsonSerializer.Serialize(journal.Read(0), ServerContract.Json);
         Assert.Contains("\"MeetingFailed\"", json, StringComparison.Ordinal);

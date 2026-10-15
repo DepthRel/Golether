@@ -106,7 +106,7 @@ public sealed partial class SettingsViewModel : ObservableObject
     /// </summary>
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(IsChanged))]
-    public partial string LogLevel { get; set; } = ServerSettings.DefaultLogLevel;
+    public partial string LogLevel { get; set; } = ServerSettings.DEFAULT_LOG_LEVEL;
 
     /// <summary>
     /// Gets the levels of the log to choose from.
@@ -145,7 +145,7 @@ public sealed partial class SettingsViewModel : ObservableObject
         AnswerTimeout = ServerSettingsStore.Seconds(r.AnswerTimeout);
         IdleTimeout = ServerSettingsStore.Seconds(r.IdleTimeout);
         StatusUrls = settings.StatusUrls;
-        LogLevel = ServerSettings.LogLevels.Contains(settings.LogLevel) ? settings.LogLevel : ServerSettings.DefaultLogLevel;
+        LogLevel = ServerSettings.LogLevels.Contains(settings.LogLevel) ? settings.LogLevel : ServerSettings.DEFAULT_LOG_LEVEL;
         Problems = string.Empty;
         OnPropertyChanged(nameof(IsChanged));
     }

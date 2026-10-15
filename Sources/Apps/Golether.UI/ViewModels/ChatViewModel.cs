@@ -18,12 +18,12 @@ public sealed partial class ChatViewModel : ObservableObject
     /// <summary>
     /// The number of lines kept.
     /// </summary>
-    public const int MaxLines = 200;
+    public const int MAX_LINES = 200;
 
     /// <summary>
     /// The number of reactions shown at once.
     /// </summary>
-    public const int MaxReactions = 12;
+    public const int MAX_REACTIONS = 12;
 
     /// <summary>
     /// How long a reaction floats over the video.
@@ -234,7 +234,7 @@ public sealed partial class ChatViewModel : ObservableObject
     {
         if (entry.Kind == ChatKind.Reaction)
         {
-            while (Reactions.Count >= MaxReactions)
+            while (Reactions.Count >= MAX_REACTIONS)
             {
                 Reactions.RemoveAt(0);
             }
@@ -264,7 +264,7 @@ public sealed partial class ChatViewModel : ObservableObject
     private void AddLine(ChatLineViewModel line)
     {
         Lines.Add(line);
-        while (Lines.Count > MaxLines)
+        while (Lines.Count > MAX_LINES)
         {
             Lines.RemoveAt(0);
         }

@@ -18,22 +18,22 @@ public static class TunnelPackageCodec
     /// <summary>
     /// The kind of offers.
     /// </summary>
-    public const string OfferKind = "offer";
+    public const string OFFER_KIND = "offer";
 
     /// <summary>
     /// The kind of answers.
     /// </summary>
-    public const string AnswerKind = "answer";
+    public const string ANSWER_KIND = "answer";
 
     /// <summary>
     /// The maximum package length.
     /// </summary>
-    public const int MaxLength = 16 * 1024;
+    public const int MAX_LENGTH = 16 * 1024;
 
     /// <summary>
     /// The JSON options of package bodies.
     /// </summary>
-    private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web) { MaxDepth = 8 };
+    private static readonly JsonSerializerOptions _jsonOptions = new(JsonSerializerDefaults.Web) { MaxDepth = 8 };
 
     /// <summary>
     /// Returns the prefix of a package kind.
@@ -53,7 +53,7 @@ public static class TunnelPackageCodec
     public static string Encode<T>(string kind, T body, DeviceIdentity identity)
     {
         ArgumentNullException.ThrowIfNull(identity);
-        var signed = Prefix(kind) + Base64Url.EncodeToString(JsonSerializer.SerializeToUtf8Bytes(body, JsonOptions));
+        var signed = Prefix(kind) + Base64Url.EncodeToString(JsonSerializer.SerializeToUtf8Bytes(body, _jsonOptions));
         var signature = identity.Sign(Encoding.ASCII.GetBytes(signed));
         return signed + "." + Base64Url.EncodeToString(signature);
     }
@@ -72,9 +72,9 @@ public static class TunnelPackageCodec
         ArgumentNullException.ThrowIfNull(certificate);
         var compact = new string((text ?? string.Empty).Where(c => !char.IsWhiteSpace(c)).ToArray());
         var prefix = Prefix(kind);
-        if (compact.Length > MaxLength || !compact.StartsWith(prefix, StringComparison.Ordinal))
+        if (compact.Length > MAX_LENGTH || !compact.StartsWith(prefix, StringComparison.Ordinal))
         {
-            throw new FormatException(Texts.Get(kind == OfferKind ? "Tunnel.Error.NotOfferPackage" : "Tunnel.Error.NotAnswerPackage"));
+            throw new FormatException(Texts.Get(kind == OFFER_KIND ? "Tunnel.Error.NotOfferPackage" : "Tunnel.Error.NotAnswerPackage"));
         }
 
         var dot = compact.LastIndexOf('.');
@@ -87,7 +87,7 @@ public static class TunnelPackageCodec
         byte[] signature;
         try
         {
-            body = JsonSerializer.Deserialize<T>(Base64Url.DecodeFromChars(compact.AsSpan(prefix.Length, dot - prefix.Length)), JsonOptions);
+            body = JsonSerializer.Deserialize<T>(Base64Url.DecodeFromChars(compact.AsSpan(prefix.Length, dot - prefix.Length)), _jsonOptions);
             signature = Base64Url.DecodeFromChars(compact.AsSpan(dot + 1));
         }
         catch (Exception ex) when (ex is FormatException or JsonException)

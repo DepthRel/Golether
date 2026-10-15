@@ -17,12 +17,12 @@ public static unsafe class GstRuntime
     /// <summary>
     /// Guards initialization.
     /// </summary>
-    private static readonly Lock Gate = new();
+    private static readonly Lock _gate = new();
 
     /// <summary>
     /// Loaded library handles by logical name.
     /// </summary>
-    private static readonly Dictionary<string, nint> Handles = new(StringComparer.Ordinal);
+    private static readonly Dictionary<string, nint> _handles = new(StringComparer.Ordinal);
 
     /// <summary>
     /// Whether initialization succeeded.
@@ -48,7 +48,7 @@ public static unsafe class GstRuntime
     /// <returns><see langword="true"/> when GStreamer is ready.</returns>
     public static bool TryInitialize(string? bundleRoot, string registryFile, out string? error)
     {
-        lock (Gate)
+        lock (_gate)
         {
             if (_initialized || _error is not null)
             {
@@ -116,12 +116,12 @@ public static unsafe class GstRuntime
     {
         var names = new Dictionary<string, string[]>
         {
-            [Gst.GLib] = ["glib-2.0-0.dll", "libglib-2.0.so.0", "libglib-2.0.0.dylib"],
-            [Gst.GObject] = ["gobject-2.0-0.dll", "libgobject-2.0.so.0", "libgobject-2.0.0.dylib"],
-            [Gst.Core] = ["gstreamer-1.0-0.dll", "libgstreamer-1.0.so.0", "libgstreamer-1.0.0.dylib"],
-            [Gst.App] = ["gstapp-1.0-0.dll", "libgstapp-1.0.so.0", "libgstapp-1.0.0.dylib"],
-            [Gst.Sdp] = ["gstsdp-1.0-0.dll", "libgstsdp-1.0.so.0", "libgstsdp-1.0.0.dylib"],
-            [Gst.WebRtc] = ["gstwebrtc-1.0-0.dll", "libgstwebrtc-1.0.so.0", "libgstwebrtc-1.0.0.dylib"],
+            [Gst.G_LIB] = ["glib-2.0-0.dll", "libglib-2.0.so.0", "libglib-2.0.0.dylib"],
+            [Gst.G_OBJECT] = ["gobject-2.0-0.dll", "libgobject-2.0.so.0", "libgobject-2.0.0.dylib"],
+            [Gst.CORE] = ["gstreamer-1.0-0.dll", "libgstreamer-1.0.so.0", "libgstreamer-1.0.0.dylib"],
+            [Gst.APP] = ["gstapp-1.0-0.dll", "libgstapp-1.0.so.0", "libgstapp-1.0.0.dylib"],
+            [Gst.SDP] = ["gstsdp-1.0-0.dll", "libgstsdp-1.0.so.0", "libgstsdp-1.0.0.dylib"],
+            [Gst.WEB_RTC] = ["gstwebrtc-1.0-0.dll", "libgstwebrtc-1.0.so.0", "libgstwebrtc-1.0.0.dylib"],
         };
 
         var index = OperatingSystem.IsWindows() ? 0 : OperatingSystem.IsMacOS() ? 2 : 1;
@@ -148,7 +148,7 @@ public static unsafe class GstRuntime
                 throw new DllNotFoundException(file);
             }
 
-            Handles[logical] = handle;
+            _handles[logical] = handle;
         }
     }
 
@@ -160,5 +160,5 @@ public static unsafe class GstRuntime
     /// <param name="searchPath">The search path.</param>
     /// <returns>The handle or zero.</returns>
     private static nint Resolve(string name, Assembly assembly, DllImportSearchPath? searchPath)
-        => Handles.GetValueOrDefault(name);
+        => _handles.GetValueOrDefault(name);
 }

@@ -35,29 +35,34 @@ public static class NatTraversal
     /// <summary>
     /// The time one server gets to answer, over all attempts.
     /// </summary>
-    private static readonly TimeSpan RequestTimeout = TimeSpan.FromSeconds(3);
+    private static readonly TimeSpan _requestTimeout = TimeSpan.FromSeconds(3);
 
     /// <summary>
     /// How long to wait before asking the same server again. UDP has no delivery to speak of, so the request is
-    /// repeated a few times inside <see cref="RequestTimeout"/>.
+    /// repeated a few times inside <see cref="_requestTimeout"/>.
     /// </summary>
-    private static readonly TimeSpan RetryDelay = TimeSpan.FromMilliseconds(500);
+    private static readonly TimeSpan _retryDelay = TimeSpan.FromMilliseconds(500);
 
     /// <summary>
     /// Asks the STUN servers how this UDP port looks from outside.
     /// </summary>
     /// <param name="socket">A bound UDP socket; its port is the one the answer describes.</param>
     /// <param name="servers">The servers to ask, or <see langword="null"/> for <see cref="DefaultServers"/>.</param>
+    /// <param name="timeProvider">The time source, or <see langword="null"/> for the system clock.</param>
     /// <param name="cancellationToken">The cancellation token.</param>
     /// <returns>The public address, or <see langword="null"/> when no server answered.</returns>
-    public static async Task<PublicEndpoint?> DiscoverAsync(Socket socket, IReadOnlyList<string>? servers = null, CancellationToken cancellationToken = default)
+    public static async Task<PublicEndpoint?> DiscoverAsync(
+        Socket socket,
+        IReadOnlyList<string>? servers = null,
+        TimeProvider? timeProvider = null,
+        CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(socket);
         var localPort = (socket.LocalEndPoint as IPEndPoint)?.Port ?? 0;
         var answers = new List<IPEndPoint>();
         foreach (var server in servers ?? DefaultServers)
         {
-            if (await AskAsync(socket, server, cancellationToken).ConfigureAwait(false) is { } answer)
+            if (await AskAsync(socket, server, timeProvider ?? TimeProvider.System, cancellationToken).ConfigureAwait(false) is { } answer)
             {
                 answers.Add(answer);
                 if (answers.Count == 2)
@@ -136,35 +141,36 @@ public static class NatTraversal
     /// </summary>
     /// <param name="socket">The socket.</param>
     /// <param name="server">The server as <c>host:port</c>.</param>
+    /// <param name="timeProvider">The time source that spaces the repeated questions.</param>
     /// <param name="cancellationToken">The cancellation token.</param>
     /// <returns>The public address, or <see langword="null"/>.</returns>
-    private static async Task<IPEndPoint?> AskAsync(Socket socket, string server, CancellationToken cancellationToken)
+    private static async Task<IPEndPoint?> AskAsync(Socket socket, string server, TimeProvider timeProvider, CancellationToken cancellationToken)
     {
         if (await ResolveAsync(server, cancellationToken).ConfigureAwait(false) is not { } address)
         {
             return null;
         }
 
-        var request = new StunMessage(Stun.Binding, Stun.ClassRequest, RandomNumberGenerator.GetBytes(12));
+        var request = new StunMessage(Stun.BINDING, Stun.CLASS_REQUEST, RandomNumberGenerator.GetBytes(12));
         var encoded = request.Encode();
         using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-        timeout.CancelAfter(RequestTimeout);
-        var buffer = new byte[StunMessage.MaxSize];
+        timeout.CancelAfter(_requestTimeout);
+        var buffer = new byte[StunMessage.MAX_SIZE];
         try
         {
             await socket.SendToAsync(encoded, SocketFlags.None, address, timeout.Token).ConfigureAwait(false);
-            var nextAttempt = DateTime.UtcNow + RetryDelay;
+            var askedAt = timeProvider.GetTimestamp();
             while (!timeout.IsCancellationRequested)
             {
-                if (DateTime.UtcNow >= nextAttempt)
+                if (timeProvider.GetElapsedTime(askedAt) >= _retryDelay)
                 {
                     // The question or the answer was lost, or the machine was busy: ask again.
                     await socket.SendToAsync(encoded, SocketFlags.None, address, timeout.Token).ConfigureAwait(false);
-                    nextAttempt = DateTime.UtcNow + RetryDelay;
+                    askedAt = timeProvider.GetTimestamp();
                 }
 
                 using var attempt = CancellationTokenSource.CreateLinkedTokenSource(timeout.Token);
-                attempt.CancelAfter(RetryDelay);
+                attempt.CancelAfter(_retryDelay);
                 SocketReceiveFromResult received;
                 try
                 {
@@ -175,7 +181,7 @@ public static class NatTraversal
                     continue;
                 }
 
-                if (received.ReceivedBytes < Stun.HeaderSize)
+                if (received.ReceivedBytes < Stun.HEADER_SIZE)
                 {
                     continue;
                 }
@@ -192,13 +198,13 @@ public static class NatTraversal
                     continue;
                 }
 
-                if (message.Method != Stun.Binding || message.Class != Stun.ClassSuccess
-                    || !message.TransactionId.AsSpan().SequenceEqual(request.TransactionId))
+                if (message.Method != Stun.BINDING || message.Class != Stun.CLASS_SUCCESS ||
+                    !message.TransactionId.AsSpan().SequenceEqual(request.TransactionId))
                 {
                     continue;
                 }
 
-                return message.GetXorAddress(Stun.AttrXorMappedAddress);
+                return message.GetXorAddress(Stun.ATTR_XOR_MAPPED_ADDRESS);
             }
         }
         catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)

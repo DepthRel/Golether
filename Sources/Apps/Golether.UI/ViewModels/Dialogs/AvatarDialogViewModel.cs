@@ -16,17 +16,17 @@ public sealed partial class AvatarDialogViewModel : ObservableObject
     /// <summary>
     /// The side of the rendered avatar and of the crop frame, in pixels.
     /// </summary>
-    public const int CropSize = 256;
+    public const int CROP_SIZE = 256;
 
     /// <summary>
     /// The smallest zoom: the image just fills the frame.
     /// </summary>
-    public const double MinZoom = 1;
+    public const double MIN_ZOOM = 1;
 
     /// <summary>
     /// The largest zoom.
     /// </summary>
-    public const double MaxZoom = 4;
+    public const double MAX_ZOOM = 4;
 
     /// <summary>
     /// Picks image files and shows errors.
@@ -45,7 +45,7 @@ public sealed partial class AvatarDialogViewModel : ObservableObject
         {
             OriginalBytes = current.Original;
             Source = bitmap;
-            Zoom = Math.Clamp(current.Framing.Zoom, MinZoom, MaxZoom);
+            Zoom = Math.Clamp(current.Framing.Zoom, MIN_ZOOM, MAX_ZOOM);
             OffsetX = current.Framing.OffsetX;
             OffsetY = current.Framing.OffsetY;
         }
@@ -67,7 +67,7 @@ public sealed partial class AvatarDialogViewModel : ObservableObject
     /// Gets or sets the zoom applied to the image inside the frame.
     /// </summary>
     [ObservableProperty]
-    public partial double Zoom { get; set; } = MinZoom;
+    public partial double Zoom { get; set; } = MIN_ZOOM;
 
     /// <summary>
     /// Gets or sets the horizontal shift of the image inside the frame, in pixels.
@@ -120,7 +120,7 @@ public sealed partial class AvatarDialogViewModel : ObservableObject
             var bitmap = TryDecode(bytes) ?? throw new NotSupportedException(Texts.Get("Avatar.BadImage.Title"));
             OriginalBytes = bytes;
             Source = bitmap;
-            Zoom = MinZoom;
+            Zoom = MIN_ZOOM;
             OffsetX = 0;
             OffsetY = 0;
         }

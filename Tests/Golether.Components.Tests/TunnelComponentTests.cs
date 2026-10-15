@@ -1,9 +1,9 @@
 using System.Net;
 using System.Security.Cryptography;
+using Microsoft.Extensions.Time.Testing;
 using Golether.Components.Catalog;
 using Golether.Components.Installation;
 using Golether.Core.Data.Enums;
-using Microsoft.Extensions.Time.Testing;
 
 namespace Golether.Components.Tests;
 
@@ -17,7 +17,7 @@ public sealed class TunnelComponentTests : IDisposable
     /// The name of the environment variable pointing at a folder with the real <c>.msi</c> packages. When it is set,
     /// the unpacking is checked against the real thing instead of a stand-in.
     /// </summary>
-    private const string RealPackagesVariable = "GOLETHER_TEST_AWG_PACKAGES";
+    private const string REAL_PACKAGES_VARIABLE = "GOLETHER_TEST_AWG_PACKAGES";
 
     /// <summary>
     /// The temporary working directory.
@@ -69,16 +69,16 @@ public sealed class TunnelComponentTests : IDisposable
 
         var target = await installer.InstallAsync(package, null, TestContext.Current.CancellationToken);
 
-        var engine = Path.Combine(target, AmneziaWgBundle.DirectoryName);
+        var engine = Path.Combine(target, AmneziaWgBundle.DIRECTORY_NAME);
         Assert.True(AmneziaWgBundle.IsComplete(engine));
-        Assert.Equal(Path.Combine(engine, AmneziaWgBundle.Executable), AmneziaWgBundle.FindExecutable(target));
+        Assert.Equal(Path.Combine(engine, AmneziaWgBundle.EXECUTABLE), AmneziaWgBundle.FindExecutable(target));
         Assert.Empty(Directory.GetFiles(engine, "*.msi"));
         Assert.False(Directory.Exists(Path.Combine(target, ".msi")));
 
         // The locator points the tunnel controller at this copy, not at an AmneziaWG of the system.
         var status = new ComponentLocator(Path.Combine(_directory.FullName, "no-bundle"), installer.Root, _ => false).GetStatus(ComponentId.Tunnel);
         Assert.Equal(ComponentSource.Installed, status.Source);
-        Assert.Equal(Path.Combine(engine, AmneziaWgBundle.Executable), status.Path);
+        Assert.Equal(Path.Combine(engine, AmneziaWgBundle.EXECUTABLE), status.Path);
     }
 
     /// <summary>
@@ -90,8 +90,8 @@ public sealed class TunnelComponentTests : IDisposable
     public async Task Installer_UnpacksTheRealPackage()
     {
         Assert.SkipUnless(OperatingSystem.IsWindows(), "Компоненты устанавливаются только в Windows.");
-        var folder = Environment.GetEnvironmentVariable(RealPackagesVariable);
-        Assert.SkipWhen(string.IsNullOrEmpty(folder), $"Задайте {RealPackagesVariable}, чтобы проверить настоящий пакет.");
+        var folder = Environment.GetEnvironmentVariable(REAL_PACKAGES_VARIABLE);
+        Assert.SkipWhen(string.IsNullOrEmpty(folder), $"Задайте {REAL_PACKAGES_VARIABLE}, чтобы проверить настоящий пакет.");
 
         var package = ComponentCatalog.Find(ComponentId.Tunnel) ?? throw new InvalidOperationException("No package.");
         var source = Path.Combine(folder!, package.FileName);
@@ -105,7 +105,7 @@ public sealed class TunnelComponentTests : IDisposable
 
         var target = await installer.InstallAsync(package, null, TestContext.Current.CancellationToken);
 
-        var engine = Path.Combine(target, AmneziaWgBundle.DirectoryName);
+        var engine = Path.Combine(target, AmneziaWgBundle.DIRECTORY_NAME);
         Assert.True(AmneziaWgBundle.IsComplete(engine), "В распакованном движке не хватает файлов.");
         Assert.All(AmneziaWgBundle.Files, name => Assert.True(new FileInfo(Path.Combine(engine, name)).Length > 100_000));
     }
@@ -116,9 +116,9 @@ public sealed class TunnelComponentTests : IDisposable
     [Fact]
     public void Locator_IgnoresAnIncompleteEngine()
     {
-        var bundled = Path.Combine(_directory.FullName, "native", AmneziaWgBundle.DirectoryName);
+        var bundled = Path.Combine(_directory.FullName, "native", AmneziaWgBundle.DIRECTORY_NAME);
         Directory.CreateDirectory(bundled);
-        File.WriteAllText(Path.Combine(bundled, AmneziaWgBundle.Executable), "x");
+        File.WriteAllText(Path.Combine(bundled, AmneziaWgBundle.EXECUTABLE), "x");
         var locator = new ComponentLocator(Path.Combine(_directory.FullName, "native"), Path.Combine(_directory.FullName, "components"), _ => false);
 
         Assert.Equal(ComponentSource.Missing, locator.GetStatus(ComponentId.Tunnel).Source);

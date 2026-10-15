@@ -22,6 +22,8 @@
   <ItemGroup>
     <AvaloniaResource Include="..\Golether.Web.Server\Assets\golether-server-256.png" Link="Assets\golether-server-256.png" />
     <AvaloniaResource Include="..\Golether.Web.Server\Assets\golether-server.ico" Link="Assets\golether-server.ico" />
+    <!-- The flags of the language selector are the ones of the application (Scripts/Assets/generate-flags.ps1). -->
+    <AvaloniaResource Include="..\Golether.UI\Assets\Flags\*.png" Link="Assets\Flags\%(Filename)%(Extension)" />
   </ItemGroup>
 
   <ItemGroup>

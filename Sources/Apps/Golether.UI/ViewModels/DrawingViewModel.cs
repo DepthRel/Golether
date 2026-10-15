@@ -40,17 +40,17 @@ public sealed partial class DrawingViewModel : ObservableObject
     /// <summary>
     /// The number of strokes kept at once.
     /// </summary>
-    public const int MaxStrokes = 24;
+    public const int MAX_STROKES = 24;
 
     /// <summary>
     /// The number of points kept in one stroke.
     /// </summary>
-    public const int MaxStrokePoints = 2048;
+    public const int MAX_STROKE_POINTS = 2048;
 
     /// <summary>
     /// The smallest move of the cursor that adds a point, as a share of the picture.
     /// </summary>
-    private const float MinStep = 0.002f;
+    private const float MIN_STEP = 0.002f;
 
     /// <summary>
     /// The session service.
@@ -187,7 +187,7 @@ public sealed partial class DrawingViewModel : ObservableObject
         }
 
         var point = Clamp(x, y);
-        if (Math.Abs(point.X - _lastLocalPoint.X) < MinStep && Math.Abs(point.Y - _lastLocalPoint.Y) < MinStep)
+        if (Math.Abs(point.X - _lastLocalPoint.X) < MIN_STEP && Math.Abs(point.Y - _lastLocalPoint.Y) < MIN_STEP)
         {
             return;
         }
@@ -195,7 +195,7 @@ public sealed partial class DrawingViewModel : ObservableObject
         _lastLocalPoint = point;
         _pending.Add(point);
         var now = _timeProvider.GetUtcNow();
-        if (_pending.Count >= DrawMessage.MaxPoints || now - _lastSent >= SendInterval)
+        if (_pending.Count >= DrawMessage.MAX_POINTS || now - _lastSent >= SendInterval)
         {
             _lastSent = now;
             Send(StrokePhase.Continue);
@@ -306,7 +306,7 @@ public sealed partial class DrawingViewModel : ObservableObject
             }
 
             stroke = new StrokeViewModel(update.StrokeId, update.Sender, ParticipantColors.For(update.Sender), update.IsLocal, _timeProvider.GetUtcNow());
-            while (Strokes.Count >= MaxStrokes)
+            while (Strokes.Count >= MAX_STROKES)
             {
                 Remove(0);
             }

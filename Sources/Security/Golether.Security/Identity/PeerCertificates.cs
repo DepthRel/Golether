@@ -12,7 +12,7 @@ public static class PeerCertificates
     /// <summary>
     /// The maximum accepted size of an embedded certificate.
     /// </summary>
-    public const int MaxCertificateSize = 8 * 1024;
+    public const int MAX_CERTIFICATE_SIZE = 8 * 1024;
 
     /// <summary>
     /// Computes the identifier of a certificate from its public key.
@@ -43,7 +43,7 @@ public static class PeerCertificates
     public static bool TryVerify(ReadOnlySpan<byte> certificateDer, ReadOnlySpan<byte> data, ReadOnlySpan<byte> signature, out PeerId signer)
     {
         signer = default;
-        if (certificateDer.IsEmpty || certificateDer.Length > MaxCertificateSize || signature.IsEmpty)
+        if (certificateDer.IsEmpty || certificateDer.Length > MAX_CERTIFICATE_SIZE || signature.IsEmpty)
         {
             return false;
         }

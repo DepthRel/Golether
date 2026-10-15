@@ -10,7 +10,7 @@ namespace Golether.Security.Invites;
 /// </summary>
 /// <remarks>
 /// A token alone admits nobody: the host approves every newcomer. What the registry bounds is how long an invitation
-/// lives and how many requests it may bring (<see cref="MaxUses"/>), so a link that leaked cannot be used to pester
+/// lives and how many requests it may bring (<see cref="MAX_USES"/>), so a link that leaked cannot be used to pester
 /// the host for ever. Every token also carries the number it was issued under; the host uses it to tell invitations
 /// made before a device was removed from those made after (see <see cref="LastSequence"/>).
 /// Only SHA-256 hashes of tokens are kept in memory. The registry is thread-safe.
@@ -38,7 +38,7 @@ public sealed class InviteRegistry
     /// How many join requests one invitation may bring. A session holds five people, so an honest company never
     /// comes near it; a leaked link stops working after this many attempts.
     /// </summary>
-    public const int MaxUses = 16;
+    public const int MAX_USES = 16;
 
     /// <summary>
     /// The issued tokens by token hash.
@@ -128,7 +128,7 @@ public sealed class InviteRegistry
 
     /// <summary>
     /// Checks a token presented by a connecting peer. A valid token stays valid for the next guest: it ends with its
-    /// lifetime or after <see cref="MaxUses"/> requests, whichever comes first.
+    /// lifetime or after <see cref="MAX_USES"/> requests, whichever comes first.
     /// </summary>
     /// <param name="token">The token.</param>
     /// <param name="sequence">The number the token was issued under, or 0 when the token is not accepted.</param>
@@ -150,7 +150,7 @@ public sealed class InviteRegistry
                 return InviteCheckResult.Unknown;
             }
 
-            if (entry.ExpiresAt <= now || entry.Uses >= MaxUses)
+            if (entry.ExpiresAt <= now || entry.Uses >= MAX_USES)
             {
                 // Spent or out of time: forgotten, so the next attempt finds nothing at all.
                 _tokens.Remove(key);

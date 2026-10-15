@@ -1,7 +1,7 @@
-using Golether.Core.Data.Context;
-using Golether.Core.Data.Stores;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
+using Golether.Core.Data.Context;
+using Golether.Core.Data.Stores;
 
 namespace Golether.Core.Data;
 

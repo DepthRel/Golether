@@ -96,7 +96,7 @@ internal sealed class ServerStatistics
     public HealthReport Snapshot() => new(
         "ok",
         typeof(ServerStatistics).Assembly.GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion ?? "unknown",
-        RendezvousProtocol.Version,
+        RendezvousProtocol.VERSION,
         (long)(_timeProvider.GetUtcNow() - _started).TotalSeconds,
         CountRooms(),
         Interlocked.Read(ref _connections),

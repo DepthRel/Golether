@@ -105,6 +105,7 @@
   </Folder>
   <Folder Name="/Tests/">
     <Project Path="Tests/Golether.Components.Tests/Golether.Components.Tests.csproj" />
+    <Project Path="Tests/Golether.Conventions.Tests/Golether.Conventions.Tests.csproj" />
     <Project Path="Tests/Golether.Core.Data.Tests/Golether.Core.Data.Tests.csproj" />
     <Project Path="Tests/Golether.Core.Tests/Golether.Core.Tests.csproj" />
     <Project Path="Tests/Golether.Localization.Tests/Golether.Localization.Tests.csproj" />

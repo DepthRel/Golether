@@ -10,14 +10,14 @@ public static class PcmGain
     /// <summary>
     /// The highest allowed volume (200 %).
     /// </summary>
-    public const double MaxVolume = 2.0;
+    public const double MAX_VOLUME = 2.0;
 
     /// <summary>
     /// Brings a volume into the allowed range.
     /// </summary>
     /// <param name="volume">The volume, 1 for unchanged.</param>
-    /// <returns>The volume between 0 and <see cref="MaxVolume"/>.</returns>
-    public static double Clamp(double volume) => double.IsFinite(volume) ? Math.Clamp(volume, 0, MaxVolume) : 1;
+    /// <returns>The volume between 0 and <see cref="MAX_VOLUME"/>.</returns>
+    public static double Clamp(double volume) => double.IsFinite(volume) ? Math.Clamp(volume, 0, MAX_VOLUME) : 1;
 
     /// <summary>
     /// Scales signed 16-bit little-endian samples in place, saturating at the limits.

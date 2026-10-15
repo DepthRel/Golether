@@ -1,19 +1,19 @@
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 using Golether.Components.Installation;
 using Golether.Core.Configuration;
+using Golether.Core.Data;
 using Golether.Core.Data.Enums;
 using Golether.Core.Data.Migrations.SQLite.Runner;
 using Golether.Core.Data.Stores;
-using Golether.Core.Data;
 using Golether.Localization;
 using Golether.Security.Identity;
 using Golether.Security.Secrets;
 using Golether.Transports.PortMapping;
 using Golether.Tunnels.AmneziaWG.Control;
 using Golether.UI.Localization;
-using Golether.UI.ViewModels.Dialogs;
 using Golether.UI.ViewModels;
-using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Logging;
+using Golether.UI.ViewModels.Dialogs;
 
 namespace Golether.UI.Services;
 
@@ -47,14 +47,17 @@ public sealed class AppServices : IAsyncDisposable
         _provider = provider;
         Identity = identity;
         LoggerFactory = provider.GetRequiredService<ILoggerFactory>();
+
         Http = new HttpClient { Timeout = Timeout.InfiniteTimeSpan };
         Http.DefaultRequestHeaders.UserAgent.ParseAdd("Golether/1.0");
+
         ComponentsRoot = paths.ComponentsDirectory;
         Components = new ComponentService(
             new ComponentLocator(Path.Combine(AppContext.BaseDirectory, "native"), ComponentsRoot),
             new ComponentInstaller(ComponentsRoot, Http, new ProcessToolRunner(), TimeProvider.System, LoggerFactory.CreateLogger<ComponentInstaller>()));
         Diagnostics = new DiagnosticsWriter(paths.LogsDirectory, Components, identity.PeerId.ToShortString(), () => fileLog.CurrentFile);
         Updates = new UpdateService(Http, logger: LoggerFactory.CreateLogger<UpdateService>());
+
         Player = new PlayerHost(LoggerFactory, paths.MpvDirectory);
         Conference = new ConferenceHost(LoggerFactory, paths.GStreamerRegistryFile);
         Conference.TryActivate(Components.GetStatus(ComponentId.Conference));
@@ -66,6 +69,7 @@ public sealed class AppServices : IAsyncDisposable
             }
         };
         Dispatcher = new AvaloniaUiDispatcher();
+
         var protector = provider.GetRequiredService<ISecretProtector>();
         Tunnels = new TunnelWorkflow(
             identity,
@@ -74,6 +78,7 @@ public sealed class AppServices : IAsyncDisposable
             new AwgCliTunnelController(new ProcessRunner(), CreateTunnelOptions(paths), LoggerFactory.CreateLogger<AwgCliTunnelController>()),
             TimeProvider.System,
             raisedStatePath: Path.Combine(paths.TunnelsDirectory, "raised.txt"));
+
         Sessions = new SessionService(
             identity,
             Player,
@@ -222,7 +227,8 @@ public sealed class AppServices : IAsyncDisposable
             Diagnostics,
             Updates,
             new LanguageViewModel(Language, FlagImages.Load, dialogs),
-            new AvatarStore(Paths.AvatarsDirectory));
+            new AvatarStore(Paths.AvatarsDirectory),
+            TimeProvider.System);
     }
 
     /// <summary>
@@ -301,7 +307,7 @@ public sealed class AppServices : IAsyncDisposable
     /// </remarks>
     private static void AdoptLegacyData(AppDataPaths paths)
     {
-        if (!string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable(AppDataPaths.DataDirectoryVariable)))
+        if (!string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable(AppDataPaths.DATA_DIRECTORY_VARIABLE)))
         {
             return;
         }

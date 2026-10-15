@@ -13,7 +13,7 @@ public sealed class WindowsGStreamerFinder : IExistingGStreamerFinder
     /// <summary>
     /// The Inno Setup application identifier of the official installers.
     /// </summary>
-    public const string InstallerAppId = "c20a66dc-b249-4e6d-a68a-d0f836b2b3cf_is1";
+    public const string INSTALLER_APP_ID = "c20a66dc-b249-4e6d-a68a-d0f836b2b3cf_is1";
 
     /// <inheritdoc />
     public IReadOnlyList<ExistingGStreamer> Find(string runtimeIdentifier)
@@ -61,7 +61,7 @@ public sealed class WindowsGStreamerFinder : IExistingGStreamerFinder
     {
         foreach (var hive in new[] { Registry.CurrentUser, Registry.LocalMachine })
         {
-            using var key = hive.OpenSubKey($@"Software\Microsoft\Windows\CurrentVersion\Uninstall\{InstallerAppId}");
+            using var key = hive.OpenSubKey($@"Software\Microsoft\Windows\CurrentVersion\Uninstall\{INSTALLER_APP_ID}");
             if (key is not null)
             {
                 return true;

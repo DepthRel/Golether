@@ -1,16 +1,17 @@
+using NSubstitute;
+using Golether.Core.Enums;
 using Golether.Localization;
-using Golether.Transports.Rendezvous.Protocol;
 using Golether.Web.Server.Contracts;
+using Golether.Web.Server.UI.Enums;
 using Golether.Web.Server.UI.Services;
 using Golether.Web.Server.UI.ViewModels;
-using NSubstitute;
 
 namespace Golether.Web.Server.UI.Tests;
 
 /// <summary>
 /// Tests of the main window model over stubs of the server, the service and the dialogs.
 /// </summary>
-[Collection(TextsCollection.Name)]
+[Collection(TextsCollection.NAME)]
 public sealed class MainViewModelTests : IDisposable
 {
     /// <summary>

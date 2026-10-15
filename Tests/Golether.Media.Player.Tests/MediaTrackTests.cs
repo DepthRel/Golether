@@ -184,8 +184,8 @@ public sealed class MediaTrackTests
             player.AddAudioFile(second);
             player.AddSubtitleFile(russian);
             player.AddSubtitleFile(english);
-            await WaitFor(() => player.GetTracks().Count(t => t.Kind == MediaTrackKind.Audio) == 2
-                && player.GetTracks().Count(t => t.Kind == MediaTrackKind.Subtitle) == 2);
+            await WaitFor(() => player.GetTracks().Count(t => t.Kind == MediaTrackKind.Audio) == 2 &&
+                player.GetTracks().Count(t => t.Kind == MediaTrackKind.Subtitle) == 2);
 
             // The sound track really switches to the other one and back.
             var audio = player.GetTracks().Where(t => t.Kind == MediaTrackKind.Audio).ToArray();
@@ -247,8 +247,8 @@ public sealed class MediaTrackTests
     /// <param name="duration">The duration.</param>
     private static void WriteSilence(string path, TimeSpan duration)
     {
-        const int rate = 8000;
-        var samples = (int)(rate * duration.TotalSeconds);
+        const int RATE = 8000;
+        var samples = (int)(RATE * duration.TotalSeconds);
         using var writer = new BinaryWriter(File.Create(path));
         writer.Write("RIFF"u8);
         writer.Write(36 + (samples * 2));
@@ -256,8 +256,8 @@ public sealed class MediaTrackTests
         writer.Write(16);
         writer.Write((short)1);
         writer.Write((short)1);
-        writer.Write(rate);
-        writer.Write(rate * 2);
+        writer.Write(RATE);
+        writer.Write(RATE * 2);
         writer.Write((short)2);
         writer.Write((short)16);
         writer.Write("data"u8);

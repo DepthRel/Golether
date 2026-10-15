@@ -11,7 +11,7 @@ public static class ParticipantColors
     /// <summary>
     /// The colours, picked by the device identifier.
     /// </summary>
-    private static readonly string[] Palette = ["#8FB8F0", "#E59BC4", "#B6D77A", "#F0A860", "#9DD6CF", "#C9A6F2"];
+    private static readonly string[] _palette = ["#8FB8F0", "#E59BC4", "#B6D77A", "#F0A860", "#9DD6CF", "#C9A6F2"];
 
     /// <summary>
     /// Returns the colour of a participant.
@@ -20,6 +20,6 @@ public static class ParticipantColors
     /// <returns>The colour as <c>#RRGGBB</c>.</returns>
     public static string For(PeerId peerId)
         => peerId.Value is { Length: >= 2 } value
-            ? Palette[Convert.ToInt32(value[..2], 16) % Palette.Length]
-            : Palette[0];
+            ? _palette[Convert.ToInt32(value[..2], 16) % _palette.Length]
+            : _palette[0];
 }

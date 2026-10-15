@@ -1,9 +1,9 @@
+using NSubstitute;
 using Golether.Core.Data.Enums;
 using Golether.Core.Data.Stores;
 using Golether.Media.Player;
 using Golether.UI.Services;
 using Golether.UI.ViewModels;
-using NSubstitute;
 
 namespace Golether.UI.Tests;
 
@@ -94,8 +94,8 @@ public sealed class TracksViewModelTests
 
         _player.Received().SelectTrack(MediaTrackKind.Audio, 2);
         _player.Received().SelectTrack(MediaTrackKind.Subtitle, 2);
-        Assert.Equal("ru", _stored[TracksViewModel.AudioLanguageSetting]);
-        Assert.Equal("en", _stored[TracksViewModel.SubtitleLanguageSetting]);
+        Assert.Equal("ru", _stored[TracksViewModel.AUDIO_LANGUAGE_SETTING]);
+        Assert.Equal("en", _stored[TracksViewModel.SUBTITLE_LANGUAGE_SETTING]);
         Assert.True(model.SubtitlesShown);
         Assert.True(model.AudioTracks[1].IsSelected);
 
@@ -128,7 +128,7 @@ public sealed class TracksViewModelTests
     [Fact]
     public async Task SubtitlesOff_IsRemembered()
     {
-        _stored[TracksViewModel.SubtitleLanguageSetting] = TracksViewModel.SubtitlesOff;
+        _stored[TracksViewModel.SUBTITLE_LANGUAGE_SETTING] = TracksViewModel.SUBTITLES_OFF;
         _tracks = Film(audioSelected: 1, subtitleSelected: 1);
         var model = Create();
 

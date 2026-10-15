@@ -20,17 +20,17 @@ public sealed partial class SingleInstance : IDisposable
     /// <summary>
     /// The largest message accepted, in bytes: an invitation is at most 4096 characters.
     /// </summary>
-    public const int MaxMessageBytes = 32 * 1024;
+    public const int MAX_MESSAGE_BYTES = 32 * 1024;
 
     /// <summary>
     /// The largest number of arguments accepted in one message.
     /// </summary>
-    public const int MaxArguments = 8;
+    public const int MAX_ARGUMENTS = 8;
 
     /// <summary>
     /// How long a second copy waits for the first one to take its arguments.
     /// </summary>
-    private static readonly TimeSpan ForwardTimeout = TimeSpan.FromSeconds(5);
+    private static readonly TimeSpan _forwardTimeout = TimeSpan.FromSeconds(5);
 
     /// <summary>
     /// The name shared by the mutex and the pipe.
@@ -119,16 +119,16 @@ public sealed partial class SingleInstance : IDisposable
         try
         {
             using var pipe = new NamedPipeClientStream(".", name, PipeDirection.Out, PipeOptions.CurrentUserOnly);
-            pipe.Connect(ForwardTimeout);
+            pipe.Connect(_forwardTimeout);
 
             // The running copy is about to come to the front; Windows lets it only when the process the user has
             // just started allows it.
             if (OperatingSystem.IsWindows())
             {
-                AllowSetForegroundWindow(AnyProcess);
+                AllowSetForegroundWindow(ANY_PROCESS);
             }
 
-            pipe.Write(JsonSerializer.SerializeToUtf8Bytes(arguments.Take(MaxArguments).ToArray()));
+            pipe.Write(JsonSerializer.SerializeToUtf8Bytes(arguments.Take(MAX_ARGUMENTS).ToArray()));
             return true;
         }
         catch (Exception ex) when (ex is TimeoutException or IOException or UnauthorizedAccessException)
@@ -165,7 +165,7 @@ public sealed partial class SingleInstance : IDisposable
     /// <returns>The arguments, or <see langword="null"/> when the message is not a short list of strings.</returns>
     public static string[]? ParseMessage(ReadOnlySpan<byte> message)
     {
-        if (message.Length is 0 or > MaxMessageBytes)
+        if (message.Length is 0 or > MAX_MESSAGE_BYTES)
         {
             return null;
         }
@@ -173,7 +173,7 @@ public sealed partial class SingleInstance : IDisposable
         try
         {
             var arguments = JsonSerializer.Deserialize<string?[]>(message);
-            return arguments is { Length: <= MaxArguments } && arguments.All(a => a is not null) ? [.. arguments.Select(a => a!)] : null;
+            return arguments is { Length: <= MAX_ARGUMENTS } && arguments.All(a => a is not null) ? [.. arguments.Select(a => a!)] : null;
         }
         catch (JsonException)
         {
@@ -219,8 +219,8 @@ public sealed partial class SingleInstance : IDisposable
 
                 // A sender that connects and says nothing must not hold the pipe for ever.
                 using var reading = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-                reading.CancelAfter(ForwardTimeout);
-                var buffer = new byte[MaxMessageBytes + 1];
+                reading.CancelAfter(_forwardTimeout);
+                var buffer = new byte[MAX_MESSAGE_BYTES + 1];
                 var read = await pipe.ReadAtLeastAsync(buffer, buffer.Length, throwOnEndOfStream: false, reading.Token).ConfigureAwait(false);
                 if (ParseMessage(buffer.AsSpan(0, read)) is { } arguments)
                 {
@@ -263,12 +263,12 @@ public sealed partial class SingleInstance : IDisposable
     /// <summary>
     /// The value of <c>ASFW_ANY</c>: any process may come to the front.
     /// </summary>
-    private const int AnyProcess = -1;
+    private const int ANY_PROCESS = -1;
 
     /// <summary>
     /// Lets another process bring its window to the front.
     /// </summary>
-    /// <param name="processId">The process, or <see cref="AnyProcess"/>.</param>
+    /// <param name="processId">The process, or <see cref="ANY_PROCESS"/>.</param>
     /// <returns><see langword="true"/> on success.</returns>
     [LibraryImport("user32.dll")]
     [return: MarshalAs(UnmanagedType.Bool)]

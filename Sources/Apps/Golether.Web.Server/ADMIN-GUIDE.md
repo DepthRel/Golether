@@ -1,8 +1,9 @@
 # Golether rendezvous server: administrator guide
 
 This guide lies in the `docs` folder of every server package and suits Windows, Linux and macOS alike. Where the
-steps differ, they are given for each system separately. The same guide in Russian:
-[ADMIN-GUIDE.ru.md](ADMIN-GUIDE.ru.md).
+steps differ, they are given for each system separately. The same guide in other languages:
+[Deutsch](ADMIN-GUIDE.de.md), [Español](ADMIN-GUIDE.es.md), [Français](ADMIN-GUIDE.fr.md),
+[Português](ADMIN-GUIDE.pt.md), [Русский](ADMIN-GUIDE.ru.md).
 
 - [1. What the server does](#1-what-the-server-does)
 - [2. What you need](#2-what-you-need)
@@ -55,8 +56,8 @@ service messages at connection time do. The load is minimal; one server serves h
 | `bin/` | the program itself, the .NET runtime and the libraries; there is no need to look in there |
 | `config/appsettings.json` | the settings: address, port, limits (see [section 5](#5-settings)) |
 | `config/monitor.json` | the settings of the monitor itself (its language); they never touch the server |
-| `docs/ADMIN-GUIDE.md`, `docs/ADMIN-GUIDE.ru.md` | this guide, in English and in Russian |
-| `docs/README.txt`, `docs/README.ru.txt` | a short note for this particular package, in English and in Russian |
+| `docs/ADMIN-GUIDE.md`, `docs/ADMIN-GUIDE.<code>.md` | this guide in English and in German (`de`), Spanish (`es`), French (`fr`), Portuguese (`pt`) and Russian (`ru`) |
+| `docs/README.txt`, `docs/README.<code>.txt` | a short note for this particular package, in the same languages |
 | `service/install-service.sh` | Linux and macOS: installs, updates and removes the service |
 | `service/golether-server.service` | Linux: the systemd unit (`install-service.sh` installs it) |
 | `service/org.golether.server.plist` | macOS: the launchd job (`install-service.sh` installs it) |
@@ -68,7 +69,7 @@ GoletherServer/
   golether-server-monitor(.exe)
   bin/        the program and the libraries
   config/     appsettings.json, monitor.json
-  docs/       ADMIN-GUIDE.md, ADMIN-GUIDE.ru.md, README.txt, README.ru.txt
+  docs/       ADMIN-GUIDE.md, ADMIN-GUIDE.<code>.md, README.txt, README.<code>.txt
   service/    Linux and macOS only
   monitor/    Golether Server Monitor (the files of the program)
 ```
@@ -84,8 +85,9 @@ Choose the way for your system. In every case the ports have to be opened after 
 
 ### Windows: the installer (recommended)
 
-Run `GoletherServer-<version>-setup.exe` (administrator rights are required). The wizard speaks English and Russian;
-you choose the language in its first window. The installer:
+Run `GoletherServer-<version>-setup.exe` (administrator rights are required). The wizard speaks English, German,
+Spanish, French, Portuguese and Russian; its first window offers the language of Windows (English when the wizard does
+not speak it), and you may choose another one. The installer:
 
 - puts the server into `C:\Program Files\Golether Server`;
 - registers the **GoletherServer** service ("Golether rendezvous server"): it starts with the computer and restarts
@@ -297,7 +299,8 @@ It shows:
 - the tab **Settings**: the fields of `config/appsettings.json` with explanations, checked by the same rules as at
   the start of the server. "Save and restart" writes the file and restarts a running service.
 
-The language of the monitor is chosen in its window and changes at once. It is remembered in `config/monitor.json`
+The language of the monitor (English, Deutsch, Español, Français, Português or Русский, each with its flag) is chosen
+in its window and changes at once. It is remembered in `config/monitor.json`
 next to the settings of the server (a file of the monitor of its own: changing it never restarts the server), and every
 user may change it. At the first start the monitor speaks the language of the system (English when it does not speak
 that one).

@@ -1,8 +1,8 @@
 using System.Globalization;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
-using Golether.Localization;
 using Golether.Core.Data.Stores;
+using Golether.Localization;
 using Golether.Media.Player;
 
 namespace Golether.UI.ViewModels;
@@ -18,17 +18,17 @@ public sealed partial class VolumeViewModel : ObservableObject
     /// <summary>
     /// The setting with the volume.
     /// </summary>
-    public const string VolumeSetting = "player.volume";
+    public const string VOLUME_SETTING = "player.volume";
 
     /// <summary>
     /// The setting with the mute state.
     /// </summary>
-    public const string MutedSetting = "player.muted";
+    public const string MUTED_SETTING = "player.muted";
 
     /// <summary>
     /// The volume restored when unmuting at 0.
     /// </summary>
-    private const double DefaultAudibleVolume = 50;
+    private const double DEFAULT_AUDIBLE_VOLUME = 50;
 
     /// <summary>
     /// The player.
@@ -113,8 +113,8 @@ public sealed partial class VolumeViewModel : ObservableObject
     /// <returns>A task that completes when the volume is applied.</returns>
     public async Task LoadAsync()
     {
-        var volume = await _settings.GetAsync(VolumeSetting, CancellationToken.None).ConfigureAwait(true);
-        var muted = await _settings.GetAsync(MutedSetting, CancellationToken.None).ConfigureAwait(true);
+        var volume = await _settings.GetAsync(VOLUME_SETTING, CancellationToken.None).ConfigureAwait(true);
+        var muted = await _settings.GetAsync(MUTED_SETTING, CancellationToken.None).ConfigureAwait(true);
         _loading = true;
         try
         {
@@ -147,7 +147,7 @@ public sealed partial class VolumeViewModel : ObservableObject
 
         if (Volume <= 0)
         {
-            Volume = _lastAudible > 0 ? _lastAudible : DefaultAudibleVolume;
+            Volume = _lastAudible > 0 ? _lastAudible : DEFAULT_AUDIBLE_VOLUME;
         }
 
         IsMuted = false;
@@ -198,8 +198,8 @@ public sealed partial class VolumeViewModel : ObservableObject
         }
 
         Apply();
-        _ = _settings.SetAsync(VolumeSetting, Math.Round(Volume).ToString(CultureInfo.InvariantCulture), CancellationToken.None);
-        _ = _settings.SetAsync(MutedSetting, IsMuted ? "true" : "false", CancellationToken.None);
+        _ = _settings.SetAsync(VOLUME_SETTING, Math.Round(Volume).ToString(CultureInfo.InvariantCulture), CancellationToken.None);
+        _ = _settings.SetAsync(MUTED_SETTING, IsMuted ? "true" : "false", CancellationToken.None);
     }
 
     /// <summary>

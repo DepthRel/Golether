@@ -1,0 +1,35 @@
+#!/usr/bin/env bash
+# Writes the note of a package in every language from the templates of a Notes folder (source this file).
+# A template is README.<code>.txt: README.en.txt becomes README.txt, the others keep their code. {version} and
+# {runtime} are filled in. A line that starts with a tag ([win], [linux], [macos], or [unix] for both Linux and macOS)
+# is kept only for that system, without the tag; a line without a tag is for every system. package-notes.ps1 does
+# the same for the PowerShell scripts.
+# Usage: write_package_notes <notes folder> <target folder> <linux|macos> <version> <runtime>
+write_package_notes() {
+  local notes="$1" target="$2" platform="$3" version="$4" runtime="$5" template code name
+  for template in "$notes"/README.*.txt; do
+    code="${template##*/README.}"
+    code="${code%.txt}"
+    if [ "$code" = en ]; then
+      name=README.txt
+    else
+      name="README.$code.txt"
+    fi
+
+    # A checkout on Windows has CRLF line ends; the notes of a Linux or macOS package have LF.
+    tr -d '\r' < "$template" | awk -v platform="$platform" -v version="$version" -v runtime="$runtime" '
+      {
+        line = $0
+        if (match(line, /^\[[a-z]+\] /)) {
+          tag = substr(line, 2, RLENGTH - 3)
+          if (tag != platform && !(tag == "unix" && platform != "win")) {
+            next
+          }
+          line = substr(line, RLENGTH + 1)
+        }
+        gsub(/[{]version[}]/, version, line)
+        gsub(/[{]runtime[}]/, runtime, line)
+        print line
+      }' > "$target/$name"
+  done
+}

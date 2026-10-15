@@ -1,10 +1,11 @@
 using System.Globalization;
 using System.Runtime.InteropServices;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 using Golether.Core.Data.Enums;
 using Golether.Core.Playback;
 using Golether.Localization;
-using Microsoft.Extensions.Logging.Abstractions;
-using Microsoft.Extensions.Logging;
+using Golether.Media.Player.Enums;
 
 namespace Golether.Media.Player.Mpv;
 
@@ -20,20 +21,20 @@ public sealed class MpvPlayer : IPlaybackController, ILocalPlayerControls
     /// <summary>
     /// The first argument of the messages sent by the video input bindings.
     /// </summary>
-    private const string PointerMessage = "golether-video";
+    private const string POINTER_MESSAGE = "golether-video";
 
     /// <summary>
     /// The largest number of seconds turned into a time (about 31 years).
     /// </summary>
-    private const double MaxSeconds = 1e9;
+    private const double MAX_SECONDS = 1e9;
 
     /// <summary>
     /// The input section with the mouse bindings of the video picture. Only the left button is bound; mpv's own
     /// bindings stay disabled.
     /// </summary>
-    private const string PointerBindings =
-        "MBTN_LEFT script-message " + PointerMessage + " click\n" +
-        "MBTN_LEFT_DBL script-message " + PointerMessage + " double";
+    private const string POINTER_BINDINGS =
+        "MBTN_LEFT script-message " + POINTER_MESSAGE + " click\n" +
+        "MBTN_LEFT_DBL script-message " + POINTER_MESSAGE + " double";
 
     /// <summary>
     /// Observed property identifiers.
@@ -229,8 +230,8 @@ public sealed class MpvPlayer : IPlaybackController, ILocalPlayerControls
     public double GetVideoAspect()
     {
         ThrowIfDisposed();
-        return double.TryParse(LibMpv.GetString(_handle, "video-params/aspect"), NumberStyles.Float, CultureInfo.InvariantCulture, out var aspect)
-            && double.IsFinite(aspect) && aspect > 0
+        return double.TryParse(LibMpv.GetString(_handle, "video-params/aspect"), NumberStyles.Float, CultureInfo.InvariantCulture, out var aspect) &&
+            double.IsFinite(aspect) && aspect > 0
                 ? aspect
                 : 0;
     }
@@ -340,10 +341,10 @@ public sealed class MpvPlayer : IPlaybackController, ILocalPlayerControls
             var ranges = new List<MediaTimeRange>();
             foreach (var item in list.EnumerateArray().Take(64))
             {
-                if (item.ValueKind == System.Text.Json.JsonValueKind.Object
-                    && item.TryGetProperty("start", out var start) && start.ValueKind == System.Text.Json.JsonValueKind.Number && start.TryGetDouble(out var from)
-                    && item.TryGetProperty("end", out var end) && end.ValueKind == System.Text.Json.JsonValueKind.Number && end.TryGetDouble(out var to)
-                    && double.IsFinite(from) && double.IsFinite(to) && to > from && from >= 0 && to < TimeSpan.MaxValue.TotalSeconds)
+                if (item.ValueKind == System.Text.Json.JsonValueKind.Object &&
+                    item.TryGetProperty("start", out var start) && start.ValueKind == System.Text.Json.JsonValueKind.Number && start.TryGetDouble(out var from) &&
+                    item.TryGetProperty("end", out var end) && end.ValueKind == System.Text.Json.JsonValueKind.Number && end.TryGetDouble(out var to) &&
+                    double.IsFinite(from) && double.IsFinite(to) && to > from && from >= 0 && to < TimeSpan.MaxValue.TotalSeconds)
                 {
                     ranges.Add(new MediaTimeRange(TimeSpan.FromSeconds(from), TimeSpan.FromSeconds(to)));
                 }
@@ -428,7 +429,7 @@ public sealed class MpvPlayer : IPlaybackController, ILocalPlayerControls
     public Task LoadAsync(Uri source, TimeSpan startPosition, bool paused, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(source);
-        if (source.Scheme is not ("file" or MpvStreamRegistry.Protocol))
+        if (source.Scheme is not ("file" or MpvStreamRegistry.PROTOCOL))
         {
             throw new ArgumentException("Only file:// and golether:// sources are allowed.", nameof(source));
         }
@@ -548,7 +549,7 @@ public sealed class MpvPlayer : IPlaybackController, ILocalPlayerControls
     /// <param name="handle">The handle.</param>
     private static void BindPointer(nint handle)
     {
-        LibMpv.Check(LibMpv.Command(handle, "define-section", "golether-pointer", PointerBindings, "force"), "binding the mouse");
+        LibMpv.Check(LibMpv.Command(handle, "define-section", "golether-pointer", POINTER_BINDINGS, "force"), "binding the mouse");
         LibMpv.Check(LibMpv.Command(handle, "enable-section", "golether-pointer"), "enabling the mouse bindings");
     }
 
@@ -587,7 +588,7 @@ public sealed class MpvPlayer : IPlaybackController, ILocalPlayerControls
     internal static TimeSpan? ToTime(double? seconds)
         => seconds is not { } value || double.IsNaN(value)
             ? null
-            : TimeSpan.FromSeconds(Math.Clamp(value, -MaxSeconds, MaxSeconds));
+            : TimeSpan.FromSeconds(Math.Clamp(value, -MAX_SECONDS, MAX_SECONDS));
 
     /// <summary>
     /// Sets a flag property.
@@ -650,7 +651,7 @@ public sealed class MpvPlayer : IPlaybackController, ILocalPlayerControls
     /// <param name="message">The message.</param>
     private unsafe void OnClientMessage(MpvEventClientMessage* message)
     {
-        if (message->NumArgs != 2 || Marshal.PtrToStringUTF8((nint)message->Args[0]) != PointerMessage)
+        if (message->NumArgs != 2 || Marshal.PtrToStringUTF8((nint)message->Args[0]) != POINTER_MESSAGE)
         {
             return;
         }

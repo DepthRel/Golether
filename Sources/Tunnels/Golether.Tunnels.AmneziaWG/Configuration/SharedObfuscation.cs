@@ -17,17 +17,17 @@ public sealed record SharedObfuscation(int S1, int S2, uint H1, uint H2, uint H3
     /// <summary>
     /// The maximum S1 (1280 − 148, the size of a handshake initiation).
     /// </summary>
-    public const int MaxS1 = 1132;
+    public const int MAX_S1 = 1132;
 
     /// <summary>
     /// The maximum S2 (1280 − 92, the size of a handshake response).
     /// </summary>
-    public const int MaxS2 = 1188;
+    public const int MAX_S2 = 1188;
 
     /// <summary>
     /// The smallest header value that differs from plain WireGuard message types (1–4).
     /// </summary>
-    public const uint MinHeader = 5;
+    public const uint MIN_HEADER = 5;
 
     /// <summary>
     /// Generates random parameters.
@@ -46,7 +46,7 @@ public sealed record SharedObfuscation(int S1, int S2, uint H1, uint H2, uint H3
         var headers = new HashSet<uint>();
         while (headers.Count < 4)
         {
-            headers.Add((uint)RandomNumberGenerator.GetInt32((int)MinHeader, int.MaxValue));
+            headers.Add((uint)RandomNumberGenerator.GetInt32((int)MIN_HEADER, int.MaxValue));
         }
 
         var h = headers.ToArray();
@@ -59,9 +59,9 @@ public sealed record SharedObfuscation(int S1, int S2, uint H1, uint H2, uint H3
     /// <exception cref="FormatException">A parameter violates the AmneziaWG rules.</exception>
     public void Validate()
     {
-        if (S1 is < 0 or > MaxS1 || S2 is < 0 or > MaxS2)
+        if (S1 is < 0 or > MAX_S1 || S2 is < 0 or > MAX_S2)
         {
-            throw new FormatException(Texts.Format("Config.Error.PaddingSizes", MaxS1, MaxS2));
+            throw new FormatException(Texts.Format("Config.Error.PaddingSizes", MAX_S1, MAX_S2));
         }
 
         if (S1 + 56 == S2)
@@ -70,7 +70,7 @@ public sealed record SharedObfuscation(int S1, int S2, uint H1, uint H2, uint H3
         }
 
         var headers = new[] { H1, H2, H3, H4 };
-        if (headers.Distinct().Count() != 4 || headers.Any(h => h < MinHeader))
+        if (headers.Distinct().Count() != 4 || headers.Any(h => h < MIN_HEADER))
         {
             throw new FormatException(Texts.Get("Config.Error.Headers"));
         }

@@ -21,7 +21,7 @@ public sealed class TunnelNegotiator
     /// <summary>
     /// The default offer lifetime.
     /// </summary>
-    private static readonly TimeSpan DefaultTtl = TimeSpan.FromHours(1);
+    private static readonly TimeSpan _defaultTtl = TimeSpan.FromHours(1);
 
     /// <summary>
     /// The local device.
@@ -70,7 +70,7 @@ public sealed class TunnelNegotiator
         using var ephemeral = NewEphemeralKey();
         var offerId = Convert.ToBase64String(RandomNumberGenerator.GetBytes(16));
         var assignedAddress = hostInterface.NextParticipantAddress(usedAddresses);
-        var expiresAt = _time.GetUtcNow().Add(ttl ?? DefaultTtl);
+        var expiresAt = _time.GetUtcNow().Add(ttl ?? _defaultTtl);
 
         var body = new TunnelOfferBody
         {
@@ -88,7 +88,7 @@ public sealed class TunnelNegotiator
             ExpiresAt = expiresAt.ToUnixTimeSeconds(),
         };
 
-        var packageText = TunnelPackageCodec.Encode(TunnelPackageCodec.OfferKind, body, _identity);
+        var packageText = TunnelPackageCodec.Encode(TunnelPackageCodec.OFFER_KIND, body, _identity);
         return new HostOffer(packageText, new PendingOfferSecrets(offerId, EphemeralPrivateKey(ephemeral), assignedAddress, expiresAt));
     }
 
@@ -113,10 +113,10 @@ public sealed class TunnelNegotiator
         ArgumentOutOfRangeException.ThrowIfLessThan(listenPort, 1);
         ArgumentOutOfRangeException.ThrowIfGreaterThan(listenPort, 65535);
 
-        var offer = TunnelPackageCodec.Decode<TunnelOfferBody>(TunnelPackageCodec.OfferKind, offerText, b => b.HostCertificate);
-        if (offer.Body.HostEndpoints is null
-            || offer.Body.Headers is not { Count: 4 }
-            || AnyMissing(offer.Body.OfferId, offer.Body.HostName, offer.Body.HostPublicKey, offer.Body.HostAddress, offer.Body.AssignedAddress, offer.Body.EphemeralKey))
+        var offer = TunnelPackageCodec.Decode<TunnelOfferBody>(TunnelPackageCodec.OFFER_KIND, offerText, b => b.HostCertificate);
+        if (offer.Body.HostEndpoints is null ||
+            offer.Body.Headers is not { Count: 4 } ||
+            AnyMissing(offer.Body.OfferId, offer.Body.HostName, offer.Body.HostPublicKey, offer.Body.HostAddress, offer.Body.AssignedAddress, offer.Body.EphemeralKey))
         {
             throw new FormatException(Texts.Get("Tunnel.Error.PackageDamaged"));
         }
@@ -148,7 +148,7 @@ public sealed class TunnelNegotiator
             PresharedKey = preshared,
             AllowedIps = [$"{offer.Body.HostAddress}/32"],
             Endpoint = hostEndpoint,
-            PersistentKeepalive = HostTunnelInterface.KeepaliveSeconds,
+            PersistentKeepalive = HostTunnelInterface.KEEPALIVE_SECONDS,
         };
 
         var obfuscation = new SharedObfuscation(
@@ -181,7 +181,7 @@ public sealed class TunnelNegotiator
             EphemeralKey = EphemeralPublicKey(ephemeral),
         };
 
-        var answerText = TunnelPackageCodec.Encode(TunnelPackageCodec.AnswerKind, answerBody, _identity);
+        var answerText = TunnelPackageCodec.Encode(TunnelPackageCodec.ANSWER_KIND, answerBody, _identity);
         return new ParticipantAcceptance(answerText, configuration, offer.Signer, offer.Body.HostName, offer.Body.HostAddress, code);
     }
 
@@ -197,9 +197,9 @@ public sealed class TunnelNegotiator
     {
         ArgumentNullException.ThrowIfNull(secrets);
 
-        var answer = TunnelPackageCodec.Decode<TunnelAnswerBody>(TunnelPackageCodec.AnswerKind, answerText, b => b.ParticipantCertificate);
-        if (answer.Body.ParticipantEndpoints is null
-            || AnyMissing(answer.Body.OfferId, answer.Body.ParticipantName, answer.Body.ParticipantPublicKey, answer.Body.EphemeralKey))
+        var answer = TunnelPackageCodec.Decode<TunnelAnswerBody>(TunnelPackageCodec.ANSWER_KIND, answerText, b => b.ParticipantCertificate);
+        if (answer.Body.ParticipantEndpoints is null ||
+            AnyMissing(answer.Body.OfferId, answer.Body.ParticipantName, answer.Body.ParticipantPublicKey, answer.Body.EphemeralKey))
         {
             throw new FormatException(Texts.Get("Tunnel.Error.PackageDamaged"));
         }
@@ -224,7 +224,7 @@ public sealed class TunnelNegotiator
             PresharedKey = preshared,
             AllowedIps = [$"{secrets.AssignedAddress}/32"],
             Endpoint = FirstEndpoint(answer.Body.ParticipantEndpoints),
-            PersistentKeepalive = HostTunnelInterface.KeepaliveSeconds,
+            PersistentKeepalive = HostTunnelInterface.KEEPALIVE_SECONDS,
         };
 
         var code = VerificationCode.Compute(answer.Signer, _identity.PeerId, secrets.OfferId);

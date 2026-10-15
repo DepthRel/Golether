@@ -46,10 +46,10 @@ public sealed class ValueTypesTests
     [Fact]
     public void MediaDescriptor_ComputesChunks()
     {
-        var media = new MediaDescriptor { FileName = "a.mkv", Length = (2 * MediaDescriptor.DefaultChunkSize) + 10, QuickId = new string('a', 64) };
+        var media = new MediaDescriptor { FileName = "a.mkv", Length = (2 * MediaDescriptor.DEFAULT_CHUNK_SIZE) + 10, QuickId = new string('a', 64) };
 
         Assert.Equal(3, media.ChunkCount);
-        Assert.Equal(MediaDescriptor.DefaultChunkSize, media.GetChunkLength(0));
+        Assert.Equal(MediaDescriptor.DEFAULT_CHUNK_SIZE, media.GetChunkLength(0));
         Assert.Equal(10, media.GetChunkLength(2));
         Assert.Throws<ArgumentOutOfRangeException>(() => media.GetChunkLength(3));
         media.Validate();
@@ -77,7 +77,7 @@ public sealed class ValueTypesTests
     {
         Assert.Equal("Марина", ParticipantInfo.NormalizeDisplayName("  Мар\nина \t"));
         Assert.Equal("Участник", ParticipantInfo.NormalizeDisplayName("\r\n"));
-        Assert.Equal(ParticipantInfo.MaxDisplayNameLength, ParticipantInfo.NormalizeDisplayName(new string('x', 200)).Length);
+        Assert.Equal(ParticipantInfo.MAX_DISPLAY_NAME_LENGTH, ParticipantInfo.NormalizeDisplayName(new string('x', 200)).Length);
     }
 
     /// <summary>
@@ -87,7 +87,7 @@ public sealed class ValueTypesTests
     public void AppDataPaths_UsesEnvironmentOverride()
     {
         var root = Path.Combine(Path.GetTempPath(), "golether-test-" + Guid.NewGuid().ToString("N"));
-        var paths = AppDataPaths.Resolve(AppContext.BaseDirectory, name => name == AppDataPaths.DataDirectoryVariable ? root : null);
+        var paths = AppDataPaths.Resolve(AppContext.BaseDirectory, name => name == AppDataPaths.DATA_DIRECTORY_VARIABLE ? root : null);
 
         Assert.Equal(Path.GetFullPath(root), paths.Root);
         Assert.Equal(Path.Combine(paths.Root, "golether.db"), paths.DatabaseFile);
@@ -106,7 +106,7 @@ public sealed class ValueTypesTests
         try
         {
             var app = Directory.CreateDirectory(Path.Combine(install.FullName, appRelative));
-            File.WriteAllText(Path.Combine(install.FullName, AppDataPaths.InstallationMarkerFileName), "installation");
+            File.WriteAllText(Path.Combine(install.FullName, AppDataPaths.INSTALLATION_MARKER_FILE_NAME), "installation");
 
             var paths = AppDataPaths.Resolve(app.FullName, _ => null);
             paths.EnsureCreated();
@@ -206,7 +206,7 @@ public sealed class ValueTypesTests
         (valid with { FileName = "Film: part 2? <final> \"cut\" | 1*.mkv" }).Validate();
         Assert.Throws<ArgumentException>(() => (valid with { FileName = "a\\b.mkv" }).Validate());
         Assert.Throws<ArgumentException>(() => (valid with { FileName = "a\nb.mkv" }).Validate());
-        Assert.Throws<ArgumentException>(() => (valid with { FileName = new string('a', MediaDescriptor.MaxFileNameLength + 1) }).Validate());
+        Assert.Throws<ArgumentException>(() => (valid with { FileName = new string('a', MediaDescriptor.MAX_FILE_NAME_LENGTH + 1) }).Validate());
     }
 
     /// <summary>
@@ -219,7 +219,7 @@ public sealed class ValueTypesTests
         Assert.Equal("a_b_c.mkv", MediaDescriptor.NormalizeFileName("a\\b/c.mkv"));
         Assert.Equal("a_b", MediaDescriptor.NormalizeFileName(" a\tb "));
         Assert.Equal("_", MediaDescriptor.NormalizeFileName(null));
-        Assert.Equal(MediaDescriptor.MaxFileNameLength, MediaDescriptor.NormalizeFileName(new string('x', 400)).Length);
+        Assert.Equal(MediaDescriptor.MAX_FILE_NAME_LENGTH, MediaDescriptor.NormalizeFileName(new string('x', 400)).Length);
         foreach (var name in new[] { "a\\b/c.mkv", "  ", new string('x', 999), "ok.mp4" })
         {
             new MediaDescriptor { FileName = MediaDescriptor.NormalizeFileName(name), Length = 1, QuickId = new string('a', 64) }.Validate();
@@ -250,7 +250,7 @@ public sealed class ValueTypesTests
         Assert.Equal(-ParticipantStatus.MaxSpan, clean.Position);
         Assert.Equal(-ParticipantStatus.MaxSpan, clean.Drift);
         Assert.Equal(ParticipantStatus.MaxSpan, clean.CacheAhead);
-        Assert.Equal(ParticipantStatus.MaxRoundTripMilliseconds, clean.RoundTripMilliseconds);
+        Assert.Equal(ParticipantStatus.MAX_ROUND_TRIP_MILLISECONDS, clean.RoundTripMilliseconds);
         Assert.Equal(0, clean.BytesFromPeers);
         Assert.Equal(0, clean.BytesToPeers);
         Assert.True(clean.IsBuffering);

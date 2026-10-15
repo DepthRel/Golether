@@ -5,7 +5,8 @@
 #   GoletherServer/golether-server    the launcher
 #   GoletherServer/bin/               the program, the .NET runtime and the libraries
 #   GoletherServer/config/            appsettings.json
-#   GoletherServer/docs/              ADMIN-GUIDE.md and README.txt in English, ADMIN-GUIDE.ru.md and README.ru.txt in Russian
+#   GoletherServer/docs/              ADMIN-GUIDE.md and README.txt in English, ADMIN-GUIDE.<code>.md and README.<code>.txt
+#                                     in the other languages (the notes come from the templates in Notes)
 #   GoletherServer/service/           install-service.sh, which installs, updates or removes the service: systemd on
 #                                     Linux (golether-server.service), launchd on macOS (org.golether.server.plist)
 #   GoletherServer/golether-server-monitor  the launcher of Golether Server Monitor (the state, the journal of
@@ -45,7 +46,8 @@ echo "==> $(basename "$monitor") ($runtime, $configuration) -> $stage/monitor"
 dotnet publish "$monitor" -c "$configuration" -r "$runtime" --self-contained true -o "$stage/monitor" -nologo -p:DebugType=none \
   "-p:GoletherMonitorLauncherPath=$stage_native/golether-server-monitor"
 
-for expected in golether-server bin/golether-server config/appsettings.json docs/ADMIN-GUIDE.md docs/ADMIN-GUIDE.ru.md monitor/golether-server-monitor golether-server-monitor config/monitor.json; do
+for expected in golether-server bin/golether-server config/appsettings.json monitor/golether-server-monitor golether-server-monitor config/monitor.json \
+  docs/ADMIN-GUIDE.md docs/ADMIN-GUIDE.de.md docs/ADMIN-GUIDE.es.md docs/ADMIN-GUIDE.fr.md docs/ADMIN-GUIDE.pt.md docs/ADMIN-GUIDE.ru.md; do
   if [ ! -f "$stage/$expected" ]; then
     echo "The package layout is incomplete: $expected is missing." >&2
     exit 1
@@ -144,16 +146,7 @@ fi
 echo "Installed into $target and started. Settings: $target/config/appsettings.json (then: sudo systemctl restart golether-server)."
 echo "Log: journalctl -u golether-server -f   Health: curl http://127.0.0.1:47980/health   Guide: $target/docs/ADMIN-GUIDE.md"
 INSTALL
-    platform_notes_en=(
-      "  - systemd service: sudo ./service/install-service.sh (installs into /opt/golether-server and enables it at boot; an update is the same command, the settings are kept)."
-      "  - Removal: sudo ./service/install-service.sh uninstall"
-      "  - Log: journalctl -u golether-server -f"
-    )
-    platform_notes=(
-      "  - Служба systemd: sudo ./service/install-service.sh (ставит в /opt/golether-server, включает автозапуск; обновление — то же, настройки сохраняются)."
-      "  - Удаление: sudo ./service/install-service.sh uninstall"
-      "  - Журнал: journalctl -u golether-server -f"
-    )
+    platform=linux
     ;;
   osx-*)
     cat > "$stage/service/org.golether.server.plist" <<'PLIST'
@@ -246,18 +239,7 @@ INSTALL
         codesign --force --sign - "$program" || echo "warning: ad-hoc signing of $program failed" >&2
       done
     fi
-    platform_notes_en=(
-      "  - launchd service: sudo ./service/install-service.sh (installs into /usr/local/golether-server and starts it at boot; an update is the same command, the settings are kept)."
-      "  - Removal: sudo ./service/install-service.sh uninstall"
-      "  - Log: tail -f /Library/Logs/golether-server.log"
-      "  - If macOS refuses to open the program: in the server folder run xattr -dr com.apple.quarantine . and codesign --force --sign - golether-server bin/golether-server"
-    )
-    platform_notes=(
-      "  - Служба launchd: sudo ./service/install-service.sh (ставит в /usr/local/golether-server, запускает при загрузке; обновление — то же, настройки сохраняются)."
-      "  - Удаление: sudo ./service/install-service.sh uninstall"
-      "  - Журнал: tail -f /Library/Logs/golether-server.log"
-      "  - Если macOS не даёт открыть программу: в папке сервера xattr -dr com.apple.quarantine . и codesign --force --sign - golether-server bin/golether-server"
-    )
+    platform=macos
     ;;
 esac
 
@@ -268,36 +250,10 @@ for name in "${executables[@]}"; do
   fi
 done
 
-# The note of the package in two languages: README.txt in English (the default one) and README.ru.txt in Russian.
-{
-  echo "Golether rendezvous server $version ($runtime)"
-  echo
-  echo "The full administrator guide (Windows, Linux, macOS): ADMIN-GUIDE.md next to this file."
-  echo
-  echo "In short (the commands are run from the root of the server folder):"
-  printf '%s\n' "${platform_notes_en[@]}"
-  echo "  - Without a service: ./golether-server (Ctrl+C stops it)."
-  echo "  - Golether Server Monitor (./golether-server-monitor, needs a desktop): the state, the journal of events, start and stop, the settings."
-  echo "  - Settings: config/appsettings.json; restart the service after changing them."
-  echo "  - Folders: bin - the program and its libraries, config - the settings, docs - the documentation, service - installing the service, monitor - the monitor."
-  echo "  - Open TCP and UDP 47900 to the outside. Check on this machine: curl http://127.0.0.1:47980/health"
-  echo "  - Give the hosts the public address of the server and the port, for example 203.0.113.7:47900."
-} > "$stage/docs/README.txt"
-
-{
-  echo "Сервер рукопожатий Golether $version ($runtime)"
-  echo
-  echo "Полное руководство администратора (Windows, Linux, macOS): ADMIN-GUIDE.ru.md рядом с этим файлом."
-  echo
-  echo "Коротко (команды — из корня папки сервера):"
-  printf '%s\n' "${platform_notes[@]}"
-  echo "  - Без службы: ./golether-server (остановка — Ctrl+C)."
-  echo "  - Golether Server Monitor (./golether-server-monitor, нужен рабочий стол): состояние, журнал событий, запуск и остановка, настройки."
-  echo "  - Настройки: config/appsettings.json; после правки перезапустите службу."
-  echo "  - Папки: bin — программа и библиотеки, config — настройки, docs — документация, service — установка службы, monitor — монитор."
-  echo "  - Снаружи откройте TCP и UDP 47900. Проверка на этой машине: curl http://127.0.0.1:47980/health"
-  echo "  - Ведущим сообщите внешний адрес сервера и порт, например 203.0.113.7:47900."
-} > "$stage/docs/README.ru.txt"
+# The note of the package in every language, from the templates in Notes.
+# shellcheck source=../Shared/package-notes.sh
+source "$script_dir/../Shared/package-notes.sh"
+write_package_notes "$script_dir/Notes" "$stage/docs" "$platform" "$version" "$runtime"
 
 package_base="$(cd "$output" && pwd)/GoletherServer-$version-$runtime"
 if tar --version 2>/dev/null | grep -q "GNU tar"; then

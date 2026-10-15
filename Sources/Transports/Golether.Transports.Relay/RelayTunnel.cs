@@ -19,7 +19,7 @@ public sealed class RelayTunnel : IAsyncDisposable
     /// <summary>
     /// The largest number of connections carried at once: the relay of the host does not grant more allocations.
     /// </summary>
-    private const int MaxConnections = 16;
+    private const int MAX_CONNECTIONS = 16;
 
     /// <summary>
     /// Opens a stream to the relay of the host.
@@ -39,7 +39,7 @@ public sealed class RelayTunnel : IAsyncDisposable
     /// <summary>
     /// Limits the connections carried at once.
     /// </summary>
-    private readonly SemaphoreSlim _slots = new(MaxConnections, MaxConnections);
+    private readonly SemaphoreSlim _slots = new(MAX_CONNECTIONS, MAX_CONNECTIONS);
 
     /// <summary>
     /// Stops the tunnel.
@@ -106,8 +106,8 @@ public sealed class RelayTunnel : IAsyncDisposable
             {
                 client = await _listener.AcceptTcpClientAsync(token).ConfigureAwait(false);
             }
-            catch (Exception ex) when (ex is OperationCanceledException or ObjectDisposedException
-                                       || (ex is SocketException && token.IsCancellationRequested))
+            catch (Exception ex) when (ex is OperationCanceledException or ObjectDisposedException ||
+                                       (ex is SocketException && token.IsCancellationRequested))
             {
                 return;
             }
@@ -119,7 +119,7 @@ public sealed class RelayTunnel : IAsyncDisposable
 
             if (!_slots.Wait(0, CancellationToken.None))
             {
-                _logger.LogWarning("Refused a local relay connection: {Count} are carried already", MaxConnections);
+                _logger.LogWarning("Refused a local relay connection: {Count} are carried already", MAX_CONNECTIONS);
                 client.Dispose();
                 continue;
             }

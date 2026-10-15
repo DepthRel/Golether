@@ -1,9 +1,9 @@
+using Microsoft.Extensions.Time.Testing;
+using NSubstitute;
 using Golether.Core.Data.Enums;
 using Golether.Core.Identity;
 using Golether.Security.Admission;
 using Golether.Security.Verification;
-using Microsoft.Extensions.Time.Testing;
-using NSubstitute;
 
 namespace Golether.Security.Tests;
 
@@ -15,21 +15,39 @@ public sealed class VerificationAndAdmissionTests
     /// <summary>
     /// The first device.
     /// </summary>
-    private static readonly PeerId First = PeerId.Parse(new string('1', 64));
+    private static readonly PeerId _first = PeerId.Parse(new string('1', 64));
 
     /// <summary>
     /// The second device.
     /// </summary>
-    private static readonly PeerId Second = PeerId.Parse(new string('2', 64));
+    private static readonly PeerId _second = PeerId.Parse(new string('2', 64));
 
     /// <summary>
-    /// The word list has 64 distinct words.
+    /// Every word of the list has a text of its own, and a number outside the list is refused.
     /// </summary>
     [Fact]
     public void WordList_Has64DistinctWords()
     {
-        Assert.Equal(64, VerificationCode.WordList.Count);
-        Assert.Equal(64, VerificationCode.WordList.Distinct().Count());
+        var words = Enumerable.Range(0, VerificationCode.WORD_COUNT).Select(VerificationCode.WordAt).ToArray();
+
+        Assert.Equal(64, words.Distinct().Count());
+        Assert.DoesNotContain(words, word => word.StartsWith(VerificationCode.WORD_KEY_PREFIX, StringComparison.Ordinal));
+        Assert.Throws<ArgumentOutOfRangeException>(() => VerificationCode.WordAt(VerificationCode.WORD_COUNT));
+        Assert.Throws<ArgumentOutOfRangeException>(() => VerificationCode.WordAt(-1));
+    }
+
+    /// <summary>
+    /// The code is made of word numbers, so both sides get the same code whatever their interface languages; only the
+    /// spelling of the words follows the language.
+    /// </summary>
+    [Fact]
+    public void Code_DoesNotDependOnTheLanguage()
+    {
+        var code = VerificationCode.Compute(_first, _second, "token");
+
+        Assert.Equal(3, code.WordNumbers.Count);
+        Assert.All(code.WordNumbers, number => Assert.InRange(number, 0, VerificationCode.WORD_COUNT - 1));
+        Assert.Equal(code.WordNumbers.Select(VerificationCode.WordAt), code.Words);
     }
 
     /// <summary>
@@ -38,8 +56,8 @@ public sealed class VerificationAndAdmissionTests
     [Fact]
     public void Code_IsSymmetric()
     {
-        var host = VerificationCode.Compute(First, Second, "token");
-        var participant = VerificationCode.Compute(Second, First, "token");
+        var host = VerificationCode.Compute(_first, _second, "token");
+        var participant = VerificationCode.Compute(_second, _first, "token");
 
         Assert.Equal(host.ToString(), participant.ToString());
         Assert.Equal(3, host.Words.Count);
@@ -54,9 +72,9 @@ public sealed class VerificationAndAdmissionTests
     {
         var codes = new[]
         {
-            VerificationCode.Compute(First, Second, "a").ToString(),
-            VerificationCode.Compute(First, Second, "b").ToString(),
-            VerificationCode.Compute(First, PeerId.Parse(new string('3', 64)), "a").ToString(),
+            VerificationCode.Compute(_first, _second, "a").ToString(),
+            VerificationCode.Compute(_first, _second, "b").ToString(),
+            VerificationCode.Compute(_first, PeerId.Parse(new string('3', 64)), "a").ToString(),
         };
 
         Assert.Equal(3, codes.Distinct().Count());
@@ -131,5 +149,5 @@ public sealed class VerificationAndAdmissionTests
     /// <param name="known">Whether the device is a trusted contact.</param>
     /// <returns>The request.</returns>
     private static AdmissionRequest Request(bool known)
-        => new(Second, "Марина", VerificationCode.Compute(First, Second, "t"), known);
+        => new(_second, "Марина", VerificationCode.Compute(_first, _second, "t"), known);
 }

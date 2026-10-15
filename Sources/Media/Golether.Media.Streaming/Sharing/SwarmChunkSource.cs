@@ -1,9 +1,9 @@
 using System.Collections.Concurrent;
 using System.Security.Cryptography;
-using Golether.Core.Media;
-using Golether.Media.Streaming.Protocol;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
+using Golether.Core.Media;
+using Golether.Media.Streaming.Protocol;
 
 namespace Golether.Media.Streaming.Sharing;
 
@@ -137,8 +137,8 @@ public sealed class SwarmChunkSource : IChunkSource
             }
 
             var expected = await hashTask.ConfigureAwait(false);
-            if (result.Data.Length != Media.GetChunkLength(index)
-                || !CryptographicOperations.FixedTimeEquals(SHA256.HashData(result.Data), expected))
+            if (result.Data.Length != Media.GetChunkLength(index) ||
+                !CryptographicOperations.FixedTimeEquals(SHA256.HashData(result.Data), expected))
             {
                 Interlocked.Increment(ref _rejectedChunks);
                 _logger.LogWarning("Chunk {Index} from {Peer} does not match the host's hash; using the host", index, result.Peer.ToShortString());

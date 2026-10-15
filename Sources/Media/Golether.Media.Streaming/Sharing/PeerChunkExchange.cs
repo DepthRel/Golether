@@ -1,10 +1,10 @@
 using System.Buffers.Binary;
 using System.Collections.Concurrent;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 using Golether.Core.Identity;
 using Golether.Core.Media;
 using Golether.Media.Streaming.Protocol;
-using Microsoft.Extensions.Logging;
-using Microsoft.Extensions.Logging.Abstractions;
 
 namespace Golether.Media.Streaming.Sharing;
 
@@ -22,27 +22,27 @@ public sealed class PeerChunkExchange : IAsyncDisposable
     /// <summary>
     /// Message type: the chunks the sender has.
     /// </summary>
-    internal const byte HaveMessage = 1;
+    internal const byte HAVE_MESSAGE = 1;
 
     /// <summary>
     /// Message type: a chunk request.
     /// </summary>
-    internal const byte RequestMessage = 2;
+    internal const byte REQUEST_MESSAGE = 2;
 
     /// <summary>
     /// Message type: a part of a chunk.
     /// </summary>
-    internal const byte DataMessage = 3;
+    internal const byte DATA_MESSAGE = 3;
 
     /// <summary>
     /// Message type: the chunk is not available.
     /// </summary>
-    internal const byte MissMessage = 4;
+    internal const byte MISS_MESSAGE = 4;
 
     /// <summary>
     /// The size of the data message header.
     /// </summary>
-    private const int DataHeaderSize = 13;
+    private const int DATA_HEADER_SIZE = 13;
 
     /// <summary>
     /// The transport.
@@ -175,8 +175,8 @@ public sealed class PeerChunkExchange : IAsyncDisposable
         var now = _timeProvider.GetUtcNow();
         var connected = _transport.ConnectedPeers;
         return _announcements
-            .Where(a => now - a.Value.Time < _options.AnnouncementLifetime && connected.Contains(a.Key)
-                        && a.Value.Ranges.Any(r => index >= r.Start && index < r.Start + r.Count))
+            .Where(a => now - a.Value.Time < _options.AnnouncementLifetime && connected.Contains(a.Key) &&
+                        a.Value.Ranges.Any(r => index >= r.Start && index < r.Start + r.Count))
             .Select(a => a.Key)
             .ToArray();
     }
@@ -216,7 +216,7 @@ public sealed class PeerChunkExchange : IAsyncDisposable
 
         var ranges = _available(_options.MaxRanges);
         var message = new byte[11 + (Math.Min(ranges.Count, _options.MaxRanges) * 8)];
-        message[0] = HaveMessage;
+        message[0] = HAVE_MESSAGE;
         BinaryPrimitives.WriteUInt64BigEndian(message.AsSpan(1), _mediaKey);
         var count = 0;
         foreach (var (start, length) in ranges.Take(_options.MaxRanges))
@@ -281,7 +281,7 @@ public sealed class PeerChunkExchange : IAsyncDisposable
         try
         {
             var request = new byte[17];
-            request[0] = RequestMessage;
+            request[0] = REQUEST_MESSAGE;
             BinaryPrimitives.WriteUInt64BigEndian(request.AsSpan(1), _mediaKey);
             BinaryPrimitives.WriteUInt32BigEndian(request.AsSpan(9), id);
             BinaryPrimitives.WriteUInt32BigEndian(request.AsSpan(13), (uint)index);
@@ -350,7 +350,7 @@ public sealed class PeerChunkExchange : IAsyncDisposable
 
         switch (data[0])
         {
-            case HaveMessage when data.Length >= 11 && BinaryPrimitives.ReadUInt64BigEndian(data[1..]) == _mediaKey:
+            case HAVE_MESSAGE when data.Length >= 11 && BinaryPrimitives.ReadUInt64BigEndian(data[1..]) == _mediaKey:
                 var count = Math.Min(BinaryPrimitives.ReadUInt16BigEndian(data[9..]), _options.MaxRanges);
                 if (data.Length < 11 + (count * 8))
                 {
@@ -366,19 +366,19 @@ public sealed class PeerChunkExchange : IAsyncDisposable
                 _announcements[message.Peer] = new Announcement(ranges, _timeProvider.GetUtcNow());
                 break;
 
-            case RequestMessage when data.Length == 17 && BinaryPrimitives.ReadUInt64BigEndian(data[1..]) == _mediaKey:
+            case REQUEST_MESSAGE when data.Length == 17 && BinaryPrimitives.ReadUInt64BigEndian(data[1..]) == _mediaKey:
                 var id = BinaryPrimitives.ReadUInt32BigEndian(data[9..]);
                 var index = (long)BinaryPrimitives.ReadUInt32BigEndian(data[13..]);
                 StartUpload(message.Peer, id, index);
                 break;
 
-            case DataMessage when data.Length > DataHeaderSize:
+            case DATA_MESSAGE when data.Length > DATA_HEADER_SIZE:
                 var dataId = BinaryPrimitives.ReadUInt32BigEndian(data[1..]);
                 if (_downloads.TryGetValue(dataId, out var download) && download.Peer == message.Peer)
                 {
                     var offset = BinaryPrimitives.ReadUInt32BigEndian(data[5..]);
                     var total = BinaryPrimitives.ReadUInt32BigEndian(data[9..]);
-                    var payload = data[DataHeaderSize..];
+                    var payload = data[DATA_HEADER_SIZE..];
                     if (download.Append(offset, total, payload))
                     {
                         Interlocked.Add(ref _bytesReceived, payload.Length);
@@ -391,7 +391,7 @@ public sealed class PeerChunkExchange : IAsyncDisposable
 
                 break;
 
-            case MissMessage when data.Length == 5:
+            case MISS_MESSAGE when data.Length == 5:
                 if (_downloads.TryGetValue(BinaryPrimitives.ReadUInt32BigEndian(data[1..]), out var missed) && missed.Peer == message.Peer)
                 {
                     missed.Fail();
@@ -415,7 +415,7 @@ public sealed class PeerChunkExchange : IAsyncDisposable
         {
             _uploads.AddOrUpdate(peer, 0, (_, n) => n - 1);
             var miss = new byte[5];
-            miss[0] = MissMessage;
+            miss[0] = MISS_MESSAGE;
             BinaryPrimitives.WriteUInt32BigEndian(miss.AsSpan(1), id);
             _transport.TrySend(peer, miss);
             return;
@@ -443,20 +443,20 @@ public sealed class PeerChunkExchange : IAsyncDisposable
     /// <returns>A task that completes when the chunk was sent or given up.</returns>
     private async Task UploadAsync(PeerId peer, uint id, byte[] chunk)
     {
-        var buffer = new byte[DataHeaderSize + _options.FragmentSize];
-        buffer[0] = DataMessage;
+        var buffer = new byte[DATA_HEADER_SIZE + _options.FragmentSize];
+        buffer[0] = DATA_MESSAGE;
         BinaryPrimitives.WriteUInt32BigEndian(buffer.AsSpan(1), id);
         BinaryPrimitives.WriteUInt32BigEndian(buffer.AsSpan(9), (uint)chunk.Length);
         for (var offset = 0; offset < chunk.Length;)
         {
             var size = Math.Min(_options.FragmentSize, chunk.Length - offset);
             BinaryPrimitives.WriteUInt32BigEndian(buffer.AsSpan(5), (uint)offset);
-            chunk.AsSpan(offset, size).CopyTo(buffer.AsSpan(DataHeaderSize));
+            chunk.AsSpan(offset, size).CopyTo(buffer.AsSpan(DATA_HEADER_SIZE));
             var waitedSince = _timeProvider.GetUtcNow();
-            while (!_transport.TrySend(peer, buffer.AsSpan(0, DataHeaderSize + size)))
+            while (!_transport.TrySend(peer, buffer.AsSpan(0, DATA_HEADER_SIZE + size)))
             {
-                if (_stop.IsCancellationRequested || _timeProvider.GetUtcNow() - waitedSince > _options.StallTimeout
-                    || !_transport.ConnectedPeers.Contains(peer))
+                if (_stop.IsCancellationRequested || _timeProvider.GetUtcNow() - waitedSince > _options.StallTimeout ||
+                    !_transport.ConnectedPeers.Contains(peer))
                 {
                     return;
                 }

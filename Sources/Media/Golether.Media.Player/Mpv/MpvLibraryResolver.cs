@@ -12,12 +12,12 @@ public static class MpvLibraryResolver
     /// <summary>
     /// The environment variable with an explicit library path.
     /// </summary>
-    public const string LibraryPathVariable = "GOLETHER_LIBMPV";
+    public const string LIBRARY_PATH_VARIABLE = "GOLETHER_LIBMPV";
 
     /// <summary>
     /// Guards registration.
     /// </summary>
-    private static readonly Lock Gate = new();
+    private static readonly Lock _gate = new();
 
     /// <summary>
     /// The loaded library handle.
@@ -49,7 +49,7 @@ public static class MpvLibraryResolver
     /// <returns><see langword="true"/> when libmpv is available.</returns>
     public static bool TryLoad(out string? error)
     {
-        lock (Gate)
+        lock (_gate)
         {
             error = null;
             if (_handle != 0)
@@ -96,7 +96,7 @@ public static class MpvLibraryResolver
     /// <param name="searchPath">The search path.</param>
     /// <returns>The handle, or zero for other libraries.</returns>
     private static nint Resolve(string name, Assembly assembly, DllImportSearchPath? searchPath)
-        => name == LibMpv.LibraryName ? _handle : 0;
+        => name == LibMpv.LIBRARY_NAME ? _handle : 0;
 
     /// <summary>
     /// Lists the paths and names to try.
@@ -109,7 +109,7 @@ public static class MpvLibraryResolver
             yield return PreferredPath;
         }
 
-        var explicitPath = Environment.GetEnvironmentVariable(LibraryPathVariable);
+        var explicitPath = Environment.GetEnvironmentVariable(LIBRARY_PATH_VARIABLE);
         if (!string.IsNullOrWhiteSpace(explicitPath))
         {
             yield return explicitPath;

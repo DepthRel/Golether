@@ -1,7 +1,7 @@
 using System.Collections.Concurrent;
-using Golether.Core.Media;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
+using Golether.Core.Media;
 
 namespace Golether.Media.Streaming.Protocol;
 
@@ -13,7 +13,7 @@ public sealed class RemoteChunkSource : IChunkSource
     /// <summary>
     /// The number of attempts per chunk.
     /// </summary>
-    private const int Attempts = 5;
+    private const int ATTEMPTS = 5;
 
     /// <summary>
     /// Opens a new data stream to the host.
@@ -198,7 +198,7 @@ public sealed class RemoteChunkSource : IChunkSource
 
                     throw;
                 }
-                catch (Exception ex) when (ex is IOException or InvalidDataException && attempt < Attempts && !token.IsCancellationRequested)
+                catch (Exception ex) when (ex is IOException or InvalidDataException && attempt < ATTEMPTS && !token.IsCancellationRequested)
                 {
                     _logger.LogWarning("Chunk {Index}, attempt {Attempt}: {Reason}", index, attempt, ex.Message);
                 }

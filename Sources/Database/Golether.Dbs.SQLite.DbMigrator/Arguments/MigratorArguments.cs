@@ -10,7 +10,7 @@ public sealed record MigratorArguments
     /// <summary>
     /// The usage text.
     /// </summary>
-    public const string Usage = """
+    public const string USAGE = """
         Golether SQLite database migrator.
 
         Usage:

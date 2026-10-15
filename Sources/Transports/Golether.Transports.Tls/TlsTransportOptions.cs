@@ -8,12 +8,12 @@ public sealed record TlsTransportOptions
     /// <summary>
     /// The default listening port.
     /// </summary>
-    public const int DefaultPort = 47800;
+    public const int DEFAULT_PORT = 47800;
 
     /// <summary>
-    /// Gets the listening port; 0 selects a free port (default <see cref="DefaultPort"/>).
+    /// Gets the listening port; 0 selects a free port (default <see cref="DEFAULT_PORT"/>).
     /// </summary>
-    public int Port { get; init; } = DefaultPort;
+    public int Port { get; init; } = DEFAULT_PORT;
 
     /// <summary>
     /// Gets the time allowed for the TCP connection, TLS handshake and preamble (default 20 s; long-distance links with

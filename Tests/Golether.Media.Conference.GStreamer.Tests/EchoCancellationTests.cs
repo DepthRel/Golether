@@ -1,8 +1,8 @@
 using System.Buffers.Binary;
+using Microsoft.Extensions.Logging.Abstractions;
 using Golether.Components.Catalog;
 using Golether.Components.GStreamer;
 using Golether.Media.Conference.GStreamer.Native;
-using Microsoft.Extensions.Logging.Abstractions;
 
 namespace Golether.Media.Conference.GStreamer.Tests;
 
@@ -15,17 +15,17 @@ public sealed class EchoCancellationTests
     /// <summary>
     /// The format of the sound on both sides.
     /// </summary>
-    private const string Format = "audio/x-raw,format=S16LE,rate=48000,channels=1,layout=interleaved";
+    private const string FORMAT = "audio/x-raw,format=S16LE,rate=48000,channels=1,layout=interleaved";
 
     /// <summary>
     /// The length of one block of sound in nanoseconds (10 ms).
     /// </summary>
-    private const ulong BlockNanoseconds = 10_000_000;
+    private const ulong BLOCK_NANOSECONDS = 10_000_000;
 
     /// <summary>
     /// How many blocks later the played sound reaches the microphone (60 ms).
     /// </summary>
-    private const int RoomDelayBlocks = 6;
+    private const int ROOM_DELAY_BLOCKS = 6;
 
     /// <summary>
     /// A microphone pipeline started later than the playback, as on every switching on of the microphone, removes
@@ -45,7 +45,7 @@ public sealed class EchoCancellationTests
 
         using var playback = new GstPipeline(
             "playback",
-            $"appsrc name=src is-live=true format=time caps=\"{Format}\" ! queue ! webrtcechoprobe name=golether-test-echo ! fakesink sync=true",
+            $"appsrc name=src is-live=true format=time caps=\"{FORMAT}\" ! queue ! webrtcechoprobe name=golether-test-echo ! fakesink sync=true",
             NullLogger.Instance);
         playback.UseTimeline(origin);
         playback.Play();
@@ -57,7 +57,7 @@ public sealed class EchoCancellationTests
         await Task.Delay(1500, token);
         using var recording = new GstPipeline(
             "microphone",
-            $"appsrc name=src is-live=true format=time caps=\"{Format}\" ! queue ! " +
+            $"appsrc name=src is-live=true format=time caps=\"{FORMAT}\" ! queue ! " +
             "webrtcdsp probe=golether-test-echo echo-cancel=true noise-suppression=false gain-control=false ! " +
             "appsink name=out sync=false max-buffers=200 drop=false",
             NullLogger.Instance);
@@ -118,10 +118,10 @@ public sealed class EchoCancellationTests
                     BinaryPrimitives.WriteInt16LittleEndian(played.AsSpan(i), (short)((noise.NextDouble() - 0.5) * 16000 * loudness));
                 }
 
-                var time = start + ((ulong)block * BlockNanoseconds);
+                var time = start + ((ulong)block * BLOCK_NANOSECONDS);
                 Samples.Push(playback.Element("src"), played, time);
                 room.Enqueue(played);
-                if (room.Count > RoomDelayBlocks && room.Dequeue() is { } heard && microphone() is { } recording)
+                if (room.Count > ROOM_DELAY_BLOCKS && room.Dequeue() is { } heard && microphone() is { } recording)
                 {
                     Samples.Push(recording.Element("src"), heard, time);
                 }

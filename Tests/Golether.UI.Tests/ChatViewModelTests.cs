@@ -1,10 +1,10 @@
+using NSubstitute;
+using NSubstitute.ExceptionExtensions;
 using Golether.Core.Data.Enums;
 using Golether.Core.Identity;
 using Golether.Session;
 using Golether.UI.Services;
 using Golether.UI.ViewModels;
-using NSubstitute.ExceptionExtensions;
-using NSubstitute;
 
 namespace Golether.UI.Tests;
 
@@ -16,7 +16,7 @@ public sealed class ChatViewModelTests
     /// <summary>
     /// A participant.
     /// </summary>
-    private static readonly PeerId Guest = PeerId.Parse(new string('b', 64));
+    private static readonly PeerId _guest = PeerId.Parse(new string('b', 64));
 
     /// <summary>
     /// The session.
@@ -91,13 +91,13 @@ public sealed class ChatViewModelTests
         Assert.Equal("ЧАТ", _chat.Header);
         Assert.Equal(3, added);
 
-        for (var i = 0; i < ChatViewModel.MaxLines + 5; i++)
+        for (var i = 0; i < ChatViewModel.MAX_LINES + 5; i++)
         {
             Receive(ChatKind.Text, $"строка {i}", local: false);
         }
 
-        Assert.Equal(ChatViewModel.MaxLines, _chat.Lines.Count);
-        Assert.Equal($"строка {ChatViewModel.MaxLines + 4}", _chat.Lines[^1].Text);
+        Assert.Equal(ChatViewModel.MAX_LINES, _chat.Lines.Count);
+        Assert.Equal($"строка {ChatViewModel.MAX_LINES + 4}", _chat.Lines[^1].Text);
 
         _chat.Reset();
         Assert.Empty(_chat.Lines);
@@ -131,12 +131,12 @@ public sealed class ChatViewModelTests
         _chat.Tick();
         Assert.False(_chat.HasReactions);
 
-        for (var i = 0; i < ChatViewModel.MaxReactions + 3; i++)
+        for (var i = 0; i < ChatViewModel.MAX_REACTIONS + 3; i++)
         {
             Receive(ChatKind.Reaction, "👍", local: false);
         }
 
-        Assert.Equal(ChatViewModel.MaxReactions, _chat.Reactions.Count);
+        Assert.Equal(ChatViewModel.MAX_REACTIONS, _chat.Reactions.Count);
     }
 
     /// <summary>
@@ -148,7 +148,7 @@ public sealed class ChatViewModelTests
     private void Receive(ChatKind kind, string text, bool local)
         => _session.ChatReceived += Raise.Event<EventHandler<ChatEntry>>(
             _session,
-            new ChatEntry("0A", Guest, "Марина", kind, text, _time.GetLocalNow(), local));
+            new ChatEntry("0A", _guest, "Марина", kind, text, _time.GetLocalNow(), local));
 
     /// <summary>
     /// A clock moved by the test.

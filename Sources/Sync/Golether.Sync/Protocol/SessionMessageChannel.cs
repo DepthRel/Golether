@@ -11,14 +11,14 @@ public sealed class SessionMessageChannel : IAsyncDisposable
     /// <summary>
     /// The maximum size of a control message: 256 KiB.
     /// </summary>
-    public const int MaxMessageSize = 256 * 1024;
+    public const int MAX_MESSAGE_SIZE = 256 * 1024;
 
     /// <summary>
     /// The slowest connection a message is still waited for, in bytes per second. A message is allowed the time it
     /// needs at this speed on top of the limit of the sender, so an avatar of a hundred kilobytes is not taken for a
     /// dead connection on a slow or lossy route.
     /// </summary>
-    public const int SlowestLinkBytesPerSecond = 4 * 1024;
+    public const int SLOWEST_LINK_BYTES_PER_SECOND = 4 * 1024;
 
     /// <summary>
     /// The JSON options of the protocol.
@@ -39,7 +39,7 @@ public sealed class SessionMessageChannel : IAsyncDisposable
     /// <param name="stream">The control stream; ownership is transferred.</param>
     public SessionMessageChannel(Stream stream)
     {
-        _frames = new FrameChannel(stream, MaxMessageSize);
+        _frames = new FrameChannel(stream, MAX_MESSAGE_SIZE);
     }
 
     /// <summary>
@@ -86,7 +86,7 @@ public sealed class SessionMessageChannel : IAsyncDisposable
 
     /// <summary>
     /// Sends a message that may take a limited time to be written: <paramref name="timeout"/> plus the time its bytes
-    /// need at <see cref="SlowestLinkBytesPerSecond"/>. The wait behind the messages queued earlier is not counted.
+    /// need at <see cref="SLOWEST_LINK_BYTES_PER_SECOND"/>. The wait behind the messages queued earlier is not counted.
     /// </summary>
     /// <param name="message">The message.</param>
     /// <param name="timeout">The time any message may take.</param>
@@ -107,7 +107,7 @@ public sealed class SessionMessageChannel : IAsyncDisposable
     /// <param name="bytes">The size of the message.</param>
     /// <returns>The limit for this message.</returns>
     public static TimeSpan WriteTimeout(TimeSpan timeout, int bytes)
-        => timeout + TimeSpan.FromSeconds((double)bytes / SlowestLinkBytesPerSecond);
+        => timeout + TimeSpan.FromSeconds((double)bytes / SLOWEST_LINK_BYTES_PER_SECOND);
 
     /// <summary>
     /// Receives the next message.

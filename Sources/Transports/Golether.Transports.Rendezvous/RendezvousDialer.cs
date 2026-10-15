@@ -1,9 +1,10 @@
 using System.Net.Sockets;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
+using Golether.Core.Enums;
 using Golether.Core.Networking;
 using Golether.Transports.Rendezvous.Protocol;
 using Golether.Transports.Rendezvous.Punching;
-using Microsoft.Extensions.Logging;
-using Microsoft.Extensions.Logging.Abstractions;
 
 namespace Golether.Transports.Rendezvous;
 

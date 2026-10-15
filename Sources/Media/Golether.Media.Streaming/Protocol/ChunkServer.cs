@@ -1,9 +1,9 @@
 using System.Collections.Concurrent;
 using System.Security.Cryptography;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 using Golether.Core.Data.Enums;
 using Golether.Core.Media;
-using Microsoft.Extensions.Logging.Abstractions;
-using Microsoft.Extensions.Logging;
 
 namespace Golether.Media.Streaming.Protocol;
 
@@ -80,8 +80,8 @@ public sealed class ChunkServer
     public async Task ServeAsync(Stream stream, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(stream);
-        var request = new byte[ChunkProtocol.RequestSize];
-        var header = new byte[ChunkProtocol.ResponseHeaderSize];
+        var request = new byte[ChunkProtocol.REQUEST_SIZE];
+        var header = new byte[ChunkProtocol.RESPONSE_HEADER_SIZE];
         byte[]? buffer = null;
         Stream? file = null;
         MediaDescriptor? openedFor = null;
@@ -116,7 +116,7 @@ public sealed class ChunkServer
                 }
 
                 var hashes = HashesFor(key);
-                if (operation == ChunkProtocol.GetHash && hashes.TryGetValue(index, out var known))
+                if (operation == ChunkProtocol.GET_HASH && hashes.TryGetValue(index, out var known))
                 {
                     ChunkProtocol.WriteResponseHeader(header, ChunkStatus.Ok, index, media.GetChunkLength(index), known);
                     await WriteAsync(stream, header, ReadOnlyMemory<byte>.Empty, cancellationToken).ConfigureAwait(false);
@@ -154,7 +154,7 @@ public sealed class ChunkServer
                 var hash = SHA256.HashData(payload.Span);
                 hashes[index] = hash;
                 ChunkProtocol.WriteResponseHeader(header, ChunkStatus.Ok, index, length, hash);
-                if (operation == ChunkProtocol.GetHash)
+                if (operation == ChunkProtocol.GET_HASH)
                 {
                     await WriteAsync(stream, header, ReadOnlyMemory<byte>.Empty, cancellationToken).ConfigureAwait(false);
                     Interlocked.Increment(ref _hashesServed);

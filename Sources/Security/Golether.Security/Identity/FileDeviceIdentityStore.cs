@@ -1,8 +1,8 @@
 using System.Security.Cryptography;
-using Golether.Localization;
-using Golether.Security.Secrets;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
+using Golether.Localization;
+using Golether.Security.Secrets;
 
 namespace Golether.Security.Identity;
 
@@ -14,7 +14,7 @@ public sealed class FileDeviceIdentityStore : IDeviceIdentityStore
     /// <summary>
     /// The identity file name.
     /// </summary>
-    public const string FileName = "device.key";
+    public const string FILE_NAME = "device.key";
 
     /// <summary>
     /// The identity directory.
@@ -55,7 +55,7 @@ public sealed class FileDeviceIdentityStore : IDeviceIdentityStore
     /// <summary>
     /// Gets the identity file path.
     /// </summary>
-    public string FilePath => Path.Combine(_directory, FileName);
+    public string FilePath => Path.Combine(_directory, FILE_NAME);
 
     /// <inheritdoc />
     /// <exception cref="CryptographicException">The stored identity cannot be read. The file is left untouched so the

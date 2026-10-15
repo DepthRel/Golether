@@ -55,7 +55,12 @@ cat > "$HOME/.local/share/applications/golether.desktop" <<ENTRY
 [Desktop Entry]
 Type=Application
 Name=Golether
-Comment=Синхронный совместный просмотр видео
+Comment=Watch a video together, in sync
+Comment[de]=Videos gemeinsam und synchron ansehen
+Comment[es]=Ver un vídeo juntos y sincronizados
+Comment[fr]=Regarder une vidéo ensemble, en synchro
+Comment[pt]=Ver um vídeo em conjunto e em sincronia
+Comment[ru]=Синхронный совместный просмотр видео
 Exec="$here/app/Golether" %u
 Path=$here/app
 Icon=$here/golether.png
@@ -73,7 +78,7 @@ fi
 echo "Golether added to the application menu; invitation links open it."
 DESKTOP
     chmod +x "$stage/install-desktop-entry.sh"
-    notes="libmpv: установите пакет дистрибутива (libmpv2 / mpv-libs). Туннели: amneziawg-tools и модуль amneziawg (или amneziawg-go)."
+    platform=linux
     ;;
   osx-*)
     bundle="$stage/Golether.app"
@@ -111,8 +116,8 @@ DESKTOP
       <key>CFBundleURLSchemes</key><array><string>golether</string></array>
     </dict>
   </array>
-  <key>NSCameraUsageDescription</key><string>Golether показывает вашу камеру участникам сеанса.</string>
-  <key>NSMicrophoneUsageDescription</key><string>Golether передаёт ваш голос участникам сеанса.</string>
+  <key>NSCameraUsageDescription</key><string>Golether shows your camera to the participants of the session.</string>
+  <key>NSMicrophoneUsageDescription</key><string>Golether sends your voice to the participants of the session.</string>
 </dict>
 </plist>
 PLIST
@@ -127,17 +132,14 @@ LAUNCHER
       # Ad-hoc signature: required for arm64 binaries; not a Developer ID signature.
       codesign --force --deep --sign - "$bundle" || echo "warning: ad-hoc signing failed" >&2
     fi
-    notes="Сборка не подписана Apple: при первом запуске откройте «Системные настройки → Конфиденциальность и безопасность → Всё равно открыть» или выполните: xattr -dr com.apple.quarantine Golether.app. libmpv: brew install mpv."
+    platform=macos
     ;;
 esac
 
-{
-  echo "Golether $version ($runtime)"
-  echo
-  echo "Запуск: ./Golether.sh"
-  echo "Все данные (ключи, база, туннели, компоненты) хранятся в папке data рядом с приложением. Переносите и удаляйте папку Golether целиком."
-  echo "$notes"
-} > "$stage/README.txt"
+# The note of the package in every language of the application, from the templates in Notes.
+# shellcheck source=../Shared/package-notes.sh
+source "$script_dir/../Shared/package-notes.sh"
+write_package_notes "$script_dir/Notes" "$stage" "$platform" "$version" "$runtime"
 
 package_base="$(cd "$output" && pwd)/Golether-$version-$runtime"
 tar -czf "$package_base.tar.gz" -C "$(dirname "$stage")" --exclude="Golether/data" Golether

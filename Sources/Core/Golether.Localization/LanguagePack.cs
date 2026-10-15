@@ -10,12 +10,12 @@ public sealed class LanguagePack : ILanguagePack
     /// <summary>
     /// The key holding the code of the language.
     /// </summary>
-    public const string CodeKey = "Language.Code";
+    public const string CODE_KEY = "Language.Code";
 
     /// <summary>
     /// The key holding the name of the language in that language.
     /// </summary>
-    public const string NameKey = "Language.Name";
+    public const string NAME_KEY = "Language.Name";
 
     /// <summary>
     /// The texts by key.
@@ -47,8 +47,8 @@ public sealed class LanguagePack : ILanguagePack
     }
 
     /// <summary>
-    /// Reads a pack from a JSON object of <c>key: text</c> pairs; the pairs <see cref="CodeKey"/> and
-    /// <see cref="NameKey"/> describe the language.
+    /// Reads a pack from a JSON object of <c>key: text</c> pairs; the pairs <see cref="CODE_KEY"/> and
+    /// <see cref="NAME_KEY"/> describe the language.
     /// </summary>
     /// <param name="json">The JSON document.</param>
     /// <returns>The pack.</returns>
@@ -66,10 +66,10 @@ public sealed class LanguagePack : ILanguagePack
             throw new InvalidDataException("A language file must be a JSON object of text values: " + ex.Message, ex);
         }
 
-        if (texts is null || !texts.TryGetValue(CodeKey, out var code) || string.IsNullOrWhiteSpace(code)
-            || !texts.TryGetValue(NameKey, out var name) || string.IsNullOrWhiteSpace(name))
+        if (texts is null || !texts.TryGetValue(CODE_KEY, out var code) || string.IsNullOrWhiteSpace(code) ||
+            !texts.TryGetValue(NAME_KEY, out var name) || string.IsNullOrWhiteSpace(name))
         {
-            throw new InvalidDataException($"A language file must define \"{CodeKey}\" and \"{NameKey}\".");
+            throw new InvalidDataException($"A language file must define \"{CODE_KEY}\" and \"{NAME_KEY}\".");
         }
 
         return new LanguagePack(new LanguageInfo(code.Trim().ToLowerInvariant(), name.Trim()), texts);

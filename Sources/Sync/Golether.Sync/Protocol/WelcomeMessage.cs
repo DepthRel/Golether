@@ -52,9 +52,9 @@ public sealed record WelcomeMessage(
     /// </summary>
     /// <returns>The relay or <see langword="null"/>.</returns>
     public RelayCredentials? GetValidRelay()
-        => Relay is { Port: > 0 and <= 65535, Username.Length: > 0 and <= 128, Password.Length: > 0 and <= 128 } relay
-           && relay.Username.All(c => char.IsAsciiLetterOrDigit(c) || c is '-' or '_')
-           && relay.Password.All(c => char.IsAsciiLetterOrDigit(c) || c is '-' or '_' or '=')
+        => Relay is { Port: > 0 and <= 65535, Username.Length: > 0 and <= 128, Password.Length: > 0 and <= 128 } relay &&
+           relay.Username.All(c => char.IsAsciiLetterOrDigit(c) || c is '-' or '_') &&
+           relay.Password.All(c => char.IsAsciiLetterOrDigit(c) || c is '-' or '_' or '=')
             ? relay
             : null;
 }

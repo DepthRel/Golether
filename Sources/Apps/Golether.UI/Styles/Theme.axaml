@@ -302,8 +302,8 @@
     <Setter Property="VerticalContentAlignment" Value="Center" />
   </Style>
   <!--
-    Кнопки-переключатели (ручка): селекторы Button.ghost к ToggleButton не относятся, поэтому отжатое состояние
-    описано отдельно — оно должно выглядеть ровно как соседние кнопки, а нажатое ясно отличаться.
+    Toggle buttons (the pen): the Button.ghost selectors do not apply to ToggleButton, so the released state is
+    described separately. It must look exactly like the neighbouring buttons, and the pressed state clearly different.
   -->
   <Style Selector="ToggleButton.ghost">
     <Setter Property="Background" Value="Transparent" />
@@ -344,8 +344,8 @@
   </Style>
 
   <!--
-    Площадка громкости в меню участника: сам пункт ничего не делает, поэтому он не подсвечивается и не выглядит
-    кнопкой. Нажимаются только динамик и шкала внутри него.
+    The volume pad in the menu of a participant: the item itself does nothing, so it is not highlighted and does not
+    look like a button. Only the speaker and the scale inside it are pressed.
   -->
   <Style Selector="MenuItem.voiceVolume">
     <Setter Property="Background" Value="Transparent" />

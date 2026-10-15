@@ -14,17 +14,17 @@ public static class PeImports
     /// <summary>
     /// The size of <c>IMAGE_IMPORT_DESCRIPTOR</c>.
     /// </summary>
-    private const int ImportDescriptorSize = 20;
+    private const int IMPORT_DESCRIPTOR_SIZE = 20;
 
     /// <summary>
     /// The size of <c>IMAGE_DELAYLOAD_DESCRIPTOR</c>.
     /// </summary>
-    private const int DelayDescriptorSize = 32;
+    private const int DELAY_DESCRIPTOR_SIZE = 32;
 
     /// <summary>
     /// The upper bound of descriptors read from one file (protects against malformed files).
     /// </summary>
-    private const int MaxDescriptors = 4096;
+    private const int MAX_DESCRIPTORS = 4096;
 
     /// <summary>
     /// Reads the imported DLL names of a file.
@@ -49,8 +49,8 @@ public static class PeImports
         using var reader = new PEReader(image, PEStreamOptions.LeaveOpen | PEStreamOptions.PrefetchEntireImage);
         var header = reader.PEHeaders.PEHeader ?? throw new BadImageFormatException("The image has no optional header.");
         var names = new List<string>();
-        ReadDescriptors(reader, header.ImportTableDirectory.RelativeVirtualAddress, ImportDescriptorSize, nameOffset: 12, names);
-        ReadDescriptors(reader, header.DelayImportTableDirectory.RelativeVirtualAddress, DelayDescriptorSize, nameOffset: 4, names);
+        ReadDescriptors(reader, header.ImportTableDirectory.RelativeVirtualAddress, IMPORT_DESCRIPTOR_SIZE, nameOffset: 12, names);
+        ReadDescriptors(reader, header.DelayImportTableDirectory.RelativeVirtualAddress, DELAY_DESCRIPTOR_SIZE, nameOffset: 4, names);
         return names.Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
     }
 
@@ -70,7 +70,7 @@ public static class PeImports
         }
 
         var table = reader.GetSectionData(tableRva);
-        for (var index = 0; index < MaxDescriptors; index++)
+        for (var index = 0; index < MAX_DESCRIPTORS; index++)
         {
             var offset = index * descriptorSize;
             if (offset + descriptorSize > table.Length)

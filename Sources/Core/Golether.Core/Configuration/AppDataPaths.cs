@@ -11,10 +11,10 @@ namespace Golether.Core.Configuration;
 /// folder ordinary users cannot write to, such as Program Files): there each user keeps the data in the profile.
 /// Resolution order:
 /// <list type="number">
-/// <item>the <see cref="DataDirectoryVariable"/> environment variable (development and tests);</item>
-/// <item><c>data</c> next to <see cref="InstallationMarkerFileName"/>, looked up from the application directory
+/// <item>the <see cref="DATA_DIRECTORY_VARIABLE"/> environment variable (development and tests);</item>
+/// <item><c>data</c> next to <see cref="INSTALLATION_MARKER_FILE_NAME"/>, looked up from the application directory
 /// upwards (packages keep the application in <c>app</c> or in <c>Golether.app/Contents/MacOS</c>), or the folder
-/// of the user when <see cref="SharedInstallationMarkerFileName"/> lies next to that marker;</item>
+/// of the user when <see cref="SHARED_INSTALLATION_MARKER_FILE_NAME"/> lies next to that marker;</item>
 /// <item><c>data</c> in the application directory (a build output without the marker).</item>
 /// </list>
 /// </remarks>
@@ -23,33 +23,33 @@ public sealed class AppDataPaths
     /// <summary>
     /// The environment variable that overrides the data directory.
     /// </summary>
-    public const string DataDirectoryVariable = "GOLETHER_DATA_DIR";
+    public const string DATA_DIRECTORY_VARIABLE = "GOLETHER_DATA_DIR";
 
     /// <summary>
     /// The file that marks the root of a packaged installation.
     /// </summary>
-    public const string InstallationMarkerFileName = "golether.install";
+    public const string INSTALLATION_MARKER_FILE_NAME = "golether.install";
 
     /// <summary>
-    /// The file an installer puts next to <see cref="InstallationMarkerFileName"/> when the installation serves every
+    /// The file an installer puts next to <see cref="INSTALLATION_MARKER_FILE_NAME"/> when the installation serves every
     /// user of the computer: the data then lives in the profile of each user instead of the installation.
     /// </summary>
-    public const string SharedInstallationMarkerFileName = "golether.shared";
+    public const string SHARED_INSTALLATION_MARKER_FILE_NAME = "golether.shared";
 
     /// <summary>
     /// The name of the data folder inside the installation.
     /// </summary>
-    public const string DataFolderName = "data";
+    public const string DATA_FOLDER_NAME = "data";
 
     /// <summary>
     /// How many directories, starting with the application directory, are searched for the marker.
     /// </summary>
-    private const int MarkerSearchLevels = 4;
+    private const int MARKER_SEARCH_LEVELS = 4;
 
     /// <summary>
     /// The file used to check that the data directory is writable.
     /// </summary>
-    private const string WriteProbeFileName = ".write-test";
+    private const string WRITE_PROBE_FILE_NAME = ".write-test";
 
     /// <summary>
     /// Initializes a new instance of the <see cref="AppDataPaths"/> class.
@@ -132,20 +132,20 @@ public sealed class AppDataPaths
         Func<string>? getUserDirectory = null)
     {
         getEnvironmentVariable ??= Environment.GetEnvironmentVariable;
-        var overridden = getEnvironmentVariable(DataDirectoryVariable);
+        var overridden = getEnvironmentVariable(DATA_DIRECTORY_VARIABLE);
         if (!string.IsNullOrWhiteSpace(overridden))
         {
             return new AppDataPaths(overridden);
         }
 
         var root = FindInstallationRoot(applicationDirectory ?? AppContext.BaseDirectory);
-        return File.Exists(Path.Combine(root, SharedInstallationMarkerFileName))
+        return File.Exists(Path.Combine(root, SHARED_INSTALLATION_MARKER_FILE_NAME))
             ? new AppDataPaths((getUserDirectory ?? GetUserDirectory)())
-            : new AppDataPaths(Path.Combine(root, DataFolderName));
+            : new AppDataPaths(Path.Combine(root, DATA_FOLDER_NAME));
     }
 
     /// <summary>
-    /// Finds the installation root: the nearest directory with <see cref="InstallationMarkerFileName"/> among the
+    /// Finds the installation root: the nearest directory with <see cref="INSTALLATION_MARKER_FILE_NAME"/> among the
     /// application directory and its parents, or the application directory itself.
     /// </summary>
     /// <param name="applicationDirectory">The application directory.</param>
@@ -155,9 +155,9 @@ public sealed class AppDataPaths
         ArgumentException.ThrowIfNullOrWhiteSpace(applicationDirectory);
         var appDir = new DirectoryInfo(Path.TrimEndingDirectorySeparator(Path.GetFullPath(applicationDirectory)));
         var current = appDir;
-        for (var level = 0; level < MarkerSearchLevels && current is not null; level++, current = current.Parent)
+        for (var level = 0; level < MARKER_SEARCH_LEVELS && current is not null; level++, current = current.Parent)
         {
-            if (File.Exists(Path.Combine(current.FullName, InstallationMarkerFileName)))
+            if (File.Exists(Path.Combine(current.FullName, INSTALLATION_MARKER_FILE_NAME)))
             {
                 return current.FullName;
             }
@@ -199,10 +199,10 @@ public sealed class AppDataPaths
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(legacyDirectory);
         var legacy = Path.TrimEndingDirectorySeparator(Path.GetFullPath(legacyDirectory));
-        if (string.Equals(legacy, Path.TrimEndingDirectorySeparator(Root), StringComparison.OrdinalIgnoreCase)
-            || !File.Exists(Path.Combine(legacy, "golether.db"))
-            || File.Exists(DatabaseFile)
-            || (Directory.Exists(IdentityDirectory) && Directory.EnumerateFileSystemEntries(IdentityDirectory).Any()))
+        if (string.Equals(legacy, Path.TrimEndingDirectorySeparator(Root), StringComparison.OrdinalIgnoreCase) ||
+            !File.Exists(Path.Combine(legacy, "golether.db")) ||
+            File.Exists(DatabaseFile) ||
+            (Directory.Exists(IdentityDirectory) && Directory.EnumerateFileSystemEntries(IdentityDirectory).Any()))
         {
             return false;
         }
@@ -226,7 +226,7 @@ public sealed class AppDataPaths
                 Directory.CreateDirectory(directory);
             }
 
-            var probe = Path.Combine(Root, WriteProbeFileName);
+            var probe = Path.Combine(Root, WRITE_PROBE_FILE_NAME);
             File.WriteAllText(probe, string.Empty);
             File.Delete(probe);
         }

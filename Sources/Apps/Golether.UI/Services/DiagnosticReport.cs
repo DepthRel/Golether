@@ -16,7 +16,7 @@ public static partial class DiagnosticReport
     /// <summary>
     /// How many log lines are included.
     /// </summary>
-    public const int LogLines = 400;
+    public const int LOG_LINES = 400;
 
     /// <summary>
     /// Removes secrets from a line: long hexadecimal strings (device identifiers, tokens, tickets) keep only their
@@ -136,7 +136,7 @@ public static partial class DiagnosticReport
     /// <param name="file">The file.</param>
     /// <param name="lines">How many lines to keep.</param>
     /// <returns>The lines.</returns>
-    public static IReadOnlyList<string> ReadLogTail(string file, int lines = LogLines)
+    public static IReadOnlyList<string> ReadLogTail(string file, int lines = LOG_LINES)
     {
         try
         {

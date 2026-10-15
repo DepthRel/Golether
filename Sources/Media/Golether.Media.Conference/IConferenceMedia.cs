@@ -110,7 +110,7 @@ public interface IConferenceMedia : IAsyncDisposable
     /// Sets how loud a participant's voice is played on this device. Other participants are not affected.
     /// </summary>
     /// <param name="peer">The participant.</param>
-    /// <param name="volume">The volume: 0 silent, 1 unchanged, up to <see cref="PcmGain.MaxVolume"/>.</param>
+    /// <param name="volume">The volume: 0 silent, 1 unchanged, up to <see cref="PcmGain.MAX_VOLUME"/>.</param>
     void SetVoiceVolume(PeerId peer, double volume);
 
     /// <summary>

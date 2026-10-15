@@ -1,12 +1,12 @@
+using Microsoft.Data.Sqlite;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Time.Testing;
 using Golether.Core.Data.Entities;
 using Golether.Core.Data.Enums;
 using Golether.Core.Data.Migrations.SQLite.Runner;
 using Golether.Core.Data.Stores;
 using Golether.Core.Identity;
 using Golether.Dbs.SQLite.DbMigrator.Arguments;
-using Microsoft.Data.Sqlite;
-using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Time.Testing;
 
 namespace Golether.Core.Data.Tests;
 

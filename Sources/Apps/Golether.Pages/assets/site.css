@@ -50,14 +50,47 @@ a:hover { color: var(--accent-light); text-decoration: underline; }
 .top nav { margin-left: auto; display: flex; align-items: center; gap: 20px; font-size: 15px; }
 .top nav a { color: var(--muted); }
 .top nav a:hover { color: var(--text); text-decoration: none; }
-.lang {
-  display: inline-flex; border: 1px solid var(--line); border-radius: 999px; overflow: hidden;
+/* The language picker: the flag and the code of the language in use; a click opens the list of languages. */
+.lang { position: relative; }
+html:not(.js) .lang { display: none; }
+.lang-button {
+  display: inline-flex; align-items: center; gap: 8px;
+  font: 600 12px/1 var(--mono); letter-spacing: 1px; color: var(--text);
+  background: var(--panel); border: 1px solid var(--line); border-radius: 999px; padding: 6px 10px 6px 7px;
+  cursor: pointer; transition: border-color 0.15s, background 0.15s;
 }
-.lang button {
-  font: 600 12px/1 var(--mono); letter-spacing: 1px;
-  background: transparent; color: var(--muted); border: 0; padding: 8px 12px; cursor: pointer;
+.lang-button:hover, .lang.open .lang-button { border-color: var(--accent); background: var(--panel2); }
+.lang-button:focus-visible, .lang-menu li:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.lang .flag {
+  display: block; width: 21px; height: 14px; border-radius: 3px; object-fit: cover; flex: none;
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.14);
 }
-.lang button[aria-pressed="true"] { background: var(--accent); color: var(--accent-ink); }
+.lang-chevron {
+  width: 7px; height: 7px; margin: -3px 2px 0 0;
+  border-right: 1.5px solid var(--muted); border-bottom: 1.5px solid var(--muted);
+  transform: rotate(45deg); transition: transform 0.2s, margin 0.2s;
+}
+.lang.open .lang-chevron { transform: rotate(-135deg); margin-top: 3px; }
+.lang-menu {
+  position: absolute; right: 0; top: calc(100% + 8px); z-index: 20; min-width: 200px;
+  list-style: none; margin: 0; padding: 6px;
+  background: var(--panel); border: 1px solid var(--line); border-radius: 12px;
+  box-shadow: 0 18px 50px rgba(0, 0, 0, 0.55), 0 0 0 1px rgba(240, 168, 96, 0.05);
+  transform-origin: top right; animation: menu 0.16s ease-out both;
+}
+.lang-menu li {
+  display: flex; align-items: center; gap: 12px; padding: 9px 10px; border-radius: 8px;
+  color: var(--text); font-size: 15px; cursor: pointer; transition: background 0.12s;
+}
+.lang-menu li:hover, .lang-menu li:focus { background: var(--panel2); outline: none; }
+.lang-menu li span:nth-child(2) { flex: 1; }
+.lang-menu .lang-code { font: 600 11px/1 var(--mono); letter-spacing: 1px; color: var(--muted); }
+.lang-menu li[aria-selected="true"] { background: rgba(240, 168, 96, 0.12); }
+.lang-menu li[aria-selected="true"] .lang-code { color: var(--accent); }
+
+/* A switch of the language fades the texts out and back in instead of flickering. */
+main, footer { transition: opacity 0.16s ease-out; }
+body.switching main, body.switching footer { opacity: 0.15; }
 
 /* Buttons */
 .btn {
@@ -181,6 +214,7 @@ footer .wrap { display: flex; gap: 18px; flex-wrap: wrap; justify-content: space
 @keyframes lamp { 0%, 100% { opacity: 0.75; } 50% { opacity: 1; } }
 @keyframes rise { from { opacity: 0; transform: translateY(22px); } to { opacity: 1; transform: none; } }
 @keyframes play { from { transform: scaleX(0.04); } to { transform: scaleX(1); } }
+@keyframes menu { from { opacity: 0; transform: translateY(-6px) scale(0.97); } to { opacity: 1; transform: none; } }
 
 @media (max-width: 900px) {
   .steps, .steps.three, .cards, .downloads { grid-template-columns: 1fr 1fr; }
@@ -192,7 +226,7 @@ footer .wrap { display: flex; gap: 18px; flex-wrap: wrap; justify-content: space
   section { padding: 48px 0; }
 }
 @media (prefers-reduced-motion: reduce) {
-  *, *::before { animation: none !important; transition: none !important; }
+  *, *::before, *::after { animation: none !important; transition: none !important; }
   .js .steps li { opacity: 1; transform: none; }
   html { scroll-behavior: auto; }
 }

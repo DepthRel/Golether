@@ -13,7 +13,7 @@ public sealed class FrameChannel : IAsyncDisposable
     /// <summary>
     /// The default maximum frame size: 1 MiB.
     /// </summary>
-    public const int DefaultMaxFrameSize = 1024 * 1024;
+    public const int DEFAULT_MAX_FRAME_SIZE = 1024 * 1024;
 
     /// <summary>
     /// The underlying stream.
@@ -40,7 +40,7 @@ public sealed class FrameChannel : IAsyncDisposable
     /// </summary>
     /// <param name="stream">The stream; ownership is transferred.</param>
     /// <param name="maxFrameSize">The maximum frame size in bytes.</param>
-    public FrameChannel(Stream stream, int maxFrameSize = DefaultMaxFrameSize)
+    public FrameChannel(Stream stream, int maxFrameSize = DEFAULT_MAX_FRAME_SIZE)
     {
         _stream = stream ?? throw new ArgumentNullException(nameof(stream));
         ArgumentOutOfRangeException.ThrowIfLessThan(maxFrameSize, 1);

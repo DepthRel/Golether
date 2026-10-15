@@ -1,10 +1,8 @@
-using System.Security.Cryptography;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Golether.Core.Networking;
 using Golether.Localization;
 using Golether.Tunnels.AmneziaWG.Configuration;
-using Golether.Tunnels.AmneziaWG.Control;
 using Golether.UI.Services;
 
 namespace Golether.UI.ViewModels.Dialogs;

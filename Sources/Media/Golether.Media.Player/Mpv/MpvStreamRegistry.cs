@@ -18,17 +18,17 @@ public static unsafe class MpvStreamRegistry
     /// <summary>
     /// The protocol name.
     /// </summary>
-    public const string Protocol = "golether";
+    public const string PROTOCOL = "golether";
 
     /// <summary>
     /// The URI prefix.
     /// </summary>
-    public const string UriPrefix = "golether://media/";
+    public const string URI_PREFIX = "golether://media/";
 
     /// <summary>
     /// Stream factories by token.
     /// </summary>
-    private static readonly ConcurrentDictionary<string, Func<Stream>> Factories = new(StringComparer.Ordinal);
+    private static readonly ConcurrentDictionary<string, Func<Stream>> _factories = new(StringComparer.Ordinal);
 
     /// <summary>
     /// Registers a stream factory.
@@ -39,8 +39,8 @@ public static unsafe class MpvStreamRegistry
     {
         ArgumentNullException.ThrowIfNull(factory);
         var token = Convert.ToHexStringLower(RandomNumberGenerator.GetBytes(16));
-        Factories[token] = factory;
-        return new Uri(UriPrefix + token);
+        _factories[token] = factory;
+        return new Uri(URI_PREFIX + token);
     }
 
     /// <summary>
@@ -52,7 +52,7 @@ public static unsafe class MpvStreamRegistry
         ArgumentNullException.ThrowIfNull(uri);
         if (TryGetToken(uri.OriginalString, out var token))
         {
-            Factories.TryRemove(token, out _);
+            _factories.TryRemove(token, out _);
         }
     }
 
@@ -61,7 +61,7 @@ public static unsafe class MpvStreamRegistry
     /// </summary>
     /// <param name="handle">The mpv handle.</param>
     internal static void Install(nint handle)
-        => LibMpv.Check(LibMpv.StreamCbAddRo(handle, Protocol, 0, &Open), "registering the golether:// protocol");
+        => LibMpv.Check(LibMpv.StreamCbAddRo(handle, PROTOCOL, 0, &Open), "registering the golether:// protocol");
 
     /// <summary>
     /// Extracts the token of a URI.
@@ -72,12 +72,12 @@ public static unsafe class MpvStreamRegistry
     private static bool TryGetToken(string uri, out string token)
     {
         token = string.Empty;
-        if (!uri.StartsWith(UriPrefix, StringComparison.Ordinal))
+        if (!uri.StartsWith(URI_PREFIX, StringComparison.Ordinal))
         {
             return false;
         }
 
-        token = uri[UriPrefix.Length..];
+        token = uri[URI_PREFIX.Length..];
         return token.Length == 32;
     }
 
@@ -87,16 +87,16 @@ public static unsafe class MpvStreamRegistry
     /// <param name="userData">Unused.</param>
     /// <param name="uri">The UTF-8 URI.</param>
     /// <param name="info">The callbacks to fill in.</param>
-    /// <returns>0 on success, <see cref="MpvError.LoadingFailed"/> otherwise.</returns>
+    /// <returns>0 on success, <see cref="MpvError.LOADING_FAILED"/> otherwise.</returns>
     [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
     private static int Open(nint userData, byte* uri, MpvStreamCallbacks* info)
     {
         try
         {
             var text = Marshal.PtrToStringUTF8((nint)uri) ?? string.Empty;
-            if (!TryGetToken(text, out var token) || !Factories.TryGetValue(token, out var factory))
+            if (!TryGetToken(text, out var token) || !_factories.TryGetValue(token, out var factory))
             {
-                return MpvError.LoadingFailed;
+                return MpvError.LOADING_FAILED;
             }
 
             var stream = factory();
@@ -110,7 +110,7 @@ public static unsafe class MpvStreamRegistry
         }
         catch (Exception)
         {
-            return MpvError.LoadingFailed;
+            return MpvError.LOADING_FAILED;
         }
     }
 
@@ -140,7 +140,7 @@ public static unsafe class MpvStreamRegistry
     /// </summary>
     /// <param name="cookie">The stream handle.</param>
     /// <param name="offset">The absolute position.</param>
-    /// <returns>The new position or <see cref="MpvError.Generic"/>.</returns>
+    /// <returns>The new position or <see cref="MpvError.GENERIC"/>.</returns>
     [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
     private static long Seek(nint cookie, long offset)
     {
@@ -151,7 +151,7 @@ public static unsafe class MpvStreamRegistry
         }
         catch (Exception)
         {
-            return MpvError.Generic;
+            return MpvError.GENERIC;
         }
     }
 
@@ -159,7 +159,7 @@ public static unsafe class MpvStreamRegistry
     /// Returns the stream size.
     /// </summary>
     /// <param name="cookie">The stream handle.</param>
-    /// <returns>The size or <see cref="MpvError.Unsupported"/>.</returns>
+    /// <returns>The size or <see cref="MpvError.UNSUPPORTED"/>.</returns>
     [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
     private static long Size(nint cookie)
     {
@@ -169,7 +169,7 @@ public static unsafe class MpvStreamRegistry
         }
         catch (Exception)
         {
-            return MpvError.Unsupported;
+            return MpvError.UNSUPPORTED;
         }
     }
 

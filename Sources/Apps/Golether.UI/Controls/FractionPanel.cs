@@ -1,4 +1,3 @@
-using System.Diagnostics;
 using System.Runtime.CompilerServices;
 using Avalonia;
 using Avalonia.Controls;
@@ -32,14 +31,14 @@ public sealed class FractionPanel : Panel
         AvaloniaProperty.Register<FractionPanel, double>(nameof(Inset));
 
     /// <summary>
-    /// The clock of the animation.
+    /// The moment the animation clock starts from.
     /// </summary>
-    private static readonly Stopwatch Clock = Stopwatch.StartNew();
+    private static readonly long _start = TimeProvider.System.GetTimestamp();
 
     /// <summary>
     /// The motion of each marker.
     /// </summary>
-    private static readonly ConditionalWeakTable<Control, MotionSmoother> Motions = new();
+    private static readonly ConditionalWeakTable<Control, MotionSmoother> _motions = new();
 
     /// <summary>
     /// Whether an animation frame is requested.
@@ -94,7 +93,7 @@ public sealed class FractionPanel : Panel
     /// <param name="child">The child.</param>
     /// <returns>The shown fraction, or <see langword="null"/>.</returns>
     public static double? GetShownFraction(Control child)
-        => Motions.TryGetValue(Source(child), out var motion) && motion.HasValue ? motion.ValueAt(Clock.Elapsed.TotalSeconds) : null;
+        => _motions.TryGetValue(Source(child), out var motion) && motion.HasValue ? motion.ValueAt(Seconds()) : null;
 
     /// <inheritdoc />
     protected override Size MeasureOverride(Size availableSize)
@@ -112,7 +111,7 @@ public sealed class FractionPanel : Panel
     /// <inheritdoc />
     protected override Size ArrangeOverride(Size finalSize)
     {
-        var now = Clock.Elapsed.TotalSeconds;
+        var now = Seconds();
         var moving = false;
         foreach (var child in Children)
         {
@@ -123,7 +122,7 @@ public sealed class FractionPanel : Panel
                 continue;
             }
 
-            var motion = Motions.GetValue(source, _ => new MotionSmoother { Minimum = 0, Maximum = 1 });
+            var motion = _motions.GetValue(source, _ => new MotionSmoother { Minimum = 0, Maximum = 1 });
             if (!motion.HasValue)
             {
                 motion.SetTarget(fraction, AdvancePerSecond, now, jump: true);
@@ -159,9 +158,9 @@ public sealed class FractionPanel : Panel
     private static void OnFractionChanged(Control control, AvaloniaPropertyChangedEventArgs e)
     {
         var panel = control.GetVisualAncestors().OfType<FractionPanel>().FirstOrDefault();
-        if (e.NewValue is double fraction && Motions.TryGetValue(control, out var motion))
+        if (e.NewValue is double fraction && _motions.TryGetValue(control, out var motion))
         {
-            motion.SetTarget(fraction, panel?.AdvancePerSecond ?? 0, Clock.Elapsed.TotalSeconds);
+            motion.SetTarget(fraction, panel?.AdvancePerSecond ?? 0, Seconds());
         }
 
         panel?.RequestFrame();
@@ -172,10 +171,10 @@ public sealed class FractionPanel : Panel
     /// </summary>
     private void Retarget()
     {
-        var now = Clock.Elapsed.TotalSeconds;
+        var now = Seconds();
         foreach (var child in Children)
         {
-            if (Motions.TryGetValue(Source(child), out var motion) && motion.HasValue)
+            if (_motions.TryGetValue(Source(child), out var motion) && motion.HasValue)
             {
                 motion.SetTarget(motion.ValueAt(now), AdvancePerSecond, now, jump: true);
             }
@@ -205,5 +204,14 @@ public sealed class FractionPanel : Panel
             _frameRequested = false;
             InvalidateArrange();
         });
+    }
+
+    /// <summary>
+    /// Tells the time of the animation clock.
+    /// </summary>
+    /// <returns>The seconds since the clock started.</returns>
+    private static double Seconds()
+    {
+        return TimeProvider.System.GetElapsedTime(_start).TotalSeconds;
     }
 }

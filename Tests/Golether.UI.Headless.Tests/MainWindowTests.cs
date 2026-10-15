@@ -1,15 +1,18 @@
 using System.Reflection;
-using Avalonia.Controls.Primitives;
+using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Controls.Primitives;
 using Avalonia.Headless;
 using Avalonia.Input;
 using Avalonia.LogicalTree;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
-using Avalonia;
+using Microsoft.Extensions.Logging.Abstractions;
+using NSubstitute;
 using Golether.Components.Installation;
 using Golether.Core.Data.Enums;
 using Golether.Core.Data.Stores;
+using Golether.Core.Enums;
 using Golether.Core.Identity;
 using Golether.Core.Media;
 using Golether.Core.Playback;
@@ -19,11 +22,10 @@ using Golether.Media.Player;
 using Golether.Session;
 using Golether.Sync.Protocol;
 using Golether.UI.Controls;
+using Golether.UI.Enums;
 using Golether.UI.Services;
 using Golether.UI.ViewModels;
 using Golether.UI.Views;
-using Microsoft.Extensions.Logging.Abstractions;
-using NSubstitute;
 
 namespace Golether.UI.Headless.Tests;
 
@@ -35,7 +37,7 @@ public sealed class MainWindowTests
     /// <summary>
     /// The headless session shared by the tests (Avalonia starts once per process).
     /// </summary>
-    private static readonly Lazy<HeadlessUnitTestSession> Session = new(() => HeadlessUnitTestSession.StartNew(typeof(TestApp)));
+    private static readonly Lazy<HeadlessUnitTestSession> _session = new(() => HeadlessUnitTestSession.StartNew(typeof(TestApp)));
 
     /// <summary>
     /// Initializes static members of the <see cref="MainWindowTests"/> class. The toolbar folds without its
@@ -50,12 +52,12 @@ public sealed class MainWindowTests
     /// <summary>
     /// This device, the host.
     /// </summary>
-    private static readonly PeerId Host = PeerId.Parse(new string('a', 64));
+    private static readonly PeerId _host = PeerId.Parse(new string('a', 64));
 
     /// <summary>
     /// A participant.
     /// </summary>
-    private static readonly PeerId Guest = PeerId.Parse(new string('b', 64));
+    private static readonly PeerId _guest = PeerId.Parse(new string('b', 64));
 
     /// <summary>
     /// A right click on a participant tile opens the menu: the local voice volume, and for the host the two
@@ -83,7 +85,7 @@ public sealed class MainWindowTests
 
         items[3].Command!.Execute(null);
         await fixture.Settle();
-        await fixture.Sessions.Received(1).SwitchOffParticipantDevicesAsync(Guest, true, false);
+        await fixture.Sessions.Received(1).SwitchOffParticipantDevicesAsync(_guest, true, false);
 
         // The voice volume changes only here and is remembered for this participant. Louder than the original only
         // clips the voice, so the slider stops at 100 %.
@@ -100,16 +102,16 @@ public sealed class MainWindowTests
 
         slider.Value = 50;
         await fixture.Settle();
-        fixture.Conference.Received().SetVoiceVolume(Guest, 0.5);
+        fixture.Conference.Received().SetVoiceVolume(_guest, 0.5);
 
         // Muting is the speaker next to the slider, not a menu entry of its own.
         var mute = menu.GetLogicalDescendants().OfType<Button>().Single(b => b.Classes.Contains("mute"));
         mute.Command!.Execute(null);
         await fixture.Settle();
-        fixture.Conference.Received().SetVoiceVolume(Guest, 0);
+        fixture.Conference.Received().SetVoiceVolume(_guest, 0);
         Assert.Equal("Вернуть звук", ToolTip.GetTip(mute));
         await Task.Delay(MainWindowViewModel.VoiceVolumeSaveDelay + TimeSpan.FromMilliseconds(300));
-        await fixture.Settings.Received(1).SetAsync(MainWindowViewModel.VoiceVolumeSettingPrefix + Guest.Value, "0", Arg.Any<CancellationToken>());
+        await fixture.Settings.Received(1).SetAsync(MainWindowViewModel.VOICE_VOLUME_SETTING_PREFIX + _guest.Value, "0", Arg.Any<CancellationToken>());
         menu.Close();
 
         // A microphone that is already off cannot be switched off again.
@@ -148,7 +150,7 @@ public sealed class MainWindowTests
         var window = Assert.Single(fixture.Window.ParticipantWindows);
         Assert.True(window.IsVisible);
         Assert.Equal("Марина", window.Title);
-        Assert.Same(fixture.ViewModel.Participants.Single(p => p.PeerId == Guest), window.DataContext);
+        Assert.Same(fixture.ViewModel.Participants.Single(p => p.PeerId == _guest), window.DataContext);
         Assert.True(window.CanResize);
 
         // Asking again brings the same window forward instead of opening another one.
@@ -205,7 +207,7 @@ public sealed class MainWindowTests
         // More than the window has room for: the video keeps its minimum.
         fixture.ViewModel.StoreSidePanelWidth(5000);
         await fixture.Settle();
-        Assert.Equal(fixture.Window.Bounds.Width - splitter.Bounds.Width - MainWindowViewModel.MinVideoWidth, PanelWidth(), 0);
+        Assert.Equal(fixture.Window.Bounds.Width - splitter.Bounds.Width - MainWindowViewModel.MIN_VIDEO_WIDTH, PanelWidth(), 0);
 
         var point = fixture.PointOf(splitter);
         fixture.Window.MouseDown(point, MouseButton.Left);
@@ -549,10 +551,10 @@ public sealed class MainWindowTests
     public Task StoredVoiceVolume_IsApplied() => RunAsync(async fixture =>
     {
         await fixture.Settle();
-        var tile = fixture.ViewModel.Participants.Single(p => p.PeerId == Guest);
+        var tile = fixture.ViewModel.Participants.Single(p => p.PeerId == _guest);
         Assert.Equal(70, tile.VoiceVolume);
-        fixture.Conference.Received().SetVoiceVolume(Guest, 0.7);
-        fixture.Conference.DidNotReceive().SetVoiceVolume(Host, Arg.Any<double>());
+        fixture.Conference.Received().SetVoiceVolume(_guest, 0.7);
+        fixture.Conference.DidNotReceive().SetVoiceVolume(_host, Arg.Any<double>());
     });
 
     /// <summary>
@@ -673,8 +675,8 @@ public sealed class MainWindowTests
         fixture.Window.Width = 1600;
         await fixture.Settle();
         Assert.False(panel.IsOverflowing);
-        Assert.DoesNotContain(OverflowPanel.OverflowedClass, leave.Classes);
-        Assert.Contains(OverflowPanel.OverflowedClass, more.Classes);
+        Assert.DoesNotContain(OverflowPanel.OVERFLOWED_CLASS, leave.Classes);
+        Assert.Contains(OverflowPanel.OVERFLOWED_CLASS, more.Classes);
         Assert.True(IsInside(leave, fixture.Window));
 
         // Over the video the bar holds fewer buttons (no tunnels, no language), so at the narrowest window it still fits;
@@ -683,9 +685,9 @@ public sealed class MainWindowTests
         panel.MaxWidth = 380;
         await fixture.Settle();
         Assert.True(panel.IsOverflowing);
-        Assert.Contains(OverflowPanel.OverflowedClass, leave.Classes);
+        Assert.Contains(OverflowPanel.OVERFLOWED_CLASS, leave.Classes);
         Assert.Equal(0, leave.Bounds.Width);
-        Assert.DoesNotContain(OverflowPanel.OverflowedClass, more.Classes);
+        Assert.DoesNotContain(OverflowPanel.OVERFLOWED_CLASS, more.Classes);
         Assert.True(IsInside(more, fixture.Window), "The more button stays inside the window.");
         foreach (var child in panel.Children.Where(c => c.Bounds.Width > 0))
         {
@@ -743,20 +745,20 @@ public sealed class MainWindowTests
         Border Frame(string name) => ((Visual)fixture.Tile(name).Parent!).GetVisualChildren().OfType<Border>().Single(b => b.Classes.Contains("speakingFrame"));
         Assert.False(Frame("Марина").IsVisible);
 
-        fixture.Conference.SpeakingChanged += Raise.Event<EventHandler<SpeakingChange>>(fixture.Conference, new SpeakingChange(Guest, true));
+        fixture.Conference.SpeakingChanged += Raise.Event<EventHandler<SpeakingChange>>(fixture.Conference, new SpeakingChange(_guest, true));
         fixture.Conference.SpeakingChanged += Raise.Event<EventHandler<SpeakingChange>>(fixture.Conference, new SpeakingChange(default, true));
         await fixture.Settle();
         Assert.True(Frame("Марина").IsVisible);
         Assert.True(Frame("Вы").IsVisible);
         Assert.Equal(Avalonia.Media.Color.Parse("#62C28E"), ((Avalonia.Media.ISolidColorBrush)Frame("Марина").BorderBrush!).Color);
 
-        fixture.Conference.SpeakingChanged += Raise.Event<EventHandler<SpeakingChange>>(fixture.Conference, new SpeakingChange(Guest, false));
+        fixture.Conference.SpeakingChanged += Raise.Event<EventHandler<SpeakingChange>>(fixture.Conference, new SpeakingChange(_guest, false));
         await fixture.Settle();
         Assert.False(Frame("Марина").IsVisible);
 
         fixture.GuestMicrophoneOff = true;
         fixture.ViewModel.Refresh();
-        fixture.Conference.SpeakingChanged += Raise.Event<EventHandler<SpeakingChange>>(fixture.Conference, new SpeakingChange(Guest, true));
+        fixture.Conference.SpeakingChanged += Raise.Event<EventHandler<SpeakingChange>>(fixture.Conference, new SpeakingChange(_guest, true));
         await fixture.Settle();
         Assert.False(Frame("Марина").IsVisible);
     });
@@ -860,10 +862,10 @@ public sealed class MainWindowTests
         Assert.DoesNotContain(overlay.Child!.GetVisualDescendants().OfType<TextBlock>(), t => t.Classes.Contains("emoji"));
         fixture.Sessions.ChatReceived += Raise.Event<EventHandler<ChatEntry>>(
             fixture.Sessions,
-            new ChatEntry("01", Guest, "Марина", ChatKind.Reaction, "🔥", DateTimeOffset.Now, false));
+            new ChatEntry("01", _guest, "Марина", ChatKind.Reaction, "🔥", DateTimeOffset.Now, false));
         fixture.Sessions.ChatReceived += Raise.Event<EventHandler<ChatEntry>>(
             fixture.Sessions,
-            new ChatEntry("02", Guest, "Марина", ChatKind.Text, "Отличная сцена", DateTimeOffset.Now, false));
+            new ChatEntry("02", _guest, "Марина", ChatKind.Text, "Отличная сцена", DateTimeOffset.Now, false));
         await fixture.SettleFor(TimeSpan.FromMilliseconds(400));
         Assert.True(overlay.IsOpen);
         Assert.Contains(overlay.Child!.GetVisualDescendants().OfType<TextBlock>(), t => t.Text == "🔥");
@@ -992,7 +994,7 @@ public sealed class MainWindowTests
             : [];
 
         fixture.Sessions.ChatReceived += Raise.Event<EventHandler<ChatEntry>>(
-            fixture.Sessions, new ChatEntry("01", Guest, "Марина", ChatKind.Reaction, "🔥", DateTimeOffset.Now, false));
+            fixture.Sessions, new ChatEntry("01", _guest, "Марина", ChatKind.Reaction, "🔥", DateTimeOffset.Now, false));
         await fixture.Settle();
         Assert.Single(fixture.ViewModel.Chat.Reactions);
         Assert.Equal(["🔥"], Shown().Distinct());
@@ -1004,7 +1006,7 @@ public sealed class MainWindowTests
         Assert.True(overlay.IsOpen, "Слой висит весь сеанс: закрытое окно не следит за списком.");
 
         fixture.Sessions.ChatReceived += Raise.Event<EventHandler<ChatEntry>>(
-            fixture.Sessions, new ChatEntry("02", Guest, "Марина", ChatKind.Reaction, "❤️", DateTimeOffset.Now, false));
+            fixture.Sessions, new ChatEntry("02", _guest, "Марина", ChatKind.Reaction, "❤️", DateTimeOffset.Now, false));
         await fixture.SettleFor(TimeSpan.FromMilliseconds(400));
         Assert.Equal(["❤️"], Shown().Distinct());
 
@@ -1067,14 +1069,14 @@ public sealed class MainWindowTests
             .GetArguments()[0]!;
         fixture.Sessions.DrawReceived += Raise.Event<EventHandler<StrokeUpdate>>(
             fixture.Sessions,
-            new StrokeUpdate(Host, mine, StrokePhase.Start, [new StrokePoint(0.2f, 0.2f), new StrokePoint(0.6f, 0.7f)], true));
+            new StrokeUpdate(_host, mine, StrokePhase.Start, [new StrokePoint(0.2f, 0.2f), new StrokePoint(0.6f, 0.7f)], true));
         fixture.Sessions.DrawReceived += Raise.Event<EventHandler<StrokeUpdate>>(
             fixture.Sessions,
-            new StrokeUpdate(Guest, "AB12", StrokePhase.Start, [new StrokePoint(0.1f, 0.8f), new StrokePoint(0.9f, 0.3f)], false));
+            new StrokeUpdate(_guest, "AB12", StrokePhase.Start, [new StrokePoint(0.1f, 0.8f), new StrokePoint(0.9f, 0.3f)], false));
         await fixture.Settle();
 
         Assert.Equal(2, fixture.ViewModel.Drawing.Strokes.Count);
-        Assert.Equal(ParticipantColors.For(Guest), fixture.ViewModel.Drawing.Strokes[1].Color);
+        Assert.Equal(ParticipantColors.For(_guest), fixture.ViewModel.Drawing.Strokes[1].Color);
         Assert.NotEqual(fixture.ViewModel.Drawing.Strokes[0].Color, fixture.ViewModel.Drawing.Strokes[1].Color);
 
         var folder = Environment.GetEnvironmentVariable("GOLETHER_TEST_SCREENSHOTS");
@@ -1156,12 +1158,12 @@ public sealed class MainWindowTests
         TextBlock Mark(string name) => fixture.Tile(name).GetVisualDescendants().OfType<TextBlock>().Single(t => t.Text == "эконом");
         Assert.False(Mark("Марина").IsEffectivelyVisible);
 
-        fixture.Conference.VideoQualityChanged += Raise.Event<EventHandler<VideoQualityChange>>(fixture.Conference, new VideoQualityChange(Guest, VideoQuality.Low));
+        fixture.Conference.VideoQualityChanged += Raise.Event<EventHandler<VideoQualityChange>>(fixture.Conference, new VideoQualityChange(_guest, VideoQuality.Low));
         await fixture.Settle();
         Assert.True(Mark("Марина").IsEffectivelyVisible);
         Assert.False(Mark("Вы").IsEffectivelyVisible);
 
-        fixture.Conference.VideoQualityChanged += Raise.Event<EventHandler<VideoQualityChange>>(fixture.Conference, new VideoQualityChange(Guest, VideoQuality.High));
+        fixture.Conference.VideoQualityChanged += Raise.Event<EventHandler<VideoQualityChange>>(fixture.Conference, new VideoQualityChange(_guest, VideoQuality.High));
         await fixture.Settle();
         Assert.False(Mark("Марина").IsEffectivelyVisible);
     });
@@ -1200,7 +1202,7 @@ public sealed class MainWindowTests
     public Task Window_Renders() => RunAsync(async fixture =>
     {
         var folder = Environment.GetEnvironmentVariable("GOLETHER_TEST_SCREENSHOTS");
-        fixture.Conference.SpeakingChanged += Raise.Event<EventHandler<SpeakingChange>>(fixture.Conference, new SpeakingChange(Guest, true));
+        fixture.Conference.SpeakingChanged += Raise.Event<EventHandler<SpeakingChange>>(fixture.Conference, new SpeakingChange(_guest, true));
         foreach (var width in new[] { 1280, 960 })
         {
             fixture.Window.Width = width;
@@ -1229,12 +1231,12 @@ public sealed class MainWindowTests
         var localizer = Golether.Localization.Texts.Localizer;
         localizer.SetLanguage("ru");
         var settings = Substitute.For<ISettingsStore>();
-        settings.GetAsync(LanguageService.Setting, Arg.Any<CancellationToken>()).Returns("ru");
+        settings.GetAsync(LanguageService.SETTING, Arg.Any<CancellationToken>()).Returns("ru");
         var service = new LanguageService(localizer, settings);
         await service.InitializeAsync(CancellationToken.None);
 
         // The flags are images of the application resources, so the selector is built where the application runs.
-        var selector = await Session.Value.Dispatch(() => new LanguageViewModel(service, Golether.UI.Localization.FlagImages.Load), TestContext.Current.CancellationToken);
+        var selector = await _session.Value.Dispatch(() => new LanguageViewModel(service, Golether.UI.Localization.FlagImages.Load), TestContext.Current.CancellationToken);
 
         await RunAsync(
             async fixture =>
@@ -1246,7 +1248,7 @@ public sealed class MainWindowTests
                     fixture.Sessions.GetSnapshot().Returns((SessionSnapshot?)null);
                     fixture.ViewModel.Refresh();
                     await fixture.Settle();
-                    Assert.Equal(["English", "Русский"], selector.Options.Select(o => o.Name));
+                    Assert.Equal(["Deutsch", "English", "Español", "Français", "Português", "Русский"], selector.Options.Select(o => o.Name));
                     Assert.All(selector.Options, o => Assert.NotNull(o.Flag));
                     Assert.Equal("Русский", selector.Selected!.Name);
                     Assert.Contains(fixture.Window.GetVisualDescendants().OfType<TextBlock>(), t => t.Text == "Смотрим вместе, где бы вы ни были");
@@ -1261,7 +1263,7 @@ public sealed class MainWindowTests
                     Assert.Contains(fixture.Window.GetVisualDescendants().OfType<TextBlock>(), t => t.Text == "Watch together, wherever you are");
                     Assert.Contains(fixture.Window.GetVisualDescendants().OfType<TextBlock>(), t => t.Text == "Device A249-B9CC");
                     Assert.DoesNotContain(fixture.Window.GetVisualDescendants().OfType<TextBlock>(), t => t.Text == "Смотрим вместе, где бы вы ни были");
-                    await settings.Received().SetAsync(LanguageService.Setting, "en", Arg.Any<CancellationToken>());
+                    await settings.Received().SetAsync(LanguageService.SETTING, "en", Arg.Any<CancellationToken>());
                 }
                 finally
                 {
@@ -1372,7 +1374,7 @@ public sealed class MainWindowTests
     {
         fixture.Sessions.CreateInvite(default!, default).ReturnsForAnyArgs(call => new Golether.Security.Invites.Invite
         {
-            HostPeerId = Host,
+            HostPeerId = _host,
             HostName = "Вы",
             SessionName = "Вечер кино",
             Endpoints = [Golether.Core.Networking.PeerEndpoint.Parse("192.168.1.2:47800")],
@@ -1502,7 +1504,7 @@ public sealed class MainWindowTests
     /// <param name="language">The language selector of the window, or <see langword="null"/> for a window without one.</param>
     /// <returns>A task that completes when the test is done and fails with the test's exception.</returns>
     private static Task RunAsync(Func<WindowFixture, Task> test, LanguageViewModel? language = null)
-        => Session.Value.Dispatch(
+        => _session.Value.Dispatch(
             () =>
             {
                 // The UI loop runs here until the test finishes, so its continuations execute and its failures (or a
@@ -1554,7 +1556,7 @@ public sealed class MainWindowTests
         public WindowFixture(LanguageViewModel? language = null)
         {
             Sessions.GetSnapshot().Returns(_ => Snapshot());
-            Settings.GetAsync(MainWindowViewModel.VoiceVolumeSettingPrefix + Guest.Value, Arg.Any<CancellationToken>()).Returns("70");
+            Settings.GetAsync(MainWindowViewModel.VOICE_VOLUME_SETTING_PREFIX + _guest.Value, Arg.Any<CancellationToken>()).Returns("70");
             Sessions.RequestAsync(default!, default).ReturnsForAnyArgs(Task.CompletedTask);
             var components = Substitute.For<IComponentService>();
             foreach (var id in new[] { ComponentId.Video, ComponentId.Conference })
@@ -1776,12 +1778,12 @@ public sealed class MainWindowTests
                 IsHost = IsHost,
                 State = SessionState.Active,
                 SessionName = "Вечер кино",
-                HostPeerId = Host,
+                HostPeerId = _host,
                 Participants =
                 [
-                    new ParticipantView(new ParticipantInfo(Host, "Вы", true), new ParticipantStatus { PeerId = Host, Position = Position }, true),
+                    new ParticipantView(new ParticipantInfo(_host, "Вы", true), new ParticipantStatus { PeerId = _host, Position = Position }, true),
                     .. GuestPresent
-                        ? [new ParticipantView(new ParticipantInfo(Guest, "Марина", false), new ParticipantStatus { PeerId = Guest, MicrophoneOff = GuestMicrophoneOff }, false)]
+                        ? [new ParticipantView(new ParticipantInfo(_guest, "Марина", false), new ParticipantStatus { PeerId = _guest, MicrophoneOff = GuestMicrophoneOff }, false)]
                         : Array.Empty<ParticipantView>(),
                     .. Enumerable.Range(0, ExtraGuests).Select(i =>
                     {
@@ -1789,7 +1791,7 @@ public sealed class MainWindowTests
                         return new ParticipantView(new ParticipantInfo(peer, $"Гость {i + 1}", false), new ParticipantStatus { PeerId = peer }, false);
                     }),
                 ],
-                Playback = PlaybackState.Initial(Host, 0) with
+                Playback = PlaybackState.Initial(_host, 0) with
                 {
                     State = PlayState.Paused,
                     Position = Ended ? TimeSpan.FromHours(2) : TimeSpan.FromMinutes(1),

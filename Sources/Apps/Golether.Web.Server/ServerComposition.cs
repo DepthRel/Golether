@@ -53,12 +53,12 @@ internal static class ServerComposition
     public static IServiceCollection AddLogTimestamps(this IServiceCollection services)
     {
         services.PostConfigure<Microsoft.Extensions.Logging.Console.SimpleConsoleFormatterOptions>(
-            options => options.TimestampFormat ??= LogTimestampFormat);
+            options => options.TimestampFormat ??= LOG_TIMESTAMP_FORMAT);
         return services;
     }
 
     /// <summary>
     /// The default stamp of a log line, for example <c>2026-10-11 16:14:12.250 +07:00</c>.
     /// </summary>
-    private const string LogTimestampFormat = "yyyy-MM-dd HH:mm:ss.fff zzz ";
+    private const string LOG_TIMESTAMP_FORMAT = "yyyy-MM-dd HH:mm:ss.fff zzz ";
 }

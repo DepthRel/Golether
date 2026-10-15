@@ -1,5 +1,5 @@
-using Golether.Localization;
 using NSec.Cryptography;
+using Golether.Localization;
 
 namespace Golether.Tunnels.AmneziaWG.Keys;
 
@@ -11,7 +11,7 @@ public static class AwgKeys
     /// <summary>
     /// The key length in bytes.
     /// </summary>
-    public const int KeyLength = 32;
+    public const int KEY_LENGTH = 32;
 
     /// <summary>
     /// Generates a new key pair.
@@ -56,7 +56,7 @@ public static class AwgKeys
             return false;
         }
 
-        Span<byte> buffer = stackalloc byte[KeyLength];
-        return Convert.TryFromBase64String(value, buffer, out var written) && written == KeyLength;
+        Span<byte> buffer = stackalloc byte[KEY_LENGTH];
+        return Convert.TryFromBase64String(value, buffer, out var written) && written == KEY_LENGTH;
     }
 }

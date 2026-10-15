@@ -1,9 +1,9 @@
 using System.Collections.Concurrent;
+using NSubstitute;
 using Golether.Core.Data.Enums;
 using Golether.Core.Data.Stores;
 using Golether.Media.Conference;
 using Golether.UI.ViewModels;
-using NSubstitute;
 
 namespace Golether.UI.Tests;
 
@@ -15,17 +15,17 @@ public sealed class DevicesViewModelTests
     /// <summary>
     /// The first camera.
     /// </summary>
-    private static readonly CaptureDevice FrontCamera = new(@"\\?\usb#front", "Front camera", CaptureDeviceKind.Camera);
+    private static readonly CaptureDevice _frontCamera = new(@"\\?\usb#front", "Front camera", CaptureDeviceKind.Camera);
 
     /// <summary>
     /// The second camera.
     /// </summary>
-    private static readonly CaptureDevice DeskCamera = new(@"\\?\usb#desk", "Desk camera", CaptureDeviceKind.Camera);
+    private static readonly CaptureDevice _deskCamera = new(@"\\?\usb#desk", "Desk camera", CaptureDeviceKind.Camera);
 
     /// <summary>
     /// The microphone.
     /// </summary>
-    private static readonly CaptureDevice Headset = new("{0.0.1.00000000}.{headset}", "Headset", CaptureDeviceKind.Microphone);
+    private static readonly CaptureDevice _headset = new("{0.0.1.00000000}.{headset}", "Headset", CaptureDeviceKind.Microphone);
 
     /// <summary>
     /// The devices backend.
@@ -43,7 +43,7 @@ public sealed class DevicesViewModelTests
     public DevicesViewModelTests()
     {
         _selector.IsAvailable.Returns(true);
-        _selector.GetDevices().Returns([DeskCamera, Headset, FrontCamera]);
+        _selector.GetDevices().Returns([_deskCamera, _headset, _frontCamera]);
     }
 
     /// <summary>
@@ -61,10 +61,10 @@ public sealed class DevicesViewModelTests
         Assert.Same(DeviceOption.SystemDefault, viewModel.SelectedCamera);
 
         viewModel.SelectedCamera = viewModel.Cameras[2];
-        await WaitUntilAsync(() => _settings.Values.ContainsKey(DevicesViewModel.CameraSetting));
+        await WaitUntilAsync(() => _settings.Values.ContainsKey(DevicesViewModel.CAMERA_SETTING));
 
-        Assert.Equal(FrontCamera.Id, _settings.Values[DevicesViewModel.CameraSetting]);
-        await _selector.Received().SelectDevicesAsync(FrontCamera, null, Arg.Any<CancellationToken>());
+        Assert.Equal(_frontCamera.Id, _settings.Values[DevicesViewModel.CAMERA_SETTING]);
+        await _selector.Received().SelectDevicesAsync(_frontCamera, null, Arg.Any<CancellationToken>());
     }
 
     /// <summary>
@@ -74,16 +74,16 @@ public sealed class DevicesViewModelTests
     [Fact]
     public async Task SavedChoice_IsRestoredOrFallsBack()
     {
-        _settings.Values[DevicesViewModel.CameraSetting] = DeskCamera.Id;
-        _settings.Values[DevicesViewModel.MicrophoneSetting] = "unplugged";
+        _settings.Values[DevicesViewModel.CAMERA_SETTING] = _deskCamera.Id;
+        _settings.Values[DevicesViewModel.MICROPHONE_SETTING] = "unplugged";
         var viewModel = new DevicesViewModel(_selector, _settings);
 
         await viewModel.RefreshAsync();
 
-        Assert.Equal(DeskCamera, viewModel.SelectedCamera!.Device);
+        Assert.Equal(_deskCamera, viewModel.SelectedCamera!.Device);
         Assert.Same(DeviceOption.SystemDefault, viewModel.SelectedMicrophone);
-        await _selector.Received(1).SelectDevicesAsync(DeskCamera, null, Arg.Any<CancellationToken>());
-        Assert.Equal("unplugged", _settings.Values[DevicesViewModel.MicrophoneSetting]);
+        await _selector.Received(1).SelectDevicesAsync(_deskCamera, null, Arg.Any<CancellationToken>());
+        Assert.Equal("unplugged", _settings.Values[DevicesViewModel.MICROPHONE_SETTING]);
     }
 
     /// <summary>

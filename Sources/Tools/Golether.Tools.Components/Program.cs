@@ -1,7 +1,7 @@
+using Microsoft.Extensions.Logging;
 using Golether.Components.Catalog;
 using Golether.Components.Installation;
 using Golether.Core.Data.Enums;
-using Microsoft.Extensions.Logging;
 
 namespace Golether.Tools.Components;
 
@@ -13,7 +13,7 @@ public static class Program
     /// <summary>
     /// The usage text.
     /// </summary>
-    private const string Usage = """
+    private const string USAGE = """
         golether-components: prepares native components for packaging.
 
         Usage:
@@ -36,7 +36,7 @@ public static class Program
     {
         if (args.Length == 0 || args[0] is "--help" or "-h")
         {
-            Console.WriteLine(Usage);
+            Console.WriteLine(USAGE);
             return args.Length == 0 ? 2 : 0;
         }
 
@@ -54,7 +54,7 @@ public static class Program
         if (options.Error is not null)
         {
             Console.Error.WriteLine($"error: {options.Error}");
-            Console.Error.WriteLine(Usage);
+            Console.Error.WriteLine(USAGE);
             return 2;
         }
 
@@ -69,7 +69,7 @@ public static class Program
                 var package = ComponentCatalog.Find(id, options.RuntimeIdentifier)
                     ?? throw new ComponentInstallException($"The catalog has no {id} package for {options.RuntimeIdentifier}.");
                 var installed = installer.GetInstallDirectory(package);
-                if (!File.Exists(Path.Combine(installed, ComponentMarker.FileName)))
+                if (!File.Exists(Path.Combine(installed, ComponentMarker.FILE_NAME)))
                 {
                     Console.WriteLine($"==> {id} {package.Version} ({package.RuntimeIdentifier}): {package.Url}");
                     var lastDecile = -1;

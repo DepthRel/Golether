@@ -1,9 +1,10 @@
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 using Golether.Core.Data.Enums;
+using Golether.Core.Enums;
 using Golether.Core.Playback;
 using Golether.Core.Time;
 using Golether.Sync.Protocol;
-using Microsoft.Extensions.Logging.Abstractions;
-using Microsoft.Extensions.Logging;
 
 namespace Golether.Sync.Engine;
 
@@ -19,17 +20,17 @@ public sealed class PlaybackFollower
     /// <summary>
     /// The drift below which a paused player is not moved.
     /// </summary>
-    private static readonly TimeSpan PausedTolerance = TimeSpan.FromMilliseconds(40);
+    private static readonly TimeSpan _pausedTolerance = TimeSpan.FromMilliseconds(40);
 
     /// <summary>
     /// The time after a seek during which the player position is not trusted.
     /// </summary>
-    private static readonly TimeSpan SeekSettleTime = TimeSpan.FromSeconds(1.5);
+    private static readonly TimeSpan _seekSettleTime = TimeSpan.FromSeconds(1.5);
 
     /// <summary>
     /// How close to the duration a position counts as the end.
     /// </summary>
-    private static readonly TimeSpan EndTolerance = TimeSpan.FromMilliseconds(500);
+    private static readonly TimeSpan _endTolerance = TimeSpan.FromMilliseconds(500);
 
     /// <summary>
     /// The player.
@@ -183,8 +184,8 @@ public sealed class PlaybackFollower
             return new FollowerStatus(snapshot, expected, drift, null);
         }
 
-        if (state.State != PlayState.Playing || snapshot.IsBuffering || snapshot.Position is null
-            || now - _lastSeekAt < Microseconds.From(SeekSettleTime))
+        if (state.State != PlayState.Playing || snapshot.IsBuffering || snapshot.Position is null ||
+            now - _lastSeekAt < Microseconds.From(_seekSettleTime))
         {
             return new FollowerStatus(snapshot, expected, drift, null);
         }
@@ -229,7 +230,7 @@ public sealed class PlaybackFollower
         if (state.State == PlayState.Paused || scheduled)
         {
             await _player.SetPausedAsync(true, cancellationToken).ConfigureAwait(false);
-            if (drift > PausedTolerance)
+            if (drift > _pausedTolerance)
             {
                 await SeekAsync(target, cancellationToken).ConfigureAwait(false);
             }
@@ -254,7 +255,7 @@ public sealed class PlaybackFollower
     /// <param name="snapshot">The player state.</param>
     /// <returns><see langword="true"/> at the end.</returns>
     private static bool IsAtEnd(TimeSpan position, PlayerSnapshot snapshot)
-        => snapshot.Duration is { } duration && duration > TimeSpan.Zero && position >= duration - EndTolerance;
+        => snapshot.Duration is { } duration && duration > TimeSpan.Zero && position >= duration - _endTolerance;
 
     /// <summary>
     /// Seeks and remembers the time of the seek.

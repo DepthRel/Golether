@@ -4,6 +4,7 @@ using Golether.Core.Networking;
 using Golether.Security.Invites;
 using Golether.Session;
 using Golether.Sync.Protocol;
+using Golether.UI.Enums;
 
 namespace Golether.UI.Services;
 

@@ -17,23 +17,23 @@ public static class ChunkProtocol
     /// <summary>
     /// The request operation that asks for a chunk.
     /// </summary>
-    public const byte GetChunk = 1;
+    public const byte GET_CHUNK = 1;
 
     /// <summary>
     /// The request operation that asks only for the SHA-256 of a chunk (the answer has no payload). Participants use
     /// it to check chunks received from other participants.
     /// </summary>
-    public const byte GetHash = 2;
+    public const byte GET_HASH = 2;
 
     /// <summary>
     /// The request size.
     /// </summary>
-    public const int RequestSize = 17;
+    public const int REQUEST_SIZE = 17;
 
     /// <summary>
     /// The response header size.
     /// </summary>
-    public const int ResponseHeaderSize = 45;
+    public const int RESPONSE_HEADER_SIZE = 45;
 
     /// <summary>
     /// Returns the media key of a descriptor.
@@ -49,11 +49,11 @@ public static class ChunkProtocol
     /// <summary>
     /// Writes a request.
     /// </summary>
-    /// <param name="destination">A buffer of at least <see cref="RequestSize"/> bytes.</param>
+    /// <param name="destination">A buffer of at least <see cref="REQUEST_SIZE"/> bytes.</param>
     /// <param name="index">The chunk index.</param>
     /// <param name="mediaKey">The media key.</param>
-    /// <param name="operation"><see cref="GetChunk"/> or <see cref="GetHash"/>.</param>
-    public static void WriteRequest(Span<byte> destination, long index, ulong mediaKey, byte operation = GetChunk)
+    /// <param name="operation"><see cref="GET_CHUNK"/> or <see cref="GET_HASH"/>.</param>
+    public static void WriteRequest(Span<byte> destination, long index, ulong mediaKey, byte operation = GET_CHUNK)
     {
         destination[0] = operation;
         BinaryPrimitives.WriteInt64BigEndian(destination[1..], index);
@@ -73,13 +73,13 @@ public static class ChunkProtocol
         operation = source[0];
         index = BinaryPrimitives.ReadInt64BigEndian(source[1..]);
         mediaKey = BinaryPrimitives.ReadUInt64BigEndian(source[9..]);
-        return operation is GetChunk or GetHash;
+        return operation is GET_CHUNK or GET_HASH;
     }
 
     /// <summary>
     /// Writes a response header.
     /// </summary>
-    /// <param name="destination">A buffer of at least <see cref="ResponseHeaderSize"/> bytes.</param>
+    /// <param name="destination">A buffer of at least <see cref="RESPONSE_HEADER_SIZE"/> bytes.</param>
     /// <param name="status">The status.</param>
     /// <param name="index">The chunk index.</param>
     /// <param name="length">The payload length.</param>

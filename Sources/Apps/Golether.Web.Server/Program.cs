@@ -1,6 +1,8 @@
 using System.Globalization;
+using Golether.Core.Enums;
 using Golether.Localization;
 using Golether.Web.Server.Contracts;
+using Golether.Web.Server.Enums;
 using Golether.Web.Server.Infrastructure;
 using Golether.Web.Server.Options;
 
@@ -14,12 +16,12 @@ public static class Program
     /// <summary>
     /// The exit code of invalid settings.
     /// </summary>
-    private const int InvalidSettings = 2;
+    private const int INVALID_SETTINGS = 2;
 
     /// <summary>
     /// The name of the Windows service the installer registers (Scripts/Server/golether-server.iss).
     /// </summary>
-    public const string ServiceName = ServerContract.WindowsServiceName;
+    public const string SERVICE_NAME = ServerContract.WINDOWS_SERVICE_NAME;
 
     /// <summary>
     /// Reads the settings, checks them and runs the server until it is stopped (Ctrl+C, SIGTERM, service stop).
@@ -47,10 +49,10 @@ public static class Program
             ContentRootPath = configDirectory,
         });
         builder.Configuration.Sources.Insert(0, new Microsoft.Extensions.Configuration.Json.JsonStreamConfigurationSource { Stream = DefaultSettings.Open() });
-        builder.Services.AddWindowsService(service => service.ServiceName = ServiceName);
+        builder.Services.AddWindowsService(service => service.ServiceName = SERVICE_NAME);
         builder.Services.AddSystemd();
         builder.Services.AddLogTimestamps();
-        var options = builder.Configuration.GetSection(RendezvousServerOptions.Section).Get<RendezvousServerOptions>() ?? new RendezvousServerOptions();
+        var options = builder.Configuration.GetSection(RendezvousServerOptions.SECTION).Get<RendezvousServerOptions>() ?? new RendezvousServerOptions();
         if (options.Validate() is { Count: > 0 } problems)
         {
             Console.Error.WriteLine(Texts.Get("Server.Error.Invalid"));
@@ -59,13 +61,13 @@ public static class Program
                 Console.Error.WriteLine("  " + problem);
             }
 
-            return InvalidSettings;
+            return INVALID_SETTINGS;
         }
 
         builder.Services.AddRendezvousServer(options);
         var app = builder.Build();
         var startLog = app.Services.GetRequiredService<ILoggerFactory>().CreateLogger(typeof(Program));
-        var settingsPath = Path.Combine(configDirectory, DefaultSettings.FileName);
+        var settingsPath = Path.Combine(configDirectory, DefaultSettings.FILE_NAME);
         if (settingsFile == SettingsFileState.Created)
         {
             startLog.LogWarning("The settings file {Path} was missing; it was written with the default settings", settingsPath);
@@ -75,11 +77,11 @@ public static class Program
             startLog.LogWarning("The settings file {Path} is missing and could not be written ({Problem}); the server runs with the default settings", settingsPath, settingsProblem);
         }
 
-        app.MapGet(ServerContract.HealthPath, (ServerStatistics statistics) => Results.Json(statistics.Snapshot()));
+        app.MapGet(ServerContract.HEALTH_PATH, (ServerStatistics statistics) => Results.Json(statistics.Snapshot()));
 
         // The journal of events is for the monitor on this computer only, whatever address the status page was
         // given in the settings: it names the addresses of the devices.
-        app.MapGet(ServerContract.JournalPath, (HttpContext context, ServerJournal journal, long? after)
+        app.MapGet(ServerContract.JOURNAL_PATH, (HttpContext context, ServerJournal journal, long? after)
             => context.Connection.RemoteIpAddress is { } remote && System.Net.IPAddress.IsLoopback(remote)
                 ? Results.Json(journal.Read(after ?? 0), ServerContract.Json)
                 : Results.StatusCode(StatusCodes.Status403Forbidden));
