@@ -76,10 +76,12 @@ public sealed class SharingTests : IAsyncLifetime
 
         Assert.Equal(SHA256.HashData(Chunk(5)), hash);
         Assert.Equal(0, source.BytesReceived);
+        await UntilAsync(() => server.HashesServed >= 1, token);
         Assert.Equal(0, server.ChunksServed);
         Assert.Equal(1, server.HashesServed);
         await source.GetChunkAsync(2, token);
         Assert.Equal(SHA256.HashData(Chunk(2)), await source.GetHashAsync(2, token));
+        await UntilAsync(() => server.ChunksServed >= 1, token);
         Assert.Equal(1, server.ChunksServed);
         await Assert.ThrowsAsync<ArgumentOutOfRangeException>(() => source.GetHashAsync(6, token));
     }
@@ -150,6 +152,7 @@ public sealed class SharingTests : IAsyncLifetime
         Assert.NotEmpty(borisExchange.PeersHaving(0));
         Assert.Equal(Chunk(0), await swarm.GetChunkAsync(0, token));
         Assert.Equal(Chunk(5), await swarm.GetChunkAsync(5, token));
+        await UntilAsync(() => server.HashesServed >= 2, token);
         Assert.Equal(0, server.ChunksServed);
         Assert.Equal(2, server.HashesServed);
         Assert.Equal(CHUNK_SIZE + 1234, swarm.BytesFromPeers);
@@ -157,11 +160,13 @@ public sealed class SharingTests : IAsyncLifetime
         network.Corrupt = true;
         Assert.Equal(Chunk(1), await swarm.GetChunkAsync(1, token));
         Assert.Equal(1, swarm.RejectedChunks);
+        await UntilAsync(() => server.ChunksServed >= 1, token);
         Assert.Equal(1, server.ChunksServed);
 
         network.Corrupt = false;
         network.Leave(_anna);
         Assert.Equal(Chunk(2), await swarm.GetChunkAsync(2, token));
+        await UntilAsync(() => server.ChunksServed >= 2, token);
         Assert.Equal(2, server.ChunksServed);
     }
 
@@ -195,6 +200,22 @@ public sealed class SharingTests : IAsyncLifetime
     /// <param name="index">The chunk index.</param>
     /// <returns>The bytes.</returns>
     private byte[] Chunk(long index) => _content.AsSpan((int)(index * CHUNK_SIZE), _media.GetChunkLength(index)).ToArray();
+
+    /// <summary>
+    /// Waits until a condition holds, for ten seconds at most. The host counts a piece or a hash after sending it, so
+    /// its counters may trail what the participant already received.
+    /// </summary>
+    /// <param name="condition">The condition.</param>
+    /// <param name="cancellationToken">The cancellation token.</param>
+    /// <returns>A task that completes when the condition holds or the time is up.</returns>
+    private static async Task UntilAsync(Func<bool> condition, CancellationToken cancellationToken)
+    {
+        var deadline = DateTime.UtcNow.AddSeconds(10);
+        while (!condition() && DateTime.UtcNow < deadline)
+        {
+            await Task.Delay(10, cancellationToken);
+        }
+    }
 
     /// <summary>
     /// Creates an exchange serving from a cache.

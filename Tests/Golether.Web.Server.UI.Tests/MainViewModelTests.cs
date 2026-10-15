@@ -211,7 +211,8 @@ public sealed class MainViewModelTests : IDisposable
         {
             Assert.Equal("ru", model.SelectedLanguage.Code);
 
-            model.SelectedLanguage = english;
+            // The language changes on the thread of the windows, as the settings of the monitor change it.
+            await HeadlessSession.Instance.Dispatch(() => model.SelectedLanguage = english, TestContext.Current.CancellationToken);
 
             Assert.Equal("Running as a service", model.StatusText);
             Assert.Equal("The server is starting", model.Rows[0].Event);
@@ -221,7 +222,7 @@ public sealed class MainViewModelTests : IDisposable
         }
         finally
         {
-            Texts.Localizer.SetLanguage("ru");
+            await HeadlessSession.Instance.Dispatch(() => Texts.Localizer.SetLanguage("ru"), CancellationToken.None);
             Directory.Delete(Path.GetDirectoryName(preferencesFile)!, recursive: true);
         }
     }

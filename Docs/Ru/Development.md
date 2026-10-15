@@ -171,12 +171,15 @@ GPL-совместимые зависимости, время через `TimePr
   `-ContinueOnError` доводит остальные шаги, `-Skip AppLinux,ServerMacOS` пропускает шаги. В конце скрипт выводит
   пакеты версии с размером и SHA-256 и пишет `artifacts/publish/SHA256SUMS-<версия>.txt` для выпуска. На машине нужны
   Inno Setup, WSL и Git для Windows; каждый шаг сам говорит, чего не хватает.
-- **macOS на GitHub.** Workflow **Packages** (`.github/workflows/packages.yml`) собирает только macOS-пакеты
-  приложения, для Apple silicon (`osx-arm64`) и Intel (`osx-x64`): им нужны `sips`, `iconutil` и `codesign`,
-  которых нет нигде, кроме macOS. Запуск вручную (Actions → Packages → Run workflow) даёт архивы как артефакты запуска.
-  Запуск по тегу версии (`git tag 0.3.0; git push origin 0.3.0`) ещё и прикладывает их к выпуску этого тега; если
-  выпуска нет, создаётся черновик. Остальное для выпуска даёт `build-release.ps1`, и это добавляется в тот же выпуск;
-  workflow заменяет только файлы с именами своих архивов.
+- **На GitHub.** Там работают два workflow. **CI** (`.github/workflows/ci.yml`) собирает решение и прогоняет все тесты
+  на Windows и Linux при каждом push в `main` и каждом pull request; благодаря правилам стиля и тестам соглашений
+  нарушенное правило делает прогон красным. **Packages** (`.github/workflows/packages.yml`) собирает все пакеты
+  выпуска: приложение для Windows (установщик и `.zip`), Linux (`.deb`, `.tar.gz`, `.zip`) и macOS (Apple silicon и
+  Intel) и сервер для Windows, Linux и macOS. Запуск вручную (Actions → Packages → Run workflow) отдаёт их как
+  артефакты прогона. Тег версии, равный `<Version>` из `Directory.Build.props`
+  (`git tag 0.3.2; git push origin 0.3.2`), ещё и прикрепляет их вместе с `SHA256SUMS-<version>.txt` к выпуску этого
+  тега, который создаётся черновиком: напишите заметки, проверьте файлы, опубликуйте и только потом обновите
+  `updates.json` страницы проекта. Цифровая подпись встраивается в Windows-задания этого workflow.
 
 ## Отладка сети
 

@@ -23,11 +23,6 @@ namespace Golether.Web.Server.UI.Tests;
 public sealed class MainWindowTests : IDisposable
 {
     /// <summary>
-    /// The headless session, shared by the tests of this class.
-    /// </summary>
-    private static readonly Lazy<HeadlessUnitTestSession> _session = new(() => HeadlessUnitTestSession.StartNew(typeof(TestApp)));
-
-    /// <summary>
     /// The settings file of the test.
     /// </summary>
     private readonly string _file = Path.Combine(Path.GetTempPath(), $"golether-monitor-{Guid.NewGuid():N}.json");
@@ -43,46 +38,54 @@ public sealed class MainWindowTests : IDisposable
     /// </summary>
     /// <returns>A task that completes when the test is done.</returns>
     [Fact]
-    public Task Window_ShowsTheJournalInColumns() => _session.Value.Dispatch(
+    public Task Window_ShowsTheJournalInColumns() => HeadlessSession.Instance.Dispatch(
         async () =>
         {
             var model = CreateModel();
             var window = new MainWindow { DataContext = model, Width = 1100, Height = 720 };
-            window.Show();
-            await model.RefreshAsync(TestContext.Current.CancellationToken);
-            Dispatcher.UIThread.RunJobs();
-            window.UpdateLayout();
-            SaveFrame(window, "monitor-journal");
-
-            var texts = window.GetVisualDescendants().OfType<TextBlock>().Where(t => t.IsEffectivelyVisible).Select(t => t.Text).ToArray();
-            Assert.Contains(Texts.Get("Monitor.Status.Running"), texts);
-            Assert.Contains("203.0.113.7:51234", texts);
-            Assert.Contains(Texts.Get("Monitor.Event.HostRegistered"), texts);
-
-            var header = window.GetVisualDescendants().OfType<TextBlock>().Single(t => t.Text == Texts.Get("Monitor.Column.Event"));
-            var cell = window.GetVisualDescendants().OfType<TextBlock>().First(t => t.Text == Texts.Get("Monitor.Event.HostRegistered"));
-            Assert.Equal(header.TranslatePoint(default, window)!.Value.X, cell.TranslatePoint(default, window)!.Value.X, 1.0);
-
-            model.Columns.Address = new GridLength(3, GridUnitType.Star);
-            Dispatcher.UIThread.RunJobs();
-            window.UpdateLayout();
-            Assert.Equal(header.TranslatePoint(default, window)!.Value.X, cell.TranslatePoint(default, window)!.Value.X, 1.0);
-
-            // A narrow window: the buttons wrap instead of leaving the window, and every column stays visible.
-            window.Width = 660;
-            Dispatcher.UIThread.RunJobs();
-            window.UpdateLayout();
-            SaveFrame(window, "monitor-narrow");
-            foreach (var button in window.GetVisualDescendants().OfType<Button>().Where(b => b.IsEffectivelyVisible))
+            try
             {
-                var left = button.TranslatePoint(default, window)!.Value.X;
-                Assert.InRange(left + button.Bounds.Width, 0, window.Bounds.Width + 0.5);
+                window.Show();
+                await model.RefreshAsync(TestContext.Current.CancellationToken);
+                Dispatcher.UIThread.RunJobs();
+                window.UpdateLayout();
+                SaveFrame(window, "monitor-journal");
+
+                var texts = window.GetVisualDescendants().OfType<TextBlock>().Where(t => t.IsEffectivelyVisible).Select(t => t.Text).ToArray();
+                Assert.Contains(Texts.Get("Monitor.Status.Running"), texts);
+                Assert.Contains("203.0.113.7:51234", texts);
+                Assert.Contains(Texts.Get("Monitor.Event.HostRegistered"), texts);
+
+                var header = window.GetVisualDescendants().OfType<TextBlock>().Single(t => t.Text == Texts.Get("Monitor.Column.Event"));
+                var cell = window.GetVisualDescendants().OfType<TextBlock>().First(t => t.Text == Texts.Get("Monitor.Event.HostRegistered"));
+                Assert.Equal(header.TranslatePoint(default, window)!.Value.X, cell.TranslatePoint(default, window)!.Value.X, 1.0);
+
+                model.Columns.Address = new GridLength(3, GridUnitType.Star);
+                Dispatcher.UIThread.RunJobs();
+                window.UpdateLayout();
+                Assert.Equal(header.TranslatePoint(default, window)!.Value.X, cell.TranslatePoint(default, window)!.Value.X, 1.0);
+
+                // A narrow window: the buttons wrap instead of leaving the window, and every column stays visible.
+                window.Width = 660;
+                Dispatcher.UIThread.RunJobs();
+                window.UpdateLayout();
+                SaveFrame(window, "monitor-narrow");
+                foreach (var button in window.GetVisualDescendants().OfType<Button>().Where(b => b.IsEffectivelyVisible))
+                {
+                    var left = button.TranslatePoint(default, window)!.Value.X;
+                    Assert.InRange(left + button.Bounds.Width, 0, window.Bounds.Width + 0.5);
+                }
+
+                var details = window.GetVisualDescendants().OfType<TextBlock>().Single(t => t.Text == Texts.Get("Monitor.Column.Details"));
+                Assert.InRange(details.TranslatePoint(default, window)!.Value.X, 0, window.Bounds.Width - 40);
             }
-
-            var details = window.GetVisualDescendants().OfType<TextBlock>().Single(t => t.Text == Texts.Get("Monitor.Column.Details"));
-            Assert.InRange(details.TranslatePoint(default, window)!.Value.X, 0, window.Bounds.Width - 40);
-
-            window.Close();
+            finally
+            {
+                // The model stays subscribed to the language of the process; a window left bound to it would be
+                // updated from the thread of the next test that changes the language.
+                window.DataContext = null;
+                window.Close();
+            }
         },
         TestContext.Current.CancellationToken);
 
@@ -92,7 +95,7 @@ public sealed class MainWindowTests : IDisposable
     /// </summary>
     /// <returns>A task that completes when the test is done.</returns>
     [Fact]
-    public Task StopQuestion_DefaultsToCancel() => _session.Value.Dispatch(
+    public Task StopQuestion_DefaultsToCancel() => HeadlessSession.Instance.Dispatch(
         () =>
         {
             var dialog = new ConfirmDialog(Texts.Get("Monitor.Stop.Confirm.Title"), Texts.Get("Monitor.Stop.Confirm.Text"), Texts.Get("Monitor.Stop"));
@@ -115,7 +118,7 @@ public sealed class MainWindowTests : IDisposable
     /// </summary>
     /// <returns>A task that completes when the test is done.</returns>
     [Fact]
-    public Task LanguageSelector_ShowsTheFlagOfEveryLanguage() => _session.Value.Dispatch(
+    public Task LanguageSelector_ShowsTheFlagOfEveryLanguage() => HeadlessSession.Instance.Dispatch(
         () =>
         {
             var flags = FlagImageConverter.Instance;

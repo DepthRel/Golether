@@ -37,9 +37,13 @@ dotnet run --project Sources/Apps/Golether.Web.Server        # rendezvous server
 ## Release
 
 1. Bump `<Version>` in `Directory.Build.props`.
-2. Tag `git tag X.Y.Z; git push origin X.Y.Z` → Packages workflow attaches the macOS app archives (it builds nothing else).
-3. Run `Scripts/build-release.ps1` locally, add its packages and `SHA256SUMS-<version>.txt` to the release, update
-   `Sources/Apps/Golether.Pages/updates.json`.
+2. Tag `git tag X.Y.Z; git push origin X.Y.Z` (must equal `<Version>`) → the Packages workflow builds every package
+   (Windows, Linux `.deb`/`.tar.gz`, macOS, server) and `SHA256SUMS-<version>.txt` into a **draft** release.
+3. Write the notes, check the files, publish the release; only then update `Sources/Apps/Golether.Pages/updates.json`
+   (pushing the page folder deploys the site at once: an early `updates.json` sends every user to a 404).
+
+CI (`.github/workflows/ci.yml`) builds and tests every push to `main` and every PR on Windows and Linux; code signing
+belongs in the Windows jobs of `packages.yml`. `Scripts/build-release.ps1` builds the same packages locally (no macOS app).
 
 ## Environment gotchas (Windows dev box)
 

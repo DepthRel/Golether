@@ -1,0 +1,47 @@
+# Builds the solution and runs every test on Windows and on Linux for each push to main and each pull request.
+#
+# The build treats the code rules of .editorconfig and the missing XML comments as errors, and
+# Tests/Golether.Conventions.Tests checks the rest of AGENTS.md, so a red run also means a broken rule. Tests that
+# need libmpv or GStreamer skip themselves here: the runners have neither.
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# A newer push to the same branch makes the older run pointless.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  DOTNET_CLI_TELEMETRY_OPTOUT: 1
+  DOTNET_NOLOGO: 1
+
+jobs:
+  test:
+    name: Build and test, ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, ubuntu-latest]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: global.json
+      - uses: actions/cache@v4
+        with:
+          path: ~/.nuget/packages
+          key: nuget-${{ runner.os }}-${{ hashFiles('Directory.Packages.props', '**/*.csproj') }}
+          restore-keys: nuget-${{ runner.os }}-
+      - name: Build
+        run: dotnet build Golether.slnx -c Release
+      - name: Test
+        run: dotnet test --solution Golether.slnx -c Release --no-build

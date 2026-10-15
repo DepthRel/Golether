@@ -129,6 +129,15 @@ public sealed class RelayMultiplexerTests
         await near.ReadExactlyAsync(refusal, token).AsTask().WaitAsync(TimeSpan.FromSeconds(10), token);
         Assert.Equal((uint)RelayMultiplexer.MAX_CHANNELS + 1, BinaryPrimitives.ReadUInt32BigEndian(refusal));
         Assert.Equal(3, refusal[4]);
+
+        // The handlers start on the thread pool, so the refusal of the extra channel may come back before the last of
+        // them has run.
+        var deadline = DateTime.UtcNow.AddSeconds(10);
+        while (Volatile.Read(ref served) < RelayMultiplexer.MAX_CHANNELS && DateTime.UtcNow < deadline)
+        {
+            await Task.Delay(10, token);
+        }
+
         Assert.Equal(RelayMultiplexer.MAX_CHANNELS, Volatile.Read(ref served));
 
         await near.WriteAsync(Frame(1, 2, RelayMultiplexer.MAX_PAYLOAD + 1), token);

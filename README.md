@@ -183,13 +183,15 @@ The `.sh` scripts are bash scripts, PowerShell cannot run them. On Windows, `./S
 Linux package inside WSL for you: it copies the sources into the WSL file system (a build under `/mnt/c` would lose
 the executable permissions) and brings the archive back to `artifacts/publish`. A macOS package must be built on
 macOS: the icon and the ad-hoc signature come from `sips`, `iconutil` and `codesign`, which exist only there, and
-without the signature an arm64 build will not start on Apple Silicon. Without a Mac, use the **Packages** workflow
-(`.github/workflows/packages.yml`): run it by hand or push a version tag, and it builds the macOS packages on GitHub
-runners and attaches them to the release of that tag.
+without the signature an arm64 build will not start on Apple Silicon.
 
-Everything else of a release is built on Windows with one command: `./Scripts/build-release.ps1` runs the app
-installer, the Linux app package (WSL), the server installer and the Linux and macOS server packages one after
-another and writes `artifacts/publish/SHA256SUMS-<version>.txt` (see [Scripts/README.md](Scripts/README.md)).
+A release is built on GitHub: push a version tag equal to `<Version>` of `Directory.Build.props`
+(`git tag 0.3.2; git push origin 0.3.2`), and the **Packages** workflow (`.github/workflows/packages.yml`) builds
+every package (the application for Windows, Linux and macOS, the server for Windows, Linux and macOS) with
+`SHA256SUMS-<version>.txt` and attaches them to a draft release of that tag; check it and publish it by hand. The
+**CI** workflow (`.github/workflows/ci.yml`) builds and tests every push to `main` and every pull request on Windows
+and Linux. On a developer's machine `./Scripts/build-release.ps1` builds the same packages but the macOS application
+(see [Scripts/README.md](Scripts/README.md)).
 
 ## License
 

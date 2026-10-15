@@ -383,6 +383,8 @@ public sealed class SessionIntegrationTests : IAsyncLifetime
         await first.JoinAsync(_host.CreateInvite([new PeerEndpoint("127.0.0.1", _host.Port)]), token);
         Assert.Equal(_content, await ReadAllAsync(_registry, token));
         var chunks = (int)(((_content.Length - 1) / Golether.Core.Media.MediaDescriptor.DEFAULT_CHUNK_SIZE) + 1);
+        // The host counts a piece after sending it, so the count may trail the last piece by a moment.
+        await WaitUntilAsync(() => _host.ChunksServed >= chunks, token);
         Assert.Equal(chunks, _host.ChunksServed);
 
         await using var second = new ParticipantSession(
@@ -404,6 +406,7 @@ public sealed class SessionIntegrationTests : IAsyncLifetime
         // A participant uploads two pieces at a time to another one; what is asked for beyond that at the same
         // moment comes from the host. So the host may serve a few more pieces, but most come from the participant,
         // and what the first participant sent is what the second one got from it.
+        await WaitUntilAsync(() => _host.HashesServed + (_host.ChunksServed - chunks) >= chunks, token);
         var fromHost = (int)(_host.ChunksServed - chunks);
         Assert.InRange(fromHost, 0, chunks / 2);
         Assert.True(_host.HashesServed >= chunks - fromHost, $"The host answered {_host.HashesServed} hashes.");

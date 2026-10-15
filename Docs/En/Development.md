@@ -177,13 +177,15 @@ How to build them without a Linux machine or a Mac at hand:
   it; `-ContinueOnError` runs the rest, `-Skip AppLinux,ServerMacOS` leaves steps out. At the end it lists the
   packages of the version with their size and SHA-256 and writes `artifacts/publish/SHA256SUMS-<version>.txt` for the
   release. The machine needs Inno Setup, WSL and Git for Windows; each step says what is missing.
-- **macOS on GitHub.** The **Packages** workflow (`.github/workflows/packages.yml`) builds only the macOS packages of
-  the application, for Apple silicon (`osx-arm64`) and Intel (`osx-x64`): they need `sips`, `iconutil` and
-  `codesign`, which exist nowhere but on macOS. A run by hand (Actions → Packages → Run workflow) gives the archives as
-  artifacts of the run. A run by a version tag (`git tag 0.3.0; git push origin 0.3.0`) also attaches them to the
-  release of that tag; when there is no release, a draft is created. The rest of the release comes from
-  `build-release.ps1` and is added to the same release; the workflow replaces only the files with the names of its own
-  archives.
+- **On GitHub.** Two workflows run there. **CI** (`.github/workflows/ci.yml`) builds the solution and runs every test
+  on Windows and Linux for each push to `main` and each pull request; with the style rules and the conventions tests,
+  a broken rule makes the run red. **Packages** (`.github/workflows/packages.yml`) builds every package of a release:
+  the application for Windows (installer and `.zip`), Linux (`.deb`, `.tar.gz`, `.zip`) and macOS (Apple silicon and
+  Intel), and the server for Windows, Linux and macOS. A run by hand (Actions → Packages → Run workflow) gives them as
+  artifacts of the run. A version tag equal to `<Version>` of `Directory.Build.props`
+  (`git tag 0.3.2; git push origin 0.3.2`) also attaches them with `SHA256SUMS-<version>.txt` to the release of that
+  tag, created as a draft: write the notes, check the files, publish, and only then update `updates.json` of the
+  project page. Code signing goes into the Windows jobs of this workflow.
 
 ## Debugging the network
 

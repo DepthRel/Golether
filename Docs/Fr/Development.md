@@ -180,13 +180,16 @@ Comment les construire sans machine Linux ni Mac sous la main :
   l'arrête ; `-ContinueOnError` lance le reste, `-Skip AppLinux,ServerMacOS` saute des étapes. À la fin, il liste les
   paquets de la version avec leur taille et leur SHA-256 et écrit `artifacts/publish/SHA256SUMS-<version>.txt` pour la
   version. La machine a besoin d'Inno Setup, de WSL et de Git pour Windows ; chaque étape dit ce qui manque.
-- **macOS sur GitHub.** Le workflow **Packages** (`.github/workflows/packages.yml`) ne construit que les paquets macOS
-  de l'application, pour puce Apple (`osx-arm64`) et Intel (`osx-x64`) : ils ont besoin de `sips`, `iconutil` et
-  `codesign`, qui n'existent que sous macOS. Une exécution manuelle (Actions → Packages → Run workflow) donne les
-  archives comme artefacts de l'exécution. Une exécution par une étiquette de version
-  (`git tag 0.3.0; git push origin 0.3.0`) les joint aussi à la version de cette étiquette ; s'il n'y a pas de version,
-  un brouillon est créé. Le reste de la version vient de `build-release.ps1` et est ajouté à la même version ; le
-  workflow ne remplace que les fichiers portant les noms de ses propres archives.
+- **Sur GitHub.** Deux workflows y tournent. **CI** (`.github/workflows/ci.yml`) compile la solution et lance tous les
+  tests sous Windows et Linux à chaque push sur `main` et à chaque pull request ; avec les règles de style et les
+  tests de conventions, une règle enfreinte rend l'exécution rouge. **Packages** (`.github/workflows/packages.yml`)
+  construit tous les paquets d'une version : l'application pour Windows (installeur et `.zip`), Linux (`.deb`,
+  `.tar.gz`, `.zip`) et macOS (Apple silicon et Intel), et le serveur pour Windows, Linux et macOS. Une exécution à la
+  main (Actions → Packages → Run workflow) les donne comme artefacts de l'exécution. Une étiquette de version égale à
+  `<Version>` de `Directory.Build.props` (`git tag 0.3.2; git push origin 0.3.2`) les joint en plus, avec
+  `SHA256SUMS-<version>.txt`, à la version de cette étiquette, créée en brouillon : écrivez les notes, vérifiez les
+  fichiers, publiez, et seulement ensuite mettez à jour `updates.json` de la page du projet. La signature du code va
+  dans les tâches Windows de ce workflow.
 
 ## Déboguer le réseau
 

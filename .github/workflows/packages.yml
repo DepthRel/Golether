@@ -1,15 +1,16 @@
-# Builds the macOS packages of Golether: they need macOS itself (sips, iconutil and codesign).
+# Builds every package of a Golether release: the application for Windows, Linux and macOS and the rendezvous server
+# with its monitor for Windows, Linux and macOS, with the checksums.
 #
 # Two ways to start it:
-#   - by hand: Actions -> Packages -> Run workflow. The archives appear as "Artifacts" of the run.
-#   - by a version tag (git tag 0.3.0 && git push origin 0.3.0). The archives are also attached to the release of
-#     that tag; a release that does not exist yet is created as a draft, so nothing is published by itself.
-#     Files of the release with the same names (Golether-<version>-osx-arm64.tar.gz, -osx-x64) are replaced; the
-#     others stay untouched.
+#   - by hand: Actions -> Packages -> Run workflow. The packages appear as "Artifacts" of the run; nothing is released.
+#   - by a version tag (git tag 0.3.2 && git push origin 0.3.2). The tag must equal <Version> of Directory.Build.props.
+#     The packages and SHA256SUMS-<version>.txt are attached to the release of that tag; a release that does not exist
+#     yet is created as a draft, so nothing is published by itself: write the notes, check the files, press Publish,
+#     then update Sources/Apps/Golether.Pages/updates.json. Files with the same names are replaced, others stay.
 #
-# Everything else of a release (the Windows installers and archives, the Linux package of the application, the server
-# packages and the checksums) is built on the developer's machine by Scripts/build-release.ps1 and added to the same
-# release.
+# Code signing goes into the Windows jobs, between "Build" and the upload of the artifact (see the notes there):
+# a signing service such as SignPath signs the files of the artifact, and the signed ones are what the release gets.
+# Scripts/build-release.ps1 still builds the same packages on a developer's machine.
 name: Packages
 
 on:
@@ -21,9 +22,90 @@ on:
 permissions:
   contents: read
 
+env:
+  DOTNET_CLI_TELEMETRY_OPTOUT: 1
+  DOTNET_NOLOGO: 1
+
 jobs:
-  build:
-    name: ${{ matrix.runtime }}
+  version:
+    name: Version
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.read.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Read the version and match it with the tag
+        id: read
+        run: |
+          version="$(sed -n 's:.*<Version>\(.*\)</Version>.*:\1:p' Directory.Build.props | head -n 1)"
+          if [ -z "$version" ]; then
+            echo "::error::No <Version> in Directory.Build.props."
+            exit 1
+          fi
+          if [ "${GITHUB_REF_TYPE}" = tag ] && [ "${GITHUB_REF_NAME}" != "$version" ]; then
+            echo "::error::The tag ${GITHUB_REF_NAME} differs from the version $version of Directory.Build.props."
+            exit 1
+          fi
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+
+  app-windows:
+    name: Application, Windows
+    needs: version
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: global.json
+      # The video and camera components (libmpv, GStreamer) are pinned by SHA-256 in the catalog; the download of a
+      # catalog is kept between runs.
+      - uses: actions/cache@v4
+        with:
+          path: artifacts/cache/components
+          key: components-win-x64-${{ hashFiles('Sources/Components/Golether.Components/Catalog/ComponentCatalog.cs') }}
+      - name: Inno Setup
+        shell: powershell
+        run: |
+          if (-not (Get-ChildItem "${env:ProgramFiles(x86)}", "$env:ProgramFiles" -Filter 'Inno Setup*' -Directory -ErrorAction SilentlyContinue)) {
+              choco install innosetup --no-progress -y
+          }
+      - name: Build
+        shell: powershell
+        run: ./Scripts/App/build-installer.ps1
+      # Code signing: sign Golether-*-setup.exe and the executables inside Golether-*-win-x64.zip here, before the
+      # upload, so the release gets the signed files.
+      - uses: actions/upload-artifact@v4
+        with:
+          name: app-windows
+          path: |
+            artifacts/publish/Golether-*-win-x64.zip
+            artifacts/publish/Golether-*-setup.exe
+          if-no-files-found: error
+
+  app-linux:
+    name: Application, Linux
+    needs: version
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: global.json
+      # The .tar.gz, the .zip and the .deb (dpkg-deb is part of Ubuntu).
+      - name: Build
+        run: bash Scripts/App/publish-linux.sh linux-x64
+      - uses: actions/upload-artifact@v4
+        with:
+          name: app-linux
+          path: |
+            artifacts/publish/Golether-*-linux-x64.tar.gz
+            artifacts/publish/Golether-*-linux-x64.zip
+            artifacts/publish/Golether-*-linux-x64.deb
+          if-no-files-found: error
+
+  app-macos:
+    name: Application, ${{ matrix.runtime }}
+    needs: version
     # macos-latest is Apple silicon; it also builds the Intel package, .NET publishes for another processor without trouble.
     runs-on: macos-latest
     strategy:
@@ -35,18 +117,69 @@ jobs:
       - uses: actions/setup-dotnet@v4
         with:
           global-json-file: global.json
-      - name: Build the package
+      - name: Build
         run: bash Scripts/App/publish-macos.sh "${{ matrix.runtime }}"
       - uses: actions/upload-artifact@v4
         with:
-          name: Golether-${{ matrix.runtime }}
+          name: app-${{ matrix.runtime }}
           path: artifacts/publish/Golether-*-${{ matrix.runtime }}.tar.gz
           if-no-files-found: error
 
+  server-windows:
+    name: Server, Windows
+    needs: version
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: global.json
+      - name: Inno Setup
+        shell: powershell
+        run: |
+          if (-not (Get-ChildItem "${env:ProgramFiles(x86)}", "$env:ProgramFiles" -Filter 'Inno Setup*' -Directory -ErrorAction SilentlyContinue)) {
+              choco install innosetup --no-progress -y
+          }
+      - name: Build
+        shell: powershell
+        run: ./Scripts/Server/build-server-installer.ps1
+      # Code signing: sign GoletherServer-*-setup.exe and the executables inside GoletherServer-*-win-x64.zip here.
+      - uses: actions/upload-artifact@v4
+        with:
+          name: server-windows
+          path: |
+            artifacts/publish/GoletherServer-*-win-x64.zip
+            artifacts/publish/GoletherServer-*-setup.exe
+          if-no-files-found: error
+
+  server-unix:
+    name: Server, ${{ matrix.runtime }}
+    needs: version
+    # The server packages of Linux and macOS are made on Linux, as build-release.ps1 makes them in Git Bash.
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        runtime: [linux-x64, osx-arm64]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: global.json
+      - name: Build
+        run: bash Scripts/Server/publish-server.sh "${{ matrix.runtime }}"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: server-${{ matrix.runtime }}
+          path: |
+            artifacts/publish/GoletherServer-*-${{ matrix.runtime }}.tar.gz
+            artifacts/publish/GoletherServer-*-${{ matrix.runtime }}.zip
+          if-no-files-found: error
+
   release:
-    name: Attach to the release
+    name: Draft release
     if: startsWith(github.ref, 'refs/tags/')
-    needs: build
+    needs: [version, app-windows, app-linux, app-macos, server-windows, server-unix]
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -54,16 +187,24 @@ jobs:
       GH_TOKEN: ${{ github.token }}
       GH_REPO: ${{ github.repository }}
       TAG: ${{ github.ref_name }}
+      VERSION: ${{ needs.version.outputs.version }}
     steps:
       - uses: actions/download-artifact@v4
         with:
           path: packages
           merge-multiple: true
-      - name: Upload the archives
+      # The usual sha256sum format, so "sha256sum -c" checks a download.
+      - name: Checksums
+        working-directory: packages
+        run: |
+          sha256sum -- * > "SHA256SUMS-$VERSION.txt"
+          cat "SHA256SUMS-$VERSION.txt"
+      - name: Attach to the release
         run: |
           ls -l packages
           if gh release view "$TAG" >/dev/null 2>&1; then
-            gh release upload "$TAG" packages/*.tar.gz --clobber
+            gh release upload "$TAG" packages/* --clobber
           else
-            gh release create "$TAG" packages/*.tar.gz --draft --title "Golether $TAG" --notes "The macOS packages. Add the packages of Scripts/build-release.ps1 and the notes, then publish."
+            gh release create "$TAG" packages/* --draft --title "Golether $TAG" \
+              --notes "Every package of Golether $TAG. Write the notes, check the files, then publish and update updates.json."
           fi

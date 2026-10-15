@@ -180,13 +180,16 @@ Cómo compilarlos sin tener a mano una máquina Linux o un Mac:
   detiene; `-ContinueOnError` ejecuta el resto, `-Skip AppLinux,ServerMacOS` omite pasos. Al final enumera los
   paquetes de la versión con su tamaño y su SHA-256 y escribe `artifacts/publish/SHA256SUMS-<version>.txt` para la
   versión. La máquina necesita Inno Setup, WSL y Git para Windows; cada paso indica lo que falta.
-- **macOS en GitHub.** El flujo **Packages** (`.github/workflows/packages.yml`) compila solo los paquetes de macOS de
-  la aplicación, para Apple silicon (`osx-arm64`) e Intel (`osx-x64`): necesitan `sips`, `iconutil` y
-  `codesign`, que solo existen en macOS. Una ejecución a mano (Actions → Packages → Run workflow) da los archivos como
-  artefactos de la ejecución. Una ejecución por una etiqueta de versión (`git tag 0.3.0; git push origin 0.3.0`)
-  además los adjunta a la versión de esa etiqueta; si no hay versión, se crea un borrador. El resto de la versión sale
-  de `build-release.ps1` y se añade a la misma versión; el flujo solo sustituye los archivos con los nombres de sus
-  propios archivos.
+- **En GitHub.** Allí funcionan dos workflows. **CI** (`.github/workflows/ci.yml`) compila la solución y ejecuta todas
+  las pruebas en Windows y Linux en cada push a `main` y en cada pull request; con las reglas de estilo y las pruebas
+  de convenciones, una regla rota pone la ejecución en rojo. **Packages** (`.github/workflows/packages.yml`) compila
+  todos los paquetes de una versión: la aplicación para Windows (instalador y `.zip`), Linux (`.deb`, `.tar.gz`,
+  `.zip`) y macOS (Apple silicon e Intel), y el servidor para Windows, Linux y macOS. Una ejecución a mano (Actions →
+  Packages → Run workflow) los deja como artefactos de la ejecución. Una etiqueta de versión igual a `<Version>` de
+  `Directory.Build.props` (`git tag 0.3.2; git push origin 0.3.2`) además los adjunta con `SHA256SUMS-<version>.txt` a
+  la versión de esa etiqueta, creada como borrador: escriba las notas, revise los archivos, publique y solo entonces
+  actualice `updates.json` de la página del proyecto. La firma de código va en los trabajos de Windows de este
+  workflow.
 
 ## Depurar la red
 

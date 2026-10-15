@@ -178,12 +178,15 @@ Como compilá-los sem ter à mão uma máquina Linux ou um Mac:
   para-o; `-ContinueOnError` executa o resto, `-Skip AppLinux,ServerMacOS` deixa passos de fora. No fim, lista os
   pacotes da versão com o tamanho e o SHA-256 e escreve `artifacts/publish/SHA256SUMS-<version>.txt` para a versão. A
   máquina precisa do Inno Setup, do WSL e do Git para Windows; cada passo diz o que falta.
-- **macOS no GitHub.** O workflow **Packages** (`.github/workflows/packages.yml`) compila apenas os pacotes macOS da
-  aplicação, para Apple silicon (`osx-arm64`) e Intel (`osx-x64`): precisam de `sips`, `iconutil` e `codesign`,
-  que só existem no macOS. Uma execução à mão (Actions → Packages → Run workflow) dá os arquivos como artefactos da
-  execução. Uma execução por uma etiqueta de versão (`git tag 0.3.0; git push origin 0.3.0`) também os anexa à versão
-  dessa etiqueta; se não houver versão, é criado um rascunho. O resto da versão vem do `build-release.ps1` e é
-  adicionado à mesma versão; o workflow só substitui os ficheiros com os nomes dos seus próprios arquivos.
+- **No GitHub.** Correm lá dois workflows. **CI** (`.github/workflows/ci.yml`) compila a solução e corre todos os
+  testes no Windows e no Linux a cada push para `main` e a cada pull request; com as regras de estilo e os testes de
+  convenções, uma regra violada põe a execução a vermelho. **Packages** (`.github/workflows/packages.yml`) compila
+  todos os pacotes de uma versão: a aplicação para Windows (instalador e `.zip`), Linux (`.deb`, `.tar.gz`, `.zip`) e
+  macOS (Apple silicon e Intel), e o servidor para Windows, Linux e macOS. Uma execução à mão (Actions → Packages →
+  Run workflow) dá-os como artefactos da execução. Uma etiqueta de versão igual a `<Version>` de
+  `Directory.Build.props` (`git tag 0.3.2; git push origin 0.3.2`) anexa-os também, com `SHA256SUMS-<version>.txt`, à
+  versão dessa etiqueta, criada como rascunho: escreva as notas, verifique os ficheiros, publique e só depois atualize
+  `updates.json` da página do projeto. A assinatura de código entra nos trabalhos de Windows deste workflow.
 
 ## Depurar a rede
 

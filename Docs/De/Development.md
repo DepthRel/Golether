@@ -180,13 +180,16 @@ So baut man sie ohne einen Linux-Rechner oder einen Mac zur Hand:
   es an; `-ContinueOnError` führt den Rest aus, `-Skip AppLinux,ServerMacOS` lässt Schritte weg. Am Ende listet es die
   Pakete der Version mit Größe und SHA-256 auf und schreibt `artifacts/publish/SHA256SUMS-<version>.txt` für das
   Release. Der Rechner braucht Inno Setup, WSL und Git für Windows; jeder Schritt sagt, was fehlt.
-- **macOS auf GitHub.** Der Workflow **Packages** (`.github/workflows/packages.yml`) baut nur die macOS-Pakete der
-  Anwendung, für Apple Silicon (`osx-arm64`) und Intel (`osx-x64`): Sie brauchen `sips`, `iconutil` und
-  `codesign`, die es nur unter macOS gibt. Ein Lauf von Hand (Actions → Packages → Run workflow) liefert die Archive
-  als Artefakte des Laufs. Ein Lauf durch ein Versions-Tag (`git tag 0.3.0; git push origin 0.3.0`) hängt sie außerdem
-  an das Release dieses Tags; gibt es kein Release, wird ein Entwurf erstellt. Der Rest des Releases kommt aus
-  `build-release.ps1` und wird zum selben Release hinzugefügt; der Workflow ersetzt nur die Dateien mit den Namen
-  seiner eigenen Archive.
+- **Auf GitHub.** Dort laufen zwei Workflows. **CI** (`.github/workflows/ci.yml`) baut die Projektmappe und führt alle
+  Tests unter Windows und Linux aus, bei jedem Push nach `main` und jedem Pull-Request; mit den Stilregeln und den
+  Konventionstests macht eine verletzte Regel den Lauf rot. **Packages** (`.github/workflows/packages.yml`) baut jedes
+  Paket eines Releases: die Anwendung für Windows (Installationsprogramm und `.zip`), Linux (`.deb`, `.tar.gz`,
+  `.zip`) und macOS (Apple Silicon und Intel) sowie den Server für Windows, Linux und macOS. Ein Lauf von Hand
+  (Actions → Packages → Run workflow) liefert sie als Artefakte des Laufs. Ein Versions-Tag gleich `<Version>` aus
+  `Directory.Build.props` (`git tag 0.3.2; git push origin 0.3.2`) hängt sie außerdem mit `SHA256SUMS-<version>.txt`
+  an das Release dieses Tags, das als Entwurf angelegt wird: Notizen schreiben, Dateien prüfen, veröffentlichen und
+  erst dann `updates.json` der Projektseite aktualisieren. Die Codesignatur kommt in die Windows-Jobs dieses
+  Workflows.
 
 ## Netzwerk debuggen
 
