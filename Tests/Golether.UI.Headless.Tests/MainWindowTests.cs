@@ -919,13 +919,25 @@ public sealed class MainWindowTests
         var markerCenter = marker.TranslatePoint(new Point(marker.Bounds.Width / 2, 0), fixture.Window)!.Value.X;
         Assert.InRange(markerCenter - thumbCenter, -1.5, 1.5);
 
-        // The mark is the chosen avatar when there is one, and the coloured initial otherwise.
+        // The mark is the chosen avatar when there is one, and the coloured initial otherwise. The avatar comes the
+        // way it does in the application, from the session: set on the tile alone, the next refresh would take it
+        // away again.
         var you = (ParticipantItemViewModel)marker.DataContext!;
         Assert.DoesNotContain(marker.GetVisualDescendants().OfType<Image>(), image => image.IsEffectivelyVisible);
-        var avatar = new Avalonia.Media.Imaging.WriteableBitmap(new PixelSize(8, 8), new Vector(96, 96), Avalonia.Platform.PixelFormat.Bgra8888, Avalonia.Platform.AlphaFormat.Opaque);
-        you.AvatarImage = avatar;
+        using var png = new MemoryStream();
+        using (var picture = new Avalonia.Media.Imaging.WriteableBitmap(new PixelSize(8, 8), new Vector(96, 96), Avalonia.Platform.PixelFormat.Bgra8888, Avalonia.Platform.AlphaFormat.Opaque))
+        {
+            picture.Save(png, Avalonia.Media.Imaging.PngBitmapEncoderOptions.Default);
+        }
+
+        fixture.Sessions.AvatarReceived += Raise.Event<EventHandler<AvatarUpdate>>(fixture.Sessions, new AvatarUpdate(you.PeerId, png.ToArray(), true));
         await fixture.Settle();
-        Assert.Contains(marker.GetVisualDescendants().OfType<Image>(), image => image.IsEffectivelyVisible && ReferenceEquals(image.Source, avatar));
+        Assert.NotNull(you.AvatarImage);
+        Assert.Contains(marker.GetVisualDescendants().OfType<Image>(), image => image.IsEffectivelyVisible && ReferenceEquals(image.Source, you.AvatarImage));
+
+        fixture.ViewModel.Refresh();
+        await fixture.Settle();
+        Assert.Contains(marker.GetVisualDescendants().OfType<Image>(), image => image.IsEffectivelyVisible && ReferenceEquals(image.Source, you.AvatarImage));
 
         var folder = Environment.GetEnvironmentVariable("GOLETHER_TEST_SCREENSHOTS");
         if (!string.IsNullOrEmpty(folder))

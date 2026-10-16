@@ -994,6 +994,13 @@ public sealed class ParticipantSession : IAsyncDisposable
         }
         finally
         {
+            // The host that said goodbye waits for this end to close before it closes its own: then nothing it was
+            // sent is lost to a reset of the connection.
+            if (ClosedByHost && _disposed == 0)
+            {
+                await _channel!.DisposeAsync().ConfigureAwait(false);
+            }
+
             if (_disposed == 0)
             {
                 // The reason is in place before anybody is told that the session ended.

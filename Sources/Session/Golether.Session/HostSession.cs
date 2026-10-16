@@ -111,7 +111,8 @@ public sealed class HostSession : IAsyncDisposable
     private readonly ConcurrentDictionary<PeerId, string> _reconnectTickets = new();
 
     /// <summary>
-    /// How long the end of the session waits for the farewell to reach the participants.
+    /// How long a farewell (the end of the session, a removal) waits to reach a participant and for the participant
+    /// to close its end of the connection.
     /// </summary>
     private static readonly TimeSpan _farewellTime = TimeSpan.FromSeconds(3);
 
@@ -514,10 +515,11 @@ public sealed class HostSession : IAsyncDisposable
             connection.End();
             _avatars.TryRemove(peerId, out _);
             await TrySendAsync(connection, new RejectedMessage(RejectReason.Removed, nameof(RejectReason.Removed))).ConfigureAwait(false);
-            await connection.Channel.DisposeAsync().ConfigureAwait(false);
             Raise(peerId, Texts.Format("Session.Event.ParticipantRemoved", connection.Info.DisplayName));
             await SyncConferenceAsync().ConfigureAwait(false);
             await BroadcastParticipantsAsync().ConfigureAwait(false);
+
+            await CloseAfterFarewellAsync(connection, Task.Delay(_farewellTime, _timeProvider)).ConfigureAwait(false);
         }
     }
 
@@ -556,7 +558,10 @@ public sealed class HostSession : IAsyncDisposable
         // Everybody is told that the session is over, so their screens go back to the start instead of trying to
         // come back. The farewell is given a short time: a participant on a stuck connection must not keep the
         // host from ending the session or closing the application.
-        await Task.WhenAny(BroadcastAsync(new ByeMessage(null)), Task.Delay(_farewellTime, _timeProvider)).ConfigureAwait(false);
+        var deadline = Task.Delay(_farewellTime, _timeProvider);
+        await Task.WhenAny(BroadcastAsync(new ByeMessage(null)), deadline).ConfigureAwait(false);
+        await Task.WhenAll(_participants.Values.Select(c => CloseAfterFarewellAsync(c, deadline))).ConfigureAwait(false);
+
         await _stopping.CancelAsync().ConfigureAwait(false);
         foreach (var connection in _participants.Values)
         {
@@ -720,6 +725,12 @@ public sealed class HostSession : IAsyncDisposable
                     return;
                 }
 
+                // A removed participant is still read until it closes its end, but nothing it says counts.
+                if (connection.Lifetime.IsCancellationRequested)
+                {
+                    continue;
+                }
+
                 await HandleMessageAsync(connection, message, cancellationToken).ConfigureAwait(false);
             }
         }
@@ -730,7 +741,7 @@ public sealed class HostSession : IAsyncDisposable
         finally
         {
             connection?.End();
-            if (connection is not null && _participants.TryRemove(new KeyValuePair<PeerId, Connection>(peer, connection)))
+            if (connection is not null && _participants.TryRemove(new KeyValuePair<PeerId, Connection>(peer, connection)) && _ended == 0)
             {
                 _avatars.TryRemove(peer, out _);
                 Raise(peer, Texts.Format("Session.Event.ParticipantLeft", connection.Info.DisplayName));
@@ -739,6 +750,7 @@ public sealed class HostSession : IAsyncDisposable
             }
 
             await channel.DisposeAsync().ConfigureAwait(false);
+            connection?.MarkClosed();
         }
     }
 
@@ -1205,6 +1217,22 @@ public sealed class HostSession : IAsyncDisposable
     }
 
     /// <summary>
+    /// Closes the control channel of a participant that was told goodbye. The participant closes its end when it
+    /// reads the farewell, and until then its messages are still read: closing this end with some of them unread
+    /// would reset the connection, and a reset may throw away the farewell before the participant reads it (Windows
+    /// does). A participant that does not close its end by the deadline is not waited for.
+    /// </summary>
+    /// <param name="connection">The participant.</param>
+    /// <param name="deadline">Completes when waiting is over.</param>
+    /// <returns>A task that completes when the channel is closed.</returns>
+    private static async Task CloseAfterFarewellAsync(Connection connection, Task deadline)
+    {
+        await Task.WhenAny(connection.Closed, deadline).ConfigureAwait(false);
+
+        await connection.Channel.DisposeAsync().ConfigureAwait(false);
+    }
+
+    /// <summary>
     /// Raises an event feed entry and a change notification.
     /// </summary>
     /// <param name="actor">The participant, or <see langword="null"/>.</param>
@@ -1265,6 +1293,11 @@ public sealed class HostSession : IAsyncDisposable
         private readonly CancellationTokenSource _lifetime = new();
 
         /// <summary>
+        /// Completes when the control channel has been read to its end and closed.
+        /// </summary>
+        private readonly TaskCompletionSource _closed = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        /// <summary>
         /// Initializes a new instance of the <see cref="Connection"/> class.
         /// </summary>
         /// <param name="info">The participant.</param>
@@ -1319,8 +1352,18 @@ public sealed class HostSession : IAsyncDisposable
         public CancellationToken Lifetime => _lifetime.Token;
 
         /// <summary>
+        /// Gets a task that completes when the control channel has been read to its end and closed.
+        /// </summary>
+        public Task Closed => _closed.Task;
+
+        /// <summary>
         /// Ends the admission: closes the media streams of the participant.
         /// </summary>
         public void End() => _lifetime.Cancel();
+
+        /// <summary>
+        /// Notes that the control channel has been read to its end and closed.
+        /// </summary>
+        public void MarkClosed() => _closed.TrySetResult();
     }
 }
