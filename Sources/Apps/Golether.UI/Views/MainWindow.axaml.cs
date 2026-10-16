@@ -78,9 +78,10 @@ public sealed partial class MainWindow : Window
     private const double REVEAL_EDGE = 24;
 
     /// <summary>
-    /// The cursor over the video while it is hidden.
+    /// The cursor over the video while it is hidden. Not static: a cursor needs the platform, and the type must load
+    /// before the platform starts (tests read <see cref="ChromeDelay"/> first).
     /// </summary>
-    private static readonly Cursor _hiddenCursor = new(StandardCursorType.None);
+    private readonly Cursor _hiddenCursor = new(StandardCursorType.None);
 
     /// <summary>
     /// Decides when the bars and the cursor are shown in full screen.

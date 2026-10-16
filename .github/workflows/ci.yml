@@ -49,12 +49,14 @@ jobs:
           set -o pipefail
           dotnet test --solution Golether.slnx -c Release --no-build 2>&1 | tee test-output.log
       # A failed test becomes an annotation of the run, readable on its page (and through the public API) without the
-      # whole log; the whole output of the tests is kept as an artifact.
+      # whole log; the whole output of the tests is kept as an artifact. The output is colored, so the colors are
+      # taken off before looking for the lines.
       - name: Report what failed
         if: failure()
         shell: bash
         run: |
-          grep -E '^failed |aborted|crashed|Unhandled exception|exit code' test-output.log | head -n 40 \
+          sed 's/\x1b\[[0-9;]*m//g' test-output.log \
+            | grep -E '^failed |aborted|crashed|Unhandled exception|exit code' | head -n 40 \
             | sed 's/^/::error title=Test (${{ matrix.os }})::/' || true
       - uses: actions/upload-artifact@v4
         if: failure()

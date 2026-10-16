@@ -120,7 +120,7 @@ public sealed class UpdateServiceTests
             var update = new UpdateInfo("0.2.0", null, "https://example.org/golether-0.2.0.exe", hash, payload.Length);
             var steps = new List<double>();
 
-            var path = await service.DownloadAsync(update, folder.FullName, new Progress<double>(steps.Add), token);
+            var path = await service.DownloadAsync(update, folder.FullName, new ListProgress(steps), token);
 
             Assert.Equal(Path.Combine(folder.FullName, "golether-0.2.0.exe"), path);
             Assert.Equal(payload, await File.ReadAllBytesAsync(path, token));
@@ -135,6 +135,17 @@ public sealed class UpdateServiceTests
         {
             folder.Delete(recursive: true);
         }
+    }
+
+    /// <summary>
+    /// Records every reported step at once. <see cref="Progress{T}"/> would not do: it reports on the thread pool, so
+    /// the last step could still be on its way when the test looks.
+    /// </summary>
+    /// <param name="steps">Receives the steps.</param>
+    private sealed class ListProgress(List<double> steps) : IProgress<double>
+    {
+        /// <inheritdoc />
+        public void Report(double value) => steps.Add(value);
     }
 
     /// <summary>
