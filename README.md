@@ -8,6 +8,7 @@
 </p>
 
 <p align="center">
+  <a href="https://github.com/DepthRel/Golether/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/DepthRel/Golether/actions/workflows/ci.yml/badge.svg?branch=main"></a>
   <img alt="License: GPL-3.0-or-later" src="https://img.shields.io/badge/license-GPL--3.0--or--later-F0A860">
   <img alt=".NET 10" src="https://img.shields.io/badge/.NET-10-512BD4">
   <img alt="Platforms" src="https://img.shields.io/badge/platforms-Windows%20%7C%20Linux%20%7C%20macOS-4FB3A5">
