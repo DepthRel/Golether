@@ -63,12 +63,8 @@ jobs:
         with:
           path: artifacts/cache/components
           key: components-win-x64-${{ hashFiles('Sources/Components/Golether.Components/Catalog/ComponentCatalog.cs') }}
-      - name: Inno Setup
-        shell: powershell
-        run: |
-          if (-not (Get-ChildItem "${env:ProgramFiles(x86)}", "$env:ProgramFiles" -Filter 'Inno Setup*' -Directory -ErrorAction SilentlyContinue)) {
-              choco install innosetup --no-progress -y
-          }
+      # The same Inno Setup as on a developer's machine, not the older one of the runner image.
+      - uses: ./.github/actions/inno-setup
       - name: Build
         shell: powershell
         run: ./Scripts/App/build-installer.ps1
@@ -134,12 +130,7 @@ jobs:
       - uses: actions/setup-dotnet@v4
         with:
           global-json-file: global.json
-      - name: Inno Setup
-        shell: powershell
-        run: |
-          if (-not (Get-ChildItem "${env:ProgramFiles(x86)}", "$env:ProgramFiles" -Filter 'Inno Setup*' -Directory -ErrorAction SilentlyContinue)) {
-              choco install innosetup --no-progress -y
-          }
+      - uses: ./.github/actions/inno-setup
       - name: Build
         shell: powershell
         run: ./Scripts/Server/build-server-installer.ps1

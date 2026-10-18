@@ -1,0 +1,42 @@
+# Installs the Inno Setup the installers are built and checked with, so a release gets the same wizard as a build on
+# a developer's machine. The runner image carries an older Inno Setup of its own and Chocolatey offers only 6.x, so the
+# official setup is downloaded from the releases of jrsoftware/issrc, checked by SHA-256 and put first in PATH, where
+# build-installer.ps1 and build-server-installer.ps1 look for ISCC.exe before anything else.
+name: Inno Setup
+description: Installs the pinned Inno Setup and puts ISCC.exe first in PATH.
+
+runs:
+  using: composite
+  steps:
+    - name: Inno Setup
+      shell: powershell
+      env:
+        INNO_VERSION: 7.1.0
+        INNO_URL: https://github.com/jrsoftware/issrc/releases/download/is-7_1_0/innosetup-7.1.0-x64.exe
+        INNO_SHA256: 0362a383ed217d4c4239b5933866dd96d3eb2102737da92f80f6057a4b40df2f
+      run: |
+        $ErrorActionPreference = 'Stop'
+        $setup = Join-Path $env:RUNNER_TEMP 'innosetup.exe'
+        $dir = Join-Path $env:RUNNER_TEMP 'InnoSetup'
+
+        Invoke-WebRequest -Uri $env:INNO_URL -OutFile $setup -UseBasicParsing
+        $hash = (Get-FileHash -Algorithm SHA256 $setup).Hash
+        if ($hash -ne $env:INNO_SHA256) {
+            throw "The Inno Setup download has SHA-256 $hash, expected $env:INNO_SHA256."
+        }
+
+        $process = Start-Process -FilePath $setup -Wait -PassThru -ArgumentList @(
+            '/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART', '/SP-', "/DIR=`"$dir`"")
+        if ($process.ExitCode -ne 0) {
+            throw "The Inno Setup installation failed with exit code $($process.ExitCode)."
+        }
+
+        # The file version of ISCC.exe is 0.0.0.0; the compiler itself tells the true one.
+        $iscc = Join-Path $dir 'ISCC.exe'
+        $version = "$(& $iscc --version)".Trim()
+        if ($LASTEXITCODE -ne 0 -or $version -ne $env:INNO_VERSION) {
+            throw "ISCC.exe is version '$version', expected $env:INNO_VERSION."
+        }
+
+        Add-Content -Path $env:GITHUB_PATH -Value $dir
+        Write-Host "Inno Setup ${version}: $iscc"
