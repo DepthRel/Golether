@@ -146,6 +146,12 @@ rechts) blendet die Leiste ganz aus und überlässt den Platz den Teilnehmerkach
 zeigt sein Reiter einen Zähler neuer Nachrichten. Nachrichten laufen über denselben geschützten Kanal wie der Rest der
 Sitzung und werden nirgends gespeichert: Wird die Sitzung geschlossen, sind sie weg.
 
+Solange der Chat nicht zu sehen ist, steht außerdem ein orangefarbenes „i“ im Kreis an der Ecke seines Reiters, und
+solange die ganze Leiste ausgeblendet ist, läuft ein kurzer orangefarbener Streifen langsam um die Pfeiltaste. Der
+Reiter **EREIGNISSE** verlangt nie Aufmerksamkeit. Eine Nachricht eines anderen Teilnehmers kündigt ein kurzer Schlag
+einer Filmklappe an; eigene Nachrichten und Reaktionen bleiben stumm. Der Ton wird in **Einstellungen**, Abschnitt
+**Töne**, ausgeschaltet.
+
 Das Smiley-Symbol in der Player-Leiste schickt eine Reaktion: Einige Sekunden lang schwebt sie bei allen Teilnehmern
 über dem Video, mit dem Namen des Absenders. Reaktionen sind ab dem Beitritt zur Sitzung verfügbar, noch bevor ein Film
 gewählt ist. Die Ebene mit den Reaktionen lässt Klicks durch: Pause per Klick auf das Video funktioniert weiter.

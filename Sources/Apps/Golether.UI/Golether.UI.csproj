@@ -14,7 +14,9 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <AvaloniaResource Include="Assets\**" />
+    <AvaloniaResource Include="Assets\**" Exclude="Assets\Sounds\**" />
+    <!-- The notification sounds were made by the project itself; the code reads them, not the windows. -->
+    <EmbeddedResource Include="Assets\Sounds\*.wav" LogicalName="Golether.UI.Sounds.%(Filename)%(Extension)" />
   </ItemGroup>
 
   <ItemGroup>

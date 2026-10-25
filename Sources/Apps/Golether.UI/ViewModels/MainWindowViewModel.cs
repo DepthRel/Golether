@@ -159,6 +159,11 @@ public sealed partial class MainWindowViewModel : ObservableObject
     private readonly IAvatarStore? _avatarStore;
 
     /// <summary>
+    /// The sound of new chat messages, or <see langword="null"/> when sounds are not offered.
+    /// </summary>
+    private readonly ChatSoundNotifier? _chatSound;
+
+    /// <summary>
     /// The avatar bitmaps received for each participant, applied to their tiles.
     /// </summary>
     private readonly Dictionary<PeerId, object?> _peerAvatars = [];
@@ -235,6 +240,7 @@ public sealed partial class MainWindowViewModel : ObservableObject
     /// <param name="language">The language selector, or <see langword="null"/> when the language cannot be chosen.</param>
     /// <param name="avatarStore">Keeps the chosen avatar, or <see langword="null"/> when avatars are not offered.</param>
     /// <param name="timeProvider">The time source, or <see langword="null"/> for the system clock.</param>
+    /// <param name="chatSound">The sound of new chat messages, or <see langword="null"/> when sounds are not offered.</param>
     public MainWindowViewModel(
         ISessionService session,
         IDialogService dialogs,
@@ -249,10 +255,12 @@ public sealed partial class MainWindowViewModel : ObservableObject
         IUpdateService? updates = null,
         LanguageViewModel? language = null,
         IAvatarStore? avatarStore = null,
-        TimeProvider? timeProvider = null)
+        TimeProvider? timeProvider = null,
+        ChatSoundNotifier? chatSound = null)
     {
         ArgumentNullException.ThrowIfNull(components);
         _avatarStore = avatarStore;
+        _chatSound = chatSound;
         _timeProvider = timeProvider ?? TimeProvider.System;
         Language = language;
         VideoComponent = new ComponentItemViewModel(ComponentId.Video, components, dialogs);
@@ -290,6 +298,13 @@ public sealed partial class MainWindowViewModel : ObservableObject
         _updates = updates;
 
         Chat = new ChatViewModel(_session, _dispatcher);
+        Chat.PropertyChanged += (_, e) =>
+        {
+            if (e.PropertyName == nameof(ChatViewModel.HasUnread))
+            {
+                OnPropertyChanged(nameof(HighlightPanelToggle));
+            }
+        };
         Drawing = new DrawingViewModel(_session, _dispatcher);
 
         conference.MuteChanged += (_, _) => _dispatcher.Post(() =>
@@ -500,7 +515,7 @@ public sealed partial class MainWindowViewModel : ObservableObject
     /// Gets or sets a value indicating whether the side panel (chat or event feed) is shown.
     /// </summary>
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(ShowChat), nameof(ShowEvents), nameof(SidePanelArrow))]
+    [NotifyPropertyChangedFor(nameof(ShowChat), nameof(ShowEvents), nameof(SidePanelArrow), nameof(HighlightPanelToggle))]
     public partial bool EventsExpanded { get; set; } = true;
 
     /// <summary>
@@ -534,6 +549,12 @@ public sealed partial class MainWindowViewModel : ObservableObject
     /// Gets the arrow of the side panel button.
     /// </summary>
     public string SidePanelArrow => EventsExpanded ? "▾" : "▸";
+
+    /// <summary>
+    /// Gets a value indicating whether the button of the side panel draws attention: the panel is hidden and new
+    /// messages came to the chat. The event feed never asks for attention.
+    /// </summary>
+    public bool HighlightPanelToggle => !EventsExpanded && Chat.HasUnread;
 
     /// <summary>
     /// Gets the camera and microphone choice, or <see langword="null"/> when the backend cannot list devices.
@@ -818,7 +839,10 @@ public sealed partial class MainWindowViewModel : ObservableObject
             ChecksUpdates,
             UpdateUrl,
             SetUpdateSource,
-            OpenAboutAsync);
+            OpenAboutAsync,
+            canChooseSounds: _chatSound is not null,
+            chatSound: _chatSound?.Enabled ?? false,
+            applyChatSound: _chatSound is null ? null : _chatSound.SetEnabled);
 
         // Reading the device lists asks the media backend and takes a moment, so it runs while the window is already
         // on screen. Refilling the lists empties the boxes, so the choice is put back once the lists are complete.
@@ -1444,6 +1468,10 @@ public sealed partial class MainWindowViewModel : ObservableObject
         EventsExpanded = await _settings.GetAsync(EVENTS_EXPANDED_SETTING, CancellationToken.None) != "false";
         IsLayoutResizable = await _settings.GetAsync(LAYOUT_RESIZABLE_SETTING, CancellationToken.None) == "true";
         AlwaysShowBars = await _settings.GetAsync(ALWAYS_SHOW_BARS_SETTING, CancellationToken.None) == "true";
+        if (_chatSound is not null)
+        {
+            await _chatSound.LoadAsync();
+        }
 
         // A stored width means something only while the border can be dragged; a locked layout is the designed one.
         if (IsLayoutResizable &&

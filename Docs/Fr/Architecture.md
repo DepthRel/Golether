@@ -99,6 +99,11 @@ Chaque flux est une connexion TLS séparée avec le préambule `GLTH`, une versi
   reçoit son propre flux `Relay`) ; l'hôte confie chaque canal d'un participant admis à `TurnServer`. C'est pourquoi les
   caméras et la voix fonctionnent partout où la séance fonctionne, même quand l'UDP est bloqué et que le port du relais
   est fermé de l'extérieur. ICE propose toujours aussi l'UDP direct et le prend quand il passe.
+  Le flux partagé peut ne s'ouvrir qu'après que la première connexion WebRTC a renoncé à chercher le relais (une
+  rencontre par le serveur de rendez-vous prend des secondes). C'est pourquoi le côté qui offre refait une connexion
+  qui échoue (ICE ou DTLS) ou ne s'établit pas en 20 secondes au bout de 3, 6, 12, 24 puis toutes les 30 secondes ;
+  sa nouvelle offre porte un autre identifiant de session sur la ligne `o=` (le certificat DTLS est unique par
+  processus) et remplace la connexion du côté qui répond.
 - **TURN** (port de la séance + 1) : le relais `Golether.Transports.Relay` pour WebRTC (RFC 5766 sur TCP, relais sur
   UDP). Seuls les participants de versions antérieures ont besoin d'un port à part. Les identifiants du relais sont créés
   pour une séance et n'atteignent un participant que dans l'accueil après l'admission ; le relais ne transmet les paquets

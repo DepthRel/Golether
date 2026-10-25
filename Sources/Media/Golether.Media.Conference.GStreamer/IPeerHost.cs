@@ -32,11 +32,18 @@ internal interface IPeerHost
     void DeliverAudio(WebRtcPeer peer, ReadOnlySpan<byte> pcm);
 
     /// <summary>
-    /// Drops a peer whose DTLS connection failed or could not be verified.
+    /// Drops a peer whose DTLS certificate does not match the signaled fingerprint.
     /// </summary>
     /// <param name="peer">The peer.</param>
     /// <param name="reason">The reason for the log.</param>
     void RejectPeer(WebRtcPeer peer, string reason);
+
+    /// <summary>
+    /// Learns that a connection failed or was not made in time; the connection is made again.
+    /// </summary>
+    /// <param name="peer">The peer.</param>
+    /// <param name="reason">The reason for the log.</param>
+    void ReportFailure(WebRtcPeer peer, string reason);
 
     /// <summary>
     /// Delivers a data channel message of a verified peer.

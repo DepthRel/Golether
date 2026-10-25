@@ -139,6 +139,11 @@ derecha) oculta el panel entero y deja el sitio a los recuadros de los participa
 pestaña muestra un contador de mensajes nuevos. Los mensajes viajan por el mismo canal protegido que el resto de la
 sesión y no se guardan en ningún sitio: al cerrar la sesión, desaparecen.
 
+Mientras el chat no se ve, en la esquina de su pestaña aparece además una «i» naranja en un círculo, y mientras todo
+el panel está oculto, una franja naranja corta recorre despacio el borde del botón de la flecha. La pestaña
+**EVENTOS** nunca llama la atención. Un mensaje de otro participante se anuncia con un breve golpe de claqueta de
+cine; tus propios mensajes y las reacciones no suenan. El sonido se desactiva en **Ajustes**, sección **Sonidos**.
+
 El icono de la carita de la barra del reproductor envía una reacción: durante unos segundos flota sobre el vídeo para
 todos los participantes, con el nombre de quien la envía. Las reacciones están disponibles desde que entras en una
 sesión, antes de elegir una película. La capa de las reacciones deja pasar los clics: la pausa con un clic en el vídeo

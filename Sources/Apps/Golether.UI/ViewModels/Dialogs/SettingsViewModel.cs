@@ -7,7 +7,7 @@ using Golether.UI.Services;
 namespace Golether.UI.ViewModels.Dialogs;
 
 /// <summary>
-/// The settings window: language, avatar, camera and microphone, display, and AmneziaWG tunnels, gathered from the
+/// The settings window: language, avatar, camera and microphone, display, sounds, and AmneziaWG tunnels, gathered from the
 /// pieces the main window already owns.
 /// </summary>
 /// <remarks>
@@ -50,6 +50,11 @@ public sealed partial class SettingsViewModel : ObservableObject
     /// Stores the choices about updates, or <see langword="null"/>.
     /// </summary>
     private readonly Action<bool, string>? _applyUpdates;
+
+    /// <summary>
+    /// Switches the sound of new chat messages on or off, or <see langword="null"/> when sounds are not offered.
+    /// </summary>
+    private readonly Action<bool>? _applyChatSound;
 
     /// <summary>
     /// Whether new versions were looked for when the window opened.
@@ -113,6 +118,9 @@ public sealed partial class SettingsViewModel : ObservableObject
     /// <param name="updateUrl">The update source typed by the user, or an empty string for the project page.</param>
     /// <param name="applyUpdates">Stores the choices about updates.</param>
     /// <param name="openAbout">Opens the window about the application, or <see langword="null"/> to leave it out.</param>
+    /// <param name="canChooseSounds">Whether the sounds of the application can be switched.</param>
+    /// <param name="chatSound">Whether new chat messages are announced by a sound now.</param>
+    /// <param name="applyChatSound">Switches the sound of new chat messages on or off.</param>
     public SettingsViewModel(
         LanguageViewModel? language,
         DevicesViewModel? devices,
@@ -132,9 +140,15 @@ public sealed partial class SettingsViewModel : ObservableObject
         bool checkUpdates = true,
         string updateUrl = "",
         Action<bool, string>? applyUpdates = null,
-        Func<Task>? openAbout = null)
+        Func<Task>? openAbout = null,
+        bool canChooseSounds = false,
+        bool chatSound = true,
+        Action<bool>? applyChatSound = null)
     {
         _openAbout = openAbout;
+        CanChooseSounds = canChooseSounds;
+        ChatSound = chatSound;
+        _applyChatSound = applyChatSound;
         CanChooseUpdates = canChooseUpdates;
         CheckUpdates = checkUpdates;
         UpdateUrl = updateUrl;
@@ -225,6 +239,18 @@ public sealed partial class SettingsViewModel : ObservableObject
     /// </summary>
     [ObservableProperty]
     public partial bool AlwaysShowBars { get; set; }
+
+    /// <summary>
+    /// Gets a value indicating whether the sounds of the application can be switched.
+    /// </summary>
+    public bool CanChooseSounds { get; }
+
+    /// <summary>
+    /// Gets or sets a value indicating whether new chat messages of the others are announced by the sound of a
+    /// clapperboard; it is applied only by <see cref="ApplyAsync"/>.
+    /// </summary>
+    [ObservableProperty]
+    public partial bool ChatSound { get; set; }
 
     /// <summary>
     /// Gets a value indicating whether the choices about updates are offered.
@@ -430,6 +456,7 @@ public sealed partial class SettingsViewModel : ObservableObject
 
         _applyLayoutResizable?.Invoke(LayoutResizable);
         _applyAlwaysShowBars?.Invoke(AlwaysShowBars);
+        _applyChatSound?.Invoke(ChatSound);
 
         // Untouched choices are not stored again: applying them would only start another check.
         var updateUrl = (UpdateUrl ?? string.Empty).Trim();

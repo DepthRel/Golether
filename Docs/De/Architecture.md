@@ -99,6 +99,11 @@ Jeder Stream ist eine eigene TLS-Verbindung mit der Präambel `GLTH`, einer Vers
   `TurnServer`. Deshalb funktionieren Kameras und Sprache überall, wo die Sitzung funktioniert, auch wenn UDP blockiert
   und der Relay-Port von außen geschlossen ist. ICE bietet trotzdem auch direktes UDP an und nimmt es, wenn es
   durchkommt.
+  Der gemeinsame Stream kann erst stehen, nachdem die erste WebRTC-Verbindung die Suche nach dem Relay aufgegeben hat
+  (ein Treffen über den Rendezvous-Server dauert Sekunden). Deshalb baut die anbietende Seite eine Verbindung, die
+  scheitert (ICE oder DTLS) oder nicht binnen 20 Sekunden zustande kommt, nach 3, 6, 12, 24 und dann alle 30 Sekunden
+  neu auf; ihr neues Angebot trägt eine andere Sitzungskennung in der `o=`-Zeile (das DTLS-Zertifikat gibt es einmal
+  pro Prozess) und ersetzt die Verbindung der antwortenden Seite.
 - **TURN** (Sitzungsport + 1): das Relay `Golether.Transports.Relay` für WebRTC (RFC 5766 über TCP, Weiterleitung über
   UDP). Einen eigenen Port brauchen nur Teilnehmer früherer Versionen. Die Zugangsdaten des Relays werden für eine
   Sitzung erzeugt und erreichen einen Teilnehmer erst im Willkommen nach dem Einlass; das Relay leitet Pakete nur an

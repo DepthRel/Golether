@@ -30,6 +30,8 @@
     <StreamGeometry x:Key="IconSubtitles">M2,4 H22 V6.2 H2 Z M2,17.8 H22 V20 H2 Z M2,4 H4.2 V20 H2 Z M19.8,4 H22 V20 H19.8 Z M5.5,9 H13 V11 H5.5 Z M15,9 H18.5 V11 H15 Z M5.5,13 H10 V15 H5.5 Z M12,13 H18.5 V15 H12 Z</StreamGeometry>
     <StreamGeometry x:Key="IconReaction">F1 M12,2 A10,10 0 1 1 11.99,2 Z M12,3.8 A8.2,8.2 0 1 0 12.01,3.8 Z M8.5,7.4 A1.5,1.5 0 1 1 8.49,7.4 Z M15.5,7.4 A1.5,1.5 0 1 1 15.49,7.4 Z M7.2,12.8 H8.9 A3.2,3.2 0 0 0 15.1,12.8 H16.8 A4.9,4.9 0 0 1 7.2,12.8 Z</StreamGeometry>
     <StreamGeometry x:Key="IconPen">M3,21 L4.6,16.4 L7.6,19.4 Z M5.6,15.4 L15.6,5.4 L18.6,8.4 L8.6,18.4 Z M16.6,4.4 L18.1,2.9 C18.7,2.3 19.5,2.3 20.1,2.9 L21.1,3.9 C21.7,4.5 21.7,5.3 21.1,5.9 L19.6,7.4 Z</StreamGeometry>
+    <!-- An "i" in a ring: the mark of new chat messages. -->
+    <StreamGeometry x:Key="IconUnread">F1 M12,1.5 A10.5,10.5 0 1 1 11.99,1.5 Z M12,4 A8,8 0 1 0 12.01,4 Z M10.8,10 H13.2 V17.5 H10.8 Z M10.8,6.3 H13.2 V8.7 H10.8 Z</StreamGeometry>
     <StreamGeometry x:Key="IconSend">M2,21 L23,12 L2,3 V10 L17,12 L2,14 Z</StreamGeometry>
     <StreamGeometry x:Key="IconFolder">M2,5 H10 L12,7 H22 V20 H2 Z</StreamGeometry>
     <!-- Speaker icons share the 24x24 frame (corner dots), so they are scaled alike. -->
@@ -603,20 +605,33 @@
                 <!-- Camera/microphone selection and the avatar now live in the Settings window. -->
                 <!-- Chat and event feed share one area; a click on the open tab (or on the feed) hides it. -->
                 <Grid ColumnDefinitions="Auto,Auto,*,Auto">
-                  <Button Classes="ghost tab" Classes.selected="{Binding IsChatTab}" Padding="8,4"
-                          Command="{Binding ShowTabCommand}" CommandParameter="{x:Static enums:SideTab.Chat}"
-                          AutomationProperties.Name="{loc:Loc Main.Chat.Name}" ToolTip.Tip="{loc:Loc Main.Chat.Tip}">
-                    <TextBlock Classes="label" Classes.unread="{Binding Chat.HasUnread}" Text="{Binding Chat.Header}" />
-                  </Button>
+                  <Panel>
+                    <Button Classes="ghost tab" Classes.selected="{Binding IsChatTab}" Padding="8,4"
+                            Command="{Binding ShowTabCommand}" CommandParameter="{x:Static enums:SideTab.Chat}"
+                            AutomationProperties.Name="{loc:Loc Main.Chat.Name}" ToolTip.Tip="{loc:Loc Main.Chat.Tip}">
+                      <TextBlock Classes="label" Classes.unread="{Binding Chat.HasUnread}" Text="{Binding Chat.Header}" />
+                    </Button>
+                    <!-- New messages came while the chat was out of sight: a mark at the top right corner of its tab. -->
+                    <Border x:Name="ChatUnreadMark" Width="14" Height="14" CornerRadius="7" Margin="0,-6,-6,0"
+                            HorizontalAlignment="Right" VerticalAlignment="Top" IsHitTestVisible="False"
+                            Background="{StaticResource GoletherPanel}" IsVisible="{Binding Chat.HasUnread}">
+                      <PathIcon Data="{StaticResource IconUnread}" Width="12" Height="12" Foreground="{StaticResource GoletherAccent}" />
+                    </Border>
+                  </Panel>
                   <Button Grid.Column="1" Classes="ghost tab" Classes.selected="{Binding IsEventsTab}" Padding="8,4" Margin="4,0,0,0"
                           Command="{Binding ShowTabCommand}" CommandParameter="{x:Static enums:SideTab.Events}"
                           AutomationProperties.Name="{loc:Loc Main.Events.Name}" ToolTip.Tip="{loc:Loc Main.Events.Tip}">
                     <TextBlock Classes="label" Text="{loc:Loc Main.Events.Header}" />
                   </Button>
-                  <Button Grid.Column="3" Classes="ghost" Padding="8,4" Command="{Binding ToggleEventsCommand}"
-                          AutomationProperties.Name="{loc:Loc Main.Panel.Name}" ToolTip.Tip="{loc:Loc Main.Panel.Tip}">
-                    <TextBlock Classes="label" Text="{Binding SidePanelArrow}" />
-                  </Button>
+                  <Panel Grid.Column="3">
+                    <Button Classes="ghost" Padding="8,4" Command="{Binding ToggleEventsCommand}"
+                            AutomationProperties.Name="{loc:Loc Main.Panel.Name}" ToolTip.Tip="{loc:Loc Main.Panel.Tip}">
+                      <TextBlock Classes="label" Text="{Binding SidePanelArrow}" />
+                    </Button>
+                    <!-- While the panel is hidden, new chat messages send a stripe around the border of its button. -->
+                    <controls:BorderChase x:Name="PanelToggleChase" IsRunning="{Binding HighlightPanelToggle}" CornerRadius="7"
+                                          Color="{StaticResource GoletherAccentColor}" />
+                  </Panel>
                 </Grid>
                 <ScrollViewer x:Name="EventFeed" Height="210" IsVisible="{Binding ShowEvents}" Background="Transparent"
                               Cursor="Hand" ToolTip.Tip="{loc:Loc Main.Events.HideTip}">

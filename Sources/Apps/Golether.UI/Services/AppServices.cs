@@ -89,6 +89,8 @@ public sealed class AppServices : IAsyncDisposable
             Conference,
             PortMapper.CreateDefault(Http, LoggerFactory),
             new RendezvousDirectory(Http, provider.GetRequiredService<ISettingsStore>(), logger: LoggerFactory.CreateLogger<RendezvousDirectory>()));
+        Sounds = new SystemSoundPlayer(paths.SoundsDirectory, LoggerFactory.CreateLogger<SystemSoundPlayer>());
+        ChatSound = new ChatSoundNotifier(Sessions, provider.GetRequiredService<ISettingsStore>(), Sounds, TimeProvider.System);
     }
 
     /// <summary>
@@ -162,6 +164,16 @@ public sealed class AppServices : IAsyncDisposable
     public SessionService Sessions { get; }
 
     /// <summary>
+    /// Gets the player of notification sounds.
+    /// </summary>
+    public SystemSoundPlayer Sounds { get; }
+
+    /// <summary>
+    /// Gets the sound of new chat messages.
+    /// </summary>
+    public ChatSoundNotifier ChatSound { get; }
+
+    /// <summary>
     /// Prepares the data directory, migrates the database and loads the device identity.
     /// </summary>
     /// <returns>The services.</returns>
@@ -228,7 +240,8 @@ public sealed class AppServices : IAsyncDisposable
             Updates,
             new LanguageViewModel(Language, FlagImages.Load, dialogs),
             new AvatarStore(Paths.AvatarsDirectory),
-            TimeProvider.System);
+            TimeProvider.System,
+            ChatSound);
     }
 
     /// <summary>
@@ -252,6 +265,7 @@ public sealed class AppServices : IAsyncDisposable
         await Sessions.DisposeAsync().ConfigureAwait(false);
         await Player.DisposeAsync().ConfigureAwait(false);
         await Conference.DisposeAsync().ConfigureAwait(false);
+        Sounds.Dispose();
         Identity.Dispose();
         Http.Dispose();
         await _provider.DisposeAsync().ConfigureAwait(false);

@@ -143,6 +143,12 @@ droite) masque complètement le panneau et laisse la place aux vignettes des par
 masquée, son onglet affiche un compteur de nouveaux messages. Les messages passent par le même canal protégé que le
 reste de la séance et ne sont enregistrés nulle part : à la fermeture de la séance, ils disparaissent.
 
+Tant que la discussion n'est pas visible, un « i » orange dans un cercle s'affiche aussi au coin de son onglet, et
+tant que tout le panneau est masqué, une courte bande orange fait lentement le tour du bouton à flèche. L'onglet
+**ÉVÉNEMENTS** n'attire jamais l'attention. Un message d'un autre participant est annoncé par un bref claquement de
+clap de cinéma ; vos propres messages et les réactions restent silencieux. Le son se coupe dans **Réglages**, section
+**Sons**.
+
 L'icône de smiley de la barre du lecteur envoie une réaction : pendant quelques secondes, elle flotte au-dessus de la
 vidéo chez tous les participants, avec le nom de l'expéditeur. Les réactions sont disponibles dès que vous entrez dans
 une séance, avant même le choix d'un film. La couche des réactions laisse passer les clics : la pause d'un clic sur la

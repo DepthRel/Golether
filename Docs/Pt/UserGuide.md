@@ -142,6 +142,12 @@ oculta o painel por completo e deixa o espaço para os quadros dos participantes
 separador dela mostra um contador de mensagens novas. As mensagens viajam pelo mesmo canal protegido que o resto da
 sessão e não ficam guardadas em lado nenhum: quando a sessão fecha, desaparecem.
 
+Enquanto a conversa não está à vista, aparece também um «i» laranja num círculo no canto do separador dela, e
+enquanto todo o painel está oculto, uma faixa laranja curta percorre devagar o contorno do botão da seta. O
+separador **EVENTOS** nunca chama a atenção. Uma mensagem de outro participante é anunciada por uma breve pancada de
+claquete de cinema; as suas próprias mensagens e as reações não fazem som. O som desliga-se nas **Definições**,
+secção **Sons**.
+
 O ícone da carinha na barra do leitor envia uma reação: durante alguns segundos, ela flutua sobre o vídeo para todos os
 participantes, com o nome de quem a enviou. As reações estão disponíveis desde que entra numa sessão, antes de escolher
 um filme. A camada das reações deixa passar os cliques: a pausa com um clique no vídeo continua a funcionar.

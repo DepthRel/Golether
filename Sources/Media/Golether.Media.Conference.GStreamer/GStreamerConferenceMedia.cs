@@ -527,6 +527,13 @@ public sealed class GStreamerConferenceMedia : IConferenceMedia, IPeerHost
         var peer = _peers.TryGetValue(signal.PeerId, out var existing)
             ? existing
             : await Task.Run(() => GetOrCreatePeer(signal.PeerId, isOfferer: false), cancellationToken).ConfigureAwait(false);
+        if (peer is not null && signal.Kind == SignalKinds.OFFER && peer.IsOtherConnection(signal.Payload))
+        {
+            // The other side gave up a connection that failed and made a new one: the new one is answered from scratch.
+            var stale = peer;
+            peer = await Task.Run(() => ReplacePeer(stale, isOfferer: false, attempt: 0), cancellationToken).ConfigureAwait(false);
+        }
+
         if (peer is not null)
         {
             await peer.HandleSignalAsync(signal.Kind, signal.Payload).ConfigureAwait(false);
@@ -657,6 +664,44 @@ public sealed class GStreamerConferenceMedia : IConferenceMedia, IPeerHost
             _logger.LogWarning(ex, "A speaking subscriber failed");
         }
     }
+
+    /// <inheritdoc />
+    /// <remarks>
+    /// The offering side makes the connection again after a pause that grows with every failure in a row; the
+    /// answering side waits for the new offer, which replaces its connection.
+    /// </remarks>
+    void IPeerHost.ReportFailure(WebRtcPeer peer, string reason)
+    {
+        if (!peer.IsOfferer)
+        {
+            _logger.LogWarning("The media connection of {Peer} failed ({Reason}); waiting for a new offer", peer.Peer.ToShortString(), reason);
+            return;
+        }
+
+        var delay = RestartDelay(peer.Attempt);
+        _logger.LogWarning("The media connection of {Peer} failed ({Reason}); connecting again in {Delay:0} s", peer.Peer.ToShortString(), reason, delay.TotalSeconds);
+        _ = Task.Run(async () =>
+        {
+            // ICE may find its way back by itself in a moment; such a connection is kept.
+            await Task.Delay(delay).ConfigureAwait(false);
+            if (peer.IsHealthy)
+            {
+                peer.Recovered();
+                _logger.LogInformation("The media connection of {Peer} recovered", peer.Peer.ToShortString());
+                return;
+            }
+
+            ReplacePeer(peer, isOfferer: true, attempt: peer.IsVerified ? 0 : peer.Attempt + 1);
+        });
+    }
+
+    /// <summary>
+    /// Returns the pause before a failed connection is made again.
+    /// </summary>
+    /// <param name="attempt">How many connections in a row failed before the one that failed now.</param>
+    /// <returns>3 s, doubled with every failure in a row, at most 30 s.</returns>
+    internal static TimeSpan RestartDelay(int attempt)
+        => TimeSpan.FromSeconds(Math.Min(30, 3 << Math.Clamp(attempt, 0, 4)));
 
     /// <inheritdoc />
     void IPeerHost.RejectPeer(WebRtcPeer peer, string reason)
@@ -1071,25 +1116,54 @@ public sealed class GStreamerConferenceMedia : IConferenceMedia, IPeerHost
     {
         lock (_gate)
         {
-            if (_peers.TryGetValue(peer, out var existing))
-            {
-                return existing;
-            }
+            return _peers.TryGetValue(peer, out var existing) ? existing : CreatePeer(peer, isOfferer, attempt: 0);
+        }
+    }
 
-            var used = _peers.Values.Select(p => p.AudioSlot).ToHashSet();
-            var slot = Enumerable.Range(0, MAX_REMOTE_PEERS).FirstOrDefault(i => !used.Contains(i), -1);
-            if (slot < 0)
+    /// <summary>
+    /// Replaces a connection with a new one to the same participant.
+    /// </summary>
+    /// <param name="stale">The connection to replace.</param>
+    /// <param name="isOfferer">Whether this side offers.</param>
+    /// <param name="attempt">How many connections in a row failed before the new one.</param>
+    /// <returns>The new connection, or <see langword="null"/> when the old one was already disconnected or replaced.</returns>
+    private WebRtcPeer? ReplacePeer(WebRtcPeer stale, bool isOfferer, int attempt)
+    {
+        lock (_gate)
+        {
+            // Only this exact connection is replaced: a participant who left meanwhile is not connected again.
+            if (!_peers.TryRemove(new KeyValuePair<PeerId, WebRtcPeer>(stale.Peer, stale)))
             {
-                _logger.LogWarning("No free slot for {Peer}", peer.ToShortString());
                 return null;
             }
 
-            var created = new WebRtcPeer(peer, isOfferer, slot, this, new PeerNetwork(_stunServer ?? _options.StunServer, _turnServer, _options.RelayOnly), _logger);
-            _peers[peer] = created;
-            created.Start();
-            _logger.LogInformation("Connecting to {Peer} as {Role}", peer.ToShortString(), isOfferer ? "offerer" : "answerer");
-            return created;
+            stale.Dispose();
+            return CreatePeer(stale.Peer, isOfferer, attempt);
         }
+    }
+
+    /// <summary>
+    /// Creates and starts a connection to a participant. Call under <see cref="_gate"/>.
+    /// </summary>
+    /// <param name="peer">The participant.</param>
+    /// <param name="isOfferer">Whether this side offers.</param>
+    /// <param name="attempt">How many connections in a row failed before this one.</param>
+    /// <returns>The peer, or <see langword="null"/> when all slots are taken.</returns>
+    private WebRtcPeer? CreatePeer(PeerId peer, bool isOfferer, int attempt)
+    {
+        var used = _peers.Values.Select(p => p.AudioSlot).ToHashSet();
+        var slot = Enumerable.Range(0, MAX_REMOTE_PEERS).FirstOrDefault(i => !used.Contains(i), -1);
+        if (slot < 0)
+        {
+            _logger.LogWarning("No free slot for {Peer}", peer.ToShortString());
+            return null;
+        }
+
+        var created = new WebRtcPeer(peer, isOfferer, slot, attempt, this, new PeerNetwork(_stunServer ?? _options.StunServer, _turnServer, _options.RelayOnly), _logger);
+        _peers[peer] = created;
+        created.Start();
+        _logger.LogInformation("Connecting to {Peer} as {Role}", peer.ToShortString(), isOfferer ? "offerer" : "answerer");
+        return created;
     }
 
     /// <summary>

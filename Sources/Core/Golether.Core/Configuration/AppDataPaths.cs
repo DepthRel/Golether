@@ -117,6 +117,11 @@ public sealed class AppDataPaths
     public string GStreamerRegistryFile => Path.Combine(Root, "gstreamer", "registry.bin");
 
     /// <summary>
+    /// Gets the directory of the notification sounds written for the players of Linux and macOS, which play files.
+    /// </summary>
+    public string SoundsDirectory => Path.Combine(Root, "sounds");
+
+    /// <summary>
     /// Resolves the data directory.
     /// </summary>
     /// <param name="applicationDirectory">The application directory; <see cref="AppContext.BaseDirectory"/> when

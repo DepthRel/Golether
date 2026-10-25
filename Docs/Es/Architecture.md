@@ -98,6 +98,11 @@ Cada flujo es una conexión TLS aparte con el preámbulo `GLTH`, una versión y 
   recibe un flujo `Relay` propio); el anfitrión entrega cada canal de un participante admitido a `TurnServer`. Por eso
   las cámaras y la voz funcionan dondequiera que funcione la sesión, incluso con UDP bloqueado y el puerto del relé
   cerrado desde fuera. ICE sigue ofreciendo también UDP directo y lo usa cuando pasa.
+  El flujo compartido puede abrirse solo después de que la primera conexión WebRTC haya dejado de buscar el relé
+  (un encuentro a través del servidor de encuentro tarda segundos). Por eso el lado que ofrece rehace la conexión que
+  falla (ICE o DTLS) o no se establece en 20 segundos tras 3, 6, 12, 24 y luego cada 30 segundos; su nueva oferta
+  lleva otro identificador de sesión en la línea `o=` (el certificado DTLS es uno por proceso) y sustituye la
+  conexión del lado que responde.
 - **TURN** (puerto de la sesión + 1): el relé `Golether.Transports.Relay` para WebRTC (RFC 5766 sobre TCP, retransmisión
   sobre UDP). Solo los participantes de versiones anteriores necesitan un puerto propio. Las credenciales del relé se
   crean para una sesión y llegan a un participante solo en la bienvenida tras la admisión; el relé reenvía paquetes solo

@@ -1036,6 +1036,44 @@ public sealed class MainWindowTests
     });
 
     /// <summary>
+    /// A message that comes while the panel is hidden puts an orange "i" on the chat tab and sends a stripe around the
+    /// button of the panel; opening the panel reads the chat and clears both. Reactions and own messages leave no mark.
+    /// </summary>
+    /// <returns>A task that completes when the test is done.</returns>
+    [Fact]
+    public Task UnreadChat_MarksTheTabAndThePanelButton() => RunAsync(async fixture =>
+    {
+        var mark = fixture.Window.FindControl<Border>("ChatUnreadMark")!;
+        var chase = fixture.Window.FindControl<BorderChase>("PanelToggleChase")!;
+        var toggle = ((Panel)chase.Parent!).Children.OfType<Button>().Single();
+        fixture.Click(toggle, MouseButton.Left);
+        await fixture.Settle();
+        Assert.False(fixture.ViewModel.EventsExpanded);
+
+        fixture.Sessions.ChatReceived += Raise.Event<EventHandler<ChatEntry>>(
+            fixture.Sessions, new ChatEntry("01", _guest, "Марина", ChatKind.Reaction, "🔥", DateTimeOffset.Now, false));
+        fixture.Sessions.ChatReceived += Raise.Event<EventHandler<ChatEntry>>(
+            fixture.Sessions, new ChatEntry("02", default, "Вы", ChatKind.Text, "сам себе", DateTimeOffset.Now, true));
+        await fixture.Settle();
+        Assert.False(mark.IsEffectivelyVisible);
+        Assert.False(chase.IsRunning);
+
+        fixture.Sessions.ChatReceived += Raise.Event<EventHandler<ChatEntry>>(
+            fixture.Sessions, new ChatEntry("03", _guest, "Марина", ChatKind.Text, "начинаем?", DateTimeOffset.Now, false));
+        await fixture.SettleFor(TimeSpan.FromMilliseconds(500));
+        Assert.True(mark.IsEffectivelyVisible, "The chat tab shows the mark.");
+        Assert.True(chase.IsRunning, "The stripe runs around the panel button.");
+        Assert.Equal(toggle.Bounds.Size, chase.Bounds.Size);
+        fixture.Shot("chat-unread");
+
+        fixture.Click(toggle, MouseButton.Left);
+        await fixture.Settle();
+        Assert.True(fixture.ViewModel.ShowChat);
+        Assert.False(mark.IsEffectivelyVisible);
+        Assert.False(chase.IsRunning);
+    });
+
+    /// <summary>
     /// The pen button presses in and out; while it is pressed a drag over the video draws a stroke and sends it, and
     /// a stroke of another participant appears over the picture in their own colour.
     /// </summary>

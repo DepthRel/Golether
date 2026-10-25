@@ -313,6 +313,102 @@ public sealed class ConferenceTests
     }
 
     /// <summary>
+    /// The route of the session to the relay opens later than the cameras ask for it (a meeting through the
+    /// rendezvous server takes seconds): the first connection finds no relay and fails, and the cameras still connect
+    /// once the route is up, without anybody leaving the session.
+    /// </summary>
+    /// <returns>A task that completes when the test is done.</returns>
+    [Fact]
+    public async Task SlowRelayRoute_CamerasConnectOnceTheRouteIsUp()
+    {
+        var (a, b, skip) = _relayPair.Value;
+        Assert.SkipWhen(skip is not null, skip ?? string.Empty);
+        var token = TestContext.Current.CancellationToken;
+        var mike = PeerId.Parse(new string('a', 64));
+        var nora = PeerId.Parse(new string('b', 64));
+        var framesAtA = new ConcurrentDictionary<PeerId, VideoFrame>();
+        var framesAtB = new ConcurrentDictionary<PeerId, VideoFrame>();
+        EventHandler<ParticipantVideoFrame> onA = (_, f) => framesAtA[f.PeerId] = f.Frame;
+        EventHandler<ParticipantVideoFrame> onB = (_, f) => framesAtB[f.PeerId] = f.Frame;
+        EventHandler<ConferenceSignal> toB = (_, s) => { if (s.PeerId == nora) { _ = b!.HandleSignalAsync(s with { PeerId = mike }, token); } };
+        EventHandler<ConferenceSignal> toA = (_, s) => { if (s.PeerId == mike) { _ = a!.HandleSignalAsync(s with { PeerId = nora }, token); } };
+        a!.VideoFrameReceived += onA;
+        b!.VideoFrameReceived += onB;
+        a.SignalReady += toB;
+        b.SignalReady += toA;
+        await using var relay = new TurnServer(new TurnServerOptions { Credentials = RelayCredentials.CreateRandom(0), ListenAddress = System.Net.IPAddress.Loopback });
+        await using var routeA = new SharedRelayRoute(SlowSharedStream(relay, TimeSpan.FromSeconds(10), token), TimeProvider.System);
+        await using var routeB = new SharedRelayRoute(SlowSharedStream(relay, TimeSpan.FromSeconds(10), token), TimeProvider.System);
+        await using var tunnelA = new RelayTunnel(routeA.OpenAsync);
+        await using var tunnelB = new RelayTunnel(routeB.OpenAsync);
+        tunnelA.Start();
+        tunnelB.Start();
+        try
+        {
+            a.SetRelay((relay.Credentials with { Port = tunnelA.Port }).ToTurnUri("127.0.0.1"));
+            b.SetRelay((relay.Credentials with { Port = tunnelB.Port }).ToTurnUri("127.0.0.1"));
+            await a.StartCaptureAsync(null, null, token);
+            await b.StartCaptureAsync(null, null, token);
+            await a.ConnectAsync(nora, isOfferer: true, token);
+            await b.ConnectAsync(mike, isOfferer: false, token);
+
+            var deadline = DateTime.UtcNow.AddSeconds(90);
+            while (!(framesAtA.ContainsKey(nora) && framesAtB.ContainsKey(mike)) && DateTime.UtcNow < deadline)
+            {
+                await Task.Delay(200, token);
+            }
+
+            Assert.True(framesAtA.ContainsKey(nora), "The offering side receives the camera once the route is up.");
+            Assert.True(framesAtB.ContainsKey(mike), "The answering side receives the camera once the route is up.");
+        }
+        finally
+        {
+            a.VideoFrameReceived -= onA;
+            b.VideoFrameReceived -= onB;
+            a.SignalReady -= toB;
+            b.SignalReady -= toA;
+            await a.DisconnectAsync(nora);
+            await b.DisconnectAsync(mike);
+            a.SetRelay(null);
+            b.SetRelay(null);
+        }
+    }
+
+    /// <summary>
+    /// Opens a shared stream to a relay after a delay, as a participant meets the host through a rendezvous server;
+    /// the far end serves every channel as the host does with a shared relay stream.
+    /// </summary>
+    /// <param name="relay">The relay.</param>
+    /// <param name="delay">How long opening takes.</param>
+    /// <param name="cancellationToken">The cancellation token.</param>
+    /// <returns>Opens the shared stream.</returns>
+    private static Func<CancellationToken, Task<Stream>> SlowSharedStream(TurnServer relay, TimeSpan delay, CancellationToken cancellationToken)
+        => async token =>
+        {
+            await Task.Delay(delay, token);
+            using var pipe = new System.Net.Sockets.TcpListener(System.Net.IPAddress.Loopback, 0);
+            pipe.Start();
+            var near = new System.Net.Sockets.TcpClient();
+            await near.ConnectAsync(System.Net.IPAddress.Loopback, ((System.Net.IPEndPoint)pipe.LocalEndpoint).Port, token);
+            var far = await pipe.AcceptTcpClientAsync(token);
+            var remote = (System.Net.IPEndPoint)far.Client.RemoteEndPoint!;
+            _ = Task.Run(
+                async () =>
+                {
+                    using (far)
+                    {
+                        await using var shared = new RelayMultiplexer(
+                            far.GetStream(),
+                            channel => relay.ServeAsync(channel, remote, System.Net.IPAddress.Loopback, cancellationToken));
+                        shared.Start();
+                        await shared.Completion;
+                    }
+                },
+                CancellationToken.None);
+            return near.GetStream();
+        };
+
+    /// <summary>
     /// Starts a local entrance to a relay, as a participant has it: every connection becomes a stream that is handed
     /// to the relay, as the host does with the relay streams of the session.
     /// </summary>

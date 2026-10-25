@@ -139,6 +139,11 @@ right) hides the panel entirely and gives the room to the participant tiles. Whi
 a counter of new messages. Messages travel over the same protected channel as the rest of the session and are stored
 nowhere: when the session is closed, they are gone.
 
+While the chat is out of sight, an orange "i" in a ring also sits at the corner of its tab, and while the whole
+panel is hidden, a short orange stripe runs slowly around the arrow button. The **EVENTS** tab never asks for
+attention. A message of another participant is announced by a short clap of a film clapperboard; your own messages
+and reactions make no sound. The sound is switched off in **Settings**, section **Sounds**.
+
 The smiley icon in the player bar sends a reaction: for a few seconds it floats over the video for every participant,
 with the sender's name. Reactions are available from the moment you enter a session, before a film is chosen. The
 layer with the reactions lets clicks through: pause by a click on the video keeps working.

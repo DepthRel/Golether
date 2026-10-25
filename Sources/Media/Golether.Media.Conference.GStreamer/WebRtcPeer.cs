@@ -31,9 +31,36 @@ internal sealed partial class WebRtcPeer : IDisposable
     private const int DATA_CHANNEL_OPEN = 2;
 
     /// <summary>
+    /// <c>GST_WEBRTC_ICE_CONNECTION_STATE_CONNECTED</c>.
+    /// </summary>
+    private const int ICE_CONNECTED = 2;
+
+    /// <summary>
+    /// <c>GST_WEBRTC_ICE_CONNECTION_STATE_COMPLETED</c>.
+    /// </summary>
+    private const int ICE_COMPLETED = 3;
+
+    /// <summary>
     /// <c>GST_WEBRTC_ICE_CONNECTION_STATE_FAILED</c>.
     /// </summary>
     private const int ICE_FAILED = 4;
+
+    /// <summary>
+    /// How long a connection may take to be made and verified before it counts as failed. The path through the relay
+    /// of the host may come up only after the first connection gave up looking for it (a meeting through the
+    /// rendezvous server takes seconds); a connection made again then finds it.
+    /// </summary>
+    private static readonly TimeSpan _connectTimeout = TimeSpan.FromSeconds(20);
+
+    /// <summary>
+    /// The last <c>GstWebRTCICEConnectionState</c> reported by webrtcbin.
+    /// </summary>
+    private volatile int _iceState;
+
+    /// <summary>
+    /// 1 while a failure of this connection has been reported and not cleared, so that it is reported once.
+    /// </summary>
+    private int _failing;
 
     /// <summary>
     /// The names of <c>GstWebRTCICEConnectionState</c> by value, for the journal.
@@ -69,6 +96,11 @@ internal sealed partial class WebRtcPeer : IDisposable
     /// The SHA-256 fingerprint of the remote DTLS certificate taken from the remote SDP.
     /// </summary>
     private byte[]? _expectedFingerprint;
+
+    /// <summary>
+    /// The session identifier (the <c>o=</c> line) of the remote SDP, or <see langword="null"/> before the first one.
+    /// </summary>
+    private volatile string? _remoteSession;
 
     /// <summary>
     /// Whether the remote DTLS certificate matched the fingerprint; media flows only then.
@@ -168,14 +200,16 @@ internal sealed partial class WebRtcPeer : IDisposable
     /// <param name="peer">The remote participant.</param>
     /// <param name="isOfferer">Whether this side creates the offer.</param>
     /// <param name="audioSlot">The mixer slot for the voice of the peer.</param>
+    /// <param name="attempt">How many connections in a row failed before this one.</param>
     /// <param name="host">The owner.</param>
     /// <param name="network">The STUN and TURN servers.</param>
     /// <param name="logger">The logger.</param>
-    public unsafe WebRtcPeer(PeerId peer, bool isOfferer, int audioSlot, IPeerHost host, PeerNetwork network, ILogger logger)
+    public unsafe WebRtcPeer(PeerId peer, bool isOfferer, int audioSlot, int attempt, IPeerHost host, PeerNetwork network, ILogger logger)
     {
         Peer = peer;
         IsOfferer = isOfferer;
         AudioSlot = audioSlot;
+        Attempt = attempt;
         _host = host;
         _logger = logger;
         _pipeline = new GstPipeline($"peer {peer.ToShortString()}", DESCRIPTION, logger);
@@ -300,6 +334,43 @@ internal sealed partial class WebRtcPeer : IDisposable
     /// Gets the mixer slot of the voice.
     /// </summary>
     public int AudioSlot { get; }
+
+    /// <summary>
+    /// Gets how many connections in a row failed before this one.
+    /// </summary>
+    public int Attempt { get; }
+
+    /// <summary>
+    /// Gets a value indicating whether media flows: the certificate is verified and a network path is in use.
+    /// </summary>
+    public bool IsHealthy => _verified && _iceState is ICE_CONNECTED or ICE_COMPLETED;
+
+    /// <summary>
+    /// Tells whether an offer starts another connection: the remote side gave up this one and made a new one. Each
+    /// connection has a session identifier of its own that stays the same when it is negotiated again (RFC 3264); the
+    /// certificate does not tell them apart, GStreamer uses one for the whole process.
+    /// </summary>
+    /// <param name="offer">The SDP of the offer.</param>
+    /// <returns><see langword="true"/> when the offer belongs to another connection.</returns>
+    public bool IsOtherConnection(string offer)
+        => _remoteSession is { } known && ParseSession(offer) is { } session && session != known;
+
+    /// <summary>
+    /// Extracts the session identifier from the <c>o=</c> line of an SDP.
+    /// </summary>
+    /// <param name="sdp">The SDP.</param>
+    /// <returns>The identifier, or <see langword="null"/> when the SDP has no origin line.</returns>
+    public static string? ParseSession(string sdp)
+    {
+        ArgumentNullException.ThrowIfNull(sdp);
+        var match = OriginPattern().Match(sdp);
+        return match.Success ? match.Groups[1].Value : null;
+    }
+
+    /// <summary>
+    /// Lets a later failure of this connection be reported again, after a failure that cleared by itself.
+    /// </summary>
+    public void Recovered() => Volatile.Write(ref _failing, 0);
 
     /// <summary>
     /// Checks the shape of signaling data before any native object is created for it.
@@ -580,10 +651,14 @@ internal sealed partial class WebRtcPeer : IDisposable
             // A connection that never leaves "checking" or ends in "failed" found no path between the devices; the
             // journal must show that without a debug build.
             var state = Signals.GetEnum(element, "ice-connection-state");
+            peer._iceState = state;
             var name = state >= 0 && state < _iceConnectionStates.Length ? _iceConnectionStates[state] : state.ToString(System.Globalization.CultureInfo.InvariantCulture);
             if (state == ICE_FAILED)
             {
+                // A failed search is final for this connection: without a new one the cameras stay dark until
+                // somebody leaves the session.
                 peer._logger.LogWarning("No network path to {Peer}: ICE {State}", peer.Peer.ToShortString(), name);
+                peer.Fail("ICE failed");
             }
             else
             {
@@ -679,24 +754,40 @@ internal sealed partial class WebRtcPeer : IDisposable
     private static partial Regex FingerprintPattern();
 
     /// <summary>
+    /// Matches the origin line of an SDP and captures its session identifier.
+    /// </summary>
+    /// <returns>The expression.</returns>
+    [GeneratedRegex(@"^o=\S+ ([0-9]{1,20}) [0-9]{1,20} ", RegexOptions.Multiline | RegexOptions.CultureInvariant)]
+    private static partial Regex OriginPattern();
+
+    /// <summary>
     /// Waits for the DTLS connection and compares the remote certificate with the signaled fingerprint.
     /// </summary>
+    /// <remarks>
+    /// A connection that fails or is not made in time is reported, and the check goes on: the answering side keeps
+    /// its connection until the new offer of the other side replaces it, and the offer may yet come for this one.
+    /// </remarks>
     /// <returns>A task that completes when the certificate was checked or the peer was disposed.</returns>
     private async Task VerifyRemoteCertificateAsync()
     {
+        var started = TimeProvider.System.GetTimestamp();
         while (!_disposed)
         {
             await Task.Delay(_verificationInterval).ConfigureAwait(false);
             var (state, pem) = ReadDtlsState();
             if (state == DTLS_FAILED)
             {
-                _logger.LogWarning("DTLS with {Peer} failed", Peer.ToShortString());
-                _host.RejectPeer(this, "DTLS failed");
-                return;
+                Fail("DTLS failed");
+                continue;
             }
 
             if (state != DTLS_CONNECTED || _expectedFingerprint is not { } expected)
             {
+                if (TimeProvider.System.GetElapsedTime(started) >= _connectTimeout)
+                {
+                    Fail("not connected in time");
+                }
+
                 continue;
             }
 
@@ -713,6 +804,28 @@ internal sealed partial class WebRtcPeer : IDisposable
             }
 
             return;
+        }
+    }
+
+    /// <summary>
+    /// Reports a failure of this connection to the owner once, until <see cref="Recovered"/> clears it.
+    /// </summary>
+    /// <param name="reason">The reason for the log.</param>
+    private void Fail(string reason)
+    {
+        if (_disposed || Interlocked.Exchange(ref _failing, 1) != 0)
+        {
+            return;
+        }
+
+        try
+        {
+            _host.ReportFailure(this, reason);
+        }
+        catch (Exception ex) when (ex is not OutOfMemoryException)
+        {
+            // Called from native callbacks too: an exception must not leave them.
+            _logger.LogWarning(ex, "The failure of {Peer} was not handled", Peer.ToShortString());
         }
     }
 
@@ -1004,6 +1117,7 @@ internal sealed partial class WebRtcPeer : IDisposable
         }
 
         _expectedFingerprint = fingerprint;
+        _remoteSession ??= ParseSession(text);
         var description = Gst.SessionDescriptionNew(type, message);
         var promise = Gst.PromiseNew();
         try

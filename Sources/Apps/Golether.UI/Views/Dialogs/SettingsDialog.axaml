@@ -114,6 +114,16 @@
         <TextBlock Classes="muted" FontSize="12" TextWrapping="Wrap" Text="{loc:Loc Settings.Display.AlwaysShowBarsNote}" />
       </StackPanel>
 
+      <Border Height="1" Background="{StaticResource GoletherLine}" Margin="0,4" IsVisible="{Binding CanChooseSounds}" />
+
+      <!-- Sounds -->
+      <TextBlock Classes="title" Text="{loc:Loc Settings.Sounds}" IsVisible="{Binding CanChooseSounds}" />
+      <StackPanel Spacing="6" IsVisible="{Binding CanChooseSounds}">
+        <CheckBox IsChecked="{Binding ChatSound}" Content="{loc:Loc Settings.Sounds.Chat}"
+                  AutomationProperties.Name="{loc:Loc Settings.Sounds.Chat}" />
+        <TextBlock Classes="muted" FontSize="12" TextWrapping="Wrap" Text="{loc:Loc Settings.Sounds.ChatNote}" />
+      </StackPanel>
+
       <Border Height="1" Background="{StaticResource GoletherLine}" Margin="0,4" />
 
       <!-- AmneziaWG tunnels -->

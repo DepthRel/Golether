@@ -97,6 +97,11 @@ Every stream is a separate TLS connection with the `GLTH` preamble, a version an
   a `Relay` stream of its own); the host hands every channel of an admitted participant to `TurnServer`. That is why
   cameras and voice work wherever the session works, even when UDP is blocked and the relay port is closed from
   outside. ICE still offers direct UDP as well and takes it when it gets through.
+  The shared stream may come up only after the first WebRTC connection gave up looking for the relay (a meeting
+  through the rendezvous server takes seconds). So a connection that fails (ICE or DTLS) or is not made within
+  20 seconds is made again by the offering side after 3, 6, 12, 24 and then every 30 seconds; its new offer carries
+  another session identifier on the `o=` line (the DTLS certificate is one per process) and replaces the connection
+  of the answering side.
 - **TURN** (session port + 1): the `Golether.Transports.Relay` relay for WebRTC (RFC 5766 over TCP, relaying over
   UDP). A port of its own is needed only by participants of earlier versions. The relay credentials are created for
   one session and reach a participant only in the welcome after admission; the relay forwards packets only to
