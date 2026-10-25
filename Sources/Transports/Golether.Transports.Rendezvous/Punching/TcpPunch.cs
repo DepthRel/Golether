@@ -21,6 +21,12 @@ namespace Golether.Transports.Rendezvous.Punching;
 /// the participant picks (<see cref="ConnectAsync"/>) and speaks first; the host keeps every connection it got
 /// (<see cref="AnswerAsync"/>) and takes the one the participant spoke on.
 /// </para>
+/// <para>
+/// The host also listens on its port. A SYN of the participant that its router already lets in, but that comes
+/// between two attempts of the host, would otherwise meet a closed port and be refused; on loopback and in a local
+/// network, where nothing is dropped, the two sides would meet only when their attempts happened to cross. Only the
+/// addresses the server named for the participant are taken from the listener.
+/// </para>
 /// </remarks>
 public static class TcpPunch
 {
@@ -69,7 +75,7 @@ public static class TcpPunch
     /// <returns>The connected socket; the caller owns it.</returns>
     /// <exception cref="RendezvousException">No connection opened in time (<see cref="RendezvousError.PunchFailed"/>).</exception>
     public static Task<Socket> ConnectAsync(int localPort, IReadOnlyList<IPEndPoint> targets, TimeSpan timeout, CancellationToken cancellationToken)
-        => RaceAsync(localPort, targets, timeout, static (_, _) => Task.FromResult(true), cancellationToken);
+        => RaceAsync(localPort, targets, timeout, static (_, _) => Task.FromResult(true), listen: false, cancellationToken);
 
     /// <summary>
     /// Connects to the other side and returns the connection on which the other side spoke first (the host's side).
@@ -82,7 +88,7 @@ public static class TcpPunch
     /// <returns>The connected socket with the first bytes of the other side still unread; the caller owns it.</returns>
     /// <exception cref="RendezvousException">No connection opened in time (<see cref="RendezvousError.PunchFailed"/>).</exception>
     public static Task<Socket> AnswerAsync(int localPort, IReadOnlyList<IPEndPoint> targets, TimeSpan timeout, CancellationToken cancellationToken)
-        => RaceAsync(localPort, targets, timeout, WaitForDataAsync, cancellationToken);
+        => RaceAsync(localPort, targets, timeout, WaitForDataAsync, listen: true, cancellationToken);
 
     /// <summary>
     /// Tries all addresses at once and keeps the first connection the check accepts.
@@ -91,6 +97,7 @@ public static class TcpPunch
     /// <param name="targets">The addresses of the other side.</param>
     /// <param name="timeout">How long to try.</param>
     /// <param name="accept">Decides whether an open connection is the one.</param>
+    /// <param name="listen">Whether connections of the other side are also taken on the local port.</param>
     /// <param name="cancellationToken">The cancellation token.</param>
     /// <returns>The winning socket.</returns>
     private static async Task<Socket> RaceAsync(
@@ -98,6 +105,7 @@ public static class TcpPunch
         IReadOnlyList<IPEndPoint> targets,
         TimeSpan timeout,
         Func<Socket, CancellationToken, Task<bool>> accept,
+        bool listen,
         CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(targets);
@@ -110,6 +118,10 @@ public static class TcpPunch
         using var race = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         race.CancelAfter(timeout);
         var attempts = targets.Distinct().Select(target => AttemptAsync(localPort, target, accept, race.Token)).ToList();
+        if (listen)
+        {
+            attempts.Add(ListenAsync(localPort, targets.ToHashSet(), accept, race.Token));
+        }
         Socket? winner = null;
         while (attempts.Count > 0)
         {
@@ -187,6 +199,60 @@ public static class TcpPunch
             catch (OperationCanceledException)
             {
                 break;
+            }
+        }
+
+        return null;
+    }
+
+    /// <summary>
+    /// Takes the connections the other side makes to the local port, until one passes the check or the time runs out.
+    /// </summary>
+    /// <param name="localPort">The local port.</param>
+    /// <param name="expected">The addresses of the other side; connections from anywhere else are closed at once.</param>
+    /// <param name="accept">Decides whether an open connection is the one.</param>
+    /// <param name="cancellationToken">Stops listening.</param>
+    /// <returns>The connected socket, or <see langword="null"/> when listening stopped or the port cannot be listened on.</returns>
+    private static async Task<Socket?> ListenAsync(int localPort, IReadOnlySet<IPEndPoint> expected, Func<Socket, CancellationToken, Task<bool>> accept, CancellationToken cancellationToken)
+    {
+        Socket listener;
+        try
+        {
+            listener = Bind(localPort);
+        }
+        catch (SocketException)
+        {
+            // The attempts to connect still run; listening only helps them.
+            return null;
+        }
+
+        using (listener)
+        {
+            try
+            {
+                listener.Listen(expected.Count + 1);
+                while (!cancellationToken.IsCancellationRequested)
+                {
+                    Socket? socket = await listener.AcceptAsync(cancellationToken).ConfigureAwait(false);
+                    try
+                    {
+                        if (socket.RemoteEndPoint is IPEndPoint remote && expected.Contains(remote) &&
+                            await accept(socket, cancellationToken).ConfigureAwait(false))
+                        {
+                            var won = socket;
+                            socket = null;
+                            return won;
+                        }
+                    }
+                    finally
+                    {
+                        socket?.Dispose();
+                    }
+                }
+            }
+            catch (Exception ex) when (ex is SocketException or OperationCanceledException or ObjectDisposedException)
+            {
+                // The time ran out, the race was won elsewhere, or the system does not let this port listen.
             }
         }
 

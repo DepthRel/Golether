@@ -209,6 +209,69 @@ public sealed class RendezvousProtocolTests
     }
 
     /// <summary>
+    /// Both sides of Golether punch at each other on loopback, as two devices meeting through a rendezvous server do:
+    /// the host listens on its port as well, so they meet every time instead of only when their attempts cross.
+    /// </summary>
+    /// <returns>A task that completes when the test is done.</returns>
+    [Fact]
+    public async Task Punch_BothSidesMeet()
+    {
+        var token = TestContext.Current.CancellationToken;
+        for (var round = 0; round < 10; round++)
+        {
+            using var hostHold = TcpPunch.Bind(0);
+            using var guestHold = TcpPunch.Bind(0);
+            var hostPort = ((IPEndPoint)hostHold.LocalEndPoint!).Port;
+            var guestPort = ((IPEndPoint)guestHold.LocalEndPoint!).Port;
+
+            var answering = TcpPunch.AnswerAsync(hostPort, [new IPEndPoint(IPAddress.Loopback, guestPort)], TimeSpan.FromSeconds(10), token);
+            using var dialed = await TcpPunch.ConnectAsync(guestPort, [new IPEndPoint(IPAddress.Loopback, hostPort)], TimeSpan.FromSeconds(10), token);
+            await dialed.SendAsync("hi"u8.ToArray(), SocketFlags.None, token);
+            using var answered = await answering.WaitAsync(TimeSpan.FromSeconds(10), token);
+
+            Assert.Equal(guestPort, ((IPEndPoint)answered.RemoteEndPoint!).Port);
+            Assert.Equal(hostPort, ((IPEndPoint)dialed.RemoteEndPoint!).Port);
+        }
+    }
+
+    /// <summary>
+    /// The host takes from its port only the addresses the server named for the participant: anybody else who
+    /// connects is closed at once and the host keeps waiting.
+    /// </summary>
+    /// <returns>A task that completes when the test is done.</returns>
+    [Fact]
+    public async Task Punch_AnswerIgnoresStrangers()
+    {
+        var token = TestContext.Current.CancellationToken;
+        using var hostHold = TcpPunch.Bind(0);
+        using var guestHold = TcpPunch.Bind(0);
+        var hostPort = ((IPEndPoint)hostHold.LocalEndPoint!).Port;
+        var guestPort = ((IPEndPoint)guestHold.LocalEndPoint!).Port;
+        var answering = TcpPunch.AnswerAsync(hostPort, [new IPEndPoint(IPAddress.Loopback, guestPort)], TimeSpan.FromSeconds(3), token);
+
+        using var stranger = new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp);
+        await stranger.ConnectAsync(new IPEndPoint(IPAddress.Loopback, hostPort), token);
+        await stranger.SendAsync("hi"u8.ToArray(), SocketFlags.None, token);
+        Assert.True(await IsClosedAsync(stranger), "The stranger is closed.");
+
+        var error = await Assert.ThrowsAsync<RendezvousException>(() => answering);
+        Assert.Equal(RendezvousError.PunchFailed, error.Error);
+
+        // A closed socket with unread bytes ends in a reset rather than in an orderly end of the stream.
+        async Task<bool> IsClosedAsync(Socket socket)
+        {
+            try
+            {
+                return await socket.ReceiveAsync(new byte[1], SocketFlags.None, token).AsTask().WaitAsync(TimeSpan.FromSeconds(5), token) == 0;
+            }
+            catch (SocketException)
+            {
+                return true;
+            }
+        }
+    }
+
+    /// <summary>
     /// When nobody answers, punching gives up in time with <see cref="RendezvousError.PunchFailed"/>.
     /// </summary>
     [Fact]
