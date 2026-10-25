@@ -525,7 +525,9 @@ public sealed class ViewModelTests
         var components = Substitute.For<IComponentService>();
         foreach (var id in new[] { ComponentId.Video, ComponentId.Conference })
         {
-            components.GetStatus(id).Returns(new ComponentStatus(id, ComponentSource.Missing, null, ComponentCatalog.Find(id, "win-x64"), null));
+            // The size is fixed here: the pinned builds change, and the texts of the button must not change with them.
+            var package = ComponentCatalog.Find(id, "win-x64")! with { Size = 29 * 1024 * 1024 };
+            components.GetStatus(id).Returns(new ComponentStatus(id, ComponentSource.Missing, null, package, null));
         }
 
         return components;

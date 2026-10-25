@@ -171,6 +171,7 @@ public sealed class ConferenceTests
         a.UpdateVideoQuality();
         Assert.Equal((null, null), a.ReadNetworkStats(PeerId.Parse(new string('6', 64))));
         await a.DisconnectAsync(hank);
+        await b.DisconnectAsync(gina);
 
         async Task WaitForSize(int width, int height)
         {
