@@ -41,10 +41,10 @@ libsodium 1.0.22                                      ISC        https://github.
 These native components are taken unchanged from the builds named below; the application can also download the same
 files itself, checked by SHA-256.
 
-libmpv, build 20260903 of shinchiro/mpv-winbuild-cmake (mpv git 69e63f425a)
+libmpv, build 20261021 of shinchiro/mpv-winbuild-cmake (mpv git e471496c56)
   License: GPL-2.0-or-later for mpv; the build includes FFmpeg and other libraries built under the GPL.
-  Corresponding source: https://github.com/mpv-player/mpv (commit 69e63f425a) and the build recipes and the list of
-  the included libraries with their versions: https://github.com/shinchiro/mpv-winbuild-cmake/releases/tag/20260903
+  Corresponding source: https://github.com/mpv-player/mpv (commit e471496c56) and the build recipes and the list of
+  the included libraries with their versions: https://github.com/shinchiro/mpv-winbuild-cmake/releases/tag/20261021
 
 GStreamer 1.28.7, the subset used for cameras and voice (official MSVC build)
   License: LGPL-2.1-or-later. Corresponding source: https://gstreamer.freedesktop.org/src/ (version 1.28.7) and the

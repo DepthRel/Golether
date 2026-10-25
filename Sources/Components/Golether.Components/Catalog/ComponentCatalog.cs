@@ -9,7 +9,7 @@ namespace Golether.Components.Catalog;
 /// substituted file is rejected.
 /// </summary>
 /// <remarks>
-/// libmpv: <c>shinchiro/mpv-winbuild-cmake</c> release 20260903 (GPL build; hashes match the release digests).
+/// libmpv: <c>shinchiro/mpv-winbuild-cmake</c> release 20261021 (GPL build; hashes match the release digests).
 /// GStreamer: official MSVC installers 1.28.7 from gstreamer.freedesktop.org (hashes match the published
 /// <c>.sha256sum</c> files). Linux and macOS use the packages of the distribution or Homebrew instead.
 /// </remarks>
@@ -20,12 +20,12 @@ public static class ComponentCatalog
     /// </summary>
     public static IReadOnlyList<ComponentPackage> Packages { get; } =
     [
-        new(ComponentId.Video, "20260903", "win-x64",
-            new Uri("https://github.com/shinchiro/mpv-winbuild-cmake/releases/download/20260903/mpv-dev-x86_64-20260903-git-69e63f425a.7z"),
-            "fac135c68a35b7639e39d72c0c365104edbaebdea39a0dfdd8c36e8c8e80faef", 31_363_218, PackageFormat.SevenZip),
-        new(ComponentId.Video, "20260903", "win-arm64",
-            new Uri("https://github.com/shinchiro/mpv-winbuild-cmake/releases/download/20260903/mpv-dev-aarch64-20260903-git-69e63f425a.7z"),
-            "9d4e0cf7370fd1dd9a91a9d8139f24a88ece9e58b00f5a9ca50b391d03114f2f", 25_950_219, PackageFormat.SevenZip),
+        new(ComponentId.Video, "20261021", "win-x64",
+            new Uri("https://github.com/shinchiro/mpv-winbuild-cmake/releases/download/20261021/mpv-dev-x86_64-20261021-git-e471496c56.7z"),
+            "efc719eff3dc5954b4a5efc800632808bcec01cc9034940dd14e5eb7fe9ea633", 31_622_190, PackageFormat.SevenZip),
+        new(ComponentId.Video, "20261021", "win-arm64",
+            new Uri("https://github.com/shinchiro/mpv-winbuild-cmake/releases/download/20261021/mpv-dev-aarch64-20261021-git-e471496c56.7z"),
+            "015f133399b3525021b6d937cf54ace2761d4f70224d5e62f5df24191b28f398", 26_183_268, PackageFormat.SevenZip),
         new(ComponentId.Conference, "1.28.7", "win-x64",
             new Uri("https://gstreamer.freedesktop.org/data/pkg/windows/1.28.7/msvc/gstreamer-1.0-msvc-x86_64-1.28.7.exe"),
             "032fc6062b8539838fc8da22589cb9b24c5d820baa7f8cc160af9ea08395badf", 526_852_553, PackageFormat.InnoSetup),
