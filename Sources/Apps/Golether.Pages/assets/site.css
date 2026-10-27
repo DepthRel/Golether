@@ -180,6 +180,9 @@ section.alt .card { background: var(--bg); }
 .card h3 { margin: 0 0 6px; font-size: 18px; }
 .card p { margin: 0; color: var(--muted); font-size: 15px; line-height: 1.5; }
 .card .icon { font-size: 26px; margin-bottom: 8px; }
+/* What is new takes a whole row, so the cards below keep their even grid at any width. */
+.card.wide { grid-column: 1 / -1; }
+.card .badge { display: inline-block; margin-left: 8px; padding: 2px 9px; border-radius: 999px; background: var(--accent); color: var(--accent-ink); font-size: 12px; font-weight: 700; vertical-align: 3px; }
 
 /* Downloads */
 .downloads { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
