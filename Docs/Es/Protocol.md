@@ -20,7 +20,7 @@ los campos van en camelCase. A es el anfitrión, P un participante.
 
 | `$t` | Dirección | Campos | Significado |
 |---|---|---|---|
-| `hello` | P → A | `version`, `displayName`, `inviteToken` | el primer mensaje |
+| `hello` | P → A | `version`, `displayName`, `inviteToken`, `gallery` | el primer mensaje |
 | `pending` | A → P | — | esperando la decisión del anfitrión |
 | `welcome` | A → P | `sessionName`, `participants[]`, `playback`, `media`, `mediaDataStreams`, `relay`, `relayOverSession`, `relayShared`, `reconnectTicket` | el participante ha sido admitido; `relay` son el puerto y las credenciales del TURN del anfitrión, creados para una sesión; `relayOverSession` significa que el anfitrión acepta TURN sobre flujos `Relay` y no hace falta un puerto aparte; `relayShared` significa que también los acepta todos en un flujo `RelayShared`; `reconnectTicket` es el billete para volver a esta sesión sin una invitación nueva |
 | `rejected` | A → P | `reason`, `message` | rechazo, la conexión se cierra |
@@ -36,6 +36,9 @@ los campos van en camelCase. A es el anfitrión, P un participante.
 | `chat` | P → A → todos | `id`, `kind` (`0` texto, `1` reacción), `text`, `sender` | un mensaje del chat o una reacción; el anfitrión rellena `sender` con el identificador verificado, el valor enviado se descarta |
 | `draw` | P → A → todos | `strokeId`, `phase` (`0` inicio, `1` continuación, `2` fin), `points[]` (`x`, `y` como fracciones de la imagen), `sender` | un trazo del lápiz sobre el vídeo; el anfitrión rellena `sender` con el identificador verificado |
 | `avatar` | P → A → todos | `image` (PNG, base64; vacío restablece), `sender` | la imagen de un participante, mostrada con la cámara apagada; el anfitrión rellena `sender`; un participante nuevo recibe del anfitrión los avatares ya elegidos |
+| `gallery` | A → P | `catalogId`, `title`, `total`, `offset`, `items[]` | una página de una carpeta mostrada; un `catalogId` vacío termina la muestra |
+| `show` | P → A → todos | `catalogId`, `index`, `version`, `sender` | el elemento en la pantalla de todos; el anfitrión numera la decisión y rellena `sender` |
+| `thumb` | P → A → P | `catalogId`, `index`, `image` (JPEG, base64) | la petición de una miniatura (sin `image`) y la respuesta |
 | `bye` | cualquiera | `reason` | salida; `reason` siempre va vacío y el receptor lo ignora |
 
 `PlaybackState`: `state` (`0` en pausa, `1` reproduciendo), `position` (`hh:mm:ss.fffffff`), `referenceTime` (µs según
@@ -120,6 +123,28 @@ después: con uno anterior recibe al momento `rejected` con el motivo `5` o `1`,
 lo envía en el campo `inviteToken` de `hello`; el anfitrión compara el billete con el emitido para ese dispositivo en
 tiempo constante y se salta la comprobación de la invitación. La confirmación del anfitrión se pide como en una entrada
 normal. Cuando el anfitrión expulsa a un participante, se le retira el billete.
+
+### Una carpeta mostrada
+
+- Solo los participantes que anunciaron `gallery: true` en `hello` reciben `gallery`, `show` y `thumb`: un
+  participante más antiguo cortaría la conexión ante un tipo desconocido.
+- `catalogId` son 32 dígitos hexadecimales, aleatorios en cada muestra. Un elemento es `fileName`, `length`, `key`,
+  `kind` (`0` imagen, `1` vídeo) y `folder`: la subcarpeta relativa a la mostrada, nombres unidos con `/`, como
+  mucho 128 caracteres, cada nombre limpiado como un nombre de archivo. `key` son 64 dígitos hexadecimales,
+  aleatorios en cada muestra; sus primeros 8 bytes son la clave de archivo de las peticiones MediaData, así que una
+  imagen se obtiene por los flujos de medios en piezas comprobadas. Un vídeo nunca se obtiene así.
+- Como mucho 2000 elementos, 50 por página; una imagen ocupa como mucho 64 MiB. Una página cuyos números no cuadran o
+  con un elemento que rompe una regla se descarta entera.
+- `show` de un participante es una intención (`version` y `sender` se ignoran). El anfitrión acepta como mucho 8
+  por segundo de un participante, numera su decisión y la envía a todos con el remitente verificado. Un vídeo puesto en
+  pantalla se convierte en la película: el anfitrión envía primero `media` y `state`, después `show`. Una imagen
+  en pantalla pausa la película.
+- Una miniatura es un JPEG de como mucho 320 × 320 píxeles y 96 KiB, que el anfitrión hace una vez. Responde como mucho
+  400 peticiones en 10 segundos por participante; lo que no sea un JPEG dentro de los límites llega como respuesta
+  vacía.
+- Un participante que mira una imagen aparte comunica su índice en `galleryView` de su estado, acotado por el número
+  de elementos; los demás muestran quién mira dónde.
+- Quien llega recibe las páginas y el `show` actual justo después de `welcome`.
 
 ## MediaData
 

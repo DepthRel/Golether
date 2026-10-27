@@ -10,6 +10,7 @@ using Golether.Core.Identity;
 using Golether.Localization;
 using Golether.Media.Conference;
 using Golether.Media.Player;
+using Golether.Media.Streaming.Gallery;
 using Golether.Security.Invites;
 using Golether.Session;
 using Golether.Sync.Protocol;
@@ -104,6 +105,12 @@ public sealed partial class MainWindowViewModel : ObservableObject
     public const string RENDEZVOUS_MODE_SETTING = "network.rendezvousMode";
 
     /// <summary>
+    /// The setting that keeps the folder the folder browser was left in, where it opens next time, also after a
+    /// restart.
+    /// </summary>
+    public const string GALLERY_FOLDER_SETTING = "gallery.folder";
+
+    /// <summary>
     /// The maximum number of event feed entries.
     /// </summary>
     private const int MAX_EVENTS = 50;
@@ -189,6 +196,17 @@ public sealed partial class MainWindowViewModel : ObservableObject
     private readonly TimeProvider _timeProvider;
 
     /// <summary>
+    /// Decodes pictures: those of a shown folder and the small pictures of the folder browser.
+    /// </summary>
+    private readonly IPictureDecoder _pictures;
+
+    /// <summary>
+    /// The folder the folder browser was left in, where it opens next time; <see langword="null"/> until the browser
+    /// was opened in this run (then it is taken from the settings).
+    /// </summary>
+    private string? _lastGalleryFolder;
+
+    /// <summary>
     /// The media whose stored position was looked up.
     /// </summary>
     private string? _resumeMedia;
@@ -241,6 +259,7 @@ public sealed partial class MainWindowViewModel : ObservableObject
     /// <param name="avatarStore">Keeps the chosen avatar, or <see langword="null"/> when avatars are not offered.</param>
     /// <param name="timeProvider">The time source, or <see langword="null"/> for the system clock.</param>
     /// <param name="chatSound">The sound of new chat messages, or <see langword="null"/> when sounds are not offered.</param>
+    /// <param name="pictures">Decodes the pictures of a shown folder; Skia when <see langword="null"/>.</param>
     public MainWindowViewModel(
         ISessionService session,
         IDialogService dialogs,
@@ -256,7 +275,8 @@ public sealed partial class MainWindowViewModel : ObservableObject
         LanguageViewModel? language = null,
         IAvatarStore? avatarStore = null,
         TimeProvider? timeProvider = null,
-        ChatSoundNotifier? chatSound = null)
+        ChatSoundNotifier? chatSound = null,
+        IPictureDecoder? pictures = null)
     {
         ArgumentNullException.ThrowIfNull(components);
         _avatarStore = avatarStore;
@@ -306,6 +326,21 @@ public sealed partial class MainWindowViewModel : ObservableObject
             }
         };
         Drawing = new DrawingViewModel(_session, _dispatcher);
+        _pictures = pictures ?? new SkiaPictureCodec();
+        Gallery = new GalleryViewModel(_session, _pictures, _timeProvider);
+        Gallery.PictureChanged += (_, _) => Drawing.Reset();
+        Gallery.PropertyChanged += (_, e) =>
+        {
+            if (e.PropertyName is nameof(GalleryViewModel.IsActive) or nameof(GalleryViewModel.ShowsPicture) or nameof(GalleryViewModel.IsGridOpen))
+            {
+                OnPropertyChanged(nameof(ShowVideoHost));
+                OnPropertyChanged(nameof(ShowPictures));
+                OnPropertyChanged(nameof(ShowPlaceholder));
+                OnPropertyChanged(nameof(CanPickFirstFile));
+                OnPropertyChanged(nameof(IsFilmOnScreen));
+                OnPropertyChanged(nameof(ShowVideoOverlay));
+            }
+        };
 
         conference.MuteChanged += (_, _) => _dispatcher.Post(() =>
         {
@@ -1376,6 +1411,12 @@ public sealed partial class MainWindowViewModel : ObservableObject
     public partial string CountdownText { get; set; } = string.Empty;
 
     /// <summary>
+    /// Gets or sets the countdown in a word: the seconds alone, shown when the whole text has no room.
+    /// </summary>
+    [ObservableProperty]
+    public partial string CountdownShort { get; set; } = string.Empty;
+
+    /// <summary>
     /// Gets or sets the notice about the player backend.
     /// </summary>
     [ObservableProperty]
@@ -1417,6 +1458,44 @@ public sealed partial class MainWindowViewModel : ObservableObject
     public bool ShowVideo => PlayerAvailable && HasMedia && !IsAwaitingApproval && !IsBusy;
 
     /// <summary>
+    /// Gets a value indicating whether the native video window is shown: not while a picture of a folder or the grid
+    /// of its items takes the screen, the film waits under them.
+    /// </summary>
+    public bool ShowVideoHost => ShowVideo && !ShowsGallerySurface;
+
+    /// <summary>
+    /// Gets a value indicating whether a picture of a shown folder or the grid of its items takes the screen.
+    /// </summary>
+    public bool ShowPictures => ShowsGallerySurface && !IsAwaitingApproval && !IsBusy;
+
+    /// <summary>
+    /// Gets a value indicating whether the window of reactions and strokes over the native video is open: for the
+    /// whole session, except while a picture of a folder is shown and the layer inside the picture is used.
+    /// </summary>
+    public bool ShowVideoOverlay => IsInSession && !ShowPictures;
+
+    /// <summary>
+    /// Gets a value indicating whether the film is what this screen shows: no folder is shown, or a video of the
+    /// folder is on the screen. The controls of the film, its sound and its subtitles are of use only then.
+    /// </summary>
+    public bool IsFilmOnScreen => !Gallery.ShowsPicture;
+
+    /// <summary>
+    /// Gets a value indicating whether the surface of a shown folder (a picture or the grid) covers the film.
+    /// </summary>
+    private bool ShowsGallerySurface => Gallery.IsActive && (Gallery.ShowsPicture || Gallery.IsGridOpen);
+
+    /// <summary>
+    /// Gets a value indicating whether the hint is shown instead of the video and the pictures.
+    /// </summary>
+    public bool ShowPlaceholder => !ShowVideoHost && !ShowPictures;
+
+    /// <summary>
+    /// Gets the folder strip, the common screen of pictures and looking at a picture alone.
+    /// </summary>
+    public GalleryViewModel Gallery { get; }
+
+    /// <summary>
     /// Gets the hint shown instead of the video. The video area is also hidden while something is in progress
     /// (see <see cref="ShowVideo"/>): then the hint says what is being done, not that the video does not work.
     /// </summary>
@@ -1428,7 +1507,7 @@ public sealed partial class MainWindowViewModel : ObservableObject
     /// <summary>
     /// Gets a value indicating whether the host can pick the first file from the placeholder.
     /// </summary>
-    public bool CanPickFirstFile => IsHost && !HasMedia && !IsBusy;
+    public bool CanPickFirstFile => IsHost && !HasMedia && !IsBusy && !Gallery.IsActive;
 
     /// <summary>
     /// Gets a value indicating whether the progress overlay of the start screen is shown.
@@ -1645,6 +1724,10 @@ public sealed partial class MainWindowViewModel : ObservableObject
             case nameof(PlayerAvailable) or nameof(HasMedia) or nameof(IsAwaitingApproval) or nameof(IsBusy) or nameof(BusyText) or nameof(IsHost)
                 or nameof(IsInSession):
                 base.OnPropertyChanged(new System.ComponentModel.PropertyChangedEventArgs(nameof(ShowVideo)));
+                base.OnPropertyChanged(new System.ComponentModel.PropertyChangedEventArgs(nameof(ShowVideoHost)));
+                base.OnPropertyChanged(new System.ComponentModel.PropertyChangedEventArgs(nameof(ShowPictures)));
+                base.OnPropertyChanged(new System.ComponentModel.PropertyChangedEventArgs(nameof(ShowVideoOverlay)));
+                base.OnPropertyChanged(new System.ComponentModel.PropertyChangedEventArgs(nameof(ShowPlaceholder)));
                 base.OnPropertyChanged(new System.ComponentModel.PropertyChangedEventArgs(nameof(VideoPlaceholder)));
                 base.OnPropertyChanged(new System.ComponentModel.PropertyChangedEventArgs(nameof(CanPickFirstFile)));
                 base.OnPropertyChanged(new System.ComponentModel.PropertyChangedEventArgs(nameof(ShowStartBusy)));
@@ -1663,6 +1746,7 @@ public sealed partial class MainWindowViewModel : ObservableObject
         IsInSession = (snapshot is not null && snapshot.State != SessionState.Ended) || IsReconnecting;
         if (snapshot is null)
         {
+            Gallery.Update(null, Participants);
             Participants.Clear();
             _peerAvatars.Clear();
             IsHost = false;
@@ -1717,9 +1801,11 @@ public sealed partial class MainWindowViewModel : ObservableObject
         IsAdvancing = IsPlaying && local?.StartsIn is null && local?.Snapshot is { IsPaused: false, IsBuffering: false };
         IsEnded = snapshot.Playback is { State: PlayState.Paused, Cause: PlaybackCause.Ended };
         IsWaiting = snapshot.Playback is { State: PlayState.Paused, Cause: PlaybackCause.WaitingForParticipants };
+        var seconds = !IsWaiting && local?.StartsIn is { } startsIn ? Math.Ceiling(startsIn.TotalSeconds).ToString("0", CultureInfo.InvariantCulture) : null;
         CountdownText = IsWaiting
             ? DescribeWaiting(snapshot, duration)
-            : local?.StartsIn is { } startsIn ? Texts.Format("Main.StartsIn", Math.Ceiling(startsIn.TotalSeconds).ToString("0", CultureInfo.InvariantCulture)) : string.Empty;
+            : seconds is not null ? Texts.Format("Main.StartsIn", seconds) : string.Empty;
+        CountdownShort = seconds ?? string.Empty;
         UpdateResume(snapshot, position, duration);
         var buffered = ComputeBufferedRanges(snapshot, duration);
         if (!buffered.SequenceEqual(BufferedRanges))
@@ -1728,11 +1814,23 @@ public sealed partial class MainWindowViewModel : ObservableObject
         }
         Chat.Tick();
         FirewallBlocked = _session.FirewallBlocked;
-        Drawing.CanDraw = snapshot.State == SessionState.Active;
-        Drawing.Tick();
-        VideoAspect = _playerControls?.GetVideoAspect() ?? 0;
-
         UpdateParticipants(snapshot, duration);
+        Gallery.Update(snapshot, Participants);
+
+        // Over a shown folder the top bar names the item on the screen with its nested folder; a video of the folder,
+        // which is the film then, keeps its size like a film.
+        if (Gallery.IsActive)
+        {
+            MediaCaption = Gallery.ShowsPicture || snapshot.Media is not { } film
+                ? Gallery.ShownName
+                : $"{Gallery.ShownName} · {DisplayFormat.Size(film.Length)}";
+        }
+
+        // Over the pictures the strokes follow the picture, and only over the one everybody sees.
+        Drawing.CanDraw = snapshot.State == SessionState.Active && (!Gallery.IsActive || Gallery.CanDraw);
+        Drawing.Tick();
+        VideoAspect = Gallery.ShowsPicture ? Gallery.PictureAspect : _playerControls?.GetVideoAspect() ?? 0;
+
         UpdateSyncChip(snapshot);
         SecurityText = Texts.Format("Main.Security", Participants.Count, SessionOptions.MAX_PARTICIPANTS_LIMIT);
         var own = snapshot.Participants.FirstOrDefault(p => p.IsLocal)?.Status;
@@ -2074,7 +2172,13 @@ public sealed partial class MainWindowViewModel : ObservableObject
 
         await RunAsync(Texts.Get("Main.Busy.PreparingFile"), async token =>
         {
-            if (_session.IsHost)
+            if (_session.IsHost && GalleryFolder.IsPicture(path))
+            {
+                // One picture is a showing of one: the host chose exactly this file, so nothing else of its folder
+                // goes out, and its metadata stays at home.
+                await _session.ShowGalleryAsync(GalleryFolder.Describe(path, canDecode: _session.CanDecodePictures), stripMetadata: true, progress: null, token);
+            }
+            else if (_session.IsHost)
             {
                 await _session.ShareMediaAsync(path, token);
             }
@@ -2083,6 +2187,45 @@ public sealed partial class MainWindowViewModel : ObservableObject
                 await _dialogs.ShowErrorAsync(Texts.Get("Main.Error.OtherFile.Title"), Texts.Get("Main.Error.OtherFile.Text"));
             }
         });
+    }
+
+    /// <summary>
+    /// Shows a folder (host): the browser shows what lies in the folders and counts what would go out, the host
+    /// confirms it and whether the metadata of the pictures stays at home, and only then is anything read or sent.
+    /// </summary>
+    /// <returns>A task that completes when the folder is shown or the host changed their mind.</returns>
+    [RelayCommand]
+    private async Task PickFolderAsync()
+    {
+        if (!_session.IsHost)
+        {
+            return;
+        }
+
+        _lastGalleryFolder ??= await _settings.GetAsync(GALLERY_FOLDER_SETTING, CancellationToken.None);
+        using var browser = new FolderBrowserViewModel(_pictures, _session.CanDecodePictures, _lastGalleryFolder);
+        var choice = await _dialogs.ChooseGalleryAsync(browser);
+
+        // The browser opens next time where it was left, chosen or not, also after a restart.
+        if (browser.CurrentPath.Length > 0 && !string.Equals(browser.CurrentPath, _lastGalleryFolder, StringComparison.Ordinal))
+        {
+            _lastGalleryFolder = browser.CurrentPath;
+            await _settings.SetAsync(GALLERY_FOLDER_SETTING, _lastGalleryFolder, CancellationToken.None);
+        }
+
+        if (choice is null)
+        {
+            return;
+        }
+        var total = choice.Folder.Files.Count;
+        var progress = new Progress<int>(done =>
+        {
+            if (IsBusy)
+            {
+                BusyText = Texts.Format("Main.Busy.PreparingPicturesProgress", done, total);
+            }
+        });
+        await RunAsync(Texts.Get("Main.Busy.PreparingPictures"), token => _session.ShowGalleryAsync(choice.Folder, choice.StripMetadata, progress, token));
     }
 
     /// <summary>

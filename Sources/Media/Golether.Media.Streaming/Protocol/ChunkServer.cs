@@ -18,6 +18,11 @@ public sealed class ChunkServer
     private readonly ISharedMedia _media;
 
     /// <summary>
+    /// The files shared next to the media (the pictures of a shown folder), or <see langword="null"/>.
+    /// </summary>
+    private readonly ISharedFileSet? _files;
+
+    /// <summary>
     /// The logger.
     /// </summary>
     private readonly ILogger<ChunkServer> _logger;
@@ -63,10 +68,12 @@ public sealed class ChunkServer
     /// </summary>
     /// <param name="media">The shared media.</param>
     /// <param name="logger">The logger.</param>
-    public ChunkServer(ISharedMedia media, ILogger<ChunkServer>? logger = null)
+    /// <param name="files">The files shared next to the media, or <see langword="null"/>.</param>
+    public ChunkServer(ISharedMedia media, ILogger<ChunkServer>? logger = null, ISharedFileSet? files = null)
     {
         _hashes = new ConcurrentDictionary<long, byte[]>();
         _media = media ?? throw new ArgumentNullException(nameof(media));
+        _files = files;
         _logger = logger ?? NullLogger<ChunkServer>.Instance;
     }
 
@@ -100,8 +107,23 @@ public sealed class ChunkServer
                     throw new InvalidDataException("The peer sent an invalid chunk request.");
                 }
 
-                var media = _media.Descriptor;
-                if (media is null || ChunkProtocol.GetMediaKey(media) != key)
+                MediaDescriptor media;
+                Func<Stream> open;
+                var isMain = false;
+                if (_media.Descriptor is { } main && ChunkProtocol.GetMediaKey(main) == key)
+                {
+                    media = main;
+                    open = _media.OpenRead;
+                    isMain = true;
+                }
+                else if (_files is not null && _files.TryFind(key, out var shared, out var openShared))
+                {
+                    // A picture is fetched whole by one participant and never checked against hashes by the
+                    // others: its hashes are not kept, so the hashes of the film are not thrown away for it.
+                    media = shared;
+                    open = openShared;
+                }
+                else
                 {
                     ChunkProtocol.WriteResponseHeader(header, ChunkStatus.WrongMedia, index, 0, default);
                     await WriteAsync(stream, header, ReadOnlyMemory<byte>.Empty, cancellationToken).ConfigureAwait(false);
@@ -115,8 +137,8 @@ public sealed class ChunkServer
                     continue;
                 }
 
-                var hashes = HashesFor(key);
-                if (operation == ChunkProtocol.GET_HASH && hashes.TryGetValue(index, out var known))
+                var hashes = isMain ? HashesFor(key) : null;
+                if (operation == ChunkProtocol.GET_HASH && hashes is not null && hashes.TryGetValue(index, out var known))
                 {
                     ChunkProtocol.WriteResponseHeader(header, ChunkStatus.Ok, index, media.GetChunkLength(index), known);
                     await WriteAsync(stream, header, ReadOnlyMemory<byte>.Empty, cancellationToken).ConfigureAwait(false);
@@ -131,7 +153,7 @@ public sealed class ChunkServer
                         await file.DisposeAsync().ConfigureAwait(false);
                     }
 
-                    file = _media.OpenRead();
+                    file = open();
                     openedFor = media;
                     buffer = new byte[media.ChunkSize];
                 }
@@ -152,7 +174,11 @@ public sealed class ChunkServer
 
                 var payload = buffer.AsMemory(0, length);
                 var hash = SHA256.HashData(payload.Span);
-                hashes[index] = hash;
+                if (hashes is not null)
+                {
+                    hashes[index] = hash;
+                }
+
                 ChunkProtocol.WriteResponseHeader(header, ChunkStatus.Ok, index, length, hash);
                 if (operation == ChunkProtocol.GET_HASH)
                 {

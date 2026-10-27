@@ -20,7 +20,7 @@ camelCase. G ist der Gastgeber, T ein Teilnehmer.
 
 | `$t` | Richtung | Felder | Bedeutung |
 |---|---|---|---|
-| `hello` | T → G | `version`, `displayName`, `inviteToken` | die erste Nachricht |
+| `hello` | T → G | `version`, `displayName`, `inviteToken`, `gallery` | die erste Nachricht |
 | `pending` | G → T | — | Warten auf die Entscheidung des Gastgebers |
 | `welcome` | G → T | `sessionName`, `participants[]`, `playback`, `media`, `mediaDataStreams`, `relay`, `relayOverSession`, `relayShared`, `reconnectTicket` | der Teilnehmer ist eingelassen; `relay` sind Port und Zugangsdaten des TURN des Gastgebers, für eine Sitzung erzeugt; `relayOverSession` bedeutet, dass der Gastgeber TURN über `Relay`-Streams annimmt und kein eigener Port nötig ist; `relayShared` bedeutet, dass er sie auch alle in einem Stream `RelayShared` annimmt; `reconnectTicket` ist das Ticket für die Rückkehr in diese Sitzung ohne neue Einladung |
 | `rejected` | G → T | `reason`, `message` | Ablehnung, die Verbindung wird geschlossen |
@@ -36,6 +36,9 @@ camelCase. G ist der Gastgeber, T ein Teilnehmer.
 | `chat` | T → G → alle | `id`, `kind` (`0` Text, `1` Reaktion), `text`, `sender` | eine Chatnachricht oder eine Reaktion; der Gastgeber füllt `sender` mit der geprüften Kennung, der gesendete Wert wird verworfen |
 | `draw` | T → G → alle | `strokeId`, `phase` (`0` Beginn, `1` Fortsetzung, `2` Ende), `points[]` (`x`, `y` als Anteile des Bildes), `sender` | ein Stiftstrich über dem Video; der Gastgeber füllt `sender` mit der geprüften Kennung |
 | `avatar` | T → G → alle | `image` (PNG, base64; leer setzt zurück), `sender` | das Bild eines Teilnehmers, gezeigt bei ausgeschalteter Kamera; der Gastgeber füllt `sender`; ein neuer Teilnehmer bekommt die bereits gewählten Avatare vom Gastgeber |
+| `gallery` | G → T | `catalogId`, `title`, `total`, `offset`, `items[]` | eine Seite eines gezeigten Ordners; eine leere `catalogId` beendet das Zeigen |
+| `show` | T → G → alle | `catalogId`, `index`, `version`, `sender` | das Element auf dem Bildschirm aller; der Gastgeber nummeriert die Entscheidung und füllt `sender` |
+| `thumb` | T → G → T | `catalogId`, `index`, `image` (JPEG, base64) | die Anfrage nach einem kleinen Bild (ohne `image`) und die Antwort |
 | `bye` | beliebig | `reason` | Verlassen; `reason` ist immer leer und wird vom Empfänger ignoriert |
 
 `PlaybackState`: `state` (`0` pausiert, `1` spielt), `position` (`hh:mm:ss.fffffff`), `referenceTime` (µs nach der Uhr
@@ -123,6 +126,28 @@ wird.
 Teilnehmer schickt es im Feld `inviteToken` von `hello`; der Gastgeber vergleicht das Ticket in konstanter Zeit mit dem
 für dieses Gerät ausgegebenen und überspringt die Prüfung der Einladung. Die Bestätigung des Gastgebers wird wie bei
 einem gewöhnlichen Eintritt eingeholt. Entfernt der Gastgeber einen Teilnehmer, wird das Ticket entzogen.
+
+### Ein gezeigter Ordner
+
+- `gallery`, `show` und `thumb` erhalten nur Teilnehmer, die in `hello` `gallery: true` angekündigt haben: Ein
+  älterer Teilnehmer würde bei einem unbekannten Typ die Verbindung abbrechen.
+- `catalogId` sind 32 Hexadezimalziffern, zufällig für jedes Zeigen. Ein Element besteht aus `fileName`, `length`,
+  `key`, `kind` (`0` Bild, `1` Video) und `folder`: dem Unterordner relativ zum gezeigten, Namen durch `/`
+  verbunden, höchstens 128 Zeichen, jeder Name wie ein Dateiname bereinigt. `key` sind 64 Hexadezimalziffern,
+  zufällig für jedes Zeigen; seine ersten 8 Bytes sind der Dateischlüssel der MediaData-Anfragen, ein Bild wird also
+  über die Medienströme in geprüften Stücken geholt. Ein Video wird nie so geholt.
+- Höchstens 2000 Elemente, 50 pro Seite; ein Bild ist höchstens 64 MiB groß. Eine Seite, deren Zahlen nicht stimmen
+  oder die ein Element gegen eine Regel enthält, wird ganz verworfen.
+- `show` eines Teilnehmers ist eine Absicht (`version` und `sender` werden ignoriert). Der Gastgeber nimmt höchstens
+  8 pro Sekunde von einem Teilnehmer an, nummeriert seine Entscheidung und sendet sie allen mit dem geprüften Absender.
+  Ein Video auf dem Bildschirm wird zum Film: Der Gastgeber sendet zuerst `media` und `state`, dann `show`. Ein
+  Bild dort pausiert den Film.
+- Ein kleines Bild ist ein JPEG von höchstens 320 × 320 Pixeln und 96 KiB, das der Gastgeber einmal macht. Er
+  beantwortet höchstens 400 Anfragen in 10 Sekunden pro Teilnehmer; was kein JPEG innerhalb der Grenzen ist, kommt als
+  leere Antwort an.
+- Ein Teilnehmer, der allein ein Bild ansieht, meldet dessen Index in `galleryView` seines Status, begrenzt durch die
+  Zahl der Elemente; die anderen zeigen, wer wohin schaut.
+- Ein Neuling erhält die Seiten und das aktuelle `show` gleich nach `welcome`.
 
 ## MediaData
 

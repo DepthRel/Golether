@@ -28,6 +28,12 @@ the fingerprint of your device key; with the camera, the microphone or the chat 
 host serves the film to the participants, who may pass pieces of it on to each other. The verification code is
 compared by voice, not sent anywhere.
 
+When the host shows a folder, the participants receive copies of its pictures (kept in memory only) and see the
+names of the files and of the nested folders. With **Do not show the place of shooting, the camera and the comments of
+the pictures** switched on (the default), the copies lose the EXIF, XMP and IPTC blocks, the comments and the pictures
+some phones append after a photo; only the orientation stays. The originals on the host's disk are never changed.
+Videos of the folder are served like a film.
+
 ## Where Golether connects
 
 | What | When | What the other side learns |

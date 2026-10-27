@@ -61,6 +61,13 @@ public sealed record ParticipantStatus
     /// Gets the file bytes the participant sent to other participants.
     /// </summary>
     public long BytesToPeers { get; init; }
+
+    /// <summary>
+    /// Gets the picture the participant looks at alone, away from the one everybody sees, or <see langword="null"/>
+    /// while it follows the common screen.
+    /// </summary>
+    public int? GalleryView { get; init; }
+
     /// <summary>
     /// The largest time accepted in a status that came from the network. Larger values (up to the limits of
     /// <see cref="TimeSpan"/>) would overflow as soon as they are compared, negated or subtracted.
@@ -85,6 +92,7 @@ public sealed record ParticipantStatus
         RoundTripMilliseconds = RoundTripMilliseconds is { } roundTrip ? Math.Clamp(roundTrip, 0, MAX_ROUND_TRIP_MILLISECONDS) : null,
         BytesFromPeers = Math.Max(0, BytesFromPeers),
         BytesToPeers = Math.Max(0, BytesToPeers),
+        GalleryView = GalleryView is >= 0 and < Media.GalleryItem.MAX_ITEMS ? GalleryView : null,
     };
 
     /// <summary>

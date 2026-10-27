@@ -102,6 +102,12 @@ public sealed class AppDataPaths
     public string AvatarsDirectory => Path.Combine(Root, "avatars");
 
     /// <summary>
+    /// Gets the directory where a shown folder keeps the JPEG files the host makes of its HEIC, AVIF and TIFF pictures
+    /// and of frames of its videos; emptied when the showing ends.
+    /// </summary>
+    public string GalleryDirectory => Path.Combine(Root, "gallery");
+
+    /// <summary>
     /// Gets the directory of downloaded components (libmpv, GStreamer).
     /// </summary>
     public string ComponentsDirectory => Path.Combine(Root, "components");

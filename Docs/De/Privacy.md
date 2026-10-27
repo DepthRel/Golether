@@ -29,6 +29,12 @@ sie) und den Fingerabdruck Ihres Geräteschlüssels; mit eingeschalteter Kamera,
 diese. Der Gastgeber liefert den Film an die Teilnehmer, die Teile davon untereinander weitergeben können. Der
 Prüfcode wird mündlich verglichen und nirgendwohin gesendet.
 
+Zeigt der Gastgeber einen Ordner, erhalten die Teilnehmer Kopien seiner Bilder (nur im Speicher) und sehen die Namen
+der Dateien und der Unterordner. Mit eingeschaltetem **Aufnahmeort, Kamera und Kommentare der Bilder nicht zeigen**
+(Standard) verlieren die Kopien die Blöcke EXIF, XMP und IPTC, die Kommentare und die Bilder, die manche Telefone an
+ein Foto anhängen; nur die Ausrichtung bleibt. Die Originale auf der Festplatte des Gastgebers werden nie verändert.
+Videos des Ordners werden wie ein Film bereitgestellt.
+
 ## Wohin Golether sich verbindet
 
 | Wohin | Wann | Was die Gegenseite erfährt |

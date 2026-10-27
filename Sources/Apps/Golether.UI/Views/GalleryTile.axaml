@@ -1,0 +1,65 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:loc="using:Golether.UI.Localization"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:Golether.UI.ViewModels"
+             xmlns:controls="using:Golether.UI.Controls"
+             x:Class="Golether.UI.Views.GalleryTile"
+             x:DataType="vm:GalleryItemViewModel">
+  <UserControl.Resources>
+    <StreamGeometry x:Key="IconFilm">M2,4 H22 V20 H2 Z M4,6 V8 H6 V6 Z M4,11 V13 H6 V11 Z M4,16 V18 H6 V16 Z M18,6 V8 H20 V6 Z M18,11 V13 H20 V11 Z M18,16 V18 H20 V16 Z M10,8.5 V15.5 L15.5,12 Z</StreamGeometry>
+  </UserControl.Resources>
+  <!--
+    An item of a shown folder, the same in the strip and in the grid: a click puts it on everybody's screen, the menu
+    opens a picture here only. A video carries the sign of a film; the first item of a nested folder names it. The
+    marks under the item are the people looking at it.
+  -->
+  <Grid RowDefinitions="*,Auto">
+    <Button Focusable="False" Classes="ghost" Padding="0" HorizontalAlignment="Stretch" VerticalAlignment="Stretch"
+            HorizontalContentAlignment="Stretch" VerticalContentAlignment="Stretch"
+            Command="{Binding ShowToAllCommand}" ToolTip.Tip="{Binding FullName}" AutomationProperties.Name="{Binding FullName}">
+      <Button.ContextMenu>
+        <ContextMenu>
+          <MenuItem Header="{loc:Loc Gallery.Item.ShowAll}" Command="{Binding ShowToAllCommand}" />
+          <MenuItem Header="{loc:Loc Gallery.Item.OpenAlone}" Command="{Binding OpenAloneCommand}" />
+        </ContextMenu>
+      </Button.ContextMenu>
+      <Panel>
+        <Border Background="{StaticResource GoletherPanel2}" CornerRadius="6" ClipToBounds="True">
+          <Image Source="{Binding Thumbnail}" Stretch="UniformToFill" />
+        </Border>
+        <PathIcon Width="26" Height="26" Data="{StaticResource IconFilm}" Foreground="{StaticResource GoletherText}" Opacity="0.85"
+                  IsVisible="{Binding IsVideo}" />
+        <Border Background="#99000000" CornerRadius="4" Padding="4,0" Margin="4" HorizontalAlignment="Left" VerticalAlignment="Bottom">
+          <TextBlock Text="{Binding Number}" Classes="mono" FontSize="10" />
+        </Border>
+        <Border Background="#CC000000" CornerRadius="4" Padding="5,1" Margin="4" HorizontalAlignment="Left" VerticalAlignment="Top"
+                MaxWidth="{Binding $parent[Panel].Bounds.Width}" IsVisible="{Binding StartsFolder}">
+          <TextBlock Text="{Binding FolderLabel}" FontSize="10" TextTrimming="CharacterEllipsis" Foreground="{StaticResource GoletherAccent}" />
+        </Border>
+        <!-- The item everybody sees has the accent frame; the one on this screen alone a thin one. -->
+        <Border CornerRadius="6" BorderThickness="1" BorderBrush="{StaticResource GoletherText}" IsVisible="{Binding IsShown}" />
+        <Border CornerRadius="6" BorderThickness="3" BorderBrush="{StaticResource GoletherAccent}" IsVisible="{Binding IsStage}" />
+      </Panel>
+    </Button>
+    <ItemsControl Grid.Row="1" ItemsSource="{Binding Viewers}" HorizontalAlignment="Center" Height="18" Margin="0,4,0,0" IsHitTestVisible="False">
+      <ItemsControl.ItemsPanel>
+        <ItemsPanelTemplate>
+          <StackPanel Orientation="Horizontal" Spacing="2" />
+        </ItemsPanelTemplate>
+      </ItemsControl.ItemsPanel>
+      <ItemsControl.ItemTemplate>
+        <DataTemplate x:DataType="vm:ParticipantItemViewModel">
+          <Panel Width="18" Height="18" ToolTip.Tip="{Binding Name}">
+            <Border CornerRadius="9" Background="{Binding AvatarColor, Converter={x:Static controls:ColorTextBrushConverter.Instance}}">
+              <TextBlock Text="{Binding Initial}" FontSize="9" FontWeight="Bold" Foreground="#0A0F11"
+                         HorizontalAlignment="Center" VerticalAlignment="Center" />
+            </Border>
+            <Border CornerRadius="9" ClipToBounds="True" IsVisible="{Binding HasAvatar}">
+              <Image Source="{Binding AvatarImage}" Stretch="UniformToFill" />
+            </Border>
+          </Panel>
+        </DataTemplate>
+      </ItemsControl.ItemTemplate>
+    </ItemsControl>
+  </Grid>
+</UserControl>

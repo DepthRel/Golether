@@ -29,6 +29,12 @@ dele) e a impressão digital da chave do seu dispositivo; com a câmara, o micro
 esses. O anfitrião serve o filme aos participantes, que podem passar partes dele uns aos outros. O código de
 verificação é comparado de viva voz e não é enviado para lado nenhum.
 
+Quando o anfitrião mostra uma pasta, os participantes recebem cópias das suas imagens (só em memória) e veem os nomes
+dos ficheiros e das subpastas. Com **Não mostrar o local da fotografia, a câmara nem os comentários das imagens**
+ligado (por omissão), as cópias perdem os blocos EXIF, XMP e IPTC, os comentários e as imagens que alguns telemóveis
+juntam depois de uma foto; só a orientação se mantém. Os originais no disco do anfitrião nunca são alterados. Os vídeos
+da pasta são servidos como um filme.
+
 ## A que se liga o Golether
 
 | A quê | Quando | O que o outro lado fica a saber |

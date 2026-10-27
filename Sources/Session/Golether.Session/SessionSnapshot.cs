@@ -71,4 +71,9 @@ public sealed record SessionSnapshot
     /// Gets a value indicating whether this participant plays a local copy.
     /// </summary>
     public bool UsesLocalCopy { get; init; }
+
+    /// <summary>
+    /// Gets the pictures shown in the session, or <see langword="null"/> while no folder is shown.
+    /// </summary>
+    public GallerySnapshot? Gallery { get; init; }
 }

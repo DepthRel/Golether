@@ -29,6 +29,12 @@ huella de la clave de su dispositivo; con la cámara, el micrófono o el chat ac
 anfitrión sirve la película a los participantes, que pueden pasarse partes de ella entre sí. El código de
 verificación se compara de viva voz y no se envía a ninguna parte.
 
+Cuando el anfitrión muestra una carpeta, los participantes reciben copias de sus imágenes (solo en memoria) y ven los
+nombres de los archivos y de las subcarpetas. Con **No mostrar el lugar de la toma, la cámara ni los comentarios de las
+imágenes** activado (por defecto), las copias pierden los bloques EXIF, XMP e IPTC, los comentarios y las imágenes que
+algunos teléfonos añaden tras una foto; solo se conserva la orientación. Los originales del disco del anfitrión nunca
+cambian. Los vídeos de la carpeta se sirven como una película.
+
 ## A dónde se conecta Golether
 
 | A dónde | Cuándo | Qué sabe la otra parte |

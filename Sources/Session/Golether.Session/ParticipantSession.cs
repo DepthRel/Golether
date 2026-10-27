@@ -1,6 +1,7 @@
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using Golether.Core.Data.Enums;
+using Golether.Core.Enums;
 using Golether.Core.Identity;
 using Golether.Core.Media;
 using Golether.Core.Networking;
@@ -253,6 +254,56 @@ public sealed class ParticipantSession : IAsyncDisposable
     private VerificationCode? _code;
 
     /// <summary>
+    /// The identifier of the showing of pictures, or <see langword="null"/> while the host shows none.
+    /// </summary>
+    private string? _galleryId;
+
+    /// <summary>
+    /// The name of the shown folder.
+    /// </summary>
+    private string _galleryTitle = string.Empty;
+
+    /// <summary>
+    /// The pictures received so far, by index; replaced, never changed, when a page arrives.
+    /// </summary>
+    private GalleryItem?[] _galleryItems = [];
+
+    /// <summary>
+    /// The index of the picture on everybody's screen.
+    /// </summary>
+    private int _galleryStage;
+
+    /// <summary>
+    /// The number of the latest decision of the host about the picture on everybody's screen.
+    /// </summary>
+    private long _galleryStageVersion;
+
+    /// <summary>
+    /// Who chose the picture on everybody's screen.
+    /// </summary>
+    private PeerId? _galleryStageOrigin;
+
+    /// <summary>
+    /// The picture this participant looks at alone, or <see langword="null"/> while it follows the common screen.
+    /// </summary>
+    private int? _galleryView;
+
+    /// <summary>
+    /// The small pictures asked of the host and not answered yet, by showing and index.
+    /// </summary>
+    private readonly System.Collections.Concurrent.ConcurrentDictionary<(string Catalog, int Index), TaskCompletionSource<byte[]?>> _thumbnailRequests = new();
+
+    /// <summary>
+    /// Limits the small pictures asked for at once, so the strip does not crowd the control stream.
+    /// </summary>
+    private readonly SemaphoreSlim _thumbnailSlots = new(6, 6);
+
+    /// <summary>
+    /// How long an answer with a small picture is waited for.
+    /// </summary>
+    private static readonly TimeSpan _thumbnailPatience = TimeSpan.FromSeconds(20);
+
+    /// <summary>
     /// Whether the session was disposed.
     /// </summary>
     private int _disposed;
@@ -405,7 +456,7 @@ public sealed class ParticipantSession : IAsyncDisposable
         _code = VerificationCode.Compute(invite.HostPeerId, _identity.PeerId, invite.Token);
         var stream = await ConnectAnyAsync(invite, cancellationToken).ConfigureAwait(false);
         _channel = new SessionMessageChannel(stream.Stream);
-        await _channel.SendAsync(new HelloMessage(SessionMessage.PROTOCOL_VERSION, DisplayName, invite.Token), cancellationToken).ConfigureAwait(false);
+        await _channel.SendAsync(new HelloMessage(SessionMessage.PROTOCOL_VERSION, DisplayName, invite.Token) { Gallery = true }, cancellationToken).ConfigureAwait(false);
 
         WelcomeMessage welcome;
         while (true)
@@ -613,6 +664,120 @@ public sealed class ParticipantSession : IAsyncDisposable
     }
 
     /// <summary>
+    /// Asks the host to put an item of the shown folder on everybody's screen; the host decides and tells everybody.
+    /// </summary>
+    /// <param name="catalogId">The showing the item belongs to.</param>
+    /// <param name="index">The index of the item.</param>
+    /// <param name="cancellationToken">The cancellation token.</param>
+    /// <returns>A task that completes when the intention was sent.</returns>
+    public async Task ShowItemAsync(string catalogId, int index, CancellationToken cancellationToken)
+    {
+        var channel = _channel ?? throw new InvalidOperationException(Texts.Get("Session.Error.NotJoined"));
+        await channel.SendAsync(new GalleryShowMessage(catalogId, index, 0, null), cancellationToken).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Notes which picture this participant looks at alone; the others see it in the next status.
+    /// </summary>
+    /// <param name="index">The picture, or <see langword="null"/> when following the common screen.</param>
+    public void SetGalleryView(int? index)
+    {
+        _galleryView = index;
+        Changed?.Invoke(this, EventArgs.Empty);
+    }
+
+    /// <summary>
+    /// Asks the host for the small picture of a picture.
+    /// </summary>
+    /// <param name="catalogId">The showing the picture belongs to.</param>
+    /// <param name="index">The index of the picture.</param>
+    /// <param name="cancellationToken">The cancellation token.</param>
+    /// <returns>The JPEG bytes, or <see langword="null"/> when the host has none or did not answer in time.</returns>
+    public async Task<byte[]?> LoadThumbnailAsync(string catalogId, int index, CancellationToken cancellationToken)
+    {
+        var channel = _channel ?? throw new InvalidOperationException(Texts.Get("Session.Error.NotJoined"));
+        lock (_gate)
+        {
+            if (!string.Equals(_galleryId, catalogId, StringComparison.Ordinal) || index < 0 || index >= _galleryItems.Length)
+            {
+                return null;
+            }
+        }
+
+        var key = (catalogId, index);
+        await _thumbnailSlots.WaitAsync(cancellationToken).ConfigureAwait(false);
+        try
+        {
+            var fresh = new TaskCompletionSource<byte[]?>(TaskCreationOptions.RunContinuationsAsynchronously);
+            var waiting = _thumbnailRequests.GetOrAdd(key, fresh);
+            if (ReferenceEquals(waiting, fresh))
+            {
+                await channel.SendAsync(new ThumbnailMessage(catalogId, index, null), cancellationToken).ConfigureAwait(false);
+            }
+
+            return await waiting.Task.WaitAsync(_thumbnailPatience, _timeProvider, cancellationToken).ConfigureAwait(false);
+        }
+        catch (TimeoutException)
+        {
+            _thumbnailRequests.TryRemove(key, out _);
+            return null;
+        }
+        finally
+        {
+            _thumbnailSlots.Release();
+        }
+    }
+
+    /// <summary>
+    /// Fetches a picture of the shown folder from the host, over the media data streams.
+    /// </summary>
+    /// <param name="catalogId">The showing the picture belongs to.</param>
+    /// <param name="index">The index of the picture.</param>
+    /// <param name="cancellationToken">The cancellation token.</param>
+    /// <returns>The bytes of the picture, each piece checked against its hash.</returns>
+    /// <exception cref="InvalidOperationException">The host shows something else now.</exception>
+    public async Task<byte[]> LoadPictureAsync(string catalogId, int index, CancellationToken cancellationToken)
+    {
+        GalleryItem item;
+        lock (_gate)
+        {
+            if (!string.Equals(_galleryId, catalogId, StringComparison.Ordinal) || index < 0 || index >= _galleryItems.Length ||
+                _galleryItems[index] is not { Kind: GalleryItemKind.Picture } found)
+            {
+                throw new InvalidOperationException(Texts.Get("Session.Error.PictureGone"));
+            }
+
+            item = found;
+        }
+
+        var media = item.ToDescriptor();
+        var source = new RemoteChunkSource(
+            media,
+            async token => _spareMediaStreams.TryTake(out var spare)
+                ? spare
+                : (await OpenStreamAsync(StreamPurpose.MediaData, token).ConfigureAwait(false)).Stream,
+            Math.Min(_mediaStreams, 4),
+            _loggerFactory.CreateLogger<RemoteChunkSource>())
+        {
+            KeepStream = KeepMediaStreamAsync,
+        };
+        await using (source.ConfigureAwait(false))
+        {
+            var chunks = await Task.WhenAll(Enumerable.Range(0, (int)media.ChunkCount).Select(i => source.GetChunkAsync(i, cancellationToken).AsTask()))
+                .ConfigureAwait(false);
+            var bytes = new byte[media.Length];
+            var offset = 0;
+            foreach (var chunk in chunks)
+            {
+                chunk.CopyTo(bytes, offset);
+                offset += chunk.Length;
+            }
+
+            return bytes;
+        }
+    }
+
+    /// <summary>
     /// Returns the current view of the session.
     /// </summary>
     /// <returns>The snapshot.</returns>
@@ -635,6 +800,7 @@ public sealed class ParticipantSession : IAsyncDisposable
                 ClockUncertainty = _estimator.Uncertainty,
                 VerificationCode = _code,
                 UsesLocalCopy = _usesLocalCopy,
+                Gallery = BuildGallerySnapshot(),
             };
         }
     }
@@ -970,6 +1136,19 @@ public sealed class ParticipantSession : IAsyncDisposable
                         break;
                     case AvatarMessage avatar when avatar.Sender is { } owner && avatar.Sanitize() is { } cleanAvatar:
                         AvatarReceived?.Invoke(this, new AvatarUpdate(owner, cleanAvatar.Image, owner == _identity.PeerId));
+                        break;
+                    case GalleryMessage gallery when gallery.Sanitize() is { } page:
+                        OnGallery(page);
+                        break;
+                    case GalleryShowMessage { Sender: { } chooser } show:
+                        OnShow(show, chooser);
+                        break;
+                    case ThumbnailMessage thumbnail:
+                        if (_thumbnailRequests.TryRemove((thumbnail.CatalogId, thumbnail.Index), out var waiting))
+                        {
+                            waiting.TrySetResult(thumbnail.Sanitize().Image);
+                        }
+
                         break;
                     case ByeMessage:
                         // Texts do not travel over the network: whatever the host wrote, the end of the session is
@@ -1370,8 +1549,135 @@ public sealed class ParticipantSession : IAsyncDisposable
             CameraOff = _conference?.CameraOff ?? true,
             BytesFromPeers = _swarm?.BytesFromPeers ?? 0,
             BytesToPeers = _sharing?.Exchange.BytesSent ?? 0,
+            GalleryView = _galleryView,
         };
     }
+
+    /// <summary>
+    /// Takes a page of the pictures the host shows, or the end of the showing.
+    /// </summary>
+    /// <param name="page">The checked page.</param>
+    private void OnGallery(GalleryMessage page)
+    {
+        var started = false;
+        lock (_gate)
+        {
+            if (page.CatalogId.Length == 0)
+            {
+                _galleryId = null;
+                _galleryItems = [];
+                _galleryView = null;
+            }
+            else
+            {
+                if (!string.Equals(_galleryId, page.CatalogId, StringComparison.Ordinal))
+                {
+                    started = true;
+                    _galleryId = page.CatalogId;
+                    _galleryTitle = page.Title;
+                    _galleryItems = new GalleryItem?[page.Total];
+                    _galleryStage = 0;
+                    _galleryStageVersion = 0;
+                    _galleryStageOrigin = null;
+                    _galleryView = null;
+                }
+
+                if (page.Total == _galleryItems.Length)
+                {
+                    // A new array for every page: a snapshot handed out earlier keeps what it had.
+                    var items = (GalleryItem?[])_galleryItems.Clone();
+                    for (var i = 0; i < page.Items.Count; i++)
+                    {
+                        items[page.Offset + i] = page.Items[i];
+                    }
+
+                    _galleryItems = items;
+                }
+            }
+        }
+
+        // Small pictures still awaited for an earlier showing will not come.
+        foreach (var key in _thumbnailRequests.Keys.Where(k => !string.Equals(k.Catalog, page.CatalogId, StringComparison.Ordinal)))
+        {
+            if (_thumbnailRequests.TryRemove(key, out var waiting))
+            {
+                waiting.TrySetResult(null);
+            }
+        }
+
+        if (started)
+        {
+            Raise(_invite!.HostPeerId, Texts.Format("Session.Event.GalleryShown", NameOf(_invite.HostPeerId), page.Title, page.Total));
+        }
+
+        Changed?.Invoke(this, EventArgs.Empty);
+    }
+
+    /// <summary>
+    /// Takes the picture the host put on everybody's screen.
+    /// </summary>
+    /// <param name="show">The decision of the host.</param>
+    /// <param name="chooser">Who chose the picture.</param>
+    private void OnShow(GalleryShowMessage show, PeerId chooser)
+    {
+        string? name = null;
+        lock (_gate)
+        {
+            if (!show.Fits(_galleryId, _galleryItems.Length) || show.Version <= _galleryStageVersion)
+            {
+                return;
+            }
+
+            // The first decision a newcomer hears is where the others already are, not a change to announce.
+            if (_galleryStageVersion != 0 && show.Index != _galleryStage)
+            {
+                name = _galleryItems[show.Index]?.FileName;
+            }
+
+            _galleryStage = show.Index;
+            _galleryStageVersion = show.Version;
+            _galleryStageOrigin = chooser;
+        }
+
+        if (name is not null)
+        {
+            Raise(chooser, Texts.Format("Session.Event.MediaShown", NameOf(chooser), name));
+        }
+
+        Changed?.Invoke(this, EventArgs.Empty);
+    }
+
+    /// <summary>
+    /// Returns the name of a participant.
+    /// </summary>
+    /// <param name="peer">The participant.</param>
+    /// <returns>The name.</returns>
+    private string NameOf(PeerId peer)
+    {
+        lock (_gate)
+        {
+            return _participants.FirstOrDefault(p => p.Info.PeerId == peer)?.Info.DisplayName ??
+                (peer == _invite?.HostPeerId ? _invite.HostName : Texts.Get("Session.DefaultParticipantName"));
+        }
+    }
+
+    /// <summary>
+    /// Returns the showing of pictures as the view sees it. Called under <see cref="_gate"/>.
+    /// </summary>
+    /// <returns>The showing, or <see langword="null"/> when there is none.</returns>
+    private GallerySnapshot? BuildGallerySnapshot()
+        => _galleryId is { } id
+            ? new GallerySnapshot
+            {
+                CatalogId = id,
+                Title = _galleryTitle,
+                Total = _galleryItems.Length,
+                Items = _galleryItems,
+                Stage = _galleryStage,
+                StageVersion = _galleryStageVersion,
+                StageOrigin = _galleryStageOrigin,
+            }
+            : null;
 
     /// <summary>
     /// Changes the connection state.

@@ -4,6 +4,7 @@ using Microsoft.Extensions.Logging.Abstractions;
 using Golether.Core.Data.Entities;
 using Golether.Core.Data.Enums;
 using Golether.Core.Data.Stores;
+using Golether.Core.Enums;
 using Golether.Core.Identity;
 using Golether.Core.Media;
 using Golether.Core.Networking;
@@ -13,6 +14,7 @@ using Golether.Core.Time;
 using Golether.Localization;
 using Golether.Media.Conference;
 using Golether.Media.Streaming.Files;
+using Golether.Media.Streaming.Gallery;
 using Golether.Media.Streaming.Protocol;
 using Golether.Security.Admission;
 using Golether.Security.Identity;
@@ -96,6 +98,67 @@ public sealed class HostSession : IAsyncDisposable
     private readonly LocalSharedMedia _media = new();
 
     /// <summary>
+    /// The pictures of the shown folder.
+    /// </summary>
+    private readonly SharedGallery _gallery = new();
+
+    /// <summary>
+    /// Makes the small pictures of the folder strip, or <see langword="null"/> when this device cannot.
+    /// </summary>
+    private readonly IThumbnailRenderer? _thumbnails;
+
+    /// <summary>
+    /// Decodes HEIC, AVIF and TIFF pictures and frames of videos of a shown folder, or <see langword="null"/>.
+    /// </summary>
+    private readonly IFrameExtractor? _frames;
+
+    /// <summary>
+    /// The folder where showings keep the JPEG files they make.
+    /// </summary>
+    private readonly string _galleryDirectory;
+
+    /// <summary>
+    /// Lets one change of the common screen through at a time: putting a video there loads it as the film.
+    /// </summary>
+    private readonly SemaphoreSlim _showGate = new(1, 1);
+
+    /// <summary>
+    /// The small pictures made for the current showing, by its identifier and the index of the picture: every
+    /// participant asks for the same ones, and a picture is decoded once.
+    /// </summary>
+    private readonly ConcurrentDictionary<(string Catalog, int Index), Task<byte[]?>> _thumbnailCache = new();
+
+    /// <summary>
+    /// Limits the pictures decoded at once for small pictures, so the strip does not take every core of the host.
+    /// </summary>
+    private readonly SemaphoreSlim _thumbnailGate = new(2, 2);
+
+    /// <summary>
+    /// Guards the showing and the picture on everybody's screen.
+    /// </summary>
+    private readonly Lock _stageGate = new();
+
+    /// <summary>
+    /// The index of the picture on everybody's screen.
+    /// </summary>
+    private int _stage;
+
+    /// <summary>
+    /// The number of the latest decision about the picture on everybody's screen.
+    /// </summary>
+    private long _stageVersion;
+
+    /// <summary>
+    /// Who chose the picture on everybody's screen, or <see langword="null"/> for the first one of a showing.
+    /// </summary>
+    private PeerId? _stageOrigin;
+
+    /// <summary>
+    /// The picture the host looks at alone, or <see langword="null"/> while it follows the common screen.
+    /// </summary>
+    private int? _galleryView;
+
+    /// <summary>
     /// Serves media data streams.
     /// </summary>
     private readonly ChunkServer _chunkServer;
@@ -177,6 +240,11 @@ public sealed class HostSession : IAsyncDisposable
     /// <param name="options">The options.</param>
     /// <param name="loggerFactory">The logger factory.</param>
     /// <param name="conference">Cameras and voices, or <see langword="null"/>.</param>
+    /// <param name="thumbnails">Makes the small pictures of a shown folder, or <see langword="null"/>.</param>
+    /// <param name="frames">Decodes HEIC, AVIF and TIFF pictures and frames of videos of a shown folder, or
+    /// <see langword="null"/>.</param>
+    /// <param name="galleryDirectory">The folder where showings keep the JPEG files they make; a folder of the
+    /// system's temporary files when <see langword="null"/>.</param>
     public HostSession(
         DeviceIdentity identity,
         IPeerListener listener,
@@ -190,8 +258,14 @@ public sealed class HostSession : IAsyncDisposable
         string displayName,
         SessionOptions options,
         ILoggerFactory? loggerFactory = null,
-        IConferenceMedia? conference = null)
+        IConferenceMedia? conference = null,
+        IThumbnailRenderer? thumbnails = null,
+        IFrameExtractor? frames = null,
+        string? galleryDirectory = null)
     {
+        _thumbnails = thumbnails;
+        _frames = frames;
+        _galleryDirectory = galleryDirectory ?? Path.Combine(Path.GetTempPath(), "golether-gallery");
         _identity = identity ?? throw new ArgumentNullException(nameof(identity));
         _listener = listener ?? throw new ArgumentNullException(nameof(listener));
         _invites = invites ?? throw new ArgumentNullException(nameof(invites));
@@ -209,7 +283,7 @@ public sealed class HostSession : IAsyncDisposable
         _clock = new HostSessionClock(clock ?? throw new ArgumentNullException(nameof(clock)));
         _authority = new PlaybackAuthority(identity.PeerId, _clock, options.Authority);
         _follower = new PlaybackFollower(player, _clock, new DriftCorrector(options.DriftCorrection), loggerFactory.CreateLogger<PlaybackFollower>());
-        _chunkServer = new ChunkServer(_media, loggerFactory.CreateLogger<ChunkServer>());
+        _chunkServer = new ChunkServer(_media, loggerFactory.CreateLogger<ChunkServer>(), _gallery);
         _conference = conference is null
             ? null
             : new ConferenceLink(conference, identity.PeerId, SendConferenceSignalAsync, loggerFactory.CreateLogger<ConferenceLink>());
@@ -301,6 +375,15 @@ public sealed class HostSession : IAsyncDisposable
         }
 
         _follower.ApplyAsync(_authority.Current, CancellationToken.None).GetAwaiter().GetResult();
+        try
+        {
+            GalleryCatalog.DeleteLeftovers(_galleryDirectory);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            _logger.LogWarning("The files of earlier showings were not deleted: {Reason}", ex.Message);
+        }
+
         _loops.Add(Task.Run(() => AcceptLoopAsync(_stopping.Token)));
         _loops.Add(Task.Run(() => TickLoopAsync(_stopping.Token)));
         _conference?.SetStunServer(Rendezvous?.StunUri);
@@ -336,55 +419,169 @@ public sealed class HostSession : IAsyncDisposable
     }
 
     /// <summary>
-    /// Shares a local file and loads it into the local player.
+    /// Shares a local file and loads it into the local player. A shown folder ends: the film takes the screen.
     /// </summary>
     /// <param name="path">The file path.</param>
     /// <param name="cancellationToken">The cancellation token.</param>
     /// <returns>The descriptor.</returns>
     public async Task<MediaDescriptor> ShareMediaAsync(string path, CancellationToken cancellationToken)
     {
-        var descriptor = await MediaFiles.DescribeAsync(path, cancellationToken).ConfigureAwait(false);
-        PlaybackState state;
-        await _playerGate.WaitAsync(cancellationToken).ConfigureAwait(false);
+        var (descriptor, state) = await LoadFilmAsync(path, cancellationToken).ConfigureAwait(false);
+
+        await CloseGalleryAsync().ConfigureAwait(false);
+        await AnnounceFilmAsync(descriptor, state).ConfigureAwait(false);
+        Raise(_identity.PeerId, Texts.Format("Session.Event.MediaShown", DisplayName, descriptor.FileName));
+        return descriptor;
+    }
+
+    /// <summary>
+    /// Shows the pictures and videos of a folder to everybody, starting with the first picture (the first video when
+    /// there is no picture). A film that plays is paused and waits under the pictures.
+    /// </summary>
+    /// <param name="folder">The folder the host chose and confirmed.</param>
+    /// <param name="stripMetadata">Whether the place, the camera and the comments are left out of the pictures.</param>
+    /// <param name="progress">Told the number of files prepared so far.</param>
+    /// <param name="cancellationToken">The cancellation token.</param>
+    /// <returns>A task that completes when everybody was told.</returns>
+    /// <exception cref="InvalidOperationException">No file of the folder can be shown.</exception>
+    public async Task ShowGalleryAsync(GalleryFolder folder, bool stripMetadata, IProgress<int>? progress, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(folder);
+        var options = new GalleryOptions { StripMetadata = stripMetadata, Frames = _frames, WorkDirectory = _galleryDirectory };
+        var catalog = await GalleryCatalog.CreateAsync(folder, options, progress, cancellationToken).ConfigureAwait(false);
+        if (catalog.Items.Count == 0)
+        {
+            catalog.Dispose();
+            throw new InvalidOperationException(Texts.Get("Session.Error.NoPictures"));
+        }
+
+        var first = 0;
+        while (first < catalog.Items.Count - 1 && catalog.Items[first].Kind != GalleryItemKind.Picture)
+        {
+            first++;
+        }
+
+        first = catalog.Items[first].Kind == GalleryItemKind.Picture ? first : 0;
+        await _showGate.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
         {
-            _follower.Reset();
-            try
+            await PrepareStageAsync(catalog, first, cancellationToken).ConfigureAwait(false);
+            GalleryCatalog? previous;
+            lock (_stageGate)
             {
-                await _player.LoadAsync(new Uri(Path.GetFullPath(path)), TimeSpan.Zero, paused: true, cancellationToken).ConfigureAwait(false);
-            }
-            catch
-            {
-                // The player refused the file. Nothing was announced yet, so the session stays on what it had: the
-                // participants are not told about a file the host cannot show, and the follower takes the current
-                // state up again.
-                try
-                {
-                    await _follower.ApplyAsync(_authority.Current, CancellationToken.None).ConfigureAwait(false);
-                }
-                catch (Exception ex) when (ex is not OutOfMemoryException)
-                {
-                    // The reason the file was refused is what the caller must see, not this second failure.
-                    _logger.LogWarning(ex, "The state was not applied after a refused file");
-                }
-
-                throw;
+                previous = _gallery.Share(catalog);
+                _stage = first;
+                _stageVersion++;
+                _stageOrigin = null;
+                _galleryView = null;
             }
 
-            _media.Share(path, descriptor);
-            state = _authority.Reset();
-            _authority.Duration = null;
-            await _follower.ApplyAsync(state, cancellationToken).ConfigureAwait(false);
+            previous?.Dispose();
+            _thumbnailCache.Clear();
+        }
+        catch
+        {
+            if (!ReferenceEquals(_gallery.Current, catalog))
+            {
+                catalog.Dispose();
+            }
+
+            throw;
         }
         finally
         {
-            _playerGate.Release();
+            _showGate.Release();
         }
 
-        await BroadcastAsync(new MediaChangedMessage(descriptor)).ConfigureAwait(false);
-        await BroadcastAsync(new PlaybackStateMessage(state)).ConfigureAwait(false);
-        Raise(_identity.PeerId, Texts.Format("Session.Event.MediaShown", DisplayName, descriptor.FileName));
-        return descriptor;
+        await Task.WhenAll(_participants.Values.Where(c => c.SupportsGallery).Select(SendGalleryAsync)).ConfigureAwait(false);
+        Raise(_identity.PeerId, Texts.Format("Session.Event.GalleryShown", DisplayName, catalog.Title, catalog.Items.Count));
+    }
+
+    /// <summary>
+    /// Ends the showing of a folder: everybody goes back to the film.
+    /// </summary>
+    /// <returns>A task that completes when everybody was told.</returns>
+    public async Task CloseGalleryAsync()
+    {
+        GalleryCatalog? previous;
+        lock (_stageGate)
+        {
+            previous = _gallery.Share(null);
+            _galleryView = null;
+        }
+
+        if (previous is null)
+        {
+            return;
+        }
+
+        previous.Dispose();
+        _thumbnailCache.Clear();
+        await BroadcastGalleryAsync(GalleryMessage.Closed()).ConfigureAwait(false);
+        Changed?.Invoke(this, EventArgs.Empty);
+    }
+
+    /// <summary>
+    /// Puts an item of the shown folder on everybody's screen: a picture, or a video, which becomes the film.
+    /// </summary>
+    /// <param name="catalogId">The showing the item belongs to.</param>
+    /// <param name="index">The index of the item.</param>
+    /// <param name="cancellationToken">The cancellation token.</param>
+    /// <returns>A task that completes when everybody was told.</returns>
+    public Task ShowItemAsync(string catalogId, int index, CancellationToken cancellationToken)
+        => ApplyShowAsync(catalogId, index, _identity.PeerId, cancellationToken);
+
+    /// <summary>
+    /// Notes which picture the host looks at alone, for the marks the others see.
+    /// </summary>
+    /// <param name="index">The picture, or <see langword="null"/> when the host follows the common screen.</param>
+    public void SetGalleryView(int? index)
+    {
+        _galleryView = index;
+        Changed?.Invoke(this, EventArgs.Empty);
+    }
+
+    /// <summary>
+    /// Returns the bytes of a picture of the shown folder as participants receive them.
+    /// </summary>
+    /// <param name="catalogId">The showing the picture belongs to.</param>
+    /// <param name="index">The index of the picture.</param>
+    /// <param name="cancellationToken">The cancellation token.</param>
+    /// <returns>The bytes.</returns>
+    /// <exception cref="InvalidOperationException">The host shows something else now.</exception>
+    public Task<byte[]> LoadPictureAsync(string catalogId, int index, CancellationToken cancellationToken)
+    {
+        if (FindCatalog(catalogId, index) is not { } catalog || catalog.Items[index].Kind != GalleryItemKind.Picture)
+        {
+            throw new InvalidOperationException(Texts.Get("Session.Error.PictureGone"));
+        }
+
+        return Task.Run(
+            () =>
+            {
+                using var stream = catalog.OpenRead(index);
+                var bytes = new byte[stream.Length];
+                stream.ReadExactly(bytes);
+                return bytes;
+            },
+            cancellationToken);
+    }
+
+    /// <summary>
+    /// Returns the small picture of a picture of the shown folder; it is made once and kept while the showing lasts.
+    /// </summary>
+    /// <param name="catalogId">The showing the picture belongs to.</param>
+    /// <param name="index">The index of the picture.</param>
+    /// <param name="cancellationToken">The cancellation token.</param>
+    /// <returns>The JPEG bytes, or <see langword="null"/> when there is none.</returns>
+    public Task<byte[]?> LoadThumbnailAsync(string catalogId, int index, CancellationToken cancellationToken)
+    {
+        if (_thumbnails is null || FindCatalog(catalogId, index) is not { } catalog)
+        {
+            return Task.FromResult<byte[]?>(null);
+        }
+
+        return _thumbnailCache.GetOrAdd((catalogId, index), _ => RenderThumbnailAsync(catalog, index)).WaitAsync(cancellationToken);
     }
 
     /// <summary>
@@ -541,6 +738,7 @@ public sealed class HostSession : IAsyncDisposable
             Playback = _authority.Current,
             Media = _media.Descriptor,
             Local = _localStatus,
+            Gallery = BuildGallerySnapshot(),
         };
     }
 
@@ -573,6 +771,7 @@ public sealed class HostSession : IAsyncDisposable
         await _listener.DisposeAsync().ConfigureAwait(false);
         await Task.WhenAll(_loops.Select(t => t.ContinueWith(_ => { }, TaskScheduler.Default))).ConfigureAwait(false);
         await _player.StopAsync().ConfigureAwait(false);
+        _gallery.Share(null)?.Dispose();
         if (_conference is not null)
         {
             await _conference.DisposeAsync().ConfigureAwait(false);
@@ -835,7 +1034,10 @@ public sealed class HostSession : IAsyncDisposable
 
         // The ticket lets the participant come back after a broken connection; the host is asked again every time.
         var reconnectTicket = _reconnectTickets.GetOrAdd(peer, _ => Convert.ToHexString(System.Security.Cryptography.RandomNumberGenerator.GetBytes(24)));
-        var connection = new Connection(new ParticipantInfo(peer, name, false), channel, _timeProvider.GetUtcNow());
+        var connection = new Connection(new ParticipantInfo(peer, name, false), channel, _timeProvider.GetUtcNow())
+        {
+            SupportsGallery = hello.Gallery,
+        };
         if (_participants.TryGetValue(peer, out var previous))
         {
             previous.End();
@@ -852,10 +1054,26 @@ public sealed class HostSession : IAsyncDisposable
         _ = SyncConferenceAsync();
         await BroadcastParticipantsAsync().ConfigureAwait(false);
 
-        // The avatars go last and are not waited for: they are by far the largest messages of a session, and on a
-        // slow route the newcomer would otherwise sit unanswered (no clock, no cameras) until they have all arrived.
-        _ = SendAvatarsAsync(connection);
+        // The pictures and the avatars go last and are not waited for: they are by far the largest messages of a
+        // session, and on a slow route the newcomer would otherwise sit unanswered (no clock, no cameras) until they
+        // have all arrived.
+        _ = SendExtrasAsync(connection);
         return connection;
+    }
+
+    /// <summary>
+    /// Brings a newcomer up to date with the shown pictures and the avatars, one after the other.
+    /// </summary>
+    /// <param name="connection">The newcomer.</param>
+    /// <returns>A task that completes when everything was sent or the newcomer was dropped.</returns>
+    private async Task SendExtrasAsync(Connection connection)
+    {
+        if (connection.SupportsGallery)
+        {
+            await SendGalleryAsync(connection).ConfigureAwait(false);
+        }
+
+        await SendAvatarsAsync(connection).ConfigureAwait(false);
     }
 
     /// <summary>
@@ -1013,6 +1231,24 @@ public sealed class HostSession : IAsyncDisposable
 
                 break;
 
+            case GalleryShowMessage show when connection.SupportsGallery:
+                // A choice of a picture changes the screen of everybody, so it is limited like the strokes.
+                if (connection.ShowLimiter.TryAcquire(_timeProvider.GetTimestamp(), _timeProvider))
+                {
+                    _ = ApplyParticipantShowAsync(connection, show.CatalogId, show.Index);
+                }
+
+                break;
+
+            case ThumbnailMessage { Image: null } request when connection.SupportsGallery:
+                if (FindCatalog(request.CatalogId, request.Index) is not null &&
+                    connection.ThumbnailLimiter.TryAcquire(_timeProvider.GetTimestamp(), _timeProvider))
+                {
+                    _ = SendThumbnailAsync(connection, request.CatalogId, request.Index);
+                }
+
+                break;
+
             case StatusReportMessage { Status: not null } report:
                 // The numbers go into the arithmetic of the authority and to every participant: they are bounded first.
                 connection.Status = report.Status.Sanitize() with { PeerId = connection.Info.PeerId };
@@ -1154,6 +1390,7 @@ public sealed class HostSession : IAsyncDisposable
             UsesLocalCopy = true,
             MicrophoneOff = _conference?.MicrophoneOff ?? true,
             CameraOff = _conference?.CameraOff ?? true,
+            GalleryView = _galleryView,
         };
     }
 
@@ -1185,6 +1422,293 @@ public sealed class HostSession : IAsyncDisposable
             snapshot.Participants.Select(p => p.Info).ToArray(),
             snapshot.Participants.Select(p => p.Status).OfType<ParticipantStatus>().ToArray())).ConfigureAwait(false);
         Changed?.Invoke(this, EventArgs.Empty);
+    }
+
+    /// <summary>
+    /// Returns the current showing when a picture of it is meant.
+    /// </summary>
+    /// <param name="catalogId">The showing the picture belongs to.</param>
+    /// <param name="index">The index of the picture.</param>
+    /// <returns>The showing, or <see langword="null"/> when it is over or has no such picture.</returns>
+    private GalleryCatalog? FindCatalog(string? catalogId, int index)
+        => _gallery.Current is { } catalog && string.Equals(catalog.Id, catalogId, StringComparison.Ordinal) &&
+           index >= 0 && index < catalog.Items.Count
+            ? catalog
+            : null;
+
+    /// <summary>
+    /// Makes the small picture of an item: of the picture, or of a frame of the video.
+    /// </summary>
+    /// <param name="catalog">The showing.</param>
+    /// <param name="index">The index of the item.</param>
+    /// <returns>The JPEG bytes, or <see langword="null"/> when the item cannot be decoded.</returns>
+    private async Task<byte[]?> RenderThumbnailAsync(GalleryCatalog catalog, int index)
+    {
+        await _thumbnailGate.WaitAsync().ConfigureAwait(false);
+        try
+        {
+            await using var preview = await catalog.OpenPreviewAsync(index, _stopping.Token).ConfigureAwait(false);
+            return preview is null ? null : await Task.Run(() => _thumbnails!.Render(preview)).ConfigureAwait(false);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidDataException or OperationCanceledException or ObjectDisposedException)
+        {
+            _logger.LogWarning("The small picture of {Index} was not made: {Reason}", index, ex.Message);
+            return null;
+        }
+        finally
+        {
+            _thumbnailGate.Release();
+        }
+    }
+
+    /// <summary>
+    /// Loads a file into the local player and starts sharing it; nobody is told yet.
+    /// </summary>
+    /// <param name="path">The file path.</param>
+    /// <param name="cancellationToken">The cancellation token.</param>
+    /// <returns>The descriptor and the new playback state.</returns>
+    private async Task<(MediaDescriptor Descriptor, PlaybackState State)> LoadFilmAsync(string path, CancellationToken cancellationToken)
+    {
+        var descriptor = await MediaFiles.DescribeAsync(path, cancellationToken).ConfigureAwait(false);
+        PlaybackState state;
+        await _playerGate.WaitAsync(cancellationToken).ConfigureAwait(false);
+        try
+        {
+            _follower.Reset();
+            try
+            {
+                await _player.LoadAsync(new Uri(Path.GetFullPath(path)), TimeSpan.Zero, paused: true, cancellationToken).ConfigureAwait(false);
+            }
+            catch
+            {
+                // The player refused the file. Nothing was announced yet, so the session stays on what it had: the
+                // participants are not told about a file the host cannot show, and the follower takes the current
+                // state up again.
+                try
+                {
+                    await _follower.ApplyAsync(_authority.Current, CancellationToken.None).ConfigureAwait(false);
+                }
+                catch (Exception ex) when (ex is not OutOfMemoryException)
+                {
+                    // The reason the file was refused is what the caller must see, not this second failure.
+                    _logger.LogWarning(ex, "The state was not applied after a refused file");
+                }
+
+                throw;
+            }
+
+            _media.Share(path, descriptor);
+            state = _authority.Reset();
+            _authority.Duration = null;
+            await _follower.ApplyAsync(state, cancellationToken).ConfigureAwait(false);
+        }
+        finally
+        {
+            _playerGate.Release();
+        }
+
+        return (descriptor, state);
+    }
+
+    /// <summary>
+    /// Tells everybody about the new film and its state.
+    /// </summary>
+    /// <param name="descriptor">The film.</param>
+    /// <param name="state">Its playback state.</param>
+    /// <returns>A task that completes when all sends finished.</returns>
+    private async Task AnnounceFilmAsync(MediaDescriptor descriptor, PlaybackState state)
+    {
+        await BroadcastAsync(new MediaChangedMessage(descriptor)).ConfigureAwait(false);
+        await BroadcastAsync(new PlaybackStateMessage(state)).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Makes the screen ready for an item: a picture pauses the film, which waits under it; a video becomes the film,
+    /// unless it is the film already.
+    /// </summary>
+    /// <param name="catalog">The showing.</param>
+    /// <param name="index">The index of the item.</param>
+    /// <param name="cancellationToken">The cancellation token.</param>
+    /// <returns>A task that completes when the screen is ready.</returns>
+    private async Task PrepareStageAsync(GalleryCatalog catalog, int index, CancellationToken cancellationToken)
+    {
+        if (catalog.Items[index].Kind == GalleryItemKind.Video)
+        {
+            var path = catalog.PathOf(index);
+            if (!string.Equals(_media.FilePath, path, StringComparison.Ordinal))
+            {
+                var (descriptor, state) = await LoadFilmAsync(path, cancellationToken).ConfigureAwait(false);
+                await AnnounceFilmAsync(descriptor, state).ConfigureAwait(false);
+            }
+
+            return;
+        }
+
+        if (_authority.Current.State == PlayState.Playing)
+        {
+            await RequestAsync(new PlaybackRequest(PlaybackRequestKind.Pause, null), cancellationToken).ConfigureAwait(false);
+        }
+    }
+
+    /// <summary>
+    /// Puts an item on everybody's screen: the host decides, numbers the decision and tells everybody.
+    /// </summary>
+    /// <param name="catalogId">The showing the item belongs to.</param>
+    /// <param name="index">The index of the item.</param>
+    /// <param name="origin">Who chose it.</param>
+    /// <param name="cancellationToken">The cancellation token.</param>
+    /// <returns>A task that completes when everybody was told.</returns>
+    private async Task ApplyShowAsync(string catalogId, int index, PeerId origin, CancellationToken cancellationToken)
+    {
+        await _showGate.WaitAsync(cancellationToken).ConfigureAwait(false);
+        try
+        {
+            GalleryCatalog catalog;
+            lock (_stageGate)
+            {
+                if (FindCatalog(catalogId, index) is not { } found || index == _stage)
+                {
+                    return;
+                }
+
+                catalog = found;
+            }
+
+            await PrepareStageAsync(catalog, index, cancellationToken).ConfigureAwait(false);
+            GalleryShowMessage message;
+            string name;
+            lock (_stageGate)
+            {
+                if (!ReferenceEquals(_gallery.Current, catalog))
+                {
+                    // The showing ended while the video was loaded.
+                    return;
+                }
+
+                _stage = index;
+                _stageVersion++;
+                _stageOrigin = origin;
+                message = new GalleryShowMessage(catalog.Id, index, _stageVersion, origin);
+                name = catalog.Items[index].FileName;
+            }
+
+            await BroadcastGalleryAsync(message).ConfigureAwait(false);
+            Raise(origin, Texts.Format("Session.Event.MediaShown", NameOf(origin), name));
+        }
+        finally
+        {
+            _showGate.Release();
+        }
+    }
+
+    /// <summary>
+    /// Carries out a participant's choice of the common screen without holding up its other messages: a video takes a
+    /// moment to load.
+    /// </summary>
+    /// <param name="connection">The participant.</param>
+    /// <param name="catalogId">The showing the item belongs to.</param>
+    /// <param name="index">The index of the item.</param>
+    /// <returns>A task that completes when the choice was carried out or refused.</returns>
+    private async Task ApplyParticipantShowAsync(Connection connection, string catalogId, int index)
+    {
+        try
+        {
+            await ApplyShowAsync(catalogId, index, connection.Info.PeerId, connection.Lifetime).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException)
+        {
+            // The participant left or the session ended.
+        }
+        catch (Exception ex) when (ex is not OutOfMemoryException)
+        {
+            // The player refused the video: the screen stays as it was, and the host sees why in the log.
+            _logger.LogWarning(ex, "The item {Index} chosen by {Peer} was not shown", index, connection.Info.PeerId);
+        }
+    }
+
+    /// <summary>
+    /// Sends the current showing to a participant: the pages of its pictures, then the picture on the screen.
+    /// </summary>
+    /// <param name="connection">The participant.</param>
+    /// <returns>A task that completes when everything was sent or the participant was dropped.</returns>
+    private async Task SendGalleryAsync(Connection connection)
+    {
+        GalleryCatalog? catalog;
+        GalleryShowMessage show;
+        lock (_stageGate)
+        {
+            catalog = _gallery.Current;
+            show = new GalleryShowMessage(catalog?.Id ?? string.Empty, _stage, _stageVersion, _stageOrigin ?? _identity.PeerId);
+        }
+
+        if (catalog is null)
+        {
+            return;
+        }
+
+        for (var offset = 0; offset < catalog.Items.Count; offset += GalleryMessage.PAGE_SIZE)
+        {
+            if (connection.Lifetime.IsCancellationRequested)
+            {
+                return;
+            }
+
+            var page = catalog.Items.Skip(offset).Take(GalleryMessage.PAGE_SIZE).ToArray();
+            await TrySendAsync(connection, new GalleryMessage(catalog.Id, catalog.Title, catalog.Items.Count, offset, page)).ConfigureAwait(false);
+        }
+
+        await TrySendAsync(connection, show).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Answers a participant's request for a small picture.
+    /// </summary>
+    /// <param name="connection">The participant.</param>
+    /// <param name="catalogId">The showing the picture belongs to.</param>
+    /// <param name="index">The index of the picture.</param>
+    /// <returns>A task that completes when the answer was sent.</returns>
+    private async Task SendThumbnailAsync(Connection connection, string catalogId, int index)
+    {
+        try
+        {
+            var image = await LoadThumbnailAsync(catalogId, index, connection.Lifetime).ConfigureAwait(false);
+            await TrySendAsync(connection, new ThumbnailMessage(catalogId, index, image).Sanitize()).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException)
+        {
+            // The participant left.
+        }
+    }
+
+    /// <summary>
+    /// Sends a message of pictures to the participants that can show them.
+    /// </summary>
+    /// <param name="message">The message.</param>
+    /// <returns>A task that completes when all sends finished.</returns>
+    private Task BroadcastGalleryAsync(SessionMessage message)
+        => Task.WhenAll(_participants.Values.Where(c => c.SupportsGallery).Select(c => TrySendAsync(c, message)));
+
+    /// <summary>
+    /// Returns the showing of pictures as the view sees it.
+    /// </summary>
+    /// <returns>The showing, or <see langword="null"/> when there is none.</returns>
+    private GallerySnapshot? BuildGallerySnapshot()
+    {
+        lock (_stageGate)
+        {
+            return _gallery.Current is { } catalog
+                ? new GallerySnapshot
+                {
+                    CatalogId = catalog.Id,
+                    Title = catalog.Title,
+                    Total = catalog.Items.Count,
+                    Items = catalog.Items,
+                    Stage = _stage,
+                    StageVersion = _stageVersion,
+                    StageOrigin = _stageOrigin,
+                }
+                : null;
+        }
     }
 
     /// <summary>
@@ -1345,6 +1869,23 @@ public sealed class HostSession : IAsyncDisposable
         /// second, and each one is relayed to everybody.
         /// </summary>
         public SlidingRateLimiter AvatarLimiter { get; } = new(TimeSpan.FromSeconds(10), 5);
+
+        /// <summary>
+        /// Gets a value indicating whether the participant can show the pictures of a folder.
+        /// </summary>
+        public bool SupportsGallery { get; init; }
+
+        /// <summary>
+        /// The limit of the pictures the participant puts on everybody's screen: a person leafing through photos
+        /// does it a few times a second at most.
+        /// </summary>
+        public SlidingRateLimiter ShowLimiter { get; } = new(TimeSpan.FromSeconds(1), 8);
+
+        /// <summary>
+        /// The limit of the small pictures the participant asks for: a strip scrolled quickly through a large
+        /// folder asks for a few hundred.
+        /// </summary>
+        public SlidingRateLimiter ThumbnailLimiter { get; } = new(TimeSpan.FromSeconds(10), 400);
 
         /// <summary>
         /// Gets a token that is cancelled when the admission ends.

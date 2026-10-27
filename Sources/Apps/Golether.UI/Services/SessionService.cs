@@ -7,6 +7,7 @@ using Golether.Core.Time;
 using Golether.Localization;
 using Golether.Media.Conference;
 using Golether.Media.Player.Mpv;
+using Golether.Media.Streaming.Gallery;
 using Golether.Security.Admission;
 using Golether.Security.Identity;
 using Golether.Security.Invites;
@@ -96,6 +97,22 @@ public sealed class SessionService : ISessionService, IAsyncDisposable
     private readonly SessionOptions _options = new();
 
     /// <summary>
+    /// Makes the small pictures of a folder the host shows.
+    /// </summary>
+    private readonly SkiaPictureCodec _thumbnails = new();
+
+    /// <summary>
+    /// Decodes HEIC, AVIF and TIFF pictures and frames of videos of a shown folder, or <see langword="null"/>.
+    /// </summary>
+    private readonly IFrameExtractor? _frames;
+
+    /// <summary>
+    /// The folder where a shown folder keeps the JPEG files the host makes, or <see langword="null"/> for a folder
+    /// of the system's temporary files.
+    /// </summary>
+    private readonly string? _galleryDirectory;
+
+    /// <summary>
     /// The number of reconnection attempts after the connection to the host broke.
     /// </summary>
     private const int RECONNECT_ATTEMPTS = 8;
@@ -156,6 +173,10 @@ public sealed class SessionService : ISessionService, IAsyncDisposable
     /// <param name="conference">Cameras and voices.</param>
     /// <param name="portMapper">Opens the listening port on the router, or <see langword="null"/>.</param>
     /// <param name="rendezvousDirectory">Finds the rendezvous server of the project, or <see langword="null"/>.</param>
+    /// <param name="frames">Decodes HEIC, AVIF and TIFF pictures and frames of videos of a shown folder, or
+    /// <see langword="null"/>.</param>
+    /// <param name="galleryDirectory">The folder where a shown folder keeps the JPEG files the host makes, or
+    /// <see langword="null"/>.</param>
     public SessionService(
         DeviceIdentity identity,
         PlayerHost player,
@@ -165,8 +186,12 @@ public sealed class SessionService : ISessionService, IAsyncDisposable
         ILoggerFactory loggerFactory,
         IConferenceMedia conference,
         PortMapper? portMapper = null,
-        IRendezvousDirectory? rendezvousDirectory = null)
+        IRendezvousDirectory? rendezvousDirectory = null,
+        IFrameExtractor? frames = null,
+        string? galleryDirectory = null)
     {
+        _frames = frames;
+        _galleryDirectory = galleryDirectory;
         _portMapper = portMapper;
         _rendezvousDirectory = rendezvousDirectory;
         _conference = conference;
@@ -255,7 +280,10 @@ public sealed class SessionService : ISessionService, IAsyncDisposable
             displayName,
             _options,
             _loggerFactory,
-            _conference);
+            _conference,
+            _thumbnails,
+            _frames,
+            _galleryDirectory);
         _relay = StartRelay(listener.Port);
         host.Relay = _relay?.Credentials;
         host.RelayServer = _relay;
@@ -393,6 +421,42 @@ public sealed class SessionService : ISessionService, IAsyncDisposable
         => _host is not null ? _host.SendDrawAsync(strokeId, phase, points)
             : _participant is not null ? _participant.SendDrawAsync(strokeId, phase, points, cancellationToken)
             : Task.CompletedTask;
+
+    /// <inheritdoc />
+    public bool CanDecodePictures => _frames?.IsAvailable == true;
+
+    /// <inheritdoc />
+    public Task ShowGalleryAsync(GalleryFolder folder, bool stripMetadata, IProgress<int>? progress, CancellationToken cancellationToken)
+        => (_host ?? throw new InvalidOperationException(Texts.Get("Session.Error.OnlyHostShares"))).ShowGalleryAsync(folder, stripMetadata, progress, cancellationToken);
+
+    /// <inheritdoc />
+    public Task CloseGalleryAsync()
+        => (_host ?? throw new InvalidOperationException(Texts.Get("Session.Error.OnlyHostShares"))).CloseGalleryAsync();
+
+    /// <inheritdoc />
+    public Task ShowItemAsync(string catalogId, int index, CancellationToken cancellationToken)
+        => _host is not null ? _host.ShowItemAsync(catalogId, index, cancellationToken)
+            : _participant is not null ? _participant.ShowItemAsync(catalogId, index, cancellationToken)
+            : Task.CompletedTask;
+
+    /// <inheritdoc />
+    public void SetGalleryView(int? index)
+    {
+        _host?.SetGalleryView(index);
+        _participant?.SetGalleryView(index);
+    }
+
+    /// <inheritdoc />
+    public Task<byte[]?> LoadThumbnailAsync(string catalogId, int index, CancellationToken cancellationToken)
+        => _host is not null ? _host.LoadThumbnailAsync(catalogId, index, cancellationToken)
+            : _participant is not null ? _participant.LoadThumbnailAsync(catalogId, index, cancellationToken)
+            : Task.FromResult<byte[]?>(null);
+
+    /// <inheritdoc />
+    public Task<byte[]> LoadPictureAsync(string catalogId, int index, CancellationToken cancellationToken)
+        => _host is not null ? _host.LoadPictureAsync(catalogId, index, cancellationToken)
+            : _participant is not null ? _participant.LoadPictureAsync(catalogId, index, cancellationToken)
+            : Task.FromException<byte[]>(new InvalidOperationException(Texts.Get("Session.Error.NotJoined")));
 
     /// <inheritdoc />
     public Task SetAvatarAsync(byte[]? image, CancellationToken cancellationToken)

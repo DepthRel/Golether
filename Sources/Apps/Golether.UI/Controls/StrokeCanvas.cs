@@ -30,6 +30,18 @@ public sealed class StrokeCanvas : Control
         AvaloniaProperty.Register<StrokeCanvas, double>(nameof(Aspect));
 
     /// <summary>
+    /// Defines the <see cref="Zoom"/> property.
+    /// </summary>
+    public static readonly StyledProperty<double> ZoomProperty =
+        AvaloniaProperty.Register<StrokeCanvas, double>(nameof(Zoom), 1);
+
+    /// <summary>
+    /// Defines the <see cref="Center"/> property.
+    /// </summary>
+    public static readonly StyledProperty<Point> CenterProperty =
+        AvaloniaProperty.Register<StrokeCanvas, Point>(nameof(Center), new Point(0.5, 0.5));
+
+    /// <summary>
     /// The model the control is listening to.
     /// </summary>
     private DrawingViewModel? _attached;
@@ -58,33 +70,27 @@ public sealed class StrokeCanvas : Control
     }
 
     /// <summary>
-    /// Gets the part of the control the picture takes, keeping its ratio.
+    /// Gets or sets how many times this person enlarged the picture of a shown folder; 1 for the film.
     /// </summary>
-    /// <param name="size">The size of the control.</param>
-    /// <param name="aspect">The ratio of the picture, or <c>0</c>.</param>
-    /// <returns>The picture rectangle.</returns>
-    public static Rect PictureRect(Size size, double aspect)
+    public double Zoom
     {
-        if (aspect <= 0 || size.Width <= 0 || size.Height <= 0)
-        {
-            return new Rect(size);
-        }
-
-        var own = size.Width / size.Height;
-        if (Math.Abs(own - aspect) < 0.0001)
-        {
-            return new Rect(size);
-        }
-
-        if (own > aspect)
-        {
-            var width = size.Height * aspect;
-            return new Rect((size.Width - width) / 2, 0, width, size.Height);
-        }
-
-        var height = size.Width / aspect;
-        return new Rect(0, (size.Height - height) / 2, size.Width, height);
+        get => GetValue(ZoomProperty);
+        set => SetValue(ZoomProperty, value);
     }
+
+    /// <summary>
+    /// Gets or sets the point of the enlarged picture in the middle, as shares of its width and height.
+    /// </summary>
+    public Point Center
+    {
+        get => GetValue(CenterProperty);
+        set => SetValue(CenterProperty, value);
+    }
+
+    /// <summary>
+    /// Gets the part of the control the picture takes: fitted whole, or enlarged the way this person enlarged it.
+    /// </summary>
+    private Rect Picture => PictureFrame.Place(Bounds.Size, Aspect, Zoom, Center);
 
     /// <inheritdoc />
     public override void Render(DrawingContext context)
@@ -104,7 +110,8 @@ public sealed class StrokeCanvas : Control
             return;
         }
 
-        var picture = PictureRect(Bounds.Size, Aspect);
+        var picture = Picture;
+        using var clip = context.PushClip(new Rect(Bounds.Size));
         foreach (var stroke in source.Strokes)
         {
             Draw(context, stroke, picture);
@@ -209,7 +216,7 @@ public sealed class StrokeCanvas : Control
         {
             Attach(change.GetNewValue<DrawingViewModel?>());
         }
-        else if (change.Property == AspectProperty)
+        else if (change.Property == AspectProperty || change.Property == ZoomProperty || change.Property == CenterProperty)
         {
             InvalidateVisual();
         }
@@ -281,7 +288,7 @@ public sealed class StrokeCanvas : Control
     /// <returns>The shares, 0–1.</returns>
     private Point ToShare(Point position)
     {
-        var picture = PictureRect(Bounds.Size, Aspect);
+        var picture = Picture;
         if (picture.Width <= 0 || picture.Height <= 0)
         {
             return new Point(0, 0);

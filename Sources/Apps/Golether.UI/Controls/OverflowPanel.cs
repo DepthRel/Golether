@@ -10,8 +10,9 @@ namespace Golether.UI.Controls;
 /// </summary>
 /// <remarks>
 /// <list type="bullet">
-/// <item>Items with <see cref="CanOverflowProperty"/> leave the row together when the row is too wide; they get the
-/// <c>overflowed</c> class and take no space.</item>
+/// <item>Items with <see cref="CanOverflowProperty"/> leave the row one by one, as long as the row is too wide, in the
+/// order of <see cref="OverflowOrderProperty"/>; a folded item gets the <c>overflowed</c> class, takes no space, and
+/// <see cref="IsFoldedProperty"/> tells the menu of the "more" button to offer it.</item>
 /// <item>The item with <see cref="IsOverflowButtonProperty"/> is shown only while items are folded.</item>
 /// <item><see cref="ReservedWidth"/> keeps room for the content to the left of the toolbar.</item>
 /// </list>
@@ -38,11 +39,18 @@ public sealed class OverflowPanel : Panel
         AvaloniaProperty.RegisterAttached<OverflowPanel, Control, double>("Fold");
 
     /// <summary>
-    /// The state the item was last told to reach. Kept apart from <see cref="FoldProperty"/>, which is mid-animation
-    /// most of the time, so the target is set once per change instead of on every layout pass.
+    /// When an item leaves the row: the lower, the earlier.
     /// </summary>
-    private static readonly AttachedProperty<bool> _foldedProperty =
-        AvaloniaProperty.RegisterAttached<OverflowPanel, Control, bool>("Folded");
+    public static readonly AttachedProperty<int> OverflowOrderProperty =
+        AvaloniaProperty.RegisterAttached<OverflowPanel, Control, int>("OverflowOrder");
+
+    /// <summary>
+    /// Whether an item is folded into the "more" button: the state it was last told to reach. Kept apart from
+    /// <see cref="FoldProperty"/>, which is mid-animation most of the time, so the target is set once per change
+    /// instead of on every layout pass. The menu of the "more" button shows the items that are folded.
+    /// </summary>
+    public static readonly AttachedProperty<bool> IsFoldedProperty =
+        AvaloniaProperty.RegisterAttached<OverflowPanel, Control, bool>("IsFolded");
 
     /// <summary>
     /// The space between items.
@@ -154,6 +162,34 @@ public sealed class OverflowPanel : Panel
     public static void SetCanOverflow(Control control, bool value) => control.SetValue(CanOverflowProperty, value);
 
     /// <summary>
+    /// Gets when an item leaves the row.
+    /// </summary>
+    /// <param name="control">The item.</param>
+    /// <returns>The order: the lower, the earlier.</returns>
+    public static int GetOverflowOrder(Control control) => control.GetValue(OverflowOrderProperty);
+
+    /// <summary>
+    /// Sets when an item leaves the row.
+    /// </summary>
+    /// <param name="control">The item.</param>
+    /// <param name="value">The order: the lower, the earlier.</param>
+    public static void SetOverflowOrder(Control control, int value) => control.SetValue(OverflowOrderProperty, value);
+
+    /// <summary>
+    /// Gets whether an item is folded into the "more" button.
+    /// </summary>
+    /// <param name="control">The item.</param>
+    /// <returns>The value.</returns>
+    public static bool GetIsFolded(Control control) => control.GetValue(IsFoldedProperty);
+
+    /// <summary>
+    /// Sets whether an item is folded into the "more" button; the panel does it itself.
+    /// </summary>
+    /// <param name="control">The item.</param>
+    /// <param name="value">The value.</param>
+    public static void SetIsFolded(Control control, bool value) => control.SetValue(IsFoldedProperty, value);
+
+    /// <summary>
     /// Gets whether an item is the "more" button.
     /// </summary>
     /// <param name="control">The item.</param>
@@ -244,23 +280,44 @@ public sealed class OverflowPanel : Panel
         }
 
         var available = Math.Max(0, availableSize.Width - ReservedWidth);
-        var needed = full - Spacing;
+        var foldable = Children
+            .Where(c => GetCanOverflow(c) && !GetIsOverflowButton(c) && c.DesiredSize.Width > 0)
+            .OrderBy(GetOverflowOrder)
+            .ThenBy(Children.IndexOf)
+            .ToList();
+        var more = Children.FirstOrDefault(GetIsOverflowButton);
+        var moreWidth = more is null ? 0 : more.DesiredSize.Width + Spacing;
+        var current = foldable.Count(GetIsFolded);
 
-        // Folded rows need a little more room than they gave up before they unfold again, so a width that hovers
-        // around the threshold does not make the toolbar jump back and forth.
-        var overflowing = _isOverflowing ? needed > available - HYSTERESIS : needed > available;
+        // The items leave one by one until the row fits, the "more" button taking the place of the first. To come
+        // back, an item needs a little more room than it gave up, so a width that hovers around a threshold does not
+        // make the toolbar jump back and forth.
+        var count = foldable.Count;
+        var needed = full - Spacing;
+        for (var folded = 0; folded <= foldable.Count; folded++)
+        {
+            var row = needed - foldable.Take(folded).Sum(c => c.DesiredSize.Width + Spacing) + (folded > 0 ? moreWidth : 0);
+            if (row <= available - (folded < current ? HYSTERESIS : 0))
+            {
+                count = folded;
+                break;
+            }
+        }
+
+        var overflowing = count > 0;
         IsOverflowing = overflowing;
+        var leaving = foldable.Take(count).ToHashSet();
         foreach (var child in Children)
         {
             // The class only hides items from the pointer and the keyboard; the fold takes care of size and opacity.
-            var folded = GetIsOverflowButton(child) ? !overflowing : overflowing && GetCanOverflow(child);
+            var folded = GetIsOverflowButton(child) ? !overflowing : leaving.Contains(child);
             child.Classes.Set(OVERFLOWED_CLASS, folded);
-            if (child.GetValue(_foldedProperty) == folded)
+            if (GetIsFolded(child) == folded)
             {
                 continue;
             }
 
-            child.SetValue(_foldedProperty, folded);
+            SetIsFolded(child, folded);
             if (_laidOut)
             {
                 EnsureFoldAnimated(child);

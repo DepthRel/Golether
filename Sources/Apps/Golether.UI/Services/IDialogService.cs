@@ -83,10 +83,17 @@ public interface IDialogService
     void BringToFront();
 
     /// <summary>
-    /// Lets the user pick a video file.
+    /// Lets the user pick a video file or a picture.
     /// </summary>
     /// <returns>The local path, or <see langword="null"/> when cancelled.</returns>
     Task<string?> PickMediaFileAsync();
+
+    /// <summary>
+    /// Lets the host choose a folder to show: the browser shows its pictures and videos and counts what goes out.
+    /// </summary>
+    /// <param name="viewModel">The browser.</param>
+    /// <returns>The choice, or <see langword="null"/> when cancelled.</returns>
+    Task<GalleryChoice?> ChooseGalleryAsync(FolderBrowserViewModel viewModel);
 
     /// <summary>
     /// Asks for a subtitle file.

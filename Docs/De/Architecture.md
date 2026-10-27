@@ -181,6 +181,35 @@ Der Zustand der Sitzung (`PlaybackState`): „Im Moment `ReferenceTime` nach der
   Unterbrechung versucht `SessionService` acht Mal zurückzukommen, mit Pausen von 2, 3, 5, 10, 20 und 30 Sekunden; der
   Gastgeber bestätigt den Eintritt jedes Mal.
 
+## Einen Ordner zeigen
+
+- `GalleryFolder` (Media.Streaming) durchläuft den gewählten Ordner, ohne Verknüpfungen zu folgen: zuerst die Dateien
+  des Ordners in natürlicher Reihenfolge, dann seine Unterordner nacheinander, höchstens 16 Ebenen tief und 100.000
+  angesehene Dateien. Er teilt die Dateien in Bilder, zu dekodierende Bilder (HEIC, AVIF, TIFF), Videos und
+  RAW-Dateien, die ausgelassen werden.
+- `GalleryCatalog` bereitet die Dateien parallel vor. `PictureLayout` liest nur die Kopfdaten und setzt die Bytes,
+  die die Teilnehmer erhalten, aus Stücken der Datei zusammen, ohne EXIF/XMP und Kommentare, ohne die Daten nach dem
+  Ende eines JPEG und ohne die Metadatenblöcke von PNG, WebP und GIF; die Ausrichtung kommt als minimaler EXIF-Block
+  zurück. Zu dekodierende Bilder gehen durch `IFrameExtractor`: `MpvFrameExtractor` startet ein eigenes libmpv ohne
+  Fenster mit der Videoausgabe `image` und schreibt ein JPEG nach `data/gallery/<Zeigen>`; ebenso wird ein Bild
+  eines Videos zu seinem kleinen Bild. Die Schlüssel sind für jedes Zeigen zufällig, und der Ordner eines Zeigens wird
+  an seinem Ende gelöscht.
+- `ChunkServer` stellt den Film und über `ISharedFileSet` die Bilder des aktuellen Zeigens nach ihren Schlüsseln
+  bereit, in denselben Stücken mit SHA-256; die Hashes der Bilder werden nicht zwischengespeichert.
+- `HostSession` ist die Autorität über den gemeinsamen Bildschirm: Sie nummeriert jede Wahl (`show`), führt sie
+  nacheinander aus und macht ein Video vor der Ankündigung zum Film (`media` + `state`); ein Bild pausiert den Film.
+  Die kleinen Bilder entstehen einmal pro Zeigen, zwei gleichzeitig, über `IThumbnailRenderer` (SkiaSharp in der
+  Oberfläche).
+- In der Oberfläche hält `GalleryViewModel` den Streifen und das Raster (Zeilen einer virtualisierten Liste, damit
+  zweitausend Elemente leicht bleiben), dekodiert Bilder für den Bildschirm über `IPictureDecoder`, behält die letzten
+  sechs, holt die Nachbarn im Voraus und fragt ein kleines Bild, das nicht ankam, erneut an (nach 5, 15 und 45
+  Sekunden). `FolderBrowserViewModel` ist der Ordnerbrowser des Gastgebers: Die Ordnerauswahl des Systems zeigt keine
+  Dateien.
+- Ein Bild zeichnet Avalonia (`ZoomableImage`), nicht mpv, daher dient, solange ein Bild gezeigt wird, eine zweite
+  Ebene der Reaktionen und Linien im Bild selbst (ein Element kann nicht zwischen Fenstern wechseln), und dort
+  erreicht der Zeiger das Bild auf jedem System. Der Zoom ist persönlich: `StrokeCanvas` setzt die Linien nach
+  derselben Regel `PictureFrame`, eine Linie bleibt also an ihrem Platz.
+
 ## Bereitstellung der Datei
 
 - `MediaDescriptor`: Name, Größe, Stückgröße, eine schnelle Kennung (SHA-256 der Größe und dreier Proben zu 1 MiB).
@@ -440,6 +469,7 @@ Das Schema wird durch Migrationen beim Start der Anwendung oder über `Golether.
 | Projektseite, Einladungslink, der die Anwendung öffnet, eine einzige Instanz, automatische Suche des Vermittlungsservers | **fertig** |
 | Eine Einladung für die ganze Runde, Entfernen eines Teilnehmers durch den Gastgeber | **fertig** |
 | Sechs Sprachen (Englisch, Deutsch, Spanisch, Französisch, Portugiesisch, Russisch) in Anwendung, Monitor, Installationsprogrammen, Seite und Dokumentation; übersetzte Wörter des Prüfcodes | **fertig** |
+| Einen Ordner zeigen: Bilder und Videos mit Unterordnern, allein ansehen, Zoom, ohne Metadaten | **fertig** |
 | libmpv-Render-API für macOS und Wayland, QUIC für Windows 11/Linux | geplant |
 | Geheimnisspeicher Keychain / libsecret, signierte Installationsprogramme | geplant |
 
@@ -477,3 +507,5 @@ Das Schema wird durch Migrationen beim Start der Anwendung oder über `Golether.
 - Tunnel werden mit Administratorrechten nur für die Dauer des Vorgangs geändert: Windows startet
   `Golether.exe --tunnel-helper` über UAC, Linux verwendet `pkexec`, macOS `osascript … with administrator privileges`.
   Es gibt keinen dauerhaften Dienst, daher braucht jede Änderung eines Tunnels eine Bestätigung.
+- Ein Ordner zeigt JPEG, PNG, WebP, GIF und BMP so, wie sie sind, HEIC, AVIF und TIFF über die Videokomponente des
+  Gastgebers; RAW-Dateien von Kameras werden nicht gezeigt. Der Zoom eines Bildes ändert nur einen Bildschirm.

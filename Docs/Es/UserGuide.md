@@ -33,7 +33,7 @@ pantalla es *owl · lighthouse · wind · 47* en la otra. Compara el significado
 
 1. Escribe tu nombre y el nombre de la sesión y pulsa **Crear una sesión**. El puerto de tu equipo (47800 por defecto)
    y la petición al router están en **Avanzado**: cámbialos solo si el puerto está ocupado o lo redirigiste a mano.
-2. Pulsa **Mostrar un archivo** y elige un vídeo. El archivo se queda contigo: los participantes lo reciben pieza a
+2. Pulsa **Mostrar** → **Archivo** y elige un vídeo. El archivo se queda contigo: los participantes lo reciben pieza a
    pieza mientras ven y lo guardan solo en memoria.
 3. Pulsa **Invitar**, copia el **enlace** y envíaselo a tus invitados como prefieras. Un clic en él abre Golether en el
    equipo del invitado y pregunta si quiere unirse. El enlace vale 15 minutos. Si a un invitado el enlace no le abre la
@@ -160,6 +160,48 @@ clic en el icono suelta el botón y el cursor vuelve a ser el normal.
 Las líneas no se guardan en ningún sitio y van unidas a la imagen, no a la ventana: si tu ventana es más ancha y la de
 la otra persona más estrecha, el lugar rodeado sigue siendo la misma parte del fotograma. Mientras el lápiz está
 apagado, los clics en el vídeo funcionan como siempre: pausa y pantalla completa.
+
+### Mostrar las fotos y los vídeos de una carpeta (anfitrión)
+
+**Mostrar** → **Carpeta de imágenes** (Ctrl+Shift+O) abre una ventana que muestra lo que hay en una carpeta: sus
+subcarpetas, sus imágenes con miniaturas y sus vídeos. Abre la carpeta que necesitas y pulsa **Mostrar**. Debajo, la
+ventana cuenta lo que se enviará (imágenes, vídeos, el tamaño de las imágenes) y lo que se omite: archivos RAW de
+cámaras e imágenes de más de 64 MB. La acompañan dos interruptores:
+
+- **Con las subcarpetas**: los archivos de cada subcarpeta van detrás de los de la propia carpeta, carpeta tras carpeta,
+  y la tira nombra cada subcarpeta en su primer elemento.
+- **No mostrar el lugar de la toma, la cámara ni los comentarios de las imágenes** (activado por defecto): las copias
+  que reciben los participantes pierden el lugar, la cámara, el autor, los comentarios y las imágenes adicionales que
+  algunos teléfonos añaden tras una foto. Tus propios archivos no cambian. La orientación se conserva, así que la foto
+  se sigue viendo derecha.
+
+En la ventana, **Atrás** y **Adelante** funcionan como en un explorador de archivos, también con Alt+← y Alt+→,
+Retroceso y los botones laterales del ratón.
+
+Se muestran como mucho 2000 archivos a la vez. Una sola imagen elegida con **Mostrar** → **Archivo** se muestra sola:
+nada más de su carpeta se envía y sus metadatos se quedan contigo.
+
+Mientras se muestra una carpeta, bajo la pantalla hay una tira de miniaturas. Un clic en un elemento lo pone en la
+pantalla de todos, como un salto en la película: cualquier participante puede hacerlo, decide el anfitrión. ← y → van
+al elemento anterior y al siguiente; el botón de cuatro cuadrados abre todos los elementos en una cuadrícula solo en
+tu pantalla (Esc la cierra). Bajo cada elemento están las marcas de quienes lo miran. La rueda del ratón desplaza la
+tira de lado.
+
+- **Las imágenes** las dibuja el propio Golether. La rueda del ratón o las teclas + y − amplían una imagen alrededor
+  del puntero, arrastrar mueve la imagen ampliada, 0 la vuelve a encajar entera. Eso cambia solo tu pantalla, y los
+  trazos del lápiz se quedan en su sitio de la imagen. Las fotos HEIC, AVIF y TIFF se convierten en JPEG en el
+  ordenador del anfitrión con el componente de vídeo, así que los participantes no necesitan nada para ellas.
+- **Abrir solo para mí** (clic derecho en un elemento) muestra una imagen solo en tu pantalla. Una línea arriba dice lo
+  que ven los demás y ofrece **Volver con todos** y **Mostrar a todos**; los demás ven la marca «APARTE» en tu
+  recuadro. Mientras tanto el lápiz está desactivado.
+- **Los vídeos** de la carpeta se reproducen como una película: puesto en pantalla, un vídeo se convierte en la
+  película de todos, con su línea de tiempo, su sonido y sus subtítulos, y la tira sigue ahí. Su miniatura es un
+  fotograma del vídeo.
+
+La película se pausa cuando aparece una imagen en pantalla y espera bajo las imágenes; los botones de sonido y
+subtítulos están inactivos mientras se muestra una imagen. Un vídeo de la carpeta puesto en pantalla sustituye a la
+película. **Cerrar las imágenes** (anfitrión) termina la muestra para todos, y la película vuelve al punto donde se
+interrumpió. Elegir una película con **Mostrar** → **Archivo** también la termina.
 
 ### Esperar a que todos estén listos
 
@@ -356,6 +398,9 @@ registro la entrada de desinstalación y el manejador de los enlaces de invitaci
 - en Windows la clave del dispositivo y los secretos de los túneles se cifran además para tu cuenta de Windows. En otro
   equipo o con otro usuario no se pueden leer: el programa lo dice, y tras borrar la carpeta `data\identity` crea una
   clave nueva;
+- mientras se muestra una carpeta, `data\gallery` guarda los archivos JPEG que el anfitrión hace de sus fotos HEIC,
+  AVIF y TIFF y de fotogramas de sus vídeos. Se vacía cuando termina la muestra, o en el siguiente inicio si el
+  programa se cerró durante ella;
 - `data\identity\device.key` es la clave del dispositivo. Si se borra, la huella del dispositivo cambia y tus contactos
   tienen que volver a comparar el código.
 

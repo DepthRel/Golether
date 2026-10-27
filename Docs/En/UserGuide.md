@@ -34,7 +34,7 @@ the host uses another language, their words are translations of yours: *owl · l
 1. Enter your name and the session name and press **Create a session**. The port of your computer (47800 by
    default) and the request to the router are under **Advanced**: change them only when the port is busy or was
    forwarded by hand.
-2. Press **Show a file** and choose a video. The file stays with you: participants receive it piece by piece while
+2. Press **Show** → **File** and choose a video. The file stays with you: participants receive it piece by piece while
    watching and keep it in memory only.
 3. Press **Invite**, copy the **link** and send it to your guests any way you like. A click on it opens Golether on
    the guest's computer and asks whether to join. The link works for 15 minutes. If the link does not open the
@@ -159,6 +159,45 @@ button and the cursor is ordinary again.
 Lines are stored nowhere and are attached to the picture, not to the window: if your window is wider and the other
 person's narrower, the circled place is still the same part of the frame. While the pen is off, clicks on the video
 work as usual: pause and full screen.
+
+### Show the photos and videos of a folder (host)
+
+**Show** → **Folder of pictures** (Ctrl+Shift+O) opens a window that shows what lies in a folder: its nested folders,
+its pictures with small previews and its videos. Open the folder you need and press **Show**. Under it the window
+counts what goes out (pictures, videos, the size of the pictures) and what is left out: camera RAW files and pictures
+larger than 64 MB. Two switches go with it:
+
+- **With nested folders**: the files of every nested folder follow those of the folder itself, folder after folder,
+  and the strip names a nested folder at its first item.
+- **Do not show the place of shooting, the camera and the comments of the pictures** (on by default): the copies the
+  participants receive lose the place, the camera, the author, the comments and the extra pictures some phones attach
+  after a photo. Your own files are not changed. The orientation stays, so a photo is still shown upright.
+
+In the window **Back** and **Forward** work as in a file manager, with Alt+← and Alt+→, Backspace and the side buttons
+of the mouse as well.
+
+At most 2000 files are shown at once. A single picture chosen with **Show** → **File** is shown alone: nothing else of
+its folder goes out, and its metadata stays with you.
+
+While a folder is shown, a strip of small pictures lies under the screen. A click on an item puts it on everybody's
+screen, like a seek of the film: every participant can do it, the host decides. ← and → go to the previous and the
+next item; the button with four squares opens all items as a grid on your screen only (Esc closes it). Under each item
+are the marks of those who look at it. The mouse wheel scrolls the strip sideways.
+
+- **Pictures** are drawn by Golether itself. The mouse wheel or the + and − keys enlarge a picture around the pointer,
+  a drag moves the enlarged picture, 0 fits it back. That changes only your screen, and the lines of the pen stay on
+  their places of the picture. HEIC, AVIF and TIFF photos are turned into JPEG on the host's computer by the video
+  component, so participants need nothing for them.
+- **Open only for me** (right click on an item) shows a picture on your screen alone. A line on top says what
+  everybody else sees and offers **Back to everybody** and **Show to everybody**; the others see the mark "ALONE" on
+  your tile. The pen is off meanwhile.
+- **Videos** of the folder are played like a film: put on the screen, a video becomes everybody's film with its
+  timeline, sound and subtitles, and the strip stays. Its small picture is a frame from the video.
+
+The film pauses when a picture comes on the screen and waits under the pictures; the sound and subtitle buttons are
+inactive while a picture is shown. A video of the folder put on the screen replaces the film. **Close the pictures**
+(host) ends the showing for everybody, and the film comes back where it was interrupted. Choosing a film with
+**Show** → **File** ends it too.
 
 ### Waiting until everybody is ready
 
@@ -354,6 +393,9 @@ entry and the handler of invitation links. Therefore:
 - on Windows the device key and the tunnel secrets are additionally encrypted for your Windows account. On another
   computer or under another user they cannot be read: the program says so, and after the `data\identity` folder is
   deleted it creates a new key;
+- while a folder is shown, `data\gallery` holds the JPEG files the host makes of its HEIC, AVIF and TIFF photos and
+  of frames of its videos. It is emptied when the showing ends, or at the next start if the program was closed during
+  one;
 - `data\identity\device.key` is the device key. If it is deleted, the fingerprint of the device changes and your
   contacts have to compare the code again.
 

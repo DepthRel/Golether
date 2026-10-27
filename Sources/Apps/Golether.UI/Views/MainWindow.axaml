@@ -5,6 +5,7 @@
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         xmlns:vm="using:Golether.UI.ViewModels"
         xmlns:controls="using:Golether.UI.Controls"
+        xmlns:views="using:Golether.UI.Views"
         xmlns:enums="using:Golether.UI.Enums"
         xmlns:protocol="using:Golether.Sync.Protocol"
         mc:Ignorable="d" d:DesignWidth="1280" d:DesignHeight="760"
@@ -34,6 +35,12 @@
     <StreamGeometry x:Key="IconUnread">F1 M12,1.5 A10.5,10.5 0 1 1 11.99,1.5 Z M12,4 A8,8 0 1 0 12.01,4 Z M10.8,10 H13.2 V17.5 H10.8 Z M10.8,6.3 H13.2 V8.7 H10.8 Z</StreamGeometry>
     <StreamGeometry x:Key="IconSend">M2,21 L23,12 L2,3 V10 L17,12 L2,14 Z</StreamGeometry>
     <StreamGeometry x:Key="IconFolder">M2,5 H10 L12,7 H22 V20 H2 Z</StreamGeometry>
+    <!-- The signs of the folded menu items and of the menu of Show: each its own, unlike the signs of the bars. -->
+    <StreamGeometry x:Key="IconEnvelope">F1 M2,5 H22 V19 H2 Z M4,7.3 V17 H20 V7.3 L12,13.2 Z M5.6,7 L12,11.4 L18.4,7 Z</StreamGeometry>
+    <StreamGeometry x:Key="IconReport">F1 M5,2 H15 L20,7 V22 H5 Z M7,4 V20 H18 V8 H14 V4 Z M8,18 H10 V13 H8 Z M11,18 H13 V10 H11 Z M14,18 H16 V15 H14 Z</StreamGeometry>
+    <StreamGeometry x:Key="IconFile">F1 M5,2 H14 L20,8 V22 H5 Z M7,4 V20 H18 V9.5 H12.5 V4 Z</StreamGeometry>
+    <StreamGeometry x:Key="IconPhotoFolder">F1 M2,3 H9 L11,5.5 H22 V21 H2 Z M4.3,8 V18.7 H19.7 V8 Z M5.8,17.2 L9.6,12.2 L12.6,15.4 L14.6,13.4 L18.2,17.2 Z M15.6,9.4 A1.5,1.5 0 1 1 15.59,9.4 Z</StreamGeometry>
+    <StreamGeometry x:Key="IconGrid">M3,3 H10 V10 H3 Z M14,3 H21 V10 H14 Z M3,14 H10 V21 H3 Z M14,14 H21 V21 H14 Z</StreamGeometry>
     <!-- Speaker icons share the 24x24 frame (corner dots), so they are scaled alike. -->
     <StreamGeometry x:Key="IconSpeakerMuted">M0,0 H0.01 V0.01 Z M23.99,23.99 H24 V24 H23.99 Z M2,9 H6 L11,4 V20 L6,15 H2 Z M14.2,9.2 L15.6,7.8 L18,10.2 L20.4,7.8 L21.8,9.2 L19.4,11.6 L21.8,14 L20.4,15.4 L18,13 L15.6,15.4 L14.2,14 L16.6,11.6 Z</StreamGeometry>
     <StreamGeometry x:Key="IconSpeakerQuiet">M0,0 H0.01 V0.01 Z M23.99,23.99 H24 V24 H23.99 Z M2,9 H6 L11,4 V20 L6,15 H2 Z M13.6,8.2 C15.9,9.6 15.9,14.4 13.6,15.8 L14.6,17.2 C18,15 18,9 14.6,6.8 Z</StreamGeometry>
@@ -71,29 +78,48 @@
                   <TextBlock Text="{Binding SecurityText}" Foreground="{StaticResource GoletherSecure}" FontFamily="{StaticResource GoletherMono}" FontSize="11" FontWeight="SemiBold" />
                 </StackPanel>
               </Border>
-              <Border Classes="chip" IsVisible="{Binding IsHost}" controls:OverflowPanel.CanOverflow="True">
+              <!-- When the bar is narrow the items fold into "more" one by one: this mark first, ending the session last. -->
+              <Border Classes="chip" IsVisible="{Binding IsHost}" controls:OverflowPanel.CanOverflow="True" controls:OverflowPanel.OverflowOrder="1">
                 <TextBlock Text="{loc:Loc Main.HostYou}" Foreground="{StaticResource GoletherMuted}" />
               </Border>
               <!-- Language, avatar, cameras and tunnels all live behind one Settings button now. -->
               <Button x:Name="SettingsButton" Classes="ghost" Command="{Binding OpenSettingsCommand}"
-                      controls:OverflowPanel.CanOverflow="True"
+                      controls:OverflowPanel.CanOverflow="True" controls:OverflowPanel.OverflowOrder="2"
                       AutomationProperties.Name="{loc:Loc Main.Settings}" ToolTip.Tip="{loc:Loc Main.SettingsTip}">
                 <StackPanel Orientation="Horizontal" Spacing="6">
                   <PathIcon Data="{StaticResource IconSettings}" Width="14" Height="14" />
                   <TextBlock Text="{loc:Loc Main.Settings}" />
                 </StackPanel>
               </Button>
-              <Button Classes="ghost" Content="{loc:Loc Main.Invite}" Command="{Binding InviteCommand}" IsVisible="{Binding IsHost}" controls:OverflowPanel.CanOverflow="True" />
-              <Button Classes="danger" Content="{loc:Loc Main.Leave}" Command="{Binding LeaveCommand}" IsVisible="{Binding IsInSession}" controls:OverflowPanel.CanOverflow="True" />
+              <Button x:Name="InviteButton" Classes="ghost" Content="{loc:Loc Main.Invite}" Command="{Binding InviteCommand}" IsVisible="{Binding IsHost}"
+                      controls:OverflowPanel.CanOverflow="True" controls:OverflowPanel.OverflowOrder="3" />
+              <Button x:Name="LeaveButton" Classes="danger" Content="{loc:Loc Main.Leave}" Command="{Binding LeaveCommand}" IsVisible="{Binding IsInSession}"
+                      controls:OverflowPanel.CanOverflow="True" controls:OverflowPanel.OverflowOrder="4" />
               <Button x:Name="MoreActions" Classes="ghost square" controls:OverflowPanel.IsOverflowButton="True"
                       AutomationProperties.Name="{loc:Loc Main.MoreName}" ToolTip.Tip="{loc:Loc Main.MoreTip}" FontSize="18" Content="⋯">
                 <Button.Flyout>
                   <MenuFlyout Placement="BottomEdgeAlignedRight">
-                    <MenuItem Header="{loc:Loc Main.Settings}" Command="{Binding OpenSettingsCommand}" />
-                    <MenuItem Header="{loc:Loc Main.Invite}" Command="{Binding InviteCommand}" IsVisible="{Binding IsHost}" />
+                    <!-- The menu offers what is folded away; what is still in the row is used there. -->
+                    <MenuItem Header="{loc:Loc Main.Settings}" Command="{Binding OpenSettingsCommand}"
+                              IsVisible="{Binding #SettingsButton.(controls:OverflowPanel.IsFolded)}">
+                      <MenuItem.Icon>
+                        <PathIcon Data="{StaticResource IconSettings}" Width="14" Height="14" />
+                      </MenuItem.Icon>
+                    </MenuItem>
+                    <MenuItem Header="{loc:Loc Main.Invite}" Command="{Binding InviteCommand}"
+                              IsVisible="{Binding #InviteButton.(controls:OverflowPanel.IsFolded)}">
+                      <MenuItem.Icon>
+                        <PathIcon Data="{StaticResource IconEnvelope}" Width="14" Height="14" />
+                      </MenuItem.Icon>
+                    </MenuItem>
                     <MenuItem Header="{loc:Loc Main.Report}" Command="{Binding SaveReportCommand}" IsVisible="{Binding CanSaveReport}"
-                              ToolTip.Tip="{loc:Loc Main.ReportTip}" />
-                    <MenuItem Header="{loc:Loc Main.Leave}" Command="{Binding LeaveCommand}" IsVisible="{Binding IsInSession}"
+                              ToolTip.Tip="{loc:Loc Main.ReportTip}">
+                      <MenuItem.Icon>
+                        <PathIcon Data="{StaticResource IconReport}" Width="14" Height="14" />
+                      </MenuItem.Icon>
+                    </MenuItem>
+                    <MenuItem Classes="danger" Header="{loc:Loc Main.Leave}" Command="{Binding LeaveCommand}"
+                              IsVisible="{Binding #LeaveButton.(controls:OverflowPanel.IsFolded)}"
                               Foreground="{StaticResource GoletherBad}" />
                   </MenuFlyout>
                 </Button.Flyout>
@@ -101,7 +127,7 @@
             </controls:OverflowPanel>
             <StackPanel VerticalAlignment="Center" IsVisible="{Binding IsInSession}" Margin="0,0,12,0">
               <TextBlock Text="{Binding SessionTitle}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
-              <TextBlock Classes="mono muted" FontSize="11" Text="{Binding MediaCaption}" TextTrimming="CharacterEllipsis" />
+              <TextBlock Classes="mono muted" FontSize="11" Text="{Binding MediaCaption}" TextTrimming="CharacterEllipsis" ToolTip.Tip="{Binding MediaCaption}" />
             </StackPanel>
           </DockPanel>
         </Grid>
@@ -284,7 +310,31 @@
                     <TextBlock VerticalAlignment="Center" TextTrimming="CharacterEllipsis" Text="{Binding ResumeText}" />
                   </DockPanel>
                 </Border>
-                <Panel Height="34">
+                <!--
+                  The strip of a shown folder: a click puts an item on everybody's screen (a video becomes the film,
+                  and its timeline comes back under the strip), the menu opens a picture here only; the marks under an
+                  item are the people looking at it.
+                -->
+                <ItemsControl x:Name="GalleryStrip" Height="112" ItemsSource="{Binding Gallery.Items}" IsVisible="{Binding Gallery.IsActive}">
+                  <ItemsControl.Template>
+                    <ControlTemplate>
+                      <ScrollViewer HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Disabled">
+                        <ItemsPresenter Name="PART_ItemsPresenter" ItemsPanel="{TemplateBinding ItemsPanel}" />
+                      </ScrollViewer>
+                    </ControlTemplate>
+                  </ItemsControl.Template>
+                  <ItemsControl.ItemsPanel>
+                    <ItemsPanelTemplate>
+                      <VirtualizingStackPanel Orientation="Horizontal" />
+                    </ItemsPanelTemplate>
+                  </ItemsControl.ItemsPanel>
+                  <ItemsControl.ItemTemplate>
+                    <DataTemplate x:DataType="vm:GalleryItemViewModel">
+                      <views:GalleryTile Width="112" Height="96" Margin="0,0,6,0" />
+                    </DataTemplate>
+                  </ItemsControl.ItemTemplate>
+                </ItemsControl>
+                <Panel Height="34" IsVisible="{Binding IsFilmOnScreen}">
                   <ItemsControl ItemsSource="{Binding Participants}" VerticalAlignment="Top" Margin="0,0,0,0" IsHitTestVisible="False">
                     <ItemsControl.ItemsPanel>
                       <ItemsPanelTemplate>
@@ -316,169 +366,253 @@
                           Minimum="0" Maximum="{Binding DurationSeconds}"
                           IsEnabled="{Binding HasMedia}" />
                 </Panel>
-                <Grid ColumnDefinitions="Auto,Auto,Auto,Auto,Auto,*,Auto,Auto,Auto,Auto,Auto,Auto">
-                  <Button Focusable="False" Classes="ghost square" Command="{Binding SeekBackCommand}" AutomationProperties.Name="{loc:Loc Main.Back.Name}" ToolTip.Tip="{loc:Loc Main.Back.Tip}">
-                    <PathIcon Data="{StaticResource IconBack}" />
-                  </Button>
-                  <Button Focusable="False" Grid.Column="1" Classes="accent round" Margin="10,0" Command="{Binding TogglePlayCommand}" AutomationProperties.Name="{loc:Loc Main.PlayName}"
-                          ToolTip.Tip="{loc:Loc Key=Main.PlayTip, Arg={Binding PlayButtonText}}">
-                    <Panel>
-                      <PathIcon Width="19" Height="19" Data="{StaticResource IconPlay}" IsVisible="{Binding ShowPlayIcon}" Foreground="{StaticResource GoletherAccentInk}" />
-                      <PathIcon Width="19" Height="19" Data="{StaticResource IconReplay}" IsVisible="{Binding IsEnded}" Foreground="{StaticResource GoletherAccentInk}" />
-                      <PathIcon Width="19" Height="19" Data="{StaticResource IconPause}" IsVisible="{Binding ShowPauseIcon}" Foreground="{StaticResource GoletherAccentInk}" />
-                    </Panel>
-                  </Button>
-                  <Button Focusable="False" Grid.Column="2" Classes="ghost square" Command="{Binding SeekForwardCommand}" AutomationProperties.Name="{loc:Loc Main.Forward.Name}" ToolTip.Tip="{loc:Loc Main.Forward.Tip}">
-                    <PathIcon Data="{StaticResource IconForward}" />
-                  </Button>
-                  <StackPanel Grid.Column="3" Orientation="Horizontal" VerticalAlignment="Center" Margin="14,0,0,0">
-                    <TextBlock Classes="mono" FontWeight="SemiBold" Text="{Binding PositionText}" />
-                    <TextBlock Classes="mono muted" Text="{Binding DurationText, StringFormat=' / {0}'}" />
-                  </StackPanel>
-                  <StackPanel Grid.Column="4" Margin="16,0,0,0" Orientation="Horizontal" Spacing="10" VerticalAlignment="Center">
-                    <TextBlock VerticalAlignment="Center" FontWeight="SemiBold" MaxWidth="260" TextTrimming="CharacterEllipsis"
-                               Foreground="{StaticResource GoletherAccent}" Text="{Binding CountdownText}" ToolTip.Tip="{Binding CountdownText}" />
-                    <Button Focusable="False" Classes="ghost" Padding="10,3" IsVisible="{Binding CanStartNow}" Command="{Binding StartNowCommand}"
-                            Content="{loc:Loc Main.StartNow}" ToolTip.Tip="{loc:Loc Main.StartNowTip}" />
-                  </StackPanel>
-                  <TextBlock Grid.Column="5" Margin="16,0" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"
-                             Classes="muted" Text="{Binding LastEvent}" />
-                  <Button Focusable="False" Grid.Column="6" Classes="ghost" Margin="0,0,8,0" Command="{Binding PickFileCommand}"
-                          ToolTip.Tip="{loc:Loc Main.File.Tip}">
-                    <StackPanel Orientation="Horizontal" Spacing="6">
-                      <PathIcon Data="{StaticResource IconFolder}" Width="14" Height="14" />
+                <DockPanel>
+                  <!--
+                    The buttons on the right keep their place: they are laid out first, and the film controls and the
+                    countdown on the left take what is left.
+                  -->
+                  <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
+                    <!-- The host shows a file (a film or one picture) or a folder; the choice is what is shown, not a mode. -->
+                    <Button Focusable="False" Classes="ghost" Margin="0,0,8,0" IsVisible="{Binding IsHost}"
+                            ToolTip.Tip="{loc:Loc Main.File.Tip}">
+                      <StackPanel Orientation="Horizontal" Spacing="6">
+                        <PathIcon Data="{StaticResource IconFolder}" Width="14" Height="14" />
+                        <TextBlock Text="{loc:Loc Gallery.ShowMenu}" />
+                      </StackPanel>
+                      <Button.Flyout>
+                        <MenuFlyout Placement="TopEdgeAlignedLeft">
+                          <MenuItem Header="{loc:Loc Gallery.ShowMenu.File}" Command="{Binding PickFileCommand}" InputGesture="Ctrl+O"
+                                    ToolTip.Tip="{loc:Loc Gallery.ShowMenu.FileTip}" ToolTip.ShowDelay="0" ToolTip.Placement="Right">
+                            <MenuItem.Icon>
+                              <PathIcon Data="{StaticResource IconFile}" Width="14" Height="14" />
+                            </MenuItem.Icon>
+                          </MenuItem>
+                          <MenuItem Header="{loc:Loc Gallery.ShowMenu.Folder}" Command="{Binding PickFolderCommand}" InputGesture="Ctrl+Shift+O">
+                            <MenuItem.Icon>
+                              <PathIcon Data="{StaticResource IconPhotoFolder}" Width="14" Height="14" />
+                            </MenuItem.Icon>
+                          </MenuItem>
+                        </MenuFlyout>
+                      </Button.Flyout>
+                    </Button>
+                    <Button Focusable="False" Classes="ghost" Margin="0,0,8,0" Command="{Binding PickFileCommand}"
+                            IsVisible="{Binding !IsHost}" ToolTip.Tip="{loc:Loc Main.File.Tip}">
+                      <StackPanel Orientation="Horizontal" Spacing="6">
+                        <PathIcon Data="{StaticResource IconFolder}" Width="14" Height="14" />
+                        <TextBlock Text="{loc:Loc Main.File.MyCopy}" />
+                      </StackPanel>
+                    </Button>
+                    <!-- The pen: while the button is pressed the cursor draws over the video and everybody sees it. -->
+                    <ToggleButton Focusable="False" x:Name="PenButton" Classes="ghost square" Margin="0,0,4,0"
+                                  IsVisible="{Binding IsInSession}" IsEnabled="{Binding Drawing.CanDraw}"
+                                  IsChecked="{Binding Drawing.IsPenActive, Mode=TwoWay}"
+                                  AutomationProperties.Name="{loc:Loc Main.Pen.Name}" ToolTip.Tip="{loc:Loc Main.Pen.Tip}">
+                      <PathIcon Data="{StaticResource IconPen}" />
+                    </ToggleButton>
+                    <!-- Reactions float over everybody's video for a few seconds. -->
+                    <Button Focusable="False" x:Name="ReactionsButton" Classes="ghost square" Margin="0,0,4,0"
+                            IsVisible="{Binding IsInSession}" AutomationProperties.Name="{loc:Loc Main.Reactions.Name}" ToolTip.Tip="{loc:Loc Main.Reactions.Tip}">
+                      <PathIcon Data="{StaticResource IconReaction}" />
+                      <Button.Flyout>
+                        <Flyout Placement="Top">
+                          <ItemsControl ItemsSource="{Binding Chat.AvailableReactions}">
+                            <ItemsControl.ItemsPanel>
+                              <ItemsPanelTemplate>
+                                <StackPanel Orientation="Horizontal" Spacing="4" />
+                              </ItemsPanelTemplate>
+                            </ItemsControl.ItemsPanel>
+                            <ItemsControl.ItemTemplate>
+                              <DataTemplate x:DataType="x:String">
+                                <Button Classes="ghost reaction" Focusable="False" Padding="0" Width="48" Height="48" Click="OnReactionChosen"
+                                        Command="{Binding $parent[ItemsControl].((vm:MainWindowViewModel)DataContext).Chat.ReactCommand}"
+                                        CommandParameter="{Binding}" AutomationProperties.Name="{Binding}">
+                                  <!-- A colour emoji glyph goes beyond its text box: the margins give it room, otherwise it is cut off. -->
+                                  <TextBlock Classes="emoji" Text="{Binding}" FontSize="24" Padding="8,11,8,5" TextAlignment="Center"
+                                             HorizontalAlignment="Center" VerticalAlignment="Center" />
+                                </Button>
+                              </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                          </ItemsControl>
+                        </Flyout>
+                      </Button.Flyout>
+                    </Button>
+                    <!-- Sound and subtitle tracks of this device only: every participant picks their own. -->
+                    <Button Focusable="False" x:Name="TracksButton" Classes="ghost square" Margin="0,0,4,0"
+                            IsVisible="{Binding Tracks.HasTracks, FallbackValue=False}" IsEnabled="{Binding IsFilmOnScreen}"
+                            AutomationProperties.Name="{loc:Loc Main.Tracks.Name}" ToolTip.Tip="{Binding Tracks.Summary, FallbackValue={x:Null}}">
                       <Panel>
-                        <TextBlock Text="{loc:Loc Main.File.Show}" IsVisible="{Binding IsHost}" />
-                        <TextBlock Text="{loc:Loc Main.File.MyCopy}" IsVisible="{Binding !IsHost}" />
+                        <PathIcon Data="{StaticResource IconSubtitles}" IsVisible="{Binding !Tracks.SubtitlesShown, FallbackValue=True}" />
+                        <PathIcon Data="{StaticResource IconSubtitles}" IsVisible="{Binding Tracks.SubtitlesShown, FallbackValue=False}"
+                                  Foreground="{StaticResource GoletherAccent}" />
                       </Panel>
-                    </StackPanel>
-                  </Button>
-                  <!-- The pen: while the button is pressed the cursor draws over the video and everybody sees it. -->
-                  <ToggleButton Focusable="False" x:Name="PenButton" Grid.Column="7" Classes="ghost square" Margin="0,0,4,0"
-                                IsVisible="{Binding IsInSession}" IsEnabled="{Binding Drawing.CanDraw}"
-                                IsChecked="{Binding Drawing.IsPenActive, Mode=TwoWay}"
-                                AutomationProperties.Name="{loc:Loc Main.Pen.Name}" ToolTip.Tip="{loc:Loc Main.Pen.Tip}">
-                    <PathIcon Data="{StaticResource IconPen}" />
-                  </ToggleButton>
-                  <!-- Reactions float over everybody's video for a few seconds. -->
-                  <Button Focusable="False" x:Name="ReactionsButton" Grid.Column="8" Classes="ghost square" Margin="0,0,4,0"
-                          IsVisible="{Binding IsInSession}" AutomationProperties.Name="{loc:Loc Main.Reactions.Name}" ToolTip.Tip="{loc:Loc Main.Reactions.Tip}">
-                    <PathIcon Data="{StaticResource IconReaction}" />
-                    <Button.Flyout>
-                      <Flyout Placement="Top">
-                        <ItemsControl ItemsSource="{Binding Chat.AvailableReactions}">
-                          <ItemsControl.ItemsPanel>
-                            <ItemsPanelTemplate>
-                              <StackPanel Orientation="Horizontal" Spacing="4" />
-                            </ItemsPanelTemplate>
-                          </ItemsControl.ItemsPanel>
-                          <ItemsControl.ItemTemplate>
-                            <DataTemplate x:DataType="x:String">
-                              <Button Classes="ghost reaction" Focusable="False" Padding="0" Width="48" Height="48" Click="OnReactionChosen"
-                                      Command="{Binding $parent[ItemsControl].((vm:MainWindowViewModel)DataContext).Chat.ReactCommand}"
-                                      CommandParameter="{Binding}" AutomationProperties.Name="{Binding}">
-                                <!-- A colour emoji glyph goes beyond its text box: the margins give it room, otherwise it is cut off. -->
-                                <TextBlock Classes="emoji" Text="{Binding}" FontSize="24" Padding="8,11,8,5" TextAlignment="Center"
-                                           HorizontalAlignment="Center" VerticalAlignment="Center" />
+                      <Button.Flyout>
+                        <Flyout Placement="TopEdgeAlignedRight">
+                          <ScrollViewer MaxHeight="420" MaxWidth="380">
+                            <StackPanel Spacing="4" Margin="2">
+                              <TextBlock Classes="muted" FontSize="11" Text="{loc:Loc Main.Tracks.Audio}" Margin="6,0,0,2" />
+                              <ItemsControl ItemsSource="{Binding Tracks.AudioTracks, FallbackValue={x:Null}}">
+                                <ItemsControl.ItemTemplate>
+                                  <DataTemplate x:DataType="vm:TrackOptionViewModel">
+                                    <Button Classes="ghost trackOption" Command="{Binding SelectCommand}" Click="OnTrackChosen"
+                                            HorizontalAlignment="Stretch" HorizontalContentAlignment="Left">
+                                      <StackPanel Orientation="Horizontal" Spacing="8">
+                                        <TextBlock Width="14" Text="✓" Foreground="{StaticResource GoletherAccent}" IsVisible="{Binding IsSelected}" />
+                                        <TextBlock Width="14" IsVisible="{Binding !IsSelected}" />
+                                        <TextBlock Text="{Binding Label}" TextTrimming="CharacterEllipsis" />
+                                      </StackPanel>
+                                    </Button>
+                                  </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                              </ItemsControl>
+                              <TextBlock Classes="muted" FontSize="11" Text="{loc:Loc Main.Tracks.Subtitles}" Margin="6,8,0,2" />
+                              <ItemsControl ItemsSource="{Binding Tracks.SubtitleTracks, FallbackValue={x:Null}}">
+                                <ItemsControl.ItemTemplate>
+                                  <DataTemplate x:DataType="vm:TrackOptionViewModel">
+                                    <Button Classes="ghost trackOption" Command="{Binding SelectCommand}" Click="OnTrackChosen"
+                                            HorizontalAlignment="Stretch" HorizontalContentAlignment="Left">
+                                      <StackPanel Orientation="Horizontal" Spacing="8">
+                                        <TextBlock Width="14" Text="✓" Foreground="{StaticResource GoletherAccent}" IsVisible="{Binding IsSelected}" />
+                                        <TextBlock Width="14" IsVisible="{Binding !IsSelected}" />
+                                        <TextBlock Text="{Binding Label}" TextTrimming="CharacterEllipsis" />
+                                      </StackPanel>
+                                    </Button>
+                                  </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                              </ItemsControl>
+                              <Button Classes="ghost" Margin="0,4,0,0" HorizontalAlignment="Stretch" HorizontalContentAlignment="Left"
+                                      Command="{Binding Tracks.AddSubtitlesCommand, FallbackValue={x:Null}}" Click="OnTrackChosen">
+                                <StackPanel Orientation="Horizontal" Spacing="8">
+                                  <PathIcon Data="{StaticResource IconFolder}" Width="14" Height="14" />
+                                  <TextBlock Text="{loc:Loc Main.Tracks.SubtitlesFile}" />
+                                </StackPanel>
                               </Button>
-                            </DataTemplate>
-                          </ItemsControl.ItemTemplate>
-                        </ItemsControl>
-                      </Flyout>
-                    </Button.Flyout>
-                  </Button>
-                  <!-- Sound and subtitle tracks of this device only: every participant picks their own. -->
-                  <Button Focusable="False" x:Name="TracksButton" Grid.Column="9" Classes="ghost square" Margin="0,0,4,0"
-                          IsVisible="{Binding Tracks.HasTracks, FallbackValue=False}"
-                          AutomationProperties.Name="{loc:Loc Main.Tracks.Name}" ToolTip.Tip="{Binding Tracks.Summary, FallbackValue={x:Null}}">
-                    <Panel>
-                      <PathIcon Data="{StaticResource IconSubtitles}" IsVisible="{Binding !Tracks.SubtitlesShown, FallbackValue=True}" />
-                      <PathIcon Data="{StaticResource IconSubtitles}" IsVisible="{Binding Tracks.SubtitlesShown, FallbackValue=False}"
-                                Foreground="{StaticResource GoletherAccent}" />
-                    </Panel>
-                    <Button.Flyout>
-                      <Flyout Placement="TopEdgeAlignedRight">
-                        <ScrollViewer MaxHeight="420" MaxWidth="380">
-                          <StackPanel Spacing="4" Margin="2">
-                            <TextBlock Classes="muted" FontSize="11" Text="{loc:Loc Main.Tracks.Audio}" Margin="6,0,0,2" />
-                            <ItemsControl ItemsSource="{Binding Tracks.AudioTracks, FallbackValue={x:Null}}">
-                              <ItemsControl.ItemTemplate>
-                                <DataTemplate x:DataType="vm:TrackOptionViewModel">
-                                  <Button Classes="ghost trackOption" Command="{Binding SelectCommand}" Click="OnTrackChosen"
-                                          HorizontalAlignment="Stretch" HorizontalContentAlignment="Left">
-                                    <StackPanel Orientation="Horizontal" Spacing="8">
-                                      <TextBlock Width="14" Text="✓" Foreground="{StaticResource GoletherAccent}" IsVisible="{Binding IsSelected}" />
-                                      <TextBlock Width="14" IsVisible="{Binding !IsSelected}" />
-                                      <TextBlock Text="{Binding Label}" TextTrimming="CharacterEllipsis" />
-                                    </StackPanel>
-                                  </Button>
-                                </DataTemplate>
-                              </ItemsControl.ItemTemplate>
-                            </ItemsControl>
-                            <TextBlock Classes="muted" FontSize="11" Text="{loc:Loc Main.Tracks.Subtitles}" Margin="6,8,0,2" />
-                            <ItemsControl ItemsSource="{Binding Tracks.SubtitleTracks, FallbackValue={x:Null}}">
-                              <ItemsControl.ItemTemplate>
-                                <DataTemplate x:DataType="vm:TrackOptionViewModel">
-                                  <Button Classes="ghost trackOption" Command="{Binding SelectCommand}" Click="OnTrackChosen"
-                                          HorizontalAlignment="Stretch" HorizontalContentAlignment="Left">
-                                    <StackPanel Orientation="Horizontal" Spacing="8">
-                                      <TextBlock Width="14" Text="✓" Foreground="{StaticResource GoletherAccent}" IsVisible="{Binding IsSelected}" />
-                                      <TextBlock Width="14" IsVisible="{Binding !IsSelected}" />
-                                      <TextBlock Text="{Binding Label}" TextTrimming="CharacterEllipsis" />
-                                    </StackPanel>
-                                  </Button>
-                                </DataTemplate>
-                              </ItemsControl.ItemTemplate>
-                            </ItemsControl>
-                            <Button Classes="ghost" Margin="0,4,0,0" HorizontalAlignment="Stretch" HorizontalContentAlignment="Left"
-                                    Command="{Binding Tracks.AddSubtitlesCommand, FallbackValue={x:Null}}" Click="OnTrackChosen">
-                              <StackPanel Orientation="Horizontal" Spacing="8">
-                                <PathIcon Data="{StaticResource IconFolder}" Width="14" Height="14" />
-                                <TextBlock Text="{loc:Loc Main.Tracks.SubtitlesFile}" />
-                              </StackPanel>
-                            </Button>
-                            <Button Classes="ghost" HorizontalAlignment="Stretch" HorizontalContentAlignment="Left"
-                                    Command="{Binding Tracks.AddAudioCommand, FallbackValue={x:Null}}" Click="OnTrackChosen">
-                              <StackPanel Orientation="Horizontal" Spacing="8">
-                                <PathIcon Data="{StaticResource IconFolder}" Width="14" Height="14" />
-                                <TextBlock Text="{loc:Loc Main.Tracks.AudioFile}" />
-                              </StackPanel>
-                            </Button>
+                              <Button Classes="ghost" HorizontalAlignment="Stretch" HorizontalContentAlignment="Left"
+                                      Command="{Binding Tracks.AddAudioCommand, FallbackValue={x:Null}}" Click="OnTrackChosen">
+                                <StackPanel Orientation="Horizontal" Spacing="8">
+                                  <PathIcon Data="{StaticResource IconFolder}" Width="14" Height="14" />
+                                  <TextBlock Text="{loc:Loc Main.Tracks.AudioFile}" />
+                                </StackPanel>
+                              </Button>
+                            </StackPanel>
+                          </ScrollViewer>
+                        </Flyout>
+                      </Button.Flyout>
+                    </Button>
+                    <!-- Volume of this device only: the popup scale opens on hover, the button mutes. -->
+                    <Panel Margin="0,0,8,0" IsVisible="{Binding Volume, Converter={x:Static ObjectConverters.IsNotNull}}">
+                      <Button Focusable="False" x:Name="VolumeButton" Classes="ghost square" Command="{Binding Volume.ToggleMuteCommand, FallbackValue={x:Null}}"
+                              IsEnabled="{Binding IsFilmOnScreen}"
+                              AutomationProperties.Name="{loc:Loc Main.Volume.ButtonName}" ToolTip.Tip="{loc:Loc Main.Volume.ButtonTip}"
+                              PointerEntered="OnVolumePointerEntered" PointerExited="OnVolumePointerExited" PointerWheelChanged="OnVolumeWheel">
+                        <Panel>
+                          <PathIcon Data="{StaticResource IconSpeakerMuted}" IsVisible="{Binding Volume.IsSilent, FallbackValue=False}" Foreground="{StaticResource GoletherBad}" />
+                          <PathIcon Data="{StaticResource IconSpeakerQuiet}" IsVisible="{Binding Volume.IsQuiet, FallbackValue=False}" />
+                          <PathIcon Data="{StaticResource IconSpeakerLoud}" IsVisible="{Binding Volume.IsLoud, FallbackValue=False}" />
+                        </Panel>
+                      </Button>
+                      <Popup x:Name="VolumePopup" PlacementTarget="{Binding #VolumeButton}" Placement="Top" VerticalOffset="-6"
+                             IsLightDismissEnabled="False">
+                        <Border Background="{StaticResource GoletherPanel2}" BorderBrush="{StaticResource GoletherLine}" BorderThickness="1"
+                                CornerRadius="8" Padding="10,10" PointerEntered="OnVolumePointerEntered" PointerExited="OnVolumePointerExited"
+                                PointerWheelChanged="OnVolumeWheel">
+                          <StackPanel Spacing="8" Width="44">
+                            <TextBlock Classes="mono" FontSize="11" HorizontalAlignment="Center" TextAlignment="Center" TextWrapping="Wrap"
+                                       Text="{Binding Volume.Caption}" />
+                            <Slider x:Name="VolumeSlider" Orientation="Vertical" Height="150" HorizontalAlignment="Center"
+                                    Minimum="0" Maximum="100" SmallChange="1" LargeChange="10"
+                                    Value="{Binding Volume.Volume, FallbackValue=0}" AutomationProperties.Name="{loc:Loc Main.Volume.SliderName}" />
                           </StackPanel>
-                        </ScrollViewer>
-                      </Flyout>
-                    </Button.Flyout>
-                  </Button>
-                  <!-- Volume of this device only: the popup scale opens on hover, the button mutes. -->
-                  <Panel Grid.Column="10" Margin="0,0,8,0" IsVisible="{Binding Volume, Converter={x:Static ObjectConverters.IsNotNull}}">
-                    <Button Focusable="False" x:Name="VolumeButton" Classes="ghost square" Command="{Binding Volume.ToggleMuteCommand, FallbackValue={x:Null}}"
-                            AutomationProperties.Name="{loc:Loc Main.Volume.ButtonName}" ToolTip.Tip="{loc:Loc Main.Volume.ButtonTip}"
-                            PointerEntered="OnVolumePointerEntered" PointerExited="OnVolumePointerExited" PointerWheelChanged="OnVolumeWheel">
+                        </Border>
+                      </Popup>
+                    </Panel>
+                    <Button Focusable="False" Classes="ghost square" Click="OnToggleFullScreen" AutomationProperties.Name="{loc:Loc Main.FullScreen.Name}" ToolTip.Tip="{loc:Loc Main.FullScreen.Tip}">
+                      <PathIcon Data="{StaticResource IconFullScreen}" />
+                    </Button>
+                  </StackPanel>
+                  <!--
+                    The left of the bar: the way through a shown folder (back and forth, the number of the item on the
+                    screen, the grid of all items, the way back to the film for the host), then the controls of the
+                    film and its countdown. The folder keeps its place at the left edge whatever the film controls
+                    show, and the name of the item is in the top bar. When the bar is narrow, the least needed items
+                    leave first (the duration, the seek buttons, the grid, the number of the item, the position) and
+                    nothing is drawn over the buttons on the right.
+                  -->
+                  <controls:ShrinkPanel>
+                    <Button Focusable="False" Classes="ghost square" Margin="0,0,8,0" Command="{Binding Gallery.PreviousCommand}"
+                            IsVisible="{Binding Gallery.IsActive}"
+                            AutomationProperties.Name="{loc:Loc Gallery.Previous}" ToolTip.Tip="{loc:Loc Gallery.Previous}">
+                      <TextBlock Text="‹" FontSize="20" Margin="0,-4,0,0" />
+                    </Button>
+                    <Button Focusable="False" Classes="ghost square" Margin="0,0,8,0" Command="{Binding Gallery.NextCommand}"
+                            IsVisible="{Binding Gallery.IsActive}"
+                            AutomationProperties.Name="{loc:Loc Gallery.Next}" ToolTip.Tip="{loc:Loc Gallery.Next}">
+                      <TextBlock Text="›" FontSize="20" Margin="0,-4,0,0" />
+                    </Button>
+                    <TextBlock Classes="mono" FontWeight="SemiBold" VerticalAlignment="Center" MinWidth="86" TextAlignment="Center" Margin="0,0,8,0"
+                               IsVisible="{Binding Gallery.IsActive}" controls:ShrinkPanel.DropOrder="3"
+                               Text="{Binding Gallery.CounterText}" ToolTip.Tip="{Binding Gallery.ShownName}" />
+                    <ToggleButton Focusable="False" Classes="ghost square" Margin="0,0,8,0" IsChecked="{Binding Gallery.IsGridOpen, Mode=OneWay}"
+                                  IsVisible="{Binding Gallery.IsActive}" controls:ShrinkPanel.DropOrder="4"
+                                  Command="{Binding Gallery.ToggleGridCommand}"
+                                  AutomationProperties.Name="{loc:Loc Gallery.Grid}" ToolTip.Tip="{loc:Loc Gallery.Grid}">
+                      <PathIcon Width="14" Height="14" Data="{StaticResource IconGrid}" />
+                    </ToggleButton>
+                    <Panel Margin="0,0,16,0" IsVisible="{Binding Gallery.IsHost}">
+                      <Button Focusable="False" Classes="ghost" Padding="10,3" Content="{loc:Loc Gallery.BackToFilm}" Command="{Binding Gallery.CloseCommand}"
+                              IsVisible="{Binding !IsFilmOnScreen}" ToolTip.Tip="{loc:Loc Gallery.BackToFilmTip}" />
+                      <Button Focusable="False" Classes="ghost square" Command="{Binding Gallery.CloseCommand}" IsVisible="{Binding IsFilmOnScreen}"
+                              AutomationProperties.Name="{loc:Loc Gallery.BackToFilm}">
+                        <ToolTip.Tip>
+                          <StackPanel Spacing="4">
+                            <TextBlock FontWeight="SemiBold" Text="{loc:Loc Gallery.BackToFilm}" />
+                            <TextBlock Text="{loc:Loc Gallery.BackToFilmTip}" />
+                          </StackPanel>
+                        </ToolTip.Tip>
+                        <TextBlock Text="✕" />
+                      </Button>
+                    </Panel>
+                    <Button Focusable="False" Classes="ghost square" Command="{Binding SeekBackCommand}" AutomationProperties.Name="{loc:Loc Main.Back.Name}" ToolTip.Tip="{loc:Loc Main.Back.Tip}"
+                            IsVisible="{Binding IsFilmOnScreen}" controls:ShrinkPanel.DropOrder="5">
+                      <PathIcon Data="{StaticResource IconBack}" />
+                    </Button>
+                    <Button Focusable="False" Classes="accent round" Margin="10,0" Command="{Binding TogglePlayCommand}" AutomationProperties.Name="{loc:Loc Main.PlayName}"
+                            IsVisible="{Binding IsFilmOnScreen}"
+                            ToolTip.Tip="{loc:Loc Key=Main.PlayTip, Arg={Binding PlayButtonText}}">
                       <Panel>
-                        <PathIcon Data="{StaticResource IconSpeakerMuted}" IsVisible="{Binding Volume.IsSilent, FallbackValue=False}" Foreground="{StaticResource GoletherBad}" />
-                        <PathIcon Data="{StaticResource IconSpeakerQuiet}" IsVisible="{Binding Volume.IsQuiet, FallbackValue=False}" />
-                        <PathIcon Data="{StaticResource IconSpeakerLoud}" IsVisible="{Binding Volume.IsLoud, FallbackValue=False}" />
+                        <PathIcon Width="19" Height="19" Data="{StaticResource IconPlay}" IsVisible="{Binding ShowPlayIcon}" Foreground="{StaticResource GoletherAccentInk}" />
+                        <PathIcon Width="19" Height="19" Data="{StaticResource IconReplay}" IsVisible="{Binding IsEnded}" Foreground="{StaticResource GoletherAccentInk}" />
+                        <PathIcon Width="19" Height="19" Data="{StaticResource IconPause}" IsVisible="{Binding ShowPauseIcon}" Foreground="{StaticResource GoletherAccentInk}" />
                       </Panel>
                     </Button>
-                    <Popup x:Name="VolumePopup" PlacementTarget="{Binding #VolumeButton}" Placement="Top" VerticalOffset="-6"
-                           IsLightDismissEnabled="False">
-                      <Border Background="{StaticResource GoletherPanel2}" BorderBrush="{StaticResource GoletherLine}" BorderThickness="1"
-                              CornerRadius="8" Padding="10,10" PointerEntered="OnVolumePointerEntered" PointerExited="OnVolumePointerExited"
-                              PointerWheelChanged="OnVolumeWheel">
-                        <StackPanel Spacing="8" Width="44">
-                          <TextBlock Classes="mono" FontSize="11" HorizontalAlignment="Center" TextAlignment="Center" TextWrapping="Wrap"
-                                     Text="{Binding Volume.Caption}" />
-                          <Slider x:Name="VolumeSlider" Orientation="Vertical" Height="150" HorizontalAlignment="Center"
-                                  Minimum="0" Maximum="100" SmallChange="1" LargeChange="10"
-                                  Value="{Binding Volume.Volume, FallbackValue=0}" AutomationProperties.Name="{loc:Loc Main.Volume.SliderName}" />
+                    <Button Focusable="False" Classes="ghost square" Command="{Binding SeekForwardCommand}" AutomationProperties.Name="{loc:Loc Main.Forward.Name}" ToolTip.Tip="{loc:Loc Main.Forward.Tip}"
+                            IsVisible="{Binding IsFilmOnScreen}" controls:ShrinkPanel.DropOrder="5">
+                      <PathIcon Data="{StaticResource IconForward}" />
+                    </Button>
+                    <TextBlock Classes="mono" FontWeight="SemiBold" VerticalAlignment="Center" Margin="14,0,0,0" Text="{Binding PositionText}"
+                               IsVisible="{Binding IsFilmOnScreen}" controls:ShrinkPanel.DropOrder="2" />
+                    <TextBlock Classes="mono muted" VerticalAlignment="Center" Text="{Binding DurationText, StringFormat=' / {0}'}"
+                               IsVisible="{Binding IsFilmOnScreen}" controls:ShrinkPanel.DropOrder="6" />
+                    <DockPanel Margin="16,0,0,0">
+                      <!-- The countdown: in full while it fits, otherwise the seconds alone. -->
+                      <controls:FallbackPanel DockPanel.Dock="Left" VerticalAlignment="Center" IsVisible="{Binding IsFilmOnScreen}">
+                        <StackPanel Orientation="Horizontal" Spacing="10">
+                          <TextBlock VerticalAlignment="Center" FontWeight="SemiBold" Foreground="{StaticResource GoletherAccent}"
+                                     Text="{Binding CountdownText}" ToolTip.Tip="{Binding CountdownText}" />
+                          <Button Focusable="False" Classes="ghost" Padding="10,3" IsVisible="{Binding CanStartNow}" Command="{Binding StartNowCommand}"
+                                  Content="{loc:Loc Main.StartNow}" ToolTip.Tip="{loc:Loc Main.StartNowTip}" />
                         </StackPanel>
-                      </Border>
-                    </Popup>
-                  </Panel>
-                  <Button Focusable="False" Grid.Column="11" Classes="ghost square" Click="OnToggleFullScreen" AutomationProperties.Name="{loc:Loc Main.FullScreen.Name}" ToolTip.Tip="{loc:Loc Main.FullScreen.Tip}">
-                    <PathIcon Data="{StaticResource IconFullScreen}" />
-                  </Button>
-                </Grid>
+                        <StackPanel Orientation="Horizontal" Spacing="10" ToolTip.Tip="{Binding CountdownText}">
+                          <TextBlock VerticalAlignment="Center" FontWeight="SemiBold" Foreground="{StaticResource GoletherAccent}"
+                                     Text="{Binding CountdownShort}" />
+                          <Button Focusable="False" Classes="ghost" Padding="10,3" IsVisible="{Binding CanStartNow}" Command="{Binding StartNowCommand}"
+                                  Content="{loc:Loc Main.StartNow}" ToolTip.Tip="{loc:Loc Main.StartNowTip}" />
+                        </StackPanel>
+                      </controls:FallbackPanel>
+                      <TextBlock Margin="16,0" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"
+                                 Classes="muted" Text="{Binding LastEvent}" IsVisible="{Binding !Gallery.IsActive}" />
+                    </DockPanel>
+                  </controls:ShrinkPanel>
+                </DockPanel>
               </StackPanel>
             </Border>
             </controls:SlideReveal>
@@ -505,49 +639,85 @@
                      IsLightDismissEnabled="False">
                 <Decorator x:Name="PlayerBarLayer" Width="{Binding #VideoArea.Bounds.Width}" />
               </Popup>
-              <controls:VideoHost x:Name="Video" IsVisible="{Binding ShowVideo}" />
+              <controls:VideoHost x:Name="Video" IsVisible="{Binding ShowVideoHost}" />
+              <!--
+                The pictures of a shown folder. They are drawn by Avalonia, not by the video window, so the reactions,
+                the strokes and the line about looking alone lie over them in the same window, and the wheel and a drag
+                enlarge and move the picture on this screen.
+              -->
+              <Panel x:Name="PictureArea" IsVisible="{Binding ShowPictures}">
+                <controls:ZoomableImage x:Name="PictureView" Source="{Binding Gallery.ShownImage}" />
+                <ProgressBar IsIndeterminate="True" Width="200" HorizontalAlignment="Center" VerticalAlignment="Center"
+                             IsVisible="{Binding Gallery.IsLoading}" />
+                <TextBlock Classes="muted" HorizontalAlignment="Center" VerticalAlignment="Center" TextWrapping="Wrap" MaxWidth="420"
+                           TextAlignment="Center" IsVisible="{Binding Gallery.HasError}" Text="{loc:Loc Gallery.LoadFailed}" />
+                <!-- The reactions and strokes over a picture, in this window, enlarged with the picture. -->
+                <views:SessionOverlay x:Name="PictureOverlay" Zoom="{Binding #PictureView.Zoom}" Center="{Binding #PictureView.Center}" />
+                <Border IsVisible="{Binding Gallery.IsAlone}" HorizontalAlignment="Center" VerticalAlignment="Top" Margin="16,14"
+                        CornerRadius="8" Padding="12,6" Background="{StaticResource GoletherPanel2}"
+                        BorderBrush="{StaticResource GoletherAccent}" BorderThickness="1">
+                  <StackPanel Orientation="Horizontal" Spacing="10">
+                    <TextBlock VerticalAlignment="Center" MaxWidth="420" TextTrimming="CharacterEllipsis" Text="{Binding Gallery.AloneText}" />
+                    <Button Focusable="False" Classes="ghost" Content="{loc:Loc Gallery.Alone.Return}" Command="{Binding Gallery.ReturnToCommonCommand}" />
+                    <Button Focusable="False" Classes="accent" Content="{loc:Loc Gallery.Alone.ShowAll}" Command="{Binding Gallery.ShowMineToAllCommand}" />
+                  </StackPanel>
+                </Border>
+                <!-- All items of the folder at once, on this screen only; a click puts one on everybody's screen. -->
+                <Border IsVisible="{Binding Gallery.IsGridOpen}" Background="{StaticResource GoletherBackground}" Padding="16,12,6,0">
+                  <DockPanel>
+                    <DockPanel DockPanel.Dock="Top" Margin="0,0,10,10">
+                      <Button DockPanel.Dock="Right" Focusable="False" Classes="ghost" Padding="10,3" Content="{loc:Loc Common.Close}"
+                              Command="{Binding Gallery.CloseGridCommand}" />
+                      <TextBlock Classes="title" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" Text="{Binding Gallery.Title}" />
+                    </DockPanel>
+                    <ItemsControl x:Name="GalleryGrid" ItemsSource="{Binding Gallery.GridRows}">
+                      <ItemsControl.Template>
+                        <ControlTemplate>
+                          <ScrollViewer HorizontalScrollBarVisibility="Disabled">
+                            <ItemsPresenter Name="PART_ItemsPresenter" ItemsPanel="{TemplateBinding ItemsPanel}" />
+                          </ScrollViewer>
+                        </ControlTemplate>
+                      </ItemsControl.Template>
+                      <ItemsControl.ItemsPanel>
+                        <ItemsPanelTemplate>
+                          <VirtualizingStackPanel />
+                        </ItemsPanelTemplate>
+                      </ItemsControl.ItemsPanel>
+                      <ItemsControl.ItemTemplate>
+                        <DataTemplate x:CompileBindings="False">
+                          <ItemsControl ItemsSource="{Binding}">
+                            <ItemsControl.ItemsPanel>
+                              <ItemsPanelTemplate>
+                                <StackPanel Orientation="Horizontal" />
+                              </ItemsPanelTemplate>
+                            </ItemsControl.ItemsPanel>
+                            <ItemsControl.ItemTemplate>
+                              <DataTemplate x:DataType="vm:GalleryItemViewModel">
+                                <views:GalleryTile Width="180" Height="146" Margin="0,0,10,10" />
+                              </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                          </ItemsControl>
+                        </DataTemplate>
+                      </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                  </DockPanel>
+                </Border>
+              </Panel>
               <!--
                 Reactions and strokes: a separate window above the video, because nothing can be drawn over the
                 native video window. It covers the whole picture and lets the mouse through, except while the pen is
                 picked up. It stays open for the whole session: a closed popup does not follow the lists, and a
-                reaction that left it would come back when it opened again.
+                reaction that left it would come back when it opened again. Only while a picture of a folder is shown
+                (no native window to cover) is it closed: an open window over the picture, even an empty one, would
+                catch the clicks of the pen. The layer inside the picture is used then, and there the pointer reaches
+                the picture on every system.
               -->
               <Popup x:Name="ReactionOverlay" PlacementTarget="{Binding #VideoArea}" Placement="AnchorAndGravity"
                      PlacementAnchor="TopLeft" PlacementGravity="BottomRight"
-                     IsLightDismissEnabled="False" IsOpen="{Binding IsInSession}">
-                <!-- No fill: the layer must not answer clicks; only the canvas of the pen catches them while the pen is on. -->
-                <Panel Width="{Binding #VideoArea.Bounds.Width}" Height="{Binding #VideoArea.Bounds.Height}">
-                  <controls:StrokeCanvas x:Name="StrokeLayer" Source="{Binding Drawing}" Aspect="{Binding VideoAspect}" />
-                  <Border Width="280" Height="360" Background="Transparent" IsHitTestVisible="False"
-                          HorizontalAlignment="Right" VerticalAlignment="Bottom" Margin="0,0,18,18">
-                  <ItemsControl ItemsSource="{Binding Chat.Reactions}">
-                    <ItemsControl.ItemsPanel>
-                      <ItemsPanelTemplate>
-                        <Canvas />
-                      </ItemsPanelTemplate>
-                    </ItemsControl.ItemsPanel>
-                    <ItemsControl.Styles>
-                      <Style Selector="ContentPresenter" x:DataType="vm:FloatingReactionViewModel">
-                        <Setter Property="Canvas.Right" Value="{Binding Offset}" />
-                        <Setter Property="Canvas.Bottom" Value="0" />
-                      </Style>
-                    </ItemsControl.Styles>
-                    <ItemsControl.ItemTemplate>
-                      <DataTemplate x:DataType="vm:FloatingReactionViewModel">
-                        <StackPanel Classes="floatingReaction" Width="72" Height="84" Spacing="1">
-                          <TextBlock Classes="emoji" Text="{Binding Emoji}" FontSize="30" Padding="10,13,10,7" TextAlignment="Center"
-                                     HorizontalAlignment="Center" VerticalAlignment="Center" />
-                          <Border Background="#A0000000" CornerRadius="5" Padding="4,1" HorizontalAlignment="Center">
-                            <TextBlock Text="{Binding Sender}" FontSize="10" Foreground="White" MaxWidth="66" TextTrimming="CharacterEllipsis" />
-                          </Border>
-                        </StackPanel>
-                      </DataTemplate>
-                    </ItemsControl.ItemTemplate>
-                  </ItemsControl>
-                  </Border>
-                </Panel>
+                     IsLightDismissEnabled="False" IsOpen="{Binding ShowVideoOverlay}">
+                <views:SessionOverlay x:Name="VideoOverlay" Width="{Binding #VideoArea.Bounds.Width}" Height="{Binding #VideoArea.Bounds.Height}" />
               </Popup>
-              <StackPanel IsVisible="{Binding !ShowVideo}" HorizontalAlignment="Center" VerticalAlignment="Center" Spacing="14" MaxWidth="560" Margin="24">
+              <StackPanel IsVisible="{Binding ShowPlaceholder}" HorizontalAlignment="Center" VerticalAlignment="Center" Spacing="14" MaxWidth="560" Margin="24">
                 <StackPanel IsVisible="{Binding IsAwaitingApproval}" Spacing="12">
                   <TextBlock Classes="title" HorizontalAlignment="Center" Text="{loc:Loc Main.Approval.Title}" />
                   <TextBlock Classes="muted" TextWrapping="Wrap" TextAlignment="Center"
@@ -562,7 +732,10 @@
                 <StackPanel IsVisible="{Binding !IsAwaitingApproval}" Spacing="12">
                   <TextBlock Classes="title" HorizontalAlignment="Center" TextWrapping="Wrap" TextAlignment="Center" Text="{Binding VideoPlaceholder}" />
                   <TextBlock Classes="muted" TextWrapping="Wrap" TextAlignment="Center" Text="{Binding PlayerNotice}" />
-                  <Button Classes="accent" HorizontalAlignment="Center" Content="{loc:Loc Main.PickFile}" Command="{Binding PickFileCommand}" IsVisible="{Binding CanPickFirstFile}" />
+                  <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" Spacing="10" IsVisible="{Binding CanPickFirstFile}">
+                    <Button Classes="accent" Content="{loc:Loc Main.PickFile}" Command="{Binding PickFileCommand}" />
+                    <Button Classes="ghost" Content="{loc:Loc Gallery.PickFolder}" Command="{Binding PickFolderCommand}" />
+                  </StackPanel>
                   <StackPanel Spacing="8" HorizontalAlignment="Center" Width="380" IsVisible="{Binding !VideoComponent.IsAvailable}">
                     <Button Classes="accent" HorizontalAlignment="Center" Content="{loc:Loc Key=Main.VideoComponent, Arg={Binding VideoComponent.InstallText}}"
                             Command="{Binding VideoComponent.InstallCommand}" IsVisible="{Binding VideoComponent.CanInstall}" />
@@ -784,6 +957,11 @@
                                          HorizontalAlignment="Center" VerticalAlignment="Center" />
                             </Border>
                             <StackPanel Orientation="Horizontal" Spacing="4" Margin="8" HorizontalAlignment="Right" VerticalAlignment="Top">
+                              <!-- Looks at a picture of the folder alone, away from the one everybody sees. -->
+                              <Border Background="#99000000" CornerRadius="5" Padding="5,1" IsVisible="{Binding IsViewingAlone}"
+                                      ToolTip.Tip="{loc:Loc Gallery.Participant.AloneTip}">
+                                <TextBlock Text="{loc:Loc Gallery.Participant.Alone}" Classes="mono" FontSize="10" Foreground="{StaticResource GoletherAccent}" VerticalAlignment="Center" />
+                              </Border>
                               <Border Background="#99000000" CornerRadius="5" Padding="5,1" IsVisible="{Binding WeakConnection}"
                                       ToolTip.Tip="{loc:Loc Main.Participant.WeakTip}"
                                       AutomationProperties.Name="{loc:Loc Main.Participant.WeakName}">

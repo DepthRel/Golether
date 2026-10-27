@@ -10,6 +10,7 @@ using Avalonia.Threading;
 using Avalonia.VisualTree;
 using Microsoft.Extensions.Logging.Abstractions;
 using NSubstitute;
+using SkiaSharp;
 using Golether.Components.Installation;
 using Golether.Core.Data.Enums;
 using Golether.Core.Data.Stores;
@@ -702,12 +703,70 @@ public sealed class MainWindowTests
         Assert.True(items[0].IsVisible);
         Assert.Equal(["Настройки", "Пригласить", "Отчёт для диагностики…", "Завершить"], items.Select(i => (string)i.Header!));
         Assert.Same(fixture.ViewModel.LeaveCommand, items[3].Command);
+
+        // Every folded action has its sign, as its button has; ending the session is red, like its button.
+        Assert.All(items[..3], i => Assert.IsType<PathIcon>(i.Icon));
+        Assert.Contains("danger", items[3].Classes);
+        SaveFrame(TopLevel.GetTopLevel(items[0])!, "top-menu");
         more.Flyout.Hide();
+
+        // The menu of Show: a file and a folder of pictures, each with its own sign.
+        var show = fixture.Window.GetVisualDescendants().OfType<Button>()
+            .Single(b => b.Flyout is MenuFlyout menu && menu.Items.OfType<MenuItem>().Any(i => i.Header as string == "Папку со снимками"));
+        show.Flyout!.ShowAt(show);
+        await fixture.Settle();
+        var choices = ((MenuFlyout)show.Flyout).Items.OfType<MenuItem>().ToArray();
+        Assert.All(choices, i => Assert.IsType<PathIcon>(i.Icon));
+        SaveFrame(TopLevel.GetTopLevel(choices[0])!, "show-menu");
+        show.Flyout.Hide();
 
         fixture.Window.Width = 1600;
         panel.MaxWidth = double.PositiveInfinity;
         await fixture.Settle();
         Assert.False(panel.IsOverflowing);
+    });
+
+    /// <summary>
+    /// As the bar gets narrower the actions fold one by one: the host mark first, then Settings, then Invite, and
+    /// ending the session last; the menu of "more" offers exactly what is folded.
+    /// </summary>
+    /// <returns>A task that completes when the test is done.</returns>
+    [Fact]
+    public Task TopBar_FoldsActionsOneByOne() => RunAsync(async fixture =>
+    {
+        var panel = fixture.Window.FindControl<OverflowPanel>("TopActions")!;
+        var more = fixture.Window.FindControl<Button>("MoreActions")!;
+        fixture.Window.Width = 1600;
+        var order = new List<string>();
+        for (var width = 900.0; width >= 200; width -= 10)
+        {
+            panel.MaxWidth = width;
+            await fixture.Settle();
+            foreach (var child in panel.Children.Where(OverflowPanel.GetIsFolded).Where(c => !OverflowPanel.GetIsOverflowButton(c)))
+            {
+                var name = child.Name ?? (child is Border ? "HostMark" : child.ToString()!);
+                if (!order.Contains(name))
+                {
+                    order.Add(name);
+                }
+            }
+
+            if (order.Count == 2)
+            {
+                // Two folded: the menu offers Settings and nothing that is still in the row.
+                more.Flyout!.ShowAt(more);
+                await fixture.Settle();
+                var shown = ((MenuFlyout)more.Flyout).Items.OfType<MenuItem>().Where(i => i.IsVisible).Select(i => (string)i.Header!).ToArray();
+                more.Flyout.Hide();
+                Assert.Contains("Настройки", shown);
+                Assert.DoesNotContain("Пригласить", shown);
+                Assert.DoesNotContain("Завершить", shown);
+            }
+        }
+
+        Assert.Equal(["HostMark", "SettingsButton", "InviteButton", "LeaveButton"], order);
+        panel.MaxWidth = double.PositiveInfinity;
+        await fixture.Settle();
     });
 
     /// <summary>
@@ -1646,11 +1705,12 @@ public sealed class MainWindowTests
     });
 
     /// <summary>
-    /// Saves the rendered window for a visual check when <c>GOLETHER_TEST_SCREENSHOTS</c> names a folder.
+    /// Saves the rendered window (or the window of an open menu) for a visual check when
+    /// <c>GOLETHER_TEST_SCREENSHOTS</c> names a folder.
     /// </summary>
     /// <param name="window">The window.</param>
     /// <param name="name">The file name without the extension.</param>
-    private static void SaveFrame(Window window, string name)
+    private static void SaveFrame(TopLevel window, string name)
     {
         var folder = Environment.GetEnvironmentVariable("GOLETHER_TEST_SCREENSHOTS");
         if (string.IsNullOrEmpty(folder))
@@ -1738,6 +1798,348 @@ public sealed class MainWindowTests
         {
             fixture.Window.Close();
         }
+    }
+
+    /// <summary>
+    /// A shown folder takes the screen: the video window, the timeline and the sound and subtitle buttons give way to
+    /// the picture and the strip, the strokes and reactions move into the picture and follow its zoom, the participant
+    /// looking alone is marked under that picture and on their tile, and looking alone here shows the line with the
+    /// way back. The grid covers the screen of this person only; a video of the folder brings the film back.
+    /// </summary>
+    /// <returns>A task that completes when the test is done.</returns>
+    [Fact]
+    public Task Gallery_TakesTheScreenAndShowsWhoLooksWhere() => RunAsync(async fixture =>
+    {
+        var catalog = new string('a', 32);
+        var items = Enumerable.Range(0, 12)
+            .Select(i => i == 9
+                ? new GalleryItem("Прогулка.mp4", 50_000_000, new string('b', 64)) { Kind = GalleryItemKind.Video, Folder = "День 2" }
+                : new GalleryItem($"IMG_{i + 1:0000}.jpg", 1000, new string('b', 64)) { Folder = i < 6 ? string.Empty : "День 2" })
+            .ToArray();
+        fixture.Gallery = new GallerySnapshot
+        {
+            CatalogId = catalog,
+            Title = "Отпуск",
+            Total = 12,
+            Items = items,
+            Stage = 2,
+            StageVersion = 1,
+            StageOrigin = PeerId.Parse(new string('a', 64)),
+        };
+        fixture.Tracks =
+        [
+            new MediaTrack(1, MediaTrackKind.Audio, "Original", "eng", "dts", 6, true, false, true),
+            new MediaTrack(1, MediaTrackKind.Subtitle, null, "rus", "subrip", null, false, false, false),
+        ];
+        fixture.ViewModel.Tracks!.Refresh();
+        fixture.GuestGalleryView = 5;
+        fixture.Sessions.LoadPictureAsync(catalog, Arg.Any<int>(), Arg.Any<CancellationToken>())
+            .Returns(call => Task.FromResult(Picture(1280, 853, call.ArgAt<int>(1))));
+        fixture.Sessions.LoadThumbnailAsync(catalog, Arg.Any<int>(), Arg.Any<CancellationToken>())
+            .Returns(call => Task.FromResult<byte[]?>(Picture(240, 160, call.ArgAt<int>(1))));
+
+        fixture.ViewModel.Refresh();
+        await WaitForAsync(fixture, () => fixture.ViewModel.Gallery.ShownImage is not null);
+        fixture.ViewModel.Refresh();
+        await fixture.SettleFor(TimeSpan.FromMilliseconds(400));
+
+        var gallery = fixture.ViewModel.Gallery;
+        Assert.False(fixture.Window.FindControl<VideoHost>("Video")!.IsVisible);
+        Assert.False(fixture.Window.FindControl<TimelineSlider>("Timeline")!.IsEffectivelyVisible);
+        Assert.True(fixture.Window.FindControl<ItemsControl>("GalleryStrip")!.IsEffectivelyVisible);
+        Assert.Equal("3 / 12", gallery.CounterText);
+        Assert.True(gallery.Items[2].IsStage);
+        Assert.Contains(gallery.Items[5].Viewers, v => v.PeerId == _guest);
+        Assert.True(fixture.ViewModel.Participants.Single(p => p.PeerId == _guest).IsViewingAlone);
+        Assert.InRange(fixture.ViewModel.VideoAspect, 1.49, 1.51);
+        Assert.False(fixture.Window.FindControl<Button>("TracksButton")!.IsEffectivelyEnabled);
+        Assert.False(fixture.Window.FindControl<Button>("VolumeButton")!.IsEffectivelyEnabled);
+        Assert.Equal("День 2", gallery.Items[6].FolderLabel);
+        Assert.False(gallery.Items[7].StartsFolder);
+        Assert.False(gallery.Items[9].OpenAloneCommand.CanExecute(null));
+
+        // The strokes and reactions are in the picture, not in a window over it, and keep to the enlarged picture.
+        var pictureOverlay = fixture.Window.FindControl<SessionOverlay>("PictureOverlay")!;
+        var videoOverlay = fixture.Window.FindControl<SessionOverlay>("VideoOverlay")!;
+        var overlayWindow = fixture.Window.FindControl<Popup>("ReactionOverlay")!;
+        Assert.True(pictureOverlay.IsEffectivelyVisible);
+        Assert.False(overlayWindow.IsOpen);
+        Assert.Equal("IMG_0003.jpg", fixture.ViewModel.MediaCaption);
+
+        // The pen draws from the very middle of the picture.
+        fixture.ViewModel.Drawing.IsPenActive = true;
+        await fixture.Settle();
+        var area = fixture.Window.FindControl<Panel>("PictureArea")!;
+        var middle = area.TranslatePoint(new Point(area.Bounds.Width / 2, area.Bounds.Height / 2), fixture.Window)!.Value;
+        fixture.Window.MouseMove(middle);
+        fixture.Window.MouseDown(middle, MouseButton.Left);
+        fixture.Window.MouseMove(middle + new Point(40, 30));
+        fixture.Window.MouseUp(middle + new Point(40, 30), MouseButton.Left);
+        await fixture.SettleFor(DrawingViewModel.SendInterval + TimeSpan.FromMilliseconds(80));
+        await fixture.Sessions.Received(1).SendDrawAsync(Arg.Any<string>(), StrokePhase.Start, Arg.Any<IReadOnlyList<StrokePoint>>(), Arg.Any<CancellationToken>());
+        fixture.ViewModel.Drawing.IsPenActive = false;
+        await fixture.Settle();
+        var picture = fixture.Window.FindControl<ZoomableImage>("PictureView")!;
+        picture.ZoomBy(2);
+        await fixture.Settle();
+        Assert.Equal(picture.Zoom, pictureOverlay.GetVisualDescendants().OfType<StrokeCanvas>().Single().Zoom);
+        Assert.InRange(picture.Zoom, 1.99, 2.01);
+
+        // The ordinary wheel scrolls the strip sideways: down to the right, up back to the left.
+        var strip = fixture.Window.FindControl<ItemsControl>("GalleryStrip")!;
+        var scroll = strip.GetVisualDescendants().OfType<ScrollViewer>().First();
+        var over = strip.TranslatePoint(new Point(strip.Bounds.Width / 2, 30), fixture.Window)!.Value;
+        scroll.Offset = default;
+        fixture.Window.MouseWheel(over, new Vector(0, -1));
+        await fixture.Settle();
+        Assert.True(scroll.Offset.X > 0);
+        fixture.Window.MouseWheel(over, new Vector(0, 1));
+        await fixture.Settle();
+        Assert.Equal(0, scroll.Offset.X);
+        SaveFrame(fixture.Window, "gallery");
+        picture.Reset();
+
+        gallery.ToggleGridCommand.Execute(null);
+        fixture.ViewModel.Refresh();
+        await fixture.SettleFor(TimeSpan.FromMilliseconds(400));
+        Assert.True(fixture.Window.FindControl<ItemsControl>("GalleryGrid")!.IsEffectivelyVisible);
+        Assert.False(fixture.ViewModel.Drawing.CanDraw);
+        SaveFrame(fixture.Window, "gallery-grid");
+        gallery.CloseGridCommand.Execute(null);
+        await fixture.Settle();
+
+        gallery.Items[7].OpenAloneCommand.Execute(null);
+        await WaitForAsync(fixture, () => gallery.ShownImage is not null && gallery.CounterText == "8 / 12");
+        fixture.ViewModel.Refresh();
+        await fixture.SettleFor(TimeSpan.FromMilliseconds(300));
+        Assert.True(gallery.IsAlone);
+        Assert.False(fixture.ViewModel.Drawing.CanDraw);
+        fixture.Sessions.Received().SetGalleryView(7);
+        SaveFrame(fixture.Window, "gallery-alone");
+        gallery.ReturnToCommonCommand.Execute(null);
+
+        // A video of the folder on everybody's screen: the film, its timeline and its sound come back under the strip.
+        fixture.Gallery = fixture.Gallery with { Stage = 9, StageVersion = 2 };
+        fixture.ViewModel.Refresh();
+        await fixture.SettleFor(TimeSpan.FromMilliseconds(300));
+        Assert.False(gallery.ShowsPicture);
+        Assert.True(fixture.ViewModel.IsFilmOnScreen);
+        Assert.True(fixture.Window.FindControl<TimelineSlider>("Timeline")!.IsEffectivelyVisible);
+        Assert.True(fixture.Window.FindControl<ItemsControl>("GalleryStrip")!.IsEffectivelyVisible);
+        Assert.True(fixture.Window.FindControl<Button>("TracksButton")!.IsEffectivelyEnabled);
+        Assert.True(overlayWindow.IsOpen);
+        Assert.Same(videoOverlay, overlayWindow.Child);
+        Assert.False(pictureOverlay.IsEffectivelyVisible);
+        Assert.StartsWith("День 2 / Прогулка.mp4", fixture.ViewModel.MediaCaption, StringComparison.Ordinal);
+
+        // A narrow bar gives up the least needed items of the left; nothing of it reaches the buttons on the right.
+        var wide = fixture.Window.Width;
+        fixture.Window.Width = 900;
+        await fixture.Settle();
+        var row = fixture.Window.GetVisualDescendants().OfType<ShrinkPanel>().Single();
+        var rightEdge = row.TranslatePoint(new Point(row.Bounds.Width, 0), fixture.Window)!.Value.X;
+        var pen = fixture.Window.FindControl<ToggleButton>("PenButton")!;
+        Assert.True(rightEdge <= pen.TranslatePoint(default, fixture.Window)!.Value.X, "The left of the bar ends before the buttons on the right.");
+        var kept = row.Children.Where(c => c.IsVisible && c.Opacity > 0).ToArray();
+        Assert.Contains(kept, c => c is Button { Classes: var classes } && classes.Contains("round"));
+        Assert.All(kept, c => Assert.True(c.Bounds.Right <= row.Bounds.Width + 0.5, $"{c} leaves the row."));
+        Assert.Contains(row.Children, c => c.Opacity == 0);
+        SaveFrame(fixture.Window, "gallery-video-narrow");
+        fixture.Window.Width = wide;
+        await fixture.Settle();
+        SaveFrame(fixture.Window, "gallery-video");
+
+        fixture.Gallery = null;
+        fixture.ViewModel.Refresh();
+        await fixture.Settle();
+        Assert.False(gallery.IsActive);
+        Assert.True(fixture.Window.FindControl<TimelineSlider>("Timeline")!.IsEffectivelyVisible);
+    });
+
+    /// <summary>
+    /// The folder browser shows the nested folders first, then the pictures with their small pictures and the videos,
+    /// counts what would be shown with the nested folders or without them, walks the folders, and closes with the
+    /// choice.
+    /// </summary>
+    /// <returns>A task that completes when the test is done.</returns>
+    [Fact]
+    public Task FolderBrowser_ShowsAndCountsWhatAFolderHolds() => RunAsync(async fixture =>
+    {
+        var root = Directory.CreateTempSubdirectory("golether-browser-").FullName;
+        var dialog = new Golether.UI.Views.Dialogs.FolderBrowserDialog();
+        try
+        {
+            for (var i = 1; i <= 7; i++)
+            {
+                await File.WriteAllBytesAsync(Path.Combine(root, $"IMG_{i}.jpg"), Picture(640, 427, i));
+            }
+
+            await File.WriteAllBytesAsync(Path.Combine(root, "Прогулка.mp4"), [1, 2, 3]);
+            await File.WriteAllTextAsync(Path.Combine(root, "notes.txt"), "-");
+            Directory.CreateDirectory(Path.Combine(root, "День 2"));
+            await File.WriteAllBytesAsync(Path.Combine(root, "День 2", "IMG_20.jpg"), Picture(640, 427, 20));
+            var viewModel = new Golether.UI.ViewModels.Dialogs.FolderBrowserViewModel(new SkiaPictureCodec(), canDecode: false, root);
+            dialog.DataContext = viewModel;
+            dialog.Show();
+            await WaitForAsync(fixture, () => !viewModel.IsCounting && viewModel.Entries.Skip(1).Take(4).All(e => e.Thumbnail is not null));
+
+            Assert.Equal(root, viewModel.CurrentPath);
+            Assert.Equal(["День 2", "IMG_1.jpg", "IMG_2.jpg", "IMG_3.jpg", "IMG_4.jpg", "IMG_5.jpg", "IMG_6.jpg", "IMG_7.jpg", "Прогулка.mp4"], viewModel.Entries.Select(e => e.Name));
+            Assert.Equal((8, 1), (viewModel.Folder!.Pictures, viewModel.Folder.Videos));
+            Assert.True(viewModel.ShowCommand.CanExecute(null));
+            SaveFrame(dialog, "folder-browser");
+
+            viewModel.IncludeSubfolders = false;
+            await WaitForAsync(fixture, () => !viewModel.IsCounting);
+            Assert.Equal(7, viewModel.Folder!.Pictures);
+
+            viewModel.OpenEntryCommand.Execute(viewModel.Entries[0]);
+            await WaitForAsync(fixture, () => !viewModel.IsCounting);
+            Assert.Equal(Path.Combine(root, "День 2"), viewModel.CurrentPath);
+            Assert.Equal(["IMG_20.jpg"], viewModel.Entries.Select(e => e.Name));
+            viewModel.UpCommand.Execute(null);
+            Assert.Equal(root, viewModel.CurrentPath);
+
+            // Back and forward like a file manager: the buttons, Alt with the arrows and the side buttons of the mouse.
+            viewModel.BackCommand.Execute(null);
+            Assert.Equal(Path.Combine(root, "День 2"), viewModel.CurrentPath);
+            dialog.KeyPress(Key.Left, RawInputModifiers.Alt, PhysicalKey.ArrowLeft, null);
+            await fixture.Settle();
+            Assert.Equal(root, viewModel.CurrentPath);
+            Assert.False(viewModel.BackCommand.CanExecute(null));
+            var inside = new Point(dialog.Bounds.Width / 2, dialog.Bounds.Height / 2);
+            dialog.MouseDown(inside, MouseButton.XButton2);
+            dialog.MouseUp(inside, MouseButton.XButton2);
+            await fixture.Settle();
+            Assert.Equal(Path.Combine(root, "День 2"), viewModel.CurrentPath);
+            dialog.MouseDown(inside, MouseButton.XButton1);
+            dialog.MouseUp(inside, MouseButton.XButton1);
+            await fixture.Settle();
+            Assert.Equal(root, viewModel.CurrentPath);
+            Assert.True(viewModel.ForwardCommand.CanExecute(null));
+            await WaitForAsync(fixture, () => !viewModel.IsCounting);
+
+            viewModel.PathText = Path.Combine(root, "missing");
+            viewModel.GoToPathCommand.Execute(null);
+            Assert.Equal(root, viewModel.CurrentPath);
+            Assert.NotEmpty(viewModel.ErrorText);
+
+            await WaitForAsync(fixture, () => !viewModel.IsCounting);
+            viewModel.ShowCommand.Execute(null);
+            await fixture.Settle();
+            Assert.Equal(root, Path.GetFullPath(Path.Combine(viewModel.Choice!.Folder.Files[0].Path, "..")));
+            Assert.True(viewModel.Choice.StripMetadata);
+            Assert.False(dialog.IsVisible);
+        }
+        finally
+        {
+            dialog.Close();
+            await fixture.Settle();
+            Directory.Delete(root, recursive: true);
+        }
+    });
+
+    /// <summary>
+    /// The end of a session leaves full screen: the start screen comes back in an ordinary window with its controls.
+    /// </summary>
+    /// <returns>A task that completes when the test is done.</returns>
+    [Fact]
+    public Task FullScreen_EndsWithTheSession() => RunAsync(async fixture =>
+    {
+        fixture.Window.WindowState = WindowState.FullScreen;
+        await fixture.Settle();
+
+        fixture.Sessions.GetSnapshot().Returns((SessionSnapshot?)null);
+        fixture.ViewModel.Refresh();
+        await fixture.Settle();
+
+        Assert.False(fixture.ViewModel.IsInSession);
+        Assert.NotEqual(WindowState.FullScreen, fixture.Window.WindowState);
+    });
+
+    /// <summary>
+    /// The buttons on the right of the player bar keep their place whatever the countdown says, and a countdown that
+    /// has no room in full shows the seconds alone.
+    /// </summary>
+    /// <returns>A task that completes when the test is done.</returns>
+    [Fact]
+    public Task PlayerBar_KeepsTheRightButtonsInPlace() => RunAsync(async fixture =>
+    {
+        var pen = fixture.Window.FindControl<ToggleButton>("PenButton")!;
+        var before = pen.TranslatePoint(default, fixture.Window)!.Value;
+
+        fixture.ViewModel.CountdownText = "Ждём Марину, Олега и ещё троих участников, пока у них загрузится начало фильма";
+        fixture.ViewModel.CountdownShort = "3";
+        await fixture.Settle();
+
+        Assert.Equal(before, pen.TranslatePoint(default, fixture.Window)!.Value);
+        var countdown = fixture.Window.GetVisualDescendants().OfType<FallbackPanel>().Single();
+        var shown = countdown.Children.Single(c => c.Opacity > 0);
+        Assert.Contains(shown.GetVisualDescendants().OfType<TextBlock>(), t => t.Text == "3");
+    });
+
+    /// <summary>
+    /// The fallback panel shows the first child that fits and, when none does, the last one.
+    /// </summary>
+    /// <returns>A task that completes when the test is done.</returns>
+    [Fact]
+    public Task FallbackPanel_ShowsTheFirstChildThatFits() => RunAsync(async fixture =>
+    {
+        var full = new TextBlock { Text = "Старт через 3…" };
+        var brief = new TextBlock { Text = "3" };
+        var panel = new FallbackPanel { Children = { full, brief } };
+
+        panel.Measure(new Size(1000, 30));
+        panel.Arrange(new Rect(0, 0, 1000, 30));
+        Assert.Equal((1.0, 0.0), (full.Opacity, brief.Opacity));
+
+        panel.Measure(new Size(30, 30));
+        panel.Arrange(new Rect(0, 0, 30, 30));
+        Assert.Equal((0.0, 1.0), (full.Opacity, brief.Opacity));
+
+        panel.Measure(new Size(1, 30));
+        panel.Arrange(new Rect(0, 0, 1, 30));
+        Assert.Equal(1.0, brief.Opacity);
+        await fixture.Settle();
+    });
+
+    /// <summary>
+    /// Makes a JPEG of a given size with a different picture for every number.
+    /// </summary>
+    /// <param name="width">The width.</param>
+    /// <param name="height">The height.</param>
+    /// <param name="seed">The number.</param>
+    /// <returns>The JPEG bytes.</returns>
+    private static byte[] Picture(int width, int height, int seed)
+    {
+        using var bitmap = new SKBitmap(width, height);
+        using (var canvas = new SKCanvas(bitmap))
+        {
+            canvas.Clear(SKColor.FromHsl(seed * 37 % 360, 45, 35));
+            using var paint = new SKPaint { Color = SKColor.FromHsl((seed * 37 + 180) % 360, 60, 60), IsAntialias = true };
+            canvas.DrawCircle(width * 0.62f, height * 0.45f, height * 0.28f, paint);
+            canvas.DrawRect(0, height * 0.75f, width, height * 0.25f, paint);
+        }
+
+        using var image = SKImage.FromBitmap(bitmap);
+        using var data = image.Encode(SKEncodedImageFormat.Jpeg, 85);
+        return data.ToArray();
+    }
+
+    /// <summary>
+    /// Lets the window work until a condition holds; pictures are decoded on other threads.
+    /// </summary>
+    /// <param name="fixture">The window.</param>
+    /// <param name="condition">The condition.</param>
+    /// <returns>A task that completes when the condition holds.</returns>
+    private static async Task WaitForAsync(WindowFixture fixture, Func<bool> condition)
+    {
+        for (var i = 0; i < 200 && !condition(); i++)
+        {
+            await fixture.SettleFor(TimeSpan.FromMilliseconds(25));
+        }
+
+        Assert.True(condition());
     }
 
     /// <summary>
@@ -1832,6 +2234,16 @@ public sealed class MainWindowTests
         /// Gets or sets a value indicating whether the film has ended.
         /// </summary>
         public bool Ended { get; set; }
+
+        /// <summary>
+        /// Gets or sets the pictures shown in the session, or <see langword="null"/>.
+        /// </summary>
+        public GallerySnapshot? Gallery { get; set; }
+
+        /// <summary>
+        /// Gets or sets the picture the participant looks at alone, or <see langword="null"/>.
+        /// </summary>
+        public int? GuestGalleryView { get; set; }
 
         /// <summary>
         /// Gets or sets the position reported by the local player.
@@ -1979,7 +2391,7 @@ public sealed class MainWindowTests
                 [
                     new ParticipantView(new ParticipantInfo(_host, "Вы", true), new ParticipantStatus { PeerId = _host, Position = Position }, true),
                     .. GuestPresent
-                        ? [new ParticipantView(new ParticipantInfo(_guest, "Марина", false), new ParticipantStatus { PeerId = _guest, MicrophoneOff = GuestMicrophoneOff }, false)]
+                        ? [new ParticipantView(new ParticipantInfo(_guest, "Марина", false), new ParticipantStatus { PeerId = _guest, MicrophoneOff = GuestMicrophoneOff, GalleryView = GuestGalleryView }, false)]
                         : Array.Empty<ParticipantView>(),
                     .. Enumerable.Range(0, ExtraGuests).Select(i =>
                     {
@@ -1995,6 +2407,7 @@ public sealed class MainWindowTests
                 },
                 Media = new MediaDescriptor { FileName = "Dune.mkv", Length = 1024 * 1024, QuickId = new string('c', 64) },
                 Local = new Sync.Engine.FollowerStatus(player, TimeSpan.FromMinutes(1), TimeSpan.Zero, null),
+                Gallery = Gallery,
             };
         }
     }

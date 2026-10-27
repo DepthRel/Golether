@@ -34,7 +34,7 @@ quando o anfitrião usa outro idioma, as palavras dele são traduções das suas
 1. Escreva o seu nome e o nome da sessão e prima **Criar uma sessão**. A porta do seu computador (47800 por
    predefinição) e o pedido ao router estão em **Avançado**: altere-os apenas se a porta estiver ocupada ou tiver sido
    reencaminhada à mão.
-2. Prima **Mostrar um ficheiro** e escolha um vídeo. O ficheiro fica consigo: os participantes recebem-no parte a parte
+2. Prima **Mostrar** → **Ficheiro** e escolha um vídeo. O ficheiro fica consigo: os participantes recebem-no parte a parte
    enquanto veem e guardam-no apenas na memória.
 3. Prima **Convidar**, copie a **ligação** e envie-a aos seus convidados como preferir. Um clique nela abre o Golether
    no computador do convidado e pergunta se quer entrar. A ligação é válida durante 15 minutos. Se a ligação não abrir a
@@ -163,6 +163,46 @@ solta o botão e o cursor volta ao normal.
 As linhas não ficam guardadas em lado nenhum e estão presas à imagem, não à janela: se a sua janela for mais larga e a
 da outra pessoa mais estreita, o sítio rodeado continua a ser a mesma parte da imagem. Enquanto a caneta está
 desligada, os cliques no vídeo funcionam como de costume: pausa e ecrã inteiro.
+
+### Mostrar as fotos e os vídeos de uma pasta (anfitrião)
+
+**Mostrar** → **Pasta de imagens** (Ctrl+Shift+O) abre uma janela que mostra o que há numa pasta: as suas subpastas,
+as suas imagens com miniaturas e os seus vídeos. Abra a pasta de que precisa e prima **Mostrar**. Por baixo, a janela
+conta o que vai sair (imagens, vídeos, o tamanho das imagens) e o que fica de fora: ficheiros RAW de câmaras e imagens
+com mais de 64 MB. Acompanham-na dois interruptores:
+
+- **Com as subpastas**: os ficheiros de cada subpasta seguem-se aos da própria pasta, pasta a pasta, e a faixa indica
+  o nome de cada subpasta no seu primeiro elemento.
+- **Não mostrar o local da fotografia, a câmara nem os comentários das imagens** (ligado por omissão): as cópias que
+  os participantes recebem perdem o local, a câmara, o autor, os comentários e as imagens extra que alguns telemóveis
+  juntam depois de uma foto. Os seus próprios ficheiros não mudam. A orientação mantém-se, por isso a foto continua
+  direita.
+
+Na janela, **Anterior** e **Seguinte** funcionam como num explorador de ficheiros, também com Alt+← e Alt+→,
+Retrocesso e os botões laterais do rato.
+
+São mostrados no máximo 2000 ficheiros de cada vez. Uma única imagem escolhida com **Mostrar** → **Ficheiro** é
+mostrada sozinha: nada mais da sua pasta sai, e os seus metadados ficam consigo.
+
+Enquanto uma pasta é mostrada, há por baixo do ecrã uma faixa de miniaturas. Um clique num elemento põe-no no ecrã de
+todos, como um salto no filme: qualquer participante o pode fazer, o anfitrião decide. ← e → passam ao elemento
+anterior e ao seguinte; o botão de quatro quadrados abre todos os elementos numa grelha só no seu ecrã (Esc fecha-a).
+Por baixo de cada elemento estão as marcas de quem o está a ver. A roda do rato desloca a faixa para o lado.
+
+- **As imagens** são desenhadas pelo próprio Golether. A roda do rato ou as teclas + e − ampliam uma imagem à volta do
+  ponteiro, arrastar move a imagem ampliada, 0 volta a mostrá-la inteira. Isso muda só o seu ecrã, e os traços da
+  caneta ficam no seu lugar da imagem. As fotos HEIC, AVIF e TIFF são convertidas em JPEG no computador do anfitrião
+  pelo componente de vídeo, por isso os participantes não precisam de nada para elas.
+- **Abrir só para mim** (clique direito num elemento) mostra uma imagem só no seu ecrã. Uma linha em cima diz o que os
+  outros veem e oferece **Voltar para todos** e **Mostrar a todos**; os outros veem a marca “À PARTE” no seu
+  mosaico. Entretanto a caneta fica desligada.
+- **Os vídeos** da pasta são reproduzidos como um filme: posto no ecrã, um vídeo passa a ser o filme de todos, com a
+  sua linha do tempo, o seu som e as suas legendas, e a faixa mantém-se. A sua miniatura é uma imagem do vídeo.
+
+O filme fica em pausa quando aparece uma imagem no ecrã e espera por baixo das imagens; os botões de som e de legendas
+ficam inativos enquanto é mostrada uma imagem. Um vídeo da pasta posto no ecrã substitui o filme. **Fechar as
+imagens** (anfitrião) termina a apresentação para todos, e o filme volta ao ponto onde foi interrompido. Escolher um
+filme com **Mostrar** → **Ficheiro** também a termina.
 
 ### Esperar que todos estejam prontos
 
@@ -361,6 +401,9 @@ entrada de desinstalação e o tratamento das ligações de convite. Por isso:
 - no Windows, a chave do dispositivo e os segredos dos túneis são ainda cifrados para a sua conta do Windows. Noutro
   computador ou com outro utilizador, não podem ser lidos: o programa diz isso e, depois de apagar a pasta
   `data\identity`, cria uma chave nova;
+- enquanto uma pasta é mostrada, `data\gallery` guarda os ficheiros JPEG que o anfitrião faz das suas fotos HEIC,
+  AVIF e TIFF e de imagens dos seus vídeos. É esvaziada quando a apresentação termina, ou no arranque seguinte se o
+  programa foi fechado durante ela;
 - `data\identity\device.key` é a chave do dispositivo. Se for apagada, a impressão digital do dispositivo muda e os seus
   contactos têm de voltar a comparar o código.
 

@@ -34,7 +34,7 @@ l'hôte utilise une autre langue, ses mots sont des traductions des vôtres. *hi
 1. Saisissez votre nom et celui de la séance, puis appuyez sur **Créer une séance**. Le port de votre ordinateur (47800
    par défaut) et la demande au routeur se trouvent sous **Avancé** : ne les changez que si le port est occupé ou a été
    redirigé à la main.
-2. Appuyez sur **Montrer un fichier** et choisissez une vidéo. Le fichier reste chez vous : les participants le reçoivent
+2. Appuyez sur **Montrer** → **Fichier** et choisissez une vidéo. Le fichier reste chez vous : les participants le reçoivent
    morceau par morceau pendant le visionnage et ne le gardent qu'en mémoire.
 3. Appuyez sur **Inviter**, copiez le **lien** et envoyez-le à vos invités comme vous voulez. Un clic dessus ouvre
    Golether sur l'ordinateur de l'invité et lui demande s'il veut rejoindre. Le lien est valable 15 minutes. Si le lien
@@ -165,6 +165,47 @@ clic sur l'icône relâche le bouton et le curseur redevient normal.
 Les traits ne sont enregistrés nulle part et sont attachés à l'image, pas à la fenêtre : si votre fenêtre est plus large
 et celle de l'autre personne plus étroite, l'endroit entouré reste la même partie de l'image. Tant que le stylo est
 désactivé, les clics sur la vidéo fonctionnent comme d'habitude : pause et plein écran.
+
+### Montrer les photos et les vidéos d'un dossier (hôte)
+
+**Montrer** → **Dossier d'images** (Ctrl+Shift+O) ouvre une fenêtre qui montre ce que contient un dossier : ses
+sous-dossiers, ses images avec des miniatures et ses vidéos. Ouvrez le dossier voulu et appuyez sur **Montrer**. En
+dessous, la fenêtre compte ce qui part (images, vidéos, taille des images) et ce qui est laissé de côté : les fichiers
+RAW des appareils photo et les images de plus de 64 Mo. Deux interrupteurs l'accompagnent :
+
+- **Avec les sous-dossiers** : les fichiers de chaque sous-dossier suivent ceux du dossier lui-même, dossier après
+  dossier, et le bandeau nomme un sous-dossier à son premier élément.
+- **Ne pas montrer le lieu de prise de vue, l'appareil ni les commentaires des images** (activé par défaut) : les
+  copies que reçoivent les participants perdent le lieu, l'appareil, l'auteur, les commentaires et les images
+  supplémentaires que certains téléphones ajoutent après une photo. Vos propres fichiers ne changent pas. L'orientation
+  est conservée, la photo reste donc droite.
+
+Dans la fenêtre, **Précédent** et **Suivant** fonctionnent comme dans un gestionnaire de fichiers, ainsi qu'Alt+← et
+Alt+→, la touche Retour arrière et les boutons latéraux de la souris.
+
+Au plus 2000 fichiers sont montrés à la fois. Une seule image choisie avec **Montrer** → **Fichier** est montrée
+seule : rien d'autre de son dossier ne part, et ses métadonnées restent chez vous.
+
+Tant qu'un dossier est montré, un bandeau de miniatures se trouve sous l'écran. Un clic sur un élément le met sur
+l'écran de tous, comme un saut dans le film : chaque participant peut le faire, l'hôte décide. ← et → passent à
+l'élément précédent et au suivant ; le bouton à quatre carrés ouvre tous les éléments en grille sur votre écran
+seulement (Échap la ferme). Sous chaque élément figurent les marques de ceux qui le regardent. La molette de la souris
+fait défiler le bandeau sur le côté.
+
+- **Les images** sont dessinées par Golether lui-même. La molette de la souris ou les touches + et − agrandissent une
+  image autour du pointeur, un glisser déplace l'image agrandie, 0 la remet en entier. Cela ne change que votre écran,
+  et les traits du stylo restent à leur place sur l'image. Les photos HEIC, AVIF et TIFF sont converties en JPEG sur
+  l'ordinateur de l'hôte par le composant vidéo, les participants n'ont besoin de rien pour elles.
+- **Ouvrir pour moi seul** (clic droit sur un élément) montre une image sur votre écran seulement. Une ligne en haut
+  dit ce que voient les autres et propose **Revenir avec tous** et **Montrer à tous** ; les autres voient la marque
+  « À PART » sur votre tuile. Le stylo est désactivé pendant ce temps.
+- **Les vidéos** du dossier se lisent comme un film : mise à l'écran, une vidéo devient le film de tous, avec sa
+  frise, son son et ses sous-titres, et le bandeau reste. Sa miniature est une image tirée de la vidéo.
+
+Le film se met en pause quand une image arrive à l'écran et attend sous les images ; les boutons du son et des
+sous-titres sont inactifs tant qu'une image est montrée. Une vidéo du dossier mise à l'écran remplace le film.
+**Fermer les images** (hôte) termine la présentation pour tous, et le film reprend là où il a été interrompu. Choisir
+un film avec **Montrer** → **Fichier** la termine aussi.
 
 ### Attendre que tout le monde soit prêt
 
@@ -369,6 +410,9 @@ Windows n'ajoute au registre que l'entrée de désinstallation et le gestionnair
 - sous Windows, la clé de l'appareil et les secrets des tunnels sont en plus chiffrés pour votre compte Windows. Sur un
   autre ordinateur ou sous un autre utilisateur, ils ne peuvent pas être lus : le programme le dit et, une fois le dossier
   `data\identity` supprimé, crée une nouvelle clé ;
+- tant qu'un dossier est montré, `data\gallery` contient les fichiers JPEG que l'hôte fait de ses photos HEIC, AVIF
+  et TIFF et d'images de ses vidéos. Il est vidé à la fin de la présentation, ou au démarrage suivant si le programme
+  a été fermé pendant celle-ci ;
 - `data\identity\device.key` est la clé de l'appareil. Si elle est supprimée, l'empreinte de l'appareil change et vos
   contacts doivent de nouveau comparer le code.
 

@@ -1,0 +1,144 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:loc="using:Golether.UI.Localization"
+        xmlns:vm="using:Golether.UI.ViewModels.Dialogs"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        x:Class="Golether.UI.Views.Dialogs.FolderBrowserDialog"
+        x:DataType="vm:FolderBrowserViewModel"
+        Title="{loc:Loc Gallery.Browser.Title}"
+        Width="960" Height="680" MinWidth="640" MinHeight="460"
+        WindowStartupLocation="CenterOwner" Icon="/Assets/golether.ico">
+  <Window.Resources>
+    <StreamGeometry x:Key="IconFolder">M2,5 H10 L12,7 H22 V20 H2 Z</StreamGeometry>
+    <StreamGeometry x:Key="IconUp">M12,4 L20,12 H15 V20 H9 V12 H4 Z</StreamGeometry>
+    <StreamGeometry x:Key="IconBack">M4,12 L12,4 V9 H20 V15 H12 V20 Z</StreamGeometry>
+    <StreamGeometry x:Key="IconForward">M20,12 L12,4 V9 H4 V15 H12 V20 Z</StreamGeometry>
+    <StreamGeometry x:Key="IconPicture">M2,4 H22 V20 H2 Z M4,6 V16.5 L9,11.5 L13,15.5 L16,12.5 L20,16.5 V6 Z M15.5,7.5 A1.8,1.8 0 1 1 15.49,7.5 Z</StreamGeometry>
+    <StreamGeometry x:Key="IconFilm">M2,4 H22 V20 H2 Z M4,6 V8 H6 V6 Z M4,11 V13 H6 V11 Z M4,16 V18 H6 V16 Z M18,6 V8 H20 V6 Z M18,11 V13 H20 V11 Z M18,16 V18 H20 V16 Z M10,8.5 V15.5 L15.5,12 Z</StreamGeometry>
+  </Window.Resources>
+  <!--
+    The host picks the folder to show. Unlike the folder picker of the system it shows the pictures and videos of a
+    folder, so the host sees which folder it is, and it counts what would go out (with the nested folders or without)
+    before anything is read or sent. The current folder is the choice: open it and press Show.
+  -->
+  <Grid Margin="18" RowDefinitions="Auto,Auto,*,Auto" ColumnDefinitions="190,*">
+    <!--
+      The address line: back, forward and up, like a file manager (also Alt+arrows, Backspace and the side buttons of
+      the mouse), and a path that can be typed.
+    -->
+    <DockPanel Grid.ColumnSpan="2" Margin="0,0,0,8">
+      <Button DockPanel.Dock="Left" Classes="ghost square" Margin="0,0,4,0" Command="{Binding BackCommand}"
+              AutomationProperties.Name="{loc:Loc Gallery.Browser.Back}" ToolTip.Tip="{loc:Loc Gallery.Browser.Back}">
+        <PathIcon Data="{StaticResource IconBack}" />
+      </Button>
+      <Button DockPanel.Dock="Left" Classes="ghost square" Margin="0,0,4,0" Command="{Binding ForwardCommand}"
+              AutomationProperties.Name="{loc:Loc Gallery.Browser.Forward}" ToolTip.Tip="{loc:Loc Gallery.Browser.Forward}">
+        <PathIcon Data="{StaticResource IconForward}" />
+      </Button>
+      <Button DockPanel.Dock="Left" Classes="ghost square" Margin="0,0,8,0" Command="{Binding UpCommand}"
+              AutomationProperties.Name="{loc:Loc Gallery.Browser.Up}" ToolTip.Tip="{loc:Loc Gallery.Browser.Up}">
+        <PathIcon Data="{StaticResource IconUp}" />
+      </Button>
+      <TextBox x:Name="PathBox" Text="{Binding PathText}" KeyDown="OnPathKeyDown"
+               AutomationProperties.Name="{loc:Loc Gallery.Browser.Path}" />
+    </DockPanel>
+    <TextBlock Grid.Row="1" Grid.ColumnSpan="2" Classes="muted" Margin="2,0,0,8" TextWrapping="Wrap"
+               Text="{loc:Loc Gallery.Browser.Hint}" />
+
+    <!-- The folders of the user and the disks. -->
+    <ScrollViewer Grid.Row="2" Margin="0,0,12,0">
+      <ItemsControl ItemsSource="{Binding Places}">
+        <ItemsControl.ItemTemplate>
+          <DataTemplate x:DataType="vm:FolderPlace">
+            <Button Classes="ghost" HorizontalAlignment="Stretch" HorizontalContentAlignment="Left" Margin="0,0,0,2"
+                    Command="{Binding $parent[ItemsControl].((vm:FolderBrowserViewModel)DataContext).GoToCommand}"
+                    CommandParameter="{Binding}" ToolTip.Tip="{Binding Path}">
+              <StackPanel Orientation="Horizontal" Spacing="8">
+                <PathIcon Width="14" Height="14" Data="{StaticResource IconFolder}" />
+                <TextBlock Text="{Binding Name}" TextTrimming="CharacterEllipsis" MaxWidth="140" />
+              </StackPanel>
+            </Button>
+          </DataTemplate>
+        </ItemsControl.ItemTemplate>
+      </ItemsControl>
+    </ScrollViewer>
+
+    <!-- What lies in the folder: nested folders open with a click, pictures and videos are shown. -->
+    <Border Grid.Row="2" Grid.Column="1" CornerRadius="8" Background="{StaticResource GoletherPanel2}" ClipToBounds="True">
+      <Panel>
+        <ItemsControl x:Name="EntryRows" ItemsSource="{Binding Rows}" Margin="8">
+          <ItemsControl.Template>
+            <ControlTemplate>
+              <ScrollViewer HorizontalScrollBarVisibility="Disabled">
+                <ItemsPresenter Name="PART_ItemsPresenter" ItemsPanel="{TemplateBinding ItemsPanel}" />
+              </ScrollViewer>
+            </ControlTemplate>
+          </ItemsControl.Template>
+          <ItemsControl.ItemsPanel>
+            <ItemsPanelTemplate>
+              <VirtualizingStackPanel />
+            </ItemsPanelTemplate>
+          </ItemsControl.ItemsPanel>
+          <ItemsControl.ItemTemplate>
+            <DataTemplate x:CompileBindings="False">
+              <ItemsControl ItemsSource="{Binding}">
+                <ItemsControl.ItemsPanel>
+                  <ItemsPanelTemplate>
+                    <StackPanel Orientation="Horizontal" />
+                  </ItemsPanelTemplate>
+                </ItemsControl.ItemsPanel>
+                <ItemsControl.ItemTemplate>
+                  <DataTemplate x:DataType="vm:FolderEntryViewModel" x:CompileBindings="True">
+                    <Button Classes="ghost" Width="132" Height="124" Margin="0,0,8,8" Padding="4"
+                            Command="{Binding $parent[Window].((vm:FolderBrowserViewModel)DataContext).OpenEntryCommand}"
+                            CommandParameter="{Binding}"
+                            ToolTip.Tip="{Binding Name}" AutomationProperties.Name="{Binding Name}">
+                      <DockPanel>
+                        <TextBlock DockPanel.Dock="Bottom" Text="{Binding Name}" FontSize="12" TextTrimming="CharacterEllipsis"
+                                   HorizontalAlignment="Center" Margin="0,4,0,0" />
+                        <Border CornerRadius="6" ClipToBounds="True" Background="{StaticResource GoletherPanel}">
+                          <Panel>
+                            <Image Source="{Binding Thumbnail}" Stretch="UniformToFill" />
+                            <PathIcon Width="40" Height="40" Data="{StaticResource IconFolder}" Foreground="{StaticResource GoletherAccent}"
+                                      IsVisible="{Binding IsFolder}" />
+                            <PathIcon Width="34" Height="34" Data="{StaticResource IconFilm}" Foreground="{StaticResource GoletherMuted}"
+                                      IsVisible="{Binding IsVideo}" />
+                            <PathIcon Width="30" Height="30" Data="{StaticResource IconPicture}" Foreground="{StaticResource GoletherMuted}"
+                                      IsVisible="{Binding ShowsPictureSign}" />
+                          </Panel>
+                        </Border>
+                      </DockPanel>
+                    </Button>
+                  </DataTemplate>
+                </ItemsControl.ItemTemplate>
+              </ItemsControl>
+            </DataTemplate>
+          </ItemsControl.ItemTemplate>
+        </ItemsControl>
+        <TextBlock Classes="muted" HorizontalAlignment="Center" VerticalAlignment="Center" TextWrapping="Wrap" TextAlignment="Center"
+                   MaxWidth="420" Text="{loc:Loc Gallery.Browser.Empty}"
+                   IsVisible="{Binding !Entries.Count}" />
+      </Panel>
+    </Border>
+
+    <!-- What would be shown, how, and the choice. -->
+    <StackPanel Grid.Row="3" Grid.ColumnSpan="2" Margin="0,14,0,0" Spacing="8">
+      <TextBlock Foreground="{StaticResource GoletherBad}" TextWrapping="Wrap" Text="{Binding ErrorText}"
+                 IsVisible="{Binding ErrorText, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+      <StackPanel Orientation="Horizontal" Spacing="10">
+        <ProgressBar IsIndeterminate="True" Width="60" VerticalAlignment="Center" IsVisible="{Binding IsCounting}" />
+        <TextBlock FontWeight="SemiBold" TextWrapping="Wrap" VerticalAlignment="Center" Text="{Binding SummaryText}" />
+      </StackPanel>
+      <TextBlock Classes="muted" TextWrapping="Wrap" Text="{Binding NotesText}"
+                 IsVisible="{Binding NotesText, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+      <CheckBox IsChecked="{Binding IncludeSubfolders}" Content="{loc:Loc Gallery.Browser.Subfolders}" />
+      <CheckBox IsChecked="{Binding StripMetadata}" Content="{loc:Loc Gallery.Confirm.Strip}" />
+      <DockPanel>
+        <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" Spacing="8">
+          <Button Classes="ghost" Content="{loc:Loc Common.Cancel}" Click="OnCancel" IsCancel="True" />
+          <Button Classes="accent" Content="{loc:Loc Gallery.Confirm.Show}" Command="{Binding ShowCommand}" />
+        </StackPanel>
+        <TextBlock Classes="muted" TextWrapping="Wrap" VerticalAlignment="Center" Margin="0,0,16,0" Text="{loc:Loc Gallery.Confirm.Copies}" />
+      </DockPanel>
+    </StackPanel>
+  </Grid>
+</Window>

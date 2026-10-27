@@ -7,6 +7,7 @@ using Golether.Core.Data.Enums;
 using Golether.Core.Data.Migrations.SQLite.Runner;
 using Golether.Core.Data.Stores;
 using Golether.Localization;
+using Golether.Media.Player.Mpv;
 using Golether.Security.Identity;
 using Golether.Security.Secrets;
 using Golether.Transports.PortMapping;
@@ -88,7 +89,9 @@ public sealed class AppServices : IAsyncDisposable
             LoggerFactory,
             Conference,
             PortMapper.CreateDefault(Http, LoggerFactory),
-            new RendezvousDirectory(Http, provider.GetRequiredService<ISettingsStore>(), logger: LoggerFactory.CreateLogger<RendezvousDirectory>()));
+            new RendezvousDirectory(Http, provider.GetRequiredService<ISettingsStore>(), logger: LoggerFactory.CreateLogger<RendezvousDirectory>()),
+            new MpvFrameExtractor(TimeProvider.System, LoggerFactory.CreateLogger<MpvFrameExtractor>()),
+            paths.GalleryDirectory);
         Sounds = new SystemSoundPlayer(paths.SoundsDirectory, LoggerFactory.CreateLogger<SystemSoundPlayer>());
         ChatSound = new ChatSoundNotifier(Sessions, provider.GetRequiredService<ISettingsStore>(), Sounds, TimeProvider.System);
     }

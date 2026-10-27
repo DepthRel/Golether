@@ -1,0 +1,45 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:Golether.UI.ViewModels"
+             xmlns:controls="using:Golether.UI.Controls"
+             xmlns:views="using:Golether.UI.Views"
+             x:Class="Golether.UI.Views.SessionOverlay"
+             x:DataType="vm:MainWindowViewModel">
+  <!--
+    The reactions and the strokes of the pen over what the screen shows. The window has two of them: one in a window
+    of its own above the native video, one inside a picture of a shown folder. A control cannot move between windows
+    (each has its own layout), so each stays where it is and only the one in use is visible.
+    No fill: the layer must not answer clicks; only the canvas of the pen catches them while the pen is on.
+  -->
+  <Panel>
+    <controls:StrokeCanvas Source="{Binding Drawing}" Aspect="{Binding VideoAspect}"
+                           Zoom="{Binding $parent[views:SessionOverlay].Zoom}" Center="{Binding $parent[views:SessionOverlay].Center}" />
+    <Border Width="280" Height="360" Background="Transparent" IsHitTestVisible="False"
+            HorizontalAlignment="Right" VerticalAlignment="Bottom" Margin="0,0,18,18">
+      <ItemsControl ItemsSource="{Binding Chat.Reactions}">
+        <ItemsControl.ItemsPanel>
+          <ItemsPanelTemplate>
+            <Canvas />
+          </ItemsPanelTemplate>
+        </ItemsControl.ItemsPanel>
+        <ItemsControl.Styles>
+          <Style Selector="ContentPresenter" x:DataType="vm:FloatingReactionViewModel">
+            <Setter Property="Canvas.Right" Value="{Binding Offset}" />
+            <Setter Property="Canvas.Bottom" Value="0" />
+          </Style>
+        </ItemsControl.Styles>
+        <ItemsControl.ItemTemplate>
+          <DataTemplate x:DataType="vm:FloatingReactionViewModel">
+            <StackPanel Classes="floatingReaction" Width="72" Height="84" Spacing="1">
+              <TextBlock Classes="emoji" Text="{Binding Emoji}" FontSize="30" Padding="10,13,10,7" TextAlignment="Center"
+                         HorizontalAlignment="Center" VerticalAlignment="Center" />
+              <Border Background="#A0000000" CornerRadius="5" Padding="4,1" HorizontalAlignment="Center">
+                <TextBlock Text="{Binding Sender}" FontSize="10" Foreground="White" MaxWidth="66" TextTrimming="CharacterEllipsis" />
+              </Border>
+            </StackPanel>
+          </DataTemplate>
+        </ItemsControl.ItemTemplate>
+      </ItemsControl>
+    </Border>
+  </Panel>
+</UserControl>

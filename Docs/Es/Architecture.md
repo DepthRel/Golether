@@ -180,6 +180,34 @@ El estado de la sesión (`PlaybackState`): «en el momento `ReferenceTime` segú
   corte, `SessionService` intenta volver ocho veces con pausas de 2, 3, 5, 10, 20 y 30 segundos; el anfitrión confirma
   la entrada cada vez.
 
+## Mostrar una carpeta
+
+- `GalleryFolder` (Media.Streaming) recorre la carpeta elegida sin seguir enlaces: primero los archivos de la carpeta
+  en orden natural, después sus subcarpetas una tras otra, como mucho 16 niveles de profundidad y 100 000 archivos
+  vistos. Reparte los archivos en imágenes, imágenes que decodificar (HEIC, AVIF, TIFF), vídeos y archivos RAW que se
+  omiten.
+- `GalleryCatalog` prepara los archivos en paralelo. `PictureLayout` lee solo las cabeceras y compone los bytes que
+  reciben los participantes con trozos del archivo, sin EXIF/XMP ni comentarios, sin los datos tras el final de un JPEG
+  y sin los bloques de metadatos de PNG, WebP y GIF; la orientación vuelve como un bloque EXIF mínimo. Las imágenes que
+  decodificar pasan por `IFrameExtractor`: `MpvFrameExtractor` lanza un libmpv aparte, sin ventana, con la salida
+  de vídeo `image` y escribe un JPEG en `data/gallery/<muestra>`; del mismo modo un fotograma de un vídeo se
+  convierte en su miniatura. Las claves son aleatorias en cada muestra, y la carpeta de una muestra se borra al
+  terminar.
+- `ChunkServer` sirve la película y, mediante `ISharedFileSet`, las imágenes de la muestra actual por sus claves, en
+  las mismas piezas con SHA-256; los hashes de las imágenes no se guardan en caché.
+- `HostSession` es la autoridad sobre la pantalla común: numera cada elección (`show`), las ejecuta de una en una y
+  convierte un vídeo en la película (`media` + `state`) antes de anunciarlo; una imagen pausa la película. Las
+  miniaturas se hacen una vez por muestra, dos a la vez, mediante `IThumbnailRenderer` (SkiaSharp en la interfaz).
+- En la interfaz `GalleryViewModel` mantiene la tira y la cuadrícula (filas de una lista virtualizada, así que dos mil
+  elementos siguen siendo ligeros), decodifica imágenes para la pantalla mediante `IPictureDecoder`, guarda las seis
+  últimas, trae por adelantado las vecinas y vuelve a pedir una miniatura que no llegó (a los 5, 15 y 45 segundos).
+  `FolderBrowserViewModel` es el explorador de carpetas del anfitrión: el selector de carpetas del sistema no muestra
+  archivos.
+- Una imagen la dibuja Avalonia (`ZoomableImage`), no mpv, así que, mientras se muestra una, se usa una segunda capa
+  de reacciones y trazos dentro de la propia imagen (un control no puede pasar de una ventana a otra), y allí el
+  puntero llega a la imagen en cualquier sistema. El zoom es personal: `StrokeCanvas` coloca los trazos con la misma
+  regla `PictureFrame`, así que un trazo se queda en su sitio.
+
 ## Servir el archivo
 
 - `MediaDescriptor`: nombre, tamaño, tamaño de pieza, un identificador rápido (SHA-256 del tamaño y de tres muestras de
@@ -432,6 +460,7 @@ El esquema lo crean las migraciones al iniciarse la aplicación o mediante `Gole
 | Página del proyecto, enlace de invitación que abre la aplicación, una sola instancia, búsqueda automática del servidor de encuentro | **hecho** |
 | Una invitación para todo el grupo, expulsión de un participante por el anfitrión | **hecho** |
 | Seis idiomas (inglés, alemán, español, francés, portugués, ruso) en la aplicación, el monitor, los instaladores, la página y la documentación; palabras traducidas del código de verificación | **hecho** |
+| Mostrar una carpeta: imágenes y vídeos con subcarpetas, mirar aparte, zoom, sin metadatos | **hecho** |
 | API de renderizado de libmpv para macOS y Wayland, QUIC para Windows 11/Linux | previsto |
 | Almacén de secretos Keychain / libsecret, instaladores firmados | previsto |
 
@@ -469,3 +498,5 @@ El esquema lo crean las migraciones al iniciarse la aplicación o mediante `Gole
 - Los túneles se cambian con permisos de administrador solo durante la operación: Windows ejecuta
   `Golether.exe --tunnel-helper` mediante UAC, Linux usa `pkexec`, macOS `osascript … with administrator privileges`.
   No hay un servicio permanente, así que cada cambio de un túnel necesita una confirmación.
+- Una carpeta muestra JPEG, PNG, WebP, GIF y BMP tal cual, y HEIC, AVIF y TIFF mediante el componente de vídeo del
+  anfitrión; los archivos RAW de cámaras no se muestran. El zoom de una imagen cambia una sola pantalla.

@@ -23,6 +23,12 @@ public sealed class AvaloniaDialogService : IDialogService
     private readonly Window _owner;
 
     /// <summary>
+    /// The pictures a folder shows, offered by the file picker next to the videos.
+    /// </summary>
+    private static readonly string[] _picturePatterns =
+        ["*.jpg", "*.jpeg", "*.jfif", "*.png", "*.webp", "*.gif", "*.bmp", "*.heic", "*.heif", "*.hif", "*.avif", "*.tif", "*.tiff"];
+
+    /// <summary>
     /// Initializes a new instance of the <see cref="AvaloniaDialogService"/> class.
     /// </summary>
     /// <param name="owner">The owner window.</param>
@@ -123,12 +129,20 @@ public sealed class AvaloniaDialogService : IDialogService
             AllowMultiple = false,
             FileTypeFilter =
             [
-                new FilePickerFileType(Texts.Get("Dialog.PickVideo.Filter")) { Patterns = ["*.mkv", "*.mp4", "*.m4v", "*.avi", "*.mov", "*.webm", "*.ts", "*.m2ts", "*.wmv", "*.flv"] },
+                new FilePickerFileType(Texts.Get("Dialog.PickVideo.Filter"))
+                {
+                    Patterns = ["*.mkv", "*.mp4", "*.m4v", "*.avi", "*.mov", "*.webm", "*.ts", "*.m2ts", "*.wmv", "*.flv", .. _picturePatterns],
+                },
+                new FilePickerFileType(Texts.Get("Dialog.PickVideo.Pictures")) { Patterns = _picturePatterns },
                 FilePickerFileTypes.All,
             ],
         });
         return files.Count > 0 ? files[0].TryGetLocalPath() : null;
     }
+
+    /// <inheritdoc />
+    public Task<GalleryChoice?> ChooseGalleryAsync(FolderBrowserViewModel viewModel)
+        => new FolderBrowserDialog { DataContext = viewModel }.ShowDialog<GalleryChoice?>(ActiveOwner);
 
     /// <inheritdoc />
     public async Task<string?> PickSubtitleFileAsync()

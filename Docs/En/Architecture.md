@@ -176,6 +176,31 @@ and the rate `Rate`". Every node computes the needed position itself: `Position 
   `SessionService` tries to come back eight times with pauses of 2, 3, 5, 10, 20 and 30 seconds; the host confirms
   the entry every time.
 
+## Showing a folder
+
+- `GalleryFolder` (Media.Streaming) walks the chosen folder without following links: the files of a folder first, in
+  natural order, then its nested folders one after another, at most 16 levels deep and 100,000 files looked at. It
+  sorts files into pictures, pictures to decode (HEIC, AVIF, TIFF), videos and RAW files that are left out.
+- `GalleryCatalog` prepares the files in parallel. `PictureLayout` reads only the headers and builds the bytes the
+  participants receive from pieces of the file, leaving out EXIF/XMP and comments, the data after the end of a JPEG and
+  the metadata blocks of PNG, WebP and GIF; the orientation is put back as a minimal EXIF block. Pictures to decode go
+  through `IFrameExtractor`: `MpvFrameExtractor` runs a separate windowless libmpv with the `image` video output
+  and writes a JPEG into `data/gallery/<showing>`; a frame of a video becomes its small picture the same way. Keys
+  are random for every showing, and the folder of a showing is deleted when it ends.
+- `ChunkServer` serves the film and, through `ISharedFileSet`, the pictures of the current showing by their keys,
+  in the same pieces with SHA-256; the hashes of pictures are not cached.
+- `HostSession` is the authority of the common screen: it numbers every choice (`show`), carries them out one at a
+  time and turns a video into the film (`media` + `state`) before announcing it; a picture pauses the film. It
+  makes the small pictures once per showing, two at a time, through `IThumbnailRenderer` (SkiaSharp in the UI).
+- In the interface `GalleryViewModel` keeps the strip and the grid (rows of a virtualized list, so two thousand
+  items stay light), decodes pictures for the screen through `IPictureDecoder`, keeps the last six, fetches the
+  neighbours ahead and asks again for a small picture that did not arrive (after 5, 15 and 45 seconds).
+  `FolderBrowserViewModel` is the folder browser of the host: the folder picker of the system shows no files.
+- A picture is drawn by Avalonia (`ZoomableImage`), not by mpv, so while one is shown a second layer of reactions and
+  strokes lies in the picture itself (a control cannot move between windows), and there the pointer reaches the
+  picture on every system. Zoom is personal: `StrokeCanvas` places the strokes by the same `PictureFrame` rule, so a
+  line stays on its place.
+
 ## Serving the file
 
 - `MediaDescriptor`: name, size, piece size, a quick identifier (SHA-256 of the size and three 1 MiB samples).
@@ -420,6 +445,7 @@ The schema is created by migrations when the application starts or through `Gole
 | Project page, invitation link that opens the application, single instance, automatic lookup of the rendezvous server | **done** |
 | One invitation for the whole company, removal of a participant by the host | **done** |
 | Six languages (English, German, Spanish, French, Portuguese, Russian) in the application, the monitor, the installers, the page and the documentation; translated words of the verification code | **done** |
+| Showing a folder: pictures and videos with nested folders, looking alone, zoom, metadata left out | **done** |
 | libmpv render API for macOS and Wayland, QUIC for Windows 11/Linux | planned |
 | Keychain / libsecret secret storage, signed installers | planned |
 
@@ -455,3 +481,5 @@ The schema is created by migrations when the application starts or through `Gole
 - Tunnels are changed with administrator rights only for the duration of the operation: Windows runs
   `Golether.exe --tunnel-helper` through UAC, Linux uses `pkexec`, macOS `osascript … with administrator privileges`.
   There is no permanent service, so every change of a tunnel needs a confirmation.
+- A folder shows JPEG, PNG, WebP, GIF and BMP as they are, HEIC, AVIF and TIFF through the video component of the
+  host; camera RAW files are not shown. Zooming a picture changes one screen only.

@@ -176,6 +176,32 @@ O estado da sessão (`PlaybackState`): “no momento `ReferenceTime` segundo o r
   quebra, o `SessionService` tenta voltar oito vezes com pausas de 2, 3, 5, 10, 20 e 30 segundos; o anfitrião confirma a
   entrada de cada vez.
 
+## Mostrar uma pasta
+
+- `GalleryFolder` (Media.Streaming) percorre a pasta escolhida sem seguir ligações: primeiro os ficheiros da pasta por
+  ordem natural, depois as suas subpastas uma a uma, no máximo 16 níveis de profundidade e 100 000 ficheiros vistos.
+  Reparte os ficheiros em imagens, imagens a descodificar (HEIC, AVIF, TIFF), vídeos e ficheiros RAW que ficam de fora.
+- `GalleryCatalog` prepara os ficheiros em paralelo. `PictureLayout` lê só os cabeçalhos e compõe os bytes que os
+  participantes recebem a partir de partes do ficheiro, sem EXIF/XMP nem comentários, sem os dados depois do fim de um
+  JPEG e sem os blocos de metadados de PNG, WebP e GIF; a orientação volta como um bloco EXIF mínimo. As imagens a
+  descodificar passam por `IFrameExtractor`: `MpvFrameExtractor` lança uma libmpv à parte, sem janela, com a saída
+  de vídeo `image` e escreve um JPEG em `data/gallery/<apresentação>`; do mesmo modo, uma imagem de um vídeo passa
+  a ser a sua miniatura. As chaves são aleatórias em cada apresentação, e a pasta de uma apresentação é apagada quando
+  ela termina.
+- `ChunkServer` serve o filme e, através de `ISharedFileSet`, as imagens da apresentação atual pelas suas chaves, nas
+  mesmas partes com SHA-256; os hashes das imagens não ficam em cache.
+- `HostSession` é a autoridade sobre o ecrã comum: numera cada escolha (`show`), executa-as uma a uma e faz de um
+  vídeo o filme (`media` + `state`) antes de o anunciar; uma imagem põe o filme em pausa. As miniaturas são feitas
+  uma vez por apresentação, duas de cada vez, através de `IThumbnailRenderer` (SkiaSharp na interface).
+- Na interface, `GalleryViewModel` mantém a faixa e a grelha (linhas de uma lista virtualizada, por isso dois mil
+  elementos continuam leves), descodifica imagens para o ecrã através de `IPictureDecoder`, guarda as últimas seis,
+  obtém as vizinhas antecipadamente e volta a pedir uma miniatura que não chegou (após 5, 15 e 45 segundos).
+  `FolderBrowserViewModel` é o navegador de pastas do anfitrião: o seletor de pastas do sistema não mostra ficheiros.
+- Uma imagem é desenhada pela Avalonia (`ZoomableImage`), não pelo mpv, por isso, enquanto se mostra uma, usa-se uma
+  segunda camada de reações e traços dentro da própria imagem (um controlo não pode passar de uma janela para outra),
+  e aí o ponteiro chega à imagem em qualquer sistema. O zoom é pessoal: `StrokeCanvas` coloca os traços pela mesma
+  regra `PictureFrame`, por isso um traço fica no seu lugar.
+
 ## Servir o ficheiro
 
 - `MediaDescriptor`: nome, tamanho, tamanho da parte, um identificador rápido (SHA-256 do tamanho e de três amostras de
@@ -421,6 +447,7 @@ O esquema é criado pelas migrações no arranque da aplicação ou através do 
 | Página do projeto, ligação de convite que abre a aplicação, instância única, procura automática do servidor de encontro | **feito** |
 | Um convite para todo o grupo, remoção de um participante pelo anfitrião | **feito** |
 | Seis idiomas (inglês, alemão, espanhol, francês, português, russo) na aplicação, no monitor, nos instaladores, na página e na documentação; palavras traduzidas do código de verificação | **feito** |
+| Mostrar uma pasta: imagens e vídeos com subpastas, ver à parte, zoom, sem metadados | **feito** |
 | API de renderização da libmpv para macOS e Wayland, QUIC para Windows 11/Linux | planeado |
 | Armazenamento de segredos Keychain / libsecret, instaladores assinados | planeado |
 
@@ -458,3 +485,5 @@ O esquema é criado pelas migrações no arranque da aplicação ou através do 
 - Os túneis só são alterados com direitos de administrador durante a operação: o Windows executa
   `Golether.exe --tunnel-helper` através do UAC, o Linux usa `pkexec`, o macOS `osascript … with administrator
   privileges`. Não há um serviço permanente, por isso cada alteração de um túnel precisa de uma confirmação.
+- Uma pasta mostra JPEG, PNG, WebP, GIF e BMP tal como são, e HEIC, AVIF e TIFF através do componente de vídeo do
+  anfitrião; os ficheiros RAW de câmaras não são mostrados. O zoom de uma imagem muda só um ecrã.

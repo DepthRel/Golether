@@ -182,6 +182,34 @@ L'état de la séance (`PlaybackState`) : « à l'instant `ReferenceTime` selon 
   coupure, `SessionService` essaie de revenir huit fois avec des pauses de 2, 3, 5, 10, 20 et 30 secondes ; l'hôte
   confirme l'entrée à chaque fois.
 
+## Montrer un dossier
+
+- `GalleryFolder` (Media.Streaming) parcourt le dossier choisi sans suivre les liens : d'abord les fichiers du dossier
+  dans l'ordre naturel, puis ses sous-dossiers l'un après l'autre, au plus 16 niveaux de profondeur et 100 000 fichiers
+  examinés. Il répartit les fichiers en images, images à décoder (HEIC, AVIF, TIFF), vidéos et fichiers RAW laissés de
+  côté.
+- `GalleryCatalog` prépare les fichiers en parallèle. `PictureLayout` ne lit que les en-têtes et compose les octets
+  que reçoivent les participants à partir de morceaux du fichier, sans EXIF/XMP ni commentaires, sans les données
+  après la fin d'un JPEG et sans les blocs de métadonnées de PNG, WebP et GIF ; l'orientation revient sous forme d'un
+  bloc EXIF minimal. Les images à décoder passent par `IFrameExtractor` : `MpvFrameExtractor` lance un libmpv à
+  part, sans fenêtre, avec la sortie vidéo `image` et écrit un JPEG dans `data/gallery/<présentation>` ; de même,
+  une image d'une vidéo devient sa miniature. Les clés sont aléatoires à chaque présentation, et le dossier d'une
+  présentation est supprimé à sa fin.
+- `ChunkServer` sert le film et, via `ISharedFileSet`, les images de la présentation en cours par leurs clés, dans
+  les mêmes morceaux avec SHA-256 ; les empreintes des images ne sont pas mises en cache.
+- `HostSession` est l'autorité sur l'écran commun : elle numérote chaque choix (`show`), les exécute un par un et fait
+  d'une vidéo le film (`media` + `state`) avant de l'annoncer ; une image met le film en pause. Les miniatures sont
+  faites une fois par présentation, deux à la fois, via `IThumbnailRenderer` (SkiaSharp dans l'interface).
+- Dans l'interface, `GalleryViewModel` tient le bandeau et la grille (lignes d'une liste virtualisée, deux mille
+  éléments restent donc légers), décode les images pour l'écran via `IPictureDecoder`, garde les six dernières,
+  récupère les voisines à l'avance et redemande une miniature qui n'est pas arrivée (après 5, 15 et 45 secondes).
+  `FolderBrowserViewModel` est le navigateur de dossiers de l'hôte : le sélecteur de dossiers du système ne montre pas
+  les fichiers.
+- Une image est dessinée par Avalonia (`ZoomableImage`), pas par mpv, donc, tant qu'une image est montrée, une seconde
+  couche de réactions et de traits sert dans l'image elle-même (un contrôle ne peut pas passer d'une fenêtre à
+  l'autre), et là le pointeur atteint l'image sur tous les systèmes. Le zoom est personnel : `StrokeCanvas` place les
+  traits selon la même règle `PictureFrame`, un trait reste donc à sa place.
+
 ## Servir le fichier
 
 - `MediaDescriptor` : nom, taille, taille de morceau, un identifiant rapide (SHA-256 de la taille et de trois
@@ -442,6 +470,7 @@ Le schéma est créé par les migrations au lancement de l'application ou via `G
 | Page du projet, lien d'invitation qui ouvre l'application, instance unique, recherche automatique du serveur de rendez-vous | **fait** |
 | Une invitation pour toute la bande, retrait d'un participant par l'hôte | **fait** |
 | Six langues (anglais, allemand, espagnol, français, portugais, russe) dans l'application, le moniteur, les programmes d'installation, la page et la documentation ; mots traduits du code de vérification | **fait** |
+| Montrer un dossier : images et vidéos avec sous-dossiers, regarder à part, zoom, sans métadonnées | **fait** |
 | API de rendu de libmpv pour macOS et Wayland, QUIC pour Windows 11/Linux | prévu |
 | Stockage des secrets Keychain / libsecret, programmes d'installation signés | prévu |
 
@@ -479,3 +508,5 @@ Le schéma est créé par les migrations au lancement de l'application ou via `G
 - Les tunnels ne sont modifiés avec des droits d'administrateur que pendant l'opération : Windows lance
   `Golether.exe --tunnel-helper` via l'UAC, Linux utilise `pkexec`, macOS `osascript … with administrator privileges`.
   Il n'y a pas de service permanent, donc chaque modification d'un tunnel demande une confirmation.
+- Un dossier montre JPEG, PNG, WebP, GIF et BMP tels quels, HEIC, AVIF et TIFF via le composant vidéo de l'hôte ; les
+  fichiers RAW des appareils photo ne sont pas montrés. Le zoom d'une image ne change qu'un écran.

@@ -36,6 +36,9 @@ transcode or install a server.
 - **Reactions.** Send an emoji that floats over the video for everyone, with your name on it.
 - **Draw on the screen.** Grab the pen and circle a detail: everyone sees the line as you draw it, in your colour.
   It fades after two seconds and stays attached to the picture, not to the window.
+- **Photos and videos of a folder.** Show a whole folder, nested folders included: everyone sees a strip of small
+  pictures and puts any photo or video on the screen, or looks at a photo alone and zooms in. HEIC works too, and the
+  place, the camera and the comments are left out of the copies by default.
 - **Webcams and voice** in one window: a tile for each person, echo cancellation, per-person volume, and a chat.
 - **Works behind grey IPs.** A tiny rendezvous server of your own (any machine with a public IP) introduces the
   host and the guests, and they punch a direct connection through their routers: no port forwarding on either side,

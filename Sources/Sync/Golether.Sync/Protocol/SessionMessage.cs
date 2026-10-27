@@ -23,6 +23,9 @@ namespace Golether.Sync.Protocol;
 [JsonDerivedType(typeof(ChatMessage), "chat")]
 [JsonDerivedType(typeof(DrawMessage), "draw")]
 [JsonDerivedType(typeof(AvatarMessage), "avatar")]
+[JsonDerivedType(typeof(GalleryMessage), "gallery")]
+[JsonDerivedType(typeof(GalleryShowMessage), "show")]
+[JsonDerivedType(typeof(ThumbnailMessage), "thumb")]
 public abstract record SessionMessage
 {
     /// <summary>

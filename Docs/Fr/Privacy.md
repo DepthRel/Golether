@@ -29,6 +29,12 @@ besoin) et l'empreinte de la clé de votre appareil ; avec la caméra, le micro 
 aussi. L'hôte sert le film aux participants, qui peuvent s'en transmettre des morceaux entre eux. Le code de
 vérification se compare de vive voix et n'est envoyé nulle part.
 
+Quand l'hôte montre un dossier, les participants reçoivent des copies de ses images (en mémoire seulement) et voient
+les noms des fichiers et des sous-dossiers. Avec **Ne pas montrer le lieu de prise de vue, l'appareil ni les
+commentaires des images** activé (par défaut), les copies perdent les blocs EXIF, XMP et IPTC, les commentaires et les
+images que certains téléphones ajoutent après une photo ; seule l'orientation reste. Les originaux sur le disque de
+l'hôte ne sont jamais modifiés. Les vidéos du dossier sont servies comme un film.
+
 ## Où Golether se connecte
 
 | Où | Quand | Ce que l'autre côté apprend |

@@ -1,6 +1,7 @@
 using Golether.Core.Data.Enums;
 using Golether.Core.Identity;
 using Golether.Core.Networking;
+using Golether.Media.Streaming.Gallery;
 using Golether.Security.Invites;
 using Golether.Session;
 using Golether.Sync.Protocol;
@@ -194,6 +195,61 @@ public interface ISessionService
     /// <param name="cancellationToken">The cancellation token.</param>
     /// <returns>A task that completes when the avatar was sent.</returns>
     Task SetAvatarAsync(byte[]? image, CancellationToken cancellationToken);
+
+    /// <summary>
+    /// Gets a value indicating whether this device can turn HEIC, AVIF and TIFF pictures into JPEG for a shown folder.
+    /// </summary>
+    bool CanDecodePictures { get; }
+
+    /// <summary>
+    /// Shows the pictures and videos of a folder to everybody (host only).
+    /// </summary>
+    /// <param name="folder">The folder the host chose and confirmed.</param>
+    /// <param name="stripMetadata">Whether the place, the camera and the comments are left out of the pictures.</param>
+    /// <param name="progress">Told the number of files prepared so far.</param>
+    /// <param name="cancellationToken">The cancellation token.</param>
+    /// <returns>A task that completes when everybody was told.</returns>
+    Task ShowGalleryAsync(GalleryFolder folder, bool stripMetadata, IProgress<int>? progress, CancellationToken cancellationToken);
+
+    /// <summary>
+    /// Ends the showing of a folder, so everybody goes back to the film (host only).
+    /// </summary>
+    /// <returns>A task that completes when everybody was told.</returns>
+    Task CloseGalleryAsync();
+
+    /// <summary>
+    /// Puts an item of the shown folder on everybody's screen (a video becomes the film); a participant asks the
+    /// host, who decides.
+    /// </summary>
+    /// <param name="catalogId">The showing the item belongs to.</param>
+    /// <param name="index">The index of the item.</param>
+    /// <param name="cancellationToken">The cancellation token.</param>
+    /// <returns>A task that completes when the choice was sent.</returns>
+    Task ShowItemAsync(string catalogId, int index, CancellationToken cancellationToken);
+
+    /// <summary>
+    /// Notes which picture this device looks at alone, so the others see where it is.
+    /// </summary>
+    /// <param name="index">The picture, or <see langword="null"/> when following the common screen.</param>
+    void SetGalleryView(int? index);
+
+    /// <summary>
+    /// Returns the small picture of an item of the shown folder.
+    /// </summary>
+    /// <param name="catalogId">The showing the item belongs to.</param>
+    /// <param name="index">The index of the item.</param>
+    /// <param name="cancellationToken">The cancellation token.</param>
+    /// <returns>The JPEG bytes, or <see langword="null"/> when there is none.</returns>
+    Task<byte[]?> LoadThumbnailAsync(string catalogId, int index, CancellationToken cancellationToken);
+
+    /// <summary>
+    /// Returns the bytes of a picture of the shown folder.
+    /// </summary>
+    /// <param name="catalogId">The showing the picture belongs to.</param>
+    /// <param name="index">The index of the picture.</param>
+    /// <param name="cancellationToken">The cancellation token.</param>
+    /// <returns>The bytes.</returns>
+    Task<byte[]> LoadPictureAsync(string catalogId, int index, CancellationToken cancellationToken);
 
     /// <summary>
     /// Leaves or ends the session.

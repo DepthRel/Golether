@@ -36,7 +36,7 @@ die Zahl.
 1. Geben Sie Ihren Namen und den Namen der Sitzung ein und drücken Sie **Sitzung erstellen**. Der Port Ihres Computers
    (standardmäßig 47800) und die Anfrage an den Router liegen unter **Erweitert**: Ändern Sie sie nur, wenn der Port
    belegt ist oder von Hand weitergeleitet wurde.
-2. Drücken Sie **Datei zeigen** und wählen Sie ein Video. Die Datei bleibt bei Ihnen: Die Teilnehmer erhalten sie
+2. Drücken Sie **Zeigen** → **Datei** und wählen Sie ein Video. Die Datei bleibt bei Ihnen: Die Teilnehmer erhalten sie
    Stück für Stück während des Ansehens und behalten sie nur im Arbeitsspeicher.
 3. Drücken Sie **Einladen**, kopieren Sie den **Link** und schicken Sie ihn Ihren Gästen auf beliebigem Weg. Ein Klick
    darauf öffnet Golether auf dem Computer des Gastes und fragt, ob er beitreten möchte. Der Link gilt 15 Minuten.
@@ -167,6 +167,47 @@ weiterer Klick auf das Symbol löst die Schaltfläche, und der Zeiger ist wieder
 Linien werden nirgends gespeichert und hängen am Bild, nicht am Fenster: Ist Ihr Fenster breiter und das der anderen
 Person schmaler, ist die eingekreiste Stelle trotzdem derselbe Teil des Bildes. Solange der Stift aus ist, wirken
 Klicks auf das Video wie gewohnt: Pause und Vollbild.
+
+### Fotos und Videos eines Ordners zeigen (Gastgeber)
+
+**Zeigen** → **Ordner mit Bildern** (Ctrl+Shift+O) öffnet ein Fenster, das zeigt, was in einem Ordner liegt: seine
+Unterordner, seine Bilder mit kleinen Vorschauen und seine Videos. Öffnen Sie den gewünschten Ordner und drücken Sie
+**Zeigen**. Darunter zählt das Fenster, was hinausgeht (Bilder, Videos, die Größe der Bilder) und was ausgelassen
+wird: RAW-Dateien von Kameras und Bilder über 64 MB. Dazu gehören zwei Schalter:
+
+- **Mit Unterordnern**: Die Dateien jedes Unterordners folgen denen des Ordners selbst, Ordner für Ordner, und der
+  Streifen nennt einen Unterordner bei seinem ersten Element.
+- **Aufnahmeort, Kamera und Kommentare der Bilder nicht zeigen** (standardmäßig an): Die Kopien, die die Teilnehmer
+  erhalten, verlieren den Ort, die Kamera, den Autor, die Kommentare und die zusätzlichen Bilder, die manche Telefone
+  an ein Foto anhängen. Ihre eigenen Dateien werden nicht verändert. Die Ausrichtung bleibt, das Foto steht also
+  weiterhin aufrecht.
+
+Im Fenster funktionieren **Zurück** und **Vorwärts** wie in einem Dateimanager, auch mit Alt+← und Alt+→, der
+Rücktaste und den Seitentasten der Maus.
+
+Höchstens 2000 Dateien werden auf einmal gezeigt. Ein einzelnes Bild, gewählt mit **Zeigen** → **Datei**, wird allein
+gezeigt: Nichts anderes aus seinem Ordner geht hinaus, und seine Metadaten bleiben bei Ihnen.
+
+Solange ein Ordner gezeigt wird, liegt unter dem Bild ein Streifen kleiner Bilder. Ein Klick auf ein Element bringt es
+auf den Bildschirm aller, wie ein Sprung im Film: Jeder Teilnehmer kann das, der Gastgeber entscheidet. ← und → gehen
+zum vorherigen und zum nächsten Element; die Schaltfläche mit vier Quadraten öffnet alle Elemente als Raster nur auf
+Ihrem Bildschirm (Esc schließt es). Unter jedem Element stehen die Marken derer, die es ansehen. Das Mausrad blättert
+den Streifen seitwärts.
+
+- **Bilder** zeichnet Golether selbst. Das Mausrad oder die Tasten + und − vergrößern ein Bild um den Zeiger, Ziehen
+  verschiebt das vergrößerte Bild, 0 zeigt es wieder ganz. Das ändert nur Ihren Bildschirm, und die Linien des Stifts
+  bleiben an ihren Stellen des Bildes. HEIC-, AVIF- und TIFF-Fotos werden auf dem Rechner des Gastgebers von der
+  Videokomponente in JPEG umgewandelt, die Teilnehmer brauchen dafür nichts.
+- **Nur für mich öffnen** (Rechtsklick auf ein Element) zeigt ein Bild nur auf Ihrem Bildschirm. Eine Zeile oben sagt,
+  was alle anderen sehen, und bietet **Zurück zu allen** und **Allen zeigen** an; die anderen sehen auf Ihrer Kachel
+  die Marke „ALLEIN“. Der Stift ist währenddessen aus.
+- **Videos** des Ordners laufen wie ein Film: Auf den Bildschirm gebracht, wird ein Video zum Film aller, mit seiner
+  Zeitleiste, seinem Ton und seinen Untertiteln, und der Streifen bleibt. Sein kleines Bild ist ein Bild aus dem Video.
+
+Der Film pausiert, sobald ein Bild auf den Bildschirm kommt, und wartet unter den Bildern; die Schaltflächen für Ton
+und Untertitel sind inaktiv, solange ein Bild gezeigt wird. Ein Video des Ordners auf dem Bildschirm ersetzt den Film.
+**Bilder schließen** (Gastgeber) beendet das Zeigen für alle, und der Film kehrt an die Stelle zurück, an der er
+unterbrochen wurde. Auch die Wahl eines Films mit **Zeigen** → **Datei** beendet es.
 
 ### Warten, bis alle bereit sind
 
@@ -372,6 +413,9 @@ Registry nur den Deinstallationseintrag und den Handler für Einladungslinks ein
 - unter Windows werden der Geräteschlüssel und die Tunnelgeheimnisse zusätzlich für Ihr Windows-Konto verschlüsselt. Auf
   einem anderen Computer oder unter einem anderen Benutzer lassen sie sich nicht lesen: Das Programm sagt das, und nach
   dem Löschen des Ordners `data\identity` erstellt es einen neuen Schlüssel;
+- solange ein Ordner gezeigt wird, liegen in `data\gallery` die JPEG-Dateien, die der Gastgeber aus seinen HEIC-,
+  AVIF- und TIFF-Fotos und aus Bildern seiner Videos macht. Der Ordner wird geleert, wenn das Zeigen endet, oder beim
+  nächsten Start, wenn das Programm währenddessen geschlossen wurde;
 - `data\identity\device.key` ist der Geräteschlüssel. Wird er gelöscht, ändert sich der Fingerabdruck des Geräts, und
   Ihre Kontakte müssen den Code erneut vergleichen.
 

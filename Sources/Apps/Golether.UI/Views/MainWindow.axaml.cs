@@ -173,6 +173,7 @@ public sealed partial class MainWindow : Window
         Timeline.AddHandler(PointerPressedEvent, OnTimelinePressed, RoutingStrategies.Tunnel, handledEventsToo: true);
         Timeline.AddHandler(PointerReleasedEvent, OnTimelineReleased, RoutingStrategies.Tunnel | RoutingStrategies.Bubble, handledEventsToo: true);
         AddHandler(KeyDownEvent, OnWindowKeyDown, RoutingStrategies.Tunnel);
+        GalleryStrip.AddHandler(PointerWheelChangedEvent, OnStripWheel, RoutingStrategies.Tunnel);
         AddHandler(KeyUpEvent, OnWindowKeyUp, RoutingStrategies.Tunnel);
         AddHandler(ContextRequestedEvent, OnContextRequested, RoutingStrategies.Tunnel);
         _refreshTimer.Tick += (_, _) =>
@@ -183,7 +184,8 @@ public sealed partial class MainWindow : Window
         _clickTimer.Tick += (_, _) =>
         {
             _clickTimer.Stop();
-            if (ViewModel is { IsInSession: true, HasMedia: true } viewModel)
+            // A click on a picture of a shown folder is not a click on the film waiting under it.
+            if (ViewModel is { IsInSession: true, HasMedia: true, IsFilmOnScreen: true } viewModel)
             {
                 viewModel.TogglePlayCommand.Execute(null);
             }
@@ -231,6 +233,14 @@ public sealed partial class MainWindow : Window
                 _overlayHandle = handle;
                 Controls.ClickThroughWindow.SetClickThrough(handle, !viewModel.Drawing.IsPenActive);
             }
+
+            // A window opened later lies above the others. In full screen the bars must stay above the strokes, or the
+            // pen would catch their clicks: their layers are opened again over this one.
+            if (_barsOverlaid && PlayerBarPopup.IsOpen)
+            {
+                TopBarPopup.IsOpen = PlayerBarPopup.IsOpen = false;
+                TopBarPopup.IsOpen = PlayerBarPopup.IsOpen = true;
+            }
         };
         ReactionOverlay.Closed += (_, _) => _overlayHandle = 0;
         viewModel.Drawing.PropertyChanged += (_, e) =>
@@ -238,6 +248,30 @@ public sealed partial class MainWindow : Window
             if (e.PropertyName is nameof(Golether.UI.ViewModels.DrawingViewModel.IsPenActive) && _overlayHandle != 0)
             {
                 Controls.ClickThroughWindow.SetClickThrough(_overlayHandle, !viewModel.Drawing.IsPenActive);
+            }
+        };
+        viewModel.Gallery.PropertyChanged += (_, e) =>
+        {
+            // The item on this screen stays in sight in the strip and in the grid, whoever chose it.
+            if (e.PropertyName is nameof(Golether.UI.ViewModels.GalleryViewModel.CounterText) or nameof(Golether.UI.ViewModels.GalleryViewModel.IsGridOpen) &&
+                viewModel.Gallery.IsActive)
+            {
+                GalleryStrip.ScrollIntoView(viewModel.Gallery.ShownIndex);
+                if (viewModel.Gallery.IsGridOpen)
+                {
+                    var row = viewModel.Gallery.ShownIndex / Math.Max(1, viewModel.Gallery.GridColumns);
+                    Dispatcher.UIThread.Post(() => GalleryGrid.ScrollIntoView(row), DispatcherPriority.Background);
+                }
+            }
+        };
+        GalleryGrid.SizeChanged += (_, e) => UpdateGridColumns(e.NewSize.Width);
+        viewModel.PropertyChanged += (_, e) =>
+        {
+            // Full screen belongs to a session: the start screen after it comes back in an ordinary window, where its
+            // controls are.
+            if (e.PropertyName == nameof(MainWindowViewModel.IsInSession) && !viewModel.IsInSession && WindowState == WindowState.FullScreen)
+            {
+                ToggleFullScreen();
             }
         };
         _player = player;
@@ -547,6 +581,39 @@ public sealed partial class MainWindow : Window
         => control.IsEffectivelyVisible && control.TranslatePoint(default, this) is { } origin
             ? new Avalonia.Rect(origin, control.Bounds.Size)
             : default;
+
+    /// <summary>
+    /// Scrolls the strip of a shown folder sideways with the ordinary wheel, as Shift and the wheel or a horizontal
+    /// wheel do: down moves to the right, up to the left. The strip has nothing to scroll up and down.
+    /// </summary>
+    /// <param name="sender">The strip.</param>
+    /// <param name="e">The event data.</param>
+    private void OnStripWheel(object? sender, PointerWheelEventArgs e)
+    {
+        const double STEP = 120;
+        if (e.Delta.Y == 0 || e.Delta.X != 0 || e.KeyModifiers.HasFlag(KeyModifiers.Shift) ||
+            GalleryStrip.FindDescendantOfType<ScrollViewer>() is not { } scroll)
+        {
+            return;
+        }
+
+        var end = Math.Max(0, scroll.Extent.Width - scroll.Viewport.Width);
+        scroll.Offset = scroll.Offset.WithX(Math.Clamp(scroll.Offset.X - (e.Delta.Y * STEP), 0, end));
+        e.Handled = true;
+    }
+
+    /// <summary>
+    /// Fits as many items into a row of the grid as its width takes.
+    /// </summary>
+    /// <param name="width">The width of the grid.</param>
+    private void UpdateGridColumns(double width)
+    {
+        const double ITEM_WIDTH = 190;
+        if (ViewModel is { } viewModel && width > 0)
+        {
+            viewModel.Gallery.GridColumns = Math.Max(1, (int)(width / ITEM_WIDTH));
+        }
+    }
 
     /// <summary>
     /// A double click on the video area toggles full screen also while no video is shown there: the native video
@@ -895,8 +962,36 @@ public sealed partial class MainWindow : Window
 
         switch (e.Key)
         {
+            case Key.Escape when viewModel.Gallery.IsGridOpen:
+                viewModel.Gallery.CloseGridCommand.Execute(null);
+                e.Handled = true;
+                break;
+            case Key.Space when !viewModel.IsFilmOnScreen:
+                // The film waits under the pictures; it does not start behind them.
+                e.Handled = true;
+                break;
             case Key.Space:
                 viewModel.TogglePlayCommand.Execute(null);
+                e.Handled = true;
+                break;
+            case Key.Left when !viewModel.IsFilmOnScreen:
+                viewModel.Gallery.PreviousCommand.Execute(null);
+                e.Handled = true;
+                break;
+            case Key.Right when !viewModel.IsFilmOnScreen:
+                viewModel.Gallery.NextCommand.Execute(null);
+                e.Handled = true;
+                break;
+            case Key.OemPlus or Key.Add when viewModel.ShowPictures && e.KeyModifiers is KeyModifiers.None or KeyModifiers.Shift:
+                PictureView.ZoomBy(Controls.ZoomableImage.STEP);
+                e.Handled = true;
+                break;
+            case Key.OemMinus or Key.Subtract when viewModel.ShowPictures && e.KeyModifiers == KeyModifiers.None:
+                PictureView.ZoomBy(1 / Controls.ZoomableImage.STEP);
+                e.Handled = true;
+                break;
+            case Key.D0 or Key.NumPad0 when viewModel.ShowPictures && e.KeyModifiers == KeyModifiers.None:
+                PictureView.Reset();
                 e.Handled = true;
                 break;
             case Key.Left:
@@ -905,6 +1000,14 @@ public sealed partial class MainWindow : Window
                 break;
             case Key.Right:
                 viewModel.SeekForwardCommand.Execute(null);
+                e.Handled = true;
+                break;
+            case Key.O when viewModel.IsHost && e.KeyModifiers == (KeyModifiers.Control | KeyModifiers.Shift):
+                viewModel.PickFolderCommand.Execute(null);
+                e.Handled = true;
+                break;
+            case Key.O when viewModel.IsHost && e.KeyModifiers == KeyModifiers.Control:
+                viewModel.PickFileCommand.Execute(null);
                 e.Handled = true;
                 break;
             case Key.F11:

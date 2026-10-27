@@ -363,6 +363,19 @@
   <Style Selector="MenuItem.voiceVolume:pressed /template/ Border#PART_LayoutRoot">
     <Setter Property="Background" Value="Transparent" />
   </Style>
+  <!-- Ending the session in a menu looks like its button: red on a red tint. -->
+  <Style Selector="MenuItem.danger">
+    <Setter Property="Foreground" Value="{StaticResource GoletherBad}" />
+  </Style>
+  <Style Selector="MenuItem.danger /template/ Border#PART_LayoutRoot">
+    <Setter Property="Background" Value="{StaticResource GoletherBadTint}" />
+  </Style>
+  <Style Selector="MenuItem.danger:pointerover /template/ Border#PART_LayoutRoot">
+    <Setter Property="Background" Value="#40E0685A" />
+  </Style>
+  <Style Selector="MenuItem.danger:selected /template/ Border#PART_LayoutRoot">
+    <Setter Property="Background" Value="#40E0685A" />
+  </Style>
   <Style Selector="Button.mute">
     <Setter Property="CornerRadius" Value="6" />
   </Style>

@@ -316,6 +316,13 @@ public sealed partial class ParticipantItemViewModel : ObservableObject
     public partial double? TimelineFraction { get; set; }
 
     /// <summary>
+    /// Gets or sets a value indicating whether the participant looks at a picture of the folder alone, away from the
+    /// one on everybody's screen.
+    /// </summary>
+    [ObservableProperty]
+    public partial bool IsViewingAlone { get; set; }
+
+    /// <summary>
     /// Switches the microphone of the participant off. There is deliberately no command that switches it on.
     /// </summary>
     /// <returns>A task that completes when the request was sent.</returns>

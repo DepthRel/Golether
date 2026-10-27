@@ -20,7 +20,7 @@ names are in camelCase. H is the host, P a participant.
 
 | `$t` | Direction | Fields | Meaning |
 |---|---|---|---|
-| `hello` | P → H | `version`, `displayName`, `inviteToken` | the first message |
+| `hello` | P → H | `version`, `displayName`, `inviteToken`, `gallery` | the first message |
 | `pending` | H → P | — | waiting for the host's decision |
 | `welcome` | H → P | `sessionName`, `participants[]`, `playback`, `media`, `mediaDataStreams`, `relay`, `relayOverSession`, `relayShared`, `reconnectTicket` | the participant is admitted; `relay` is the port and the credentials of the host's TURN, created for one session; `relayOverSession` means the host accepts TURN over `Relay` streams and no separate port is needed; `relayShared` means it also accepts all of them in one `RelayShared` stream; `reconnectTicket` is the ticket for coming back to this session without a new invitation |
 | `rejected` | H → P | `reason`, `message` | refusal, the connection is closed |
@@ -36,6 +36,9 @@ names are in camelCase. H is the host, P a participant.
 | `chat` | P → H → all | `id`, `kind` (`0` text, `1` reaction), `text`, `sender` | a chat message or a reaction; the host fills `sender` with the verified identifier, the value that was sent is discarded |
 | `draw` | P → H → all | `strokeId`, `phase` (`0` begin, `1` continue, `2` end), `points[]` (`x`, `y` as fractions of the picture), `sender` | a pen stroke over the video; the host fills `sender` with the verified identifier |
 | `avatar` | P → H → all | `image` (PNG, base64; empty resets), `sender` | a participant's picture, shown while the camera is off; the host fills `sender`; a new participant gets the avatars already chosen from the host |
+| `gallery` | H → P | `catalogId`, `title`, `total`, `offset`, `items[]` | a page of a shown folder; an empty `catalogId` ends the showing |
+| `show` | P → H → all | `catalogId`, `index`, `version`, `sender` | the item on everybody's screen; the host numbers the decision and fills `sender` |
+| `thumb` | P → H → P | `catalogId`, `index`, `image` (JPEG, base64) | a request for a small picture (without `image`) and the answer |
 | `bye` | any | `reason` | leaving; `reason` is always empty and is ignored by the receiver |
 
 `PlaybackState`: `state` (`0` paused, `1` playing), `position` (`hh:mm:ss.fffffff`), `referenceTime` (µs by the
@@ -115,6 +118,27 @@ connect without a token. A device the host removed or declined needs a token iss
 sends it in the `inviteToken` field of `hello`; the host compares the ticket with the one issued for that device in
 constant time and skips the invitation check. The host's confirmation is asked as for an ordinary entry. When the
 host removes a participant, the ticket is taken away.
+
+### A shown folder
+
+- Only participants that announced `gallery: true` in `hello` receive `gallery`, `show` and `thumb`: an older
+  participant would drop the connection on an unknown type.
+- `catalogId` is 32 hexadecimal digits, random for every showing. An item is `fileName`, `length`, `key`, `kind`
+  (`0` picture, `1` video) and `folder`: the nested folder relative to the shown one, names joined by `/`, at most
+  128 characters, every name cleaned like a file name. `key` is 64 hexadecimal digits, random for every showing; its
+  first 8 bytes are the file key of MediaData requests, so a picture is fetched over the media streams in checked
+  pieces. A video is never fetched this way.
+- At most 2000 items, 50 in a page; a picture is at most 64 MiB. A page whose numbers do not agree, or with an item
+  that breaks a rule, is dropped as a whole.
+- `show` from a participant is an intention (`version` and `sender` are ignored). The host accepts at most 8 a
+  second from a participant, numbers its decision and sends it to everybody with the verified sender. A video put on
+  the screen becomes the film: the host sends `media` and `state` first, then `show`. A picture put there pauses
+  the film.
+- A small picture is a JPEG of at most 320 × 320 pixels and 96 KiB, made once by the host. The host answers at most
+  400 requests in 10 seconds per participant; anything that is not a JPEG within the limits arrives as an empty answer.
+- A participant looking at a picture alone reports its index in `galleryView` of its status, bounded by the number of
+  items; the others show where everybody looks.
+- A newcomer receives the pages and the current `show` right after `welcome`.
 
 ## MediaData
 
