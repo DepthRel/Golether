@@ -57,9 +57,6 @@ The sealing is a mask against scanners, not a secret: the key is in the open cod
   the part of the address after `#` and `?` out of its reports and skips browsers that ask not to be tracked. The
   invitation page has no counter: a script of another server would see the invitation in its address. Both pages
   pin what they may load with a `Content-Security-Policy` header; there are no inline scripts or styles either.
-- The styles and scripts are linked with `?v=<date>` (`assets/site.css?v=2026-10-28`). A change of a file in
-  `assets/` moves that date in `index.html` and `join/index.html`: otherwise a browser or the GitHub Pages cache may
-  give a new page an old script, and a new text stays in English.
 - The invitation stands after `#`, so the browser does not send it to the server. The invitation page passes it
   nowhere and removes it from the address bar at once.
 - The English text is written right in the HTML (the page reads fine without scripts); the other languages (Deutsch,
