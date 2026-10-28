@@ -1448,8 +1448,10 @@ public sealed class MainWindowTests
         // The host was reached: the code to read out appears on the same screen.
         fixture.ViewModel.IsWaitingForHost = true;
         fixture.ViewModel.VerificationText = "клён · река · камень";
-        await fixture.Settle();
-        shown = fixture.Window.GetVisualDescendants().OfType<TextBlock>().Where(text => text.IsEffectivelyVisible).Select(text => text.Text).ToArray();
+
+        // Laid out at once: the refresh timer of the window would take the waiting back, as the session has none yet.
+        fixture.Window.UpdateLayout();
+        shown =fixture.Window.GetVisualDescendants().OfType<TextBlock>().Where(text => text.IsEffectivelyVisible).Select(text => text.Text).ToArray();
         Assert.Contains(Golether.Localization.Texts.Get("Main.Approval.Title"), shown);
         Assert.Contains("клён · река · камень", shown);
         SaveFrame(fixture.Window, "joining-approval");
@@ -2063,19 +2065,23 @@ public sealed class MainWindowTests
     /// </summary>
     /// <returns>A task that completes when the test is done.</returns>
     [Fact]
-    public Task PlayerBar_KeepsTheRightButtonsInPlace() => RunAsync(async fixture =>
+    public Task PlayerBar_KeepsTheRightButtonsInPlace() => RunAsync(fixture =>
     {
         var pen = fixture.Window.FindControl<ToggleButton>("PenButton")!;
         var before = pen.TranslatePoint(default, fixture.Window)!.Value;
 
         fixture.ViewModel.CountdownText = "Ждём Марину, Олега и ещё троих участников, пока у них загрузится начало фильма";
         fixture.ViewModel.CountdownShort = "3";
-        await fixture.Settle();
+
+        // The layout is run at once rather than by pumping the dispatcher: the refresh timer of the window would
+        // rebuild the countdown from the session, which has none, on a slow machine before the checks.
+        fixture.Window.UpdateLayout();
 
         Assert.Equal(before, pen.TranslatePoint(default, fixture.Window)!.Value);
         var countdown = fixture.Window.GetVisualDescendants().OfType<FallbackPanel>().Single();
         var shown = countdown.Children.Single(c => c.Opacity > 0);
         Assert.Contains(shown.GetVisualDescendants().OfType<TextBlock>(), t => t.Text == "3");
+        return Task.CompletedTask;
     });
 
     /// <summary>
