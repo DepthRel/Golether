@@ -182,7 +182,19 @@ section.alt .card { background: var(--bg); }
 .card .icon { font-size: 26px; margin-bottom: 8px; }
 /* What is new takes a whole row, so the cards below keep their even grid at any width. */
 .card.wide { grid-column: 1 / -1; }
-.card .badge { display: inline-block; margin-left: 8px; padding: 2px 9px; border-radius: 999px; background: var(--accent); color: var(--accent-ink); font-size: 12px; font-weight: 700; vertical-align: 3px; }
+/* The icon and the "New!" mark share one line: the mark stands at the right edge of the card. */
+.card-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 8px; }
+.card-head .icon { margin-bottom: 0; }
+.card .new { font-size: 15px; font-weight: 600; white-space: nowrap; color: var(--accent); }
+/* A light glint runs over the mark from time to time; reduced motion leaves it plain amber. */
+@supports ((-webkit-background-clip: text) or (background-clip: text)) {
+  .card .new {
+    background: linear-gradient(100deg, var(--accent) 35%, #FFE4C4 50%, var(--accent) 65%) 100% 0 / 300% 100%;
+    -webkit-background-clip: text; background-clip: text; color: transparent;
+    animation: glint 3.2s ease-in-out infinite;
+  }
+}
+@keyframes glint { 0%, 30% { background-position: 100% 0; } 100% { background-position: 0 0; } }
 
 /* Downloads */
 .downloads { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
