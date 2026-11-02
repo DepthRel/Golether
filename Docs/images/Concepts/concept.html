@@ -1,0 +1,421 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<title>Golether Android: концепт</title>
+<style>
+:root {
+  --bg: #0A0F11; --panel: #10181B; --panel2: #162226; --line: #223036; --text: #DDE7E5; --muted: #7F9491;
+  --accent: #F0A860; --accent-light: #F4BC84; --accent-ink: #1A1208; --secure: #4FB3A5; --secure-light: #7FD1C4;
+  --good: #62C28E; --bad: #E0685A; --bad-tint: rgba(224,104,90,.14); --mono: 'Cascadia Mono', Consolas, monospace;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { background: #05080A; color: var(--text); font: 15px/1.35 'Segoe UI', Roboto, sans-serif; padding: 40px; width: 2120px; }
+h1 { font-size: 30px; font-weight: 700; margin-bottom: 6px; }
+h1 b { color: var(--accent); }
+.lead { color: var(--muted); font-size: 16px; margin-bottom: 30px; }
+h2 { font: 600 13px var(--mono); letter-spacing: 1.5px; color: var(--muted); margin-bottom: 12px; text-transform: uppercase; }
+.row { display: flex; gap: 34px; align-items: flex-start; margin-bottom: 44px; }
+.phone { width: 360px; height: 780px; border-radius: 34px; border: 7px solid #1B2226; background: var(--bg); overflow: hidden; position: relative; display: flex; flex-direction: column; }
+.status { height: 26px; font: 600 11px var(--mono); color: var(--muted); display: flex; justify-content: space-between; padding: 7px 20px 0; flex: none; }
+svg.i { width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; display: block; }
+.label { font: 600 11px var(--mono); letter-spacing: 1px; color: var(--muted); text-transform: uppercase; }
+.mono { font-family: var(--mono); }
+.wordmark { font-weight: 800; letter-spacing: .3px; }
+.wordmark b { color: var(--accent); font-weight: 800; }
+
+/* join */
+.glow { position: absolute; left: -60px; right: -60px; top: -30px; height: 420px; background: radial-gradient(closest-side, rgba(240,168,96,.24), transparent 75%); }
+.join { position: relative; flex: 1; display: flex; flex-direction: column; padding: 0 22px 22px; }
+.brand { margin-top: 56px !important; }
+.lang { align-self: flex-end; margin-top: 6px; display: flex; gap: 7px; align-items: center; padding: 5px 11px; border: 1px solid var(--line); border-radius: 99px; font: 600 11px var(--mono); background: #10181BCC; }
+.flag { width: 18px; height: 12px; border-radius: 2px; background: linear-gradient(#fff 33%, #1C57A7 33% 66%, #D52B1E 66%); }
+.brand { text-align: center; margin: 22px 0 26px; }
+.brand img, .brand svg { width: 118px; height: 118px; }
+.brand .wordmark { font-size: 34px; margin-top: 6px; }
+.tag { color: var(--muted); font-size: 14px; margin-top: 2px; }
+.tag b { color: var(--accent); }
+.card { background: var(--panel); border: 1px solid var(--line); border-radius: 18px; padding: 16px; display: flex; flex-direction: column; gap: 7px; }
+.field { background: var(--bg); border: 1px solid var(--line); border-radius: 11px; padding: 11px 12px; font-size: 15px; display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 7px; }
+.field.focus { border-color: var(--accent); }
+.field .ph { color: var(--muted); overflow: hidden; white-space: nowrap; }
+.field svg.i { color: var(--accent); flex: none; }
+.btn { background: var(--accent); color: var(--accent-ink); border-radius: 12px; font-weight: 700; text-align: center; padding: 13px; font-size: 16px; box-shadow: 0 6px 24px rgba(240,168,96,.28); }
+.ghost { border: 1px solid var(--line); border-radius: 12px; text-align: center; padding: 12px; color: var(--text); }
+.note { color: var(--muted); font-size: 12px; text-align: center; margin-top: auto; display: flex; gap: 6px; justify-content: center; align-items: center; }
+.note svg.i { width: 14px; height: 14px; color: var(--secure); }
+
+/* approval */
+.center { position: relative; flex: 1; display: flex; flex-direction: column; justify-content: center; padding: 22px; gap: 14px; }
+.tvpulse { align-self: center; position: relative; width: 150px; height: 150px; display: grid; place-items: center; }
+.tvpulse::before, .tvpulse::after { content: ''; position: absolute; inset: 8px; border-radius: 50%; border: 1px solid rgba(240,168,96,.32); }
+.tvpulse::after { inset: -14px; border-color: rgba(240,168,96,.13); }
+.tvpulse svg { width: 84px; height: 84px; }
+.title { font-size: 23px; font-weight: 700; text-align: center; }
+.text { color: var(--muted); text-align: center; font-size: 14px; }
+.codes { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; margin: 4px 0 8px; }
+.code { font: 600 15px var(--mono); color: var(--secure-light); border: 1px solid rgba(79,179,165,.45); background: rgba(79,179,165,.09); padding: 7px 12px; border-radius: 9px; }
+
+/* watch */
+.topbar { display: flex; align-items: center; gap: 9px; padding: 6px 14px 9px; flex: none; }
+.topbar svg.logo { width: 26px; height: 26px; }
+.topbar .name { font-weight: 700; font-size: 15px; flex: 1; white-space: nowrap; overflow: hidden; }
+.chip { display: flex; align-items: center; gap: 5px; font: 600 11px var(--mono); padding: 4px 9px; border-radius: 99px; border: 1px solid var(--line); }
+.chip.secure { color: var(--secure); border-color: rgba(79,179,165,.45); background: rgba(79,179,165,.09); }
+.chip svg.i { width: 13px; height: 13px; }
+.video { position: relative; height: 197px; flex: none; overflow: hidden; background: linear-gradient(180deg, #27364F 0%, #8C5A5F 44%, #E9A266 62%, #2B2A33 63%, #14161C 100%); }
+.video::before { content: ''; position: absolute; left: 76%; top: 24%; width: 46px; height: 46px; border-radius: 50%; background: #FFD9A6; box-shadow: 0 0 60px 24px rgba(255,190,120,.55); }
+.video::after { content: ''; position: absolute; left: -10%; right: -10%; bottom: 0; height: 42%; background: #101218; clip-path: polygon(0 60%, 18% 30%, 34% 52%, 52% 18%, 70% 50%, 85% 34%, 100% 62%, 100% 100%, 0 100%); }
+.shade { position: absolute; inset: 0; background: linear-gradient(180deg, rgba(5,8,10,.35), transparent 34%, transparent 52%, rgba(5,8,10,.82)); z-index: 2; }
+.ctrls { position: absolute; z-index: 3; left: 0; right: 0; top: 46px; display: flex; justify-content: center; align-items: center; gap: 30px; color: #fff; }
+.play { width: 56px; height: 56px; border-radius: 50%; background: var(--accent); color: var(--accent-ink); display: grid; place-items: center; box-shadow: 0 4px 22px rgba(240,168,96,.5); }
+.play svg.i { width: 26px; height: 26px; fill: currentColor; }
+.skip { position: relative; width: 40px; height: 40px; display: grid; place-items: center; }
+.skip svg.i { width: 32px; height: 32px; stroke-width: 1.8; }
+.skip span { position: absolute; font: 700 9px var(--mono); top: 15px; }
+.seek { position: absolute; z-index: 3; left: 12px; right: 12px; bottom: 9px; }
+.times { display: flex; justify-content: space-between; align-items: center; font: 600 11px var(--mono); margin-bottom: 7px; color: #fff; }
+.times i { font-style: normal; color: #C6D1CF; }
+.times .tools { display: flex; gap: 14px; }
+.times .tools svg.i { width: 19px; height: 19px; }
+.bar { height: 4px; border-radius: 3px; background: rgba(255,255,255,.26); position: relative; }
+.bar i { position: absolute; left: 0; top: 0; bottom: 0; width: 72%; background: rgba(255,255,255,.26); border-radius: 3px; }
+.bar b { position: absolute; left: 0; top: 0; bottom: 0; width: 38%; background: var(--accent); border-radius: 3px; }
+.bar u { position: absolute; left: 38%; top: -4px; width: 12px; height: 12px; margin-left: -6px; border-radius: 50%; background: var(--accent); box-shadow: 0 0 0 4px rgba(240,168,96,.25); }
+.people { display: flex; gap: 8px; padding: 11px 12px 5px; flex: none; }
+.tile { flex: none; width: 96px; height: 72px; border-radius: 13px; position: relative; overflow: hidden; display: grid; place-items: center; background: var(--panel2); border: 1px solid var(--line); }
+.tile.speak { border: 2px solid var(--good); box-shadow: 0 0 14px rgba(98,194,142,.45); }
+.ava { width: 42px; height: 42px; border-radius: 50%; display: grid; place-items: center; font-weight: 800; color: #0C1315; font-size: 18px; }
+.who { position: absolute; left: 5px; bottom: 4px; font-size: 11px; padding: 0 6px; background: rgba(5,8,10,.66); border-radius: 6px; }
+.mic { position: absolute; right: 5px; top: 5px; width: 19px; height: 19px; border-radius: 6px; background: rgba(5,8,10,.7); color: var(--bad); display: grid; place-items: center; }
+.mic svg.i { width: 12px; height: 12px; stroke-width: 2.4; }
+.cam { background: radial-gradient(circle at 50% 44%, #D9A77F 0 18%, transparent 19%), radial-gradient(ellipse at 50% 112%, #3B5A66 0 44%, transparent 45%), #1E2A30; }
+.chat { flex: 1; min-height: 0; padding: 7px 14px 0; display: flex; flex-direction: column; gap: 9px; overflow: hidden; }
+.msg { font-size: 14px; }
+.msg .head { display: flex; gap: 6px; align-items: baseline; font-size: 12px; font-weight: 700; color: #B9A4F0; }
+.msg .head.me { color: var(--accent); }
+.msg .head span { font: 400 10px var(--mono); color: var(--muted); }
+.sys { font: 11px var(--mono); color: var(--muted); text-align: center; }
+.input { display: flex; gap: 8px; padding: 7px 12px; align-items: center; flex: none; }
+.input .box { flex: 1; background: var(--panel); border: 1px solid var(--line); border-radius: 22px; padding: 9px 15px; color: var(--muted); font-size: 14px; }
+.send { width: 40px; height: 40px; border-radius: 50%; background: var(--panel2); color: var(--accent); display: grid; place-items: center; }
+.dock { margin: 2px 12px 12px; padding: 7px; background: var(--panel); border: 1px solid var(--line); border-radius: 24px; display: flex; justify-content: space-between; flex: none; }
+.key { width: 48px; height: 48px; border-radius: 17px; display: grid; place-items: center; background: var(--panel2); color: var(--text); }
+.key.off { background: #3A1F1B; color: var(--bad); }
+.key.on { background: var(--accent); color: var(--accent-ink); }
+.key.end { background: var(--bad); color: #1D0D0A; }
+
+/* sheet */
+.dim { position: absolute; inset: 0; background: rgba(5,8,10,.6); z-index: 5; }
+.sheet { position: absolute; left: 0; right: 0; bottom: 0; z-index: 6; background: var(--panel); border-top: 1px solid var(--line); border-radius: 24px 24px 0 0; padding: 9px 18px 18px; }
+.grab { width: 40px; height: 4px; border-radius: 3px; background: var(--line); margin: 0 auto 13px; }
+.vol { display: flex; gap: 12px; align-items: center; margin: 9px 0 16px; color: var(--muted); }
+.vol .bar { flex: 1; background: var(--line); }
+.vol .bar b { width: 70%; }
+.vol .bar u { left: 70%; }
+.opt { display: flex; align-items: center; gap: 11px; padding: 10px 2px; font-size: 15px; }
+.opt svg.i { width: 18px; height: 18px; color: var(--accent); stroke-width: 2.6; }
+.opt .blank { width: 18px; }
+.opt.add { color: var(--accent); font-weight: 600; }
+.sep { height: 1px; background: var(--line); margin: 8px 0 12px; }
+
+/* gallery */
+.gtop { display: flex; align-items: center; justify-content: space-between; padding: 8px 16px 12px; }
+.gtop b { font-size: 18px; }
+.grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 7px; padding: 0 12px; }
+.pic { aspect-ratio: 1; border-radius: 12px; position: relative; overflow: hidden; }
+.pic.stage { outline: 3px solid var(--accent); outline-offset: -3px; box-shadow: 0 0 16px rgba(240,168,96,.5); }
+.pic span { position: absolute; left: 6px; bottom: 5px; font: 600 10px var(--mono); padding: 0 5px; background: rgba(5,8,10,.66); border-radius: 5px; }
+
+/* landscape */
+.land { width: 780px; height: 366px; border-radius: 30px; border: 7px solid #1B2226; overflow: hidden; position: relative; }
+.land .video { height: 100%; }
+.land .ctrls { top: 118px; gap: 54px; }
+.land .ctrls .play { width: 68px; height: 68px; }
+.land .seek { left: 22px; right: 86px; bottom: 16px; }
+.land .ltop { position: absolute; z-index: 3; top: 14px; left: 22px; right: 86px; display: flex; gap: 9px; align-items: center; font-weight: 700; color: #fff; }
+.land .ltop svg.logo { width: 24px; height: 24px; }
+.strip { position: absolute; z-index: 4; right: 12px; top: 14px; bottom: 14px; display: flex; flex-direction: column; justify-content: center; gap: 9px; }
+.strip .ava { border: 2px solid rgba(255,255,255,.14); width: 50px; height: 50px; }
+.strip .ava.speak { border-color: var(--good); box-shadow: 0 0 12px rgba(98,194,142,.7); }
+.bubble { position: absolute; z-index: 3; left: 22px; bottom: 74px; background: rgba(10,15,17,.72); border-radius: 12px; padding: 6px 11px; font-size: 13px; }
+.bubble b { color: #B9A4F0; font-size: 12px; margin-right: 5px; }
+
+/* icons */
+.home { width: 780px; border-radius: 22px; padding: 22px 26px 18px; background: radial-gradient(circle at 20% 0%, #33506E, #1A2A3C 60%, #101A26); }
+.opts { display: flex; justify-content: space-between; }
+.optn { text-align: center; width: 225px; }
+.optn h3 { font-size: 15px; font-weight: 700; margin-top: 13px; }
+.optn p { font-size: 12px; color: #BCC9D6; margin-top: 2px; }
+.shapes { display: flex; gap: 14px; align-items: center; justify-content: center; }
+.mask { overflow: hidden; display: block; }
+.mask.circle { border-radius: 50%; width: 108px; height: 108px; }
+.mask.squir { border-radius: 27%; width: 72px; height: 72px; }
+.mask.small { border-radius: 50%; width: 44px; height: 44px; }
+.mask svg { width: 100%; height: 100%; display: block; }
+
+.set { width: 500px; }
+.icons { display: grid; grid-template-columns: repeat(7, 1fr); gap: 13px; background: var(--panel); border: 1px solid var(--line); border-radius: 16px; padding: 15px; color: var(--text); margin-bottom: 15px; }
+.icons svg.i { width: 28px; height: 28px; margin: auto; }
+.swatches { display: flex; gap: 8px; }
+.sw { flex: 1; height: 58px; border-radius: 11px; border: 1px solid var(--line); font: 600 9px var(--mono); padding: 5px; display: flex; align-items: flex-end; }
+</style>
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute">
+  <defs>
+    <linearGradient id="amber" x1="112" y1="232" x2="912" y2="812" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#F6BE82"/><stop offset="1" stop-color="#E08E3C"/></linearGradient>
+    <linearGradient id="teal" x1="312" y1="356" x2="712" y2="756" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#7FD1C4"/><stop offset="1" stop-color="#3C9A8D"/></linearGradient>
+    <clipPath id="screen"><rect x="168" y="288" width="688" height="468" rx="64"/></clipPath>
+    <radialGradient id="plateGlow" cx=".5" cy=".5" r=".55"><stop offset="0" stop-color="#3A2A1A"/><stop offset=".7" stop-color="#141B1E"/><stop offset="1" stop-color="#0E1517"/></radialGradient>
+    <radialGradient id="plateAmber" cx=".35" cy=".25" r=".95"><stop offset="0" stop-color="#F8C78F"/><stop offset="1" stop-color="#E08E3C"/></radialGradient>
+    <symbol id="tv" viewBox="0 0 1024 1024">
+      <g stroke="#EDA35A" stroke-width="40" stroke-linecap="round" fill="none"><path d="M512 232 L380 96 M512 232 L644 96"/><path d="M300 800 L270 900 M724 800 L754 900"/></g>
+      <rect x="112" y="232" width="800" height="580" rx="110" fill="url(#amber)"/>
+      <rect x="168" y="288" width="688" height="468" rx="64" fill="#0C1315"/>
+      <g clip-path="url(#screen)" fill="url(#teal)"><circle cx="512" cy="452" r="96"/><ellipse cx="512" cy="768" rx="200" ry="180"/></g>
+    </symbol>
+    <symbol id="tvdark" viewBox="0 0 1024 1024">
+      <g stroke="#1A1208" stroke-width="44" stroke-linecap="round" fill="none"><path d="M512 232 L380 96 M512 232 L644 96"/><path d="M300 800 L270 900 M724 800 L754 900"/></g>
+      <rect x="112" y="232" width="800" height="580" rx="110" fill="#1A1208"/>
+      <g clip-path="url(#screen)" fill="url(#teal)"><circle cx="512" cy="452" r="96"/><ellipse cx="512" cy="768" rx="200" ry="180"/></g>
+    </symbol>
+    <symbol id="i-play" viewBox="0 0 24 24"><path d="M8 5.5v13l10.5-6.5z"/></symbol>
+    <symbol id="i-pause" viewBox="0 0 24 24"><path d="M9 5v14M15 5v14"/></symbol>
+    <symbol id="i-back" viewBox="0 0 24 24"><path d="M4 12a8 8 0 1 0 2.5-5.8L4 8.5M4 4v4.5h4.5"/></symbol>
+    <symbol id="i-fwd" viewBox="0 0 24 24"><path d="M20 12a8 8 0 1 1-2.5-5.8L20 8.5M20 4v4.5h-4.5"/></symbol>
+    <symbol id="i-mic" viewBox="0 0 24 24"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5.5 11.5a6.5 6.5 0 0 0 13 0M12 18v3"/></symbol>
+    <symbol id="i-micoff" viewBox="0 0 24 24"><path d="M9 9v2a3 3 0 0 0 4.6 2.5M15 10V6a3 3 0 0 0-5.8-1M5.5 11.5a6.5 6.5 0 0 0 10.6 5M18.5 11.5a6.5 6.5 0 0 1-.5 2.5M12 18v3M4 4l16 16"/></symbol>
+    <symbol id="i-cam" viewBox="0 0 24 24"><rect x="3" y="6.5" width="12.5" height="11" rx="2.5"/><path d="M15.5 10.5 21 7.5v9l-5.5-3"/></symbol>
+    <symbol id="i-pen" viewBox="0 0 24 24"><path d="M4 20l1-4.5L16 4.5a2.1 2.1 0 0 1 3 3L8 18.5zM14 6.5l3.5 3.5"/></symbol>
+    <symbol id="i-smile" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M8.5 14a4 4 0 0 0 7 0M9 9.5v.01M15 9.5v.01"/></symbol>
+    <symbol id="i-end" viewBox="0 0 24 24"><path d="M10 4H6a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h4M15 8l4 4-4 4M19 12H10"/></symbol>
+    <symbol id="i-send" viewBox="0 0 24 24"><path d="M4 12 20 4.5 15.5 20l-3.5-6.5zM12 13.5 20 4.5"/></symbol>
+    <symbol id="i-cc" viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="14" rx="3"/><path d="M6.5 12.5h4M13 12.5h4.5M6.5 15.5h7M15.5 15.5h2"/></symbol>
+    <symbol id="i-grid" viewBox="0 0 24 24"><rect x="4" y="4" width="6.5" height="6.5" rx="1.6"/><rect x="13.5" y="4" width="6.5" height="6.5" rx="1.6"/><rect x="4" y="13.5" width="6.5" height="6.5" rx="1.6"/><rect x="13.5" y="13.5" width="6.5" height="6.5" rx="1.6"/></symbol>
+    <symbol id="i-lock" viewBox="0 0 24 24"><rect x="5" y="11" width="14" height="9.5" rx="2.5"/><path d="M8 11V7.5a4 4 0 0 1 8 0V11"/></symbol>
+    <symbol id="i-check" viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7"/></symbol>
+    <symbol id="i-sound" viewBox="0 0 24 24"><path d="M4 9.5v5h3.5L12.5 19V5L7.5 9.5zM16 9a4 4 0 0 1 0 6M18.5 6.5a8 8 0 0 1 0 11"/></symbol>
+    <symbol id="i-swap" viewBox="0 0 24 24"><path d="M4 12a8 8 0 0 1 14-5.2L20 9M20 4.5V9h-4.5M20 12a8 8 0 0 1-14 5.2L4 15M4 19.5V15h4.5"/></symbol>
+    <symbol id="i-paste" viewBox="0 0 24 24"><rect x="5" y="5" width="14" height="16" rx="2.5"/><path d="M9 5V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v1M9 12h6M9 16h4"/></symbol>
+    <symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol>
+    <symbol id="i-close" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6 6 18"/></symbol>
+    <symbol id="i-people" viewBox="0 0 24 24"><circle cx="9.5" cy="8" r="3.5"/><path d="M3 20a6.5 6.5 0 0 1 13 0M16 4.8a3.5 3.5 0 0 1 0 6.4M21 20a6.5 6.5 0 0 0-3.5-5.8"/></symbol>
+  </defs>
+</svg>
+
+<h1>gole<b>ther</b> для Android: концепт интерфейса</h1>
+<div class="lead">Палитра, знак и язык те же, что на десктопе и сайте: чернильный фон, лампа проектора, моно-подписи. Изображение фильма условное.</div>
+
+<div class="row">
+  <div>
+    <h2>1. Вход</h2>
+    <div class="phone">
+      <div class="status"><span>21:07</span><span>5G 84%</span></div>
+      <div class="glow"></div>
+      <div class="join">
+        <div class="lang"><span class="flag"></span>RU</div>
+        <div class="brand">
+          <svg><use href="#tv"/></svg>
+          <div class="wordmark">gole<b>ther</b></div>
+          <div class="tag"><b>LET</b>'s <b>GO</b> toget<b>HER</b></div>
+        </div>
+        <div class="card">
+          <div class="label">Ваше имя</div>
+          <div class="field"><span>Катя</span></div>
+          <div class="label">Приглашение</div>
+          <div class="field focus"><span class="ph">golether://join/8Fq2…x7Kd</span><svg class="i"><use href="#i-paste"/></svg></div>
+          <div class="btn">Подключиться</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div>
+    <h2>2. Проверка</h2>
+    <div class="phone">
+      <div class="status"><span>21:07</span><span>5G 84%</span></div>
+      <div class="glow"></div>
+      <div class="center">
+        <div class="tvpulse"><svg><use href="#tv"/></svg></div>
+        <div class="title">Ждём хоста</div>
+        <div class="text">Сверьте код с хостом голосом: у него на экране те же слова</div>
+        <div class="codes">
+          <span class="code">якорь</span><span class="code">лимон</span><span class="code">компас</span>
+          <span class="code">сова</span><span class="code">мост</span><span class="code">перо</span>
+        </div>
+        <div class="ghost">Отмена</div>
+      </div>
+    </div>
+  </div>
+
+  <div>
+    <h2>3. Просмотр</h2>
+    <div class="phone">
+      <div class="status"><span>21:12</span><span>5G 83%</span></div>
+      <div class="topbar">
+        <svg class="logo"><use href="#tv"/></svg>
+        <div class="name">Киновечер</div>
+        <div class="chip secure"><svg class="i"><use href="#i-lock"/></svg>3 из 5</div>
+      </div>
+      <div class="video">
+        <div class="shade"></div>
+        <div class="ctrls">
+          <div class="skip"><svg class="i"><use href="#i-back"/></svg><span>10</span></div>
+          <div class="play"><svg class="i"><use href="#i-play"/></svg></div>
+          <div class="skip"><svg class="i"><use href="#i-fwd"/></svg><span>10</span></div>
+        </div>
+        <div class="seek">
+          <div class="times"><span>0:28:06 <i>/ 2:28:07</i></span><div class="tools"><svg class="i"><use href="#i-cc"/></svg><svg class="i"><use href="#i-sound"/></svg></div></div>
+          <div class="bar"><i></i><b></b><u></u></div>
+        </div>
+      </div>
+      <div class="people">
+        <div class="tile speak cam"><div class="who">Вы</div></div>
+        <div class="tile"><div class="ava" style="background:#CDB4F6">M</div><div class="who">Миша</div></div>
+        <div class="tile"><div class="ava" style="background:#7FD1C4">А</div><div class="who">Аня</div><div class="mic"><svg class="i"><use href="#i-micoff"/></svg></div></div>
+      </div>
+      <div class="chat">
+        <div class="sys">Миша поставил на паузу · 0:27:40</div>
+        <div class="msg"><div class="head">Миша <span>21:10</span></div>Сейчас будет лучшая сцена</div>
+        <div class="msg"><div class="head me">Вы <span>21:11</span></div>Да, помню!</div>
+      </div>
+      <div class="input"><div class="box">Сообщение…</div><div class="send"><svg class="i"><use href="#i-send"/></svg></div></div>
+      <div class="dock">
+        <div class="key"><svg class="i"><use href="#i-mic"/></svg></div>
+        <div class="key off"><svg class="i"><use href="#i-cam"/></svg></div>
+        <div class="key on"><svg class="i"><use href="#i-pen"/></svg></div>
+        <div class="key"><svg class="i"><use href="#i-smile"/></svg></div>
+        <div class="key end"><svg class="i"><use href="#i-end"/></svg></div>
+      </div>
+    </div>
+  </div>
+
+  <div>
+    <h2>4. Звук и субтитры</h2>
+    <div class="phone">
+      <div class="status"><span>21:12</span><span>5G 83%</span></div>
+      <div class="topbar"><svg class="logo"><use href="#tv"/></svg><div class="name">Киновечер</div></div>
+      <div class="video"></div>
+      <div class="dim"></div>
+      <div class="sheet">
+        <div class="grab"></div>
+        <div class="label">Громкость фильма</div>
+        <div class="vol"><svg class="i"><use href="#i-sound"/></svg><div class="bar"><b></b><u></u></div></div>
+        <div class="label">Звук</div>
+        <div class="opt"><svg class="i"><use href="#i-check"/></svg>Русский · 5.1</div>
+        <div class="opt"><span class="blank"></span>English</div>
+        <div class="opt add"><svg class="i"><use href="#i-plus"/></svg>Добавить файл</div>
+        <div class="sep"></div>
+        <div class="label">Субтитры</div>
+        <div class="opt"><span class="blank"></span>Выключены</div>
+        <div class="opt"><svg class="i"><use href="#i-check"/></svg>Русский</div>
+        <div class="opt add"><svg class="i"><use href="#i-plus"/></svg>Добавить файл</div>
+      </div>
+    </div>
+  </div>
+
+  <div>
+    <h2>5. Галерея</h2>
+    <div class="phone">
+      <div class="status"><span>21:30</span><span>5G 80%</span></div>
+      <div class="gtop"><b>Отпуск 2026</b><svg class="i"><use href="#i-close"/></svg></div>
+      <div class="grid">
+        <div class="pic" style="background:linear-gradient(#4F7FA8,#D8B48A)"><span>1</span></div>
+        <div class="pic" style="background:linear-gradient(135deg,#2F5D50,#8FB36C)"><span>2</span></div>
+        <div class="pic stage" style="background:linear-gradient(#E9A266,#6B3B4F)"><span>3</span></div>
+        <div class="pic" style="background:linear-gradient(200deg,#21354F,#6E8BA8)"><span>4</span></div>
+        <div class="pic" style="background:linear-gradient(#C96A4F,#3B2A33)"><span>5</span></div>
+        <div class="pic" style="background:linear-gradient(120deg,#D9C27E,#5E7F5A)"><span>6</span></div>
+        <div class="pic" style="background:linear-gradient(#7FA8C9,#2A4A6B)"><span>7</span></div>
+        <div class="pic" style="background:linear-gradient(160deg,#8C5A7F,#E0B7A0)"><span>8</span></div>
+        <div class="pic" style="background:linear-gradient(#3C6E71,#284B63)"><span>9</span></div>
+        <div class="pic" style="background:linear-gradient(#B7C9D6,#5F7485)"><span>10</span></div>
+        <div class="pic" style="background:linear-gradient(45deg,#403233,#C98F5E)"><span>11</span></div>
+        <div class="pic" style="background:linear-gradient(#90B894,#35594F)"><span>12</span></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="row">
+  <div>
+    <h2>6. На боку: фильм на весь экран, люди сбоку</h2>
+    <div class="land">
+      <div class="video">
+        <div class="shade"></div>
+        <div class="ltop"><svg class="logo"><use href="#tv"/></svg>Киновечер</div>
+        <div class="ctrls">
+          <div class="skip"><svg class="i"><use href="#i-back"/></svg><span>10</span></div>
+          <div class="play"><svg class="i"><use href="#i-pause"/></svg></div>
+          <div class="skip"><svg class="i"><use href="#i-fwd"/></svg><span>10</span></div>
+        </div>
+        <div class="bubble"><b>Миша</b>Смотрите на море!</div>
+        <div class="seek">
+          <div class="times"><span>0:28:06 <i>/ 2:28:07</i></span><div class="tools"><svg class="i"><use href="#i-mic"/></svg><svg class="i"><use href="#i-pen"/></svg><svg class="i"><use href="#i-smile"/></svg><svg class="i"><use href="#i-cc"/></svg><svg class="i"><use href="#i-sound"/></svg></div></div>
+          <div class="bar"><i></i><b></b><u></u></div>
+        </div>
+        <div class="strip">
+          <div class="ava speak" style="background:#CDB4F6">M</div>
+          <div class="ava" style="background:#7FD1C4">А</div>
+          <div class="ava" style="background:#F4BC84">К</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div>
+    <h2>Иконка: три варианта (круг, скруглённый квадрат, мелкий размер)</h2>
+    <div class="home" style="height:366px; display:flex; flex-direction:column; justify-content:center;">
+      <div class="opts">
+        <div class="optn">
+          <div class="shapes">
+            <span class="mask circle"><svg viewBox="0 0 108 108"><rect width="108" height="108" fill="url(#plateGlow)"/><use href="#tv" x="24" y="23" width="60" height="60"/></svg></span>
+            <span class="mask squir"><svg viewBox="0 0 108 108"><rect width="108" height="108" fill="url(#plateGlow)"/><use href="#tv" x="24" y="23" width="60" height="60"/></svg></span>
+          </div>
+          <div class="shapes" style="margin-top:10px"><span class="mask small"><svg viewBox="0 0 108 108"><rect width="108" height="108" fill="url(#plateGlow)"/><use href="#tv" x="24" y="23" width="60" height="60"/></svg></span></div>
+          <h3>A. Логотип на чернилах</h3>
+          <p>Весь телевизор целиком, тёплое свечение за ним. Как на десктопе</p>
+        </div>
+        <div class="optn">
+          <div class="shapes">
+            <span class="mask circle"><svg viewBox="0 0 108 108"><rect width="108" height="108" fill="url(#plateAmber)"/><use href="#tvdark" x="24" y="23" width="60" height="60"/></svg></span>
+            <span class="mask squir"><svg viewBox="0 0 108 108"><rect width="108" height="108" fill="url(#plateAmber)"/><use href="#tvdark" x="24" y="23" width="60" height="60"/></svg></span>
+          </div>
+          <div class="shapes" style="margin-top:10px"><span class="mask small"><svg viewBox="0 0 108 108"><rect width="108" height="108" fill="url(#plateAmber)"/><use href="#tvdark" x="24" y="23" width="60" height="60"/></svg></span></div>
+          <h3>B. Янтарная плашка</h3>
+          <p>Тёмный телевизор на янтаре. Ярче всех на рабочем столе</p>
+        </div>
+        <div class="optn">
+          <div class="shapes">
+            <span class="mask circle"><svg viewBox="0 0 108 108"><rect width="108" height="108" fill="url(#plateGlow)"/><use href="#tv" x="19" y="16" width="70" height="70"/></svg></span>
+            <span class="mask squir"><svg viewBox="0 0 108 108"><rect width="108" height="108" fill="url(#plateGlow)"/><use href="#tv" x="19" y="16" width="70" height="70"/></svg></span>
+          </div>
+          <div class="shapes" style="margin-top:10px"><span class="mask small"><svg viewBox="0 0 108 108"><rect width="108" height="108" fill="url(#plateGlow)"/><use href="#tv" x="19" y="16" width="70" height="70"/></svg></span></div>
+          <h3>C. Логотип крупнее</h3>
+          <p>Как A, но телевизор на пределе безопасной зоны</p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="set">
+    <h2>Свой набор значков и палитра</h2>
+    <div class="icons">
+      <svg class="i"><use href="#i-play"/></svg><svg class="i"><use href="#i-pause"/></svg><svg class="i"><use href="#i-back"/></svg><svg class="i"><use href="#i-fwd"/></svg><svg class="i"><use href="#i-mic"/></svg><svg class="i"><use href="#i-micoff"/></svg><svg class="i"><use href="#i-cam"/></svg>
+      <svg class="i"><use href="#i-swap"/></svg><svg class="i"><use href="#i-pen"/></svg><svg class="i"><use href="#i-smile"/></svg><svg class="i"><use href="#i-end"/></svg><svg class="i"><use href="#i-send"/></svg><svg class="i"><use href="#i-cc"/></svg><svg class="i"><use href="#i-sound"/></svg>
+      <svg class="i"><use href="#i-grid"/></svg><svg class="i"><use href="#i-lock"/></svg><svg class="i"><use href="#i-check"/></svg><svg class="i"><use href="#i-paste"/></svg><svg class="i"><use href="#i-plus"/></svg><svg class="i"><use href="#i-close"/></svg><svg class="i"><use href="#i-people"/></svg>
+    </div>
+    <div class="swatches">
+      <div class="sw" style="background:#0A0F11">фон</div>
+      <div class="sw" style="background:#10181B">панель</div>
+      <div class="sw" style="background:#162226">кнопка</div>
+      <div class="sw" style="background:#F0A860;color:#1A1208">акцент</div>
+      <div class="sw" style="background:#4FB3A5;color:#07201C">защита</div>
+      <div class="sw" style="background:#62C28E;color:#07201C">говорит</div>
+      <div class="sw" style="background:#E0685A;color:#1D0D0A">стоп</div>
+    </div>
+  </div>
+</div>
+</body>
+</html>
