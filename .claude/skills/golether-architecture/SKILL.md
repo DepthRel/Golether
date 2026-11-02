@@ -26,6 +26,7 @@ Full design: `Docs/En/Architecture.md`, wire formats: `Docs/En/Protocol.md`.
 | `Session` | `HostSession`, `ParticipantSession` |
 | `Apps/Golether.Client` | client layer shared with the mobile client: services and view models without windows, the colours of the theme (`Styles/Palette.axaml`), `IFeatureAccess` (paid features) |
 | `Apps/Golether.UI` | Avalonia MVVM app, composition root `AppServices` |
+| `Apps/Golether.Mobile(.Android)` | Android participant client: one Avalonia view, its own theme and icons; the package with the activity and the foreground service. Projects with `Build="false"` in `Golether.slnx`, so CI never needs the Android workload; `*.Android` projects next to their abstraction (`Media.Player.Android`, `Media.Conference.GStreamer.Android`, `Security.Android`) |
 | `Apps/Golether.Web.Server(.UI/.Contracts)` | rendezvous + STUN server, its monitor window, shared contracts |
 | `Apps/Golether.Pages` | static GitHub Pages site: landing, `join/` link page, `updates.json`, `config.json` |
 

@@ -1,0 +1,10 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- The start of GStreamer from an Android Context; its Java classes go into the package of the application. -->
+  <PropertyGroup>
+    <TargetFramework>net10.0-android</TargetFramework>
+    <SupportedOSPlatformVersion>26</SupportedOSPlatformVersion>
+    <RootNamespace>Golether.Media.Conference.GStreamer.Android</RootNamespace>
+  </PropertyGroup>
+
+</Project>

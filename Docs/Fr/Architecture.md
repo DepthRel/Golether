@@ -40,6 +40,7 @@ Sources/
   Database/Golether.Dbs.SQLite.DbMigrator  le migrateur en console
   Security/Golether.Security               clé de l'appareil, protection des secrets, invitations, code de vérification,
                                            admission, l'adresse scellée du serveur de rendez-vous
+  Security/Golether.Security.Android       les secrets sous une clé de l'Android Keystore
   Components/Golether.Components          catalogue des composants natifs (libmpv, GStreamer, AmneziaWG), recherche et installation
   Tools/Golether.Tools.Components          l'utilitaire golether-components : prépare les composants pour la construction d'un paquet
   Transports/Golether.Transports.Abstractions  PeerStream, connecteur et écouteur, FrameChannel
@@ -50,11 +51,15 @@ Sources/
   Sync/Golether.Sync                       protocole, estimation du décalage des horloges, PlaybackAuthority, PlaybackFollower
   Media/Golether.Media.Streaming           serveur de morceaux, client parallèle, cache, lecture anticipée, flux pour le lecteur
   Media/Golether.Media.Player              libmpv (P/Invoke, intégration, golether://), un lecteur simulé
+  Media/Golether.Media.Player.Android      libmpv sous Android : les décodeurs matériels de FFmpeg
   Media/Golether.Media.Conference          contrat des caméras et de la voix, un bouchon
   Media/Golether.Media.Conference.GStreamer  caméras et voix : capture, VP8/Opus, webrtcbin, mixeur, annulation d'écho
+  Media/Golether.Media.Conference.GStreamer.Android  le démarrage de GStreamer sous Android
   Tunnels/Golether.Tunnels.AmneziaWG       clés X25519, obfuscation, .conf, paquets signés, pilotage par la CLI
   Session/Golether.Session                 HostSession et ParticipantSession
   Apps/Golether.Client                     couche client commune : services, modèles de vue et contrôles sans fenêtres, couleurs du thème, fonctions payantes
+  Apps/Golether.Mobile                     les écrans du client mobile : Avalonia, une vue au lieu de fenêtres, thème et icônes propres
+  Apps/Golether.Mobile.Android             le paquet Android : activité, service de premier plan de la session, composants natifs
   Apps/Golether.UI                         Avalonia : fenêtre, dialogues, composition des dépendances
   Apps/Golether.Web.Server                 le serveur de rendez-vous (une application séparée, voir RendezvousServer.md)
   Apps/Golether.Web.Server.Contracts       ce que partagent le serveur et son moniteur : réglages, noms du service, état, journal

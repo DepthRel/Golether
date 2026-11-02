@@ -27,6 +27,9 @@ It is a free, open-source, **cross-platform** desktop app (Windows 10+, Linux on
 The host shows a video file in its original quality, up to five people watch together, and nobody has to upload,
 transcode or install a server.
 
+An **Android** client for the participants is in development: it joins a session hosted on a computer. It is not
+released yet.
+
 ## Features
 
 - **Truly synchronous playback.** Play, pause and seek work for everyone, in both directions. The protocol is
@@ -133,8 +136,10 @@ combination, so two instances can be tried on one machine. Each profile builds o
 
 ```
 Sources/
-  Apps/          the application (Golether.UI), the rendezvous server (Golether.Web.Server), its monitor
-                 (Golether.Web.Server.UI) and their shared contracts, the project page (Golether.Pages)
+  Apps/          the application (Golether.UI), the client layer it shares with the Android client
+                 (Golether.Client), the Android client (Golether.Mobile, Golether.Mobile.Android), the rendezvous
+                 server (Golether.Web.Server), its monitor (Golether.Web.Server.UI) and their shared contracts,
+                 the project page (Golether.Pages)
   Components/    native components: catalog, checksums, installer
   Core/          core, data and migrations, localization
   Database/      console database migrator
@@ -147,8 +152,8 @@ Sources/
   Tunnels/       AmneziaWG tunnels
 Tests/           one test project per module
 Docs/            documentation: En (the main set), De, Es, Fr, Pt, Ru (the same set translated), images
-Scripts/         packaging: App (the application), Server (the server and its monitor), Assets (pictures),
-                 Shared (helpers); build-release.ps1 builds a whole release
+Scripts/         packaging: App (the application), Server (the server and its monitor), Android (native components,
+                 the emulator), Assets (pictures), Shared (helpers); build-release.ps1 builds a whole release
 ```
 
 ## Documentation
@@ -165,6 +170,7 @@ The documentation is kept by language: [English](Docs/En) is the main set, and t
 | [Protocol](Docs/En/Protocol.md) | network protocol and packet formats |
 | [Rendezvous server](Docs/En/RendezvousServer.md) | how the rendezvous server works and how to build it |
 | [Development](Docs/En/Development.md) | developers: build, tests, debugging, packaging |
+| [Android emulator](Docs/En/AndroidEmulator.md) | developers: the tools and the virtual device for the Android client on Windows |
 | [AGENTS.md](AGENTS.md) | code rules and code style for people and coding agents |
 
 ## Packaging
@@ -202,3 +208,6 @@ and Linux. On a developer's machine `./Scripts/build-release.ps1` builds the sam
 GPL-3.0-or-later: the text is in [LICENSE.txt](LICENSE.txt). All dependencies are GPL-compatible; the components,
 their licenses and where to get their source are listed in [THIRD-PARTY-NOTICES.txt](THIRD-PARTY-NOTICES.txt), which
 every package carries next to the program.
+
+The license covers the code, not the name and the logo. A modified version you distribute must carry its own name and
+icon, so that nobody takes it for Golether.

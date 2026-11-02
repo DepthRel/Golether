@@ -1,0 +1,62 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- The Android package of the mobile client. It needs the android workload, so Golether.slnx does not build it. -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0-android</TargetFramework>
+    <SupportedOSPlatformVersion>26</SupportedOSPlatformVersion>
+    <RootNamespace>Golether.Mobile.Android</RootNamespace>
+    <ApplicationId>depthrel.golether</ApplicationId>
+    <ApplicationVersion>1</ApplicationVersion>
+    <ApplicationDisplayVersion>$(Version)</ApplicationDisplayVersion>
+    <RuntimeIdentifiers>android-arm64;android-arm;android-x64</RuntimeIdentifiers>
+    <AndroidPackageFormat>apk</AndroidPackageFormat>
+  </PropertyGroup>
+
+  <!--
+    The native components go into the package: a store forbids downloading code. They are built once per version by
+    Scripts/Android/build-natives.ps1 and are not in git, see Native/README.md.
+  -->
+  <PropertyGroup>
+    <GoletherNativeRoot>$([MSBuild]::NormalizeDirectory('$(MSBuildThisFileDirectory)', '..', '..', '..', 'Native'))</GoletherNativeRoot>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <AndroidNativeLibrary Include="$(GoletherNativeRoot)android-arm64\**\*.so" Abi="arm64-v8a" />
+    <AndroidNativeLibrary Include="$(GoletherNativeRoot)android-arm\**\*.so" Abi="armeabi-v7a" />
+    <AndroidNativeLibrary Include="$(GoletherNativeRoot)android-x64\**\*.so" Abi="x86_64" />
+    <!-- The Java classes generated with GStreamer: its library looks them up as soon as it is loaded. -->
+    <AndroidJavaSource Include="$(GoletherNativeRoot)android\gstreamer-java\org\**\*.java" Bind="false" />
+  </ItemGroup>
+
+  <Target Name="GoletherRequireNatives" BeforeTargets="PrepareForBuild"
+          Condition="!Exists('$(GoletherNativeRoot)android-arm64\libmpv.so') or !Exists('$(GoletherNativeRoot)android-arm\libmpv.so') or !Exists('$(GoletherNativeRoot)android-x64\libmpv.so')">
+    <Error Text="The native components of Android are missing in Native/android-*. Run Scripts/Android/build-natives.ps1 (see Native/README.md)." />
+  </Target>
+
+  <!-- The checks that can be proved only on a device; they never go into a normal package. -->
+  <PropertyGroup Condition="'$(GoletherDeviceChecks)' == 'true'">
+    <DefineConstants>$(DefineConstants);DEVICE_CHECKS</DefineConstants>
+  </PropertyGroup>
+
+  <ItemGroup Condition="'$(GoletherDeviceChecks)' != 'true'">
+    <Compile Remove="Diagnostics/**" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Avalonia.Android" />
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection" />
+    <PackageReference Include="Microsoft.Extensions.Logging" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="../Golether.Mobile/Golether.Mobile.csproj" />
+    <ProjectReference Include="../../Core/Golether.Core.Data.Migrations.SQLite/Golether.Core.Data.Migrations.SQLite.csproj" />
+    <ProjectReference Include="../../Media/Golether.Media.Conference.GStreamer/Golether.Media.Conference.GStreamer.csproj" />
+    <ProjectReference Include="../../Media/Golether.Media.Conference.GStreamer.Android/Golether.Media.Conference.GStreamer.Android.csproj" />
+    <ProjectReference Include="../../Media/Golether.Media.Player.Android/Golether.Media.Player.Android.csproj" />
+    <ProjectReference Include="../../Security/Golether.Security.Android/Golether.Security.Android.csproj" />
+    <ProjectReference Include="../../Transports/Golether.Transports.Tls/Golether.Transports.Tls.csproj" />
+  </ItemGroup>
+
+</Project>

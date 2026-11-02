@@ -1,0 +1,34 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- The screens of the mobile client: one view instead of windows, on top of the client layer. -->
+  <PropertyGroup>
+    <RootNamespace>Golether.Mobile</RootNamespace>
+    <AvaloniaUseCompiledBindingsByDefault>true</AvaloniaUseCompiledBindingsByDefault>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Avalonia" />
+    <PackageReference Include="Avalonia.Fonts.Inter" />
+    <PackageReference Include="Avalonia.Themes.Fluent" />
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection" />
+    <PackageReference Include="Microsoft.Extensions.Logging" />
+  </ItemGroup>
+
+  <!-- The logo and the flags stay in one place, with the desktop application. -->
+  <ItemGroup>
+    <AvaloniaResource Include="..\Golether.UI\Assets\golether-512.png" Link="Assets\golether-512.png" />
+    <AvaloniaResource Include="..\Golether.UI\Assets\Flags\*.png" Link="Assets\Flags\%(Filename)%(Extension)" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="Golether.Mobile.Tests" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="../Golether.Client/Golether.Client.csproj" />
+    <ProjectReference Include="../../Core/Golether.Core.Data.Migrations.SQLite/Golether.Core.Data.Migrations.SQLite.csproj" />
+    <ProjectReference Include="../../Media/Golether.Media.Conference.GStreamer/Golether.Media.Conference.GStreamer.csproj" />
+    <ProjectReference Include="../../Transports/Golether.Transports.Tls/Golether.Transports.Tls.csproj" />
+  </ItemGroup>
+
+</Project>

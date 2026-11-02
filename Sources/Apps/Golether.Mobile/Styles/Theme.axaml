@@ -1,0 +1,423 @@
+<Styles xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:controls="using:Golether.Mobile.Controls">
+  <!--
+    The look of the mobile client, on the colours of the desktop: ink ground, the amber of a projector lamp for what acts,
+    teal for what is secure, mono captions.
+  -->
+  <Styles.Resources>
+    <ResourceDictionary>
+      <ResourceDictionary.MergedDictionaries>
+        <ResourceInclude Source="avares://Golether.Client/Styles/Palette.axaml" />
+        <ResourceInclude Source="avares://Golether.Mobile/Styles/Icons.axaml" />
+      </ResourceDictionary.MergedDictionaries>
+
+      <FontFamily x:Key="GoletherFont">fonts:Inter#Inter, $Default</FontFamily>
+      <SolidColorBrush x:Key="GoletherSecureLight" Color="#7FD1C4" />
+      <SolidColorBrush x:Key="GoletherSecureFrame" Color="#734FB3A5" />
+      <SolidColorBrush x:Key="GoletherOverFilm" Color="#A60A0F11" />
+      <SolidColorBrush x:Key="GoletherOffKey" Color="#3A1F1B" />
+
+      <!-- Text fields: ink in a thin line, the lamp lights the line of the one in use. -->
+      <SolidColorBrush x:Key="TextControlBackground" Color="#0A0F11" />
+      <SolidColorBrush x:Key="TextControlBackgroundPointerOver" Color="#0A0F11" />
+      <SolidColorBrush x:Key="TextControlBackgroundFocused" Color="#0A0F11" />
+      <SolidColorBrush x:Key="TextControlBorderBrush" Color="#223036" />
+      <SolidColorBrush x:Key="TextControlBorderBrushPointerOver" Color="#223036" />
+      <SolidColorBrush x:Key="TextControlBorderBrushFocused" Color="#F0A860" />
+      <SolidColorBrush x:Key="TextControlForeground" Color="#DDE7E5" />
+      <SolidColorBrush x:Key="TextControlForegroundFocused" Color="#DDE7E5" />
+      <SolidColorBrush x:Key="TextControlPlaceholderForeground" Color="#7F9491" />
+      <SolidColorBrush x:Key="TextControlPlaceholderForegroundFocused" Color="#7F9491" />
+      <Thickness x:Key="TextControlBorderThemeThicknessFocused">1</Thickness>
+
+      <!-- Scales: a thin line with the amber part of the way. -->
+      <SolidColorBrush x:Key="SliderTrackValueFill" Color="#F0A860" />
+      <SolidColorBrush x:Key="SliderTrackValueFillPointerOver" Color="#F0A860" />
+      <SolidColorBrush x:Key="SliderTrackValueFillPressed" Color="#F0A860" />
+      <SolidColorBrush x:Key="SliderTrackFill" Color="#47FFFFFF" />
+      <SolidColorBrush x:Key="SliderTrackFillPointerOver" Color="#47FFFFFF" />
+      <SolidColorBrush x:Key="SliderTrackFillPressed" Color="#47FFFFFF" />
+      <SolidColorBrush x:Key="SliderThumbBackground" Color="#F0A860" />
+      <SolidColorBrush x:Key="SliderThumbBackgroundPointerOver" Color="#F4BC84" />
+      <SolidColorBrush x:Key="SliderThumbBackgroundPressed" Color="#D98E45" />
+    </ResourceDictionary>
+  </Styles.Resources>
+
+  <!-- Text roles -->
+  <Style Selector="TextBlock.label">
+    <Setter Property="FontFamily" Value="{StaticResource GoletherMono}" />
+    <Setter Property="FontSize" Value="11" />
+    <Setter Property="FontWeight" Value="SemiBold" />
+    <Setter Property="LetterSpacing" Value="1" />
+    <Setter Property="Foreground" Value="{StaticResource GoletherMuted}" />
+  </Style>
+  <Style Selector="TextBlock.mono">
+    <Setter Property="FontFamily" Value="{StaticResource GoletherMono}" />
+  </Style>
+  <Style Selector="TextBlock.muted">
+    <Setter Property="Foreground" Value="{StaticResource GoletherMuted}" />
+  </Style>
+  <Style Selector="TextBlock.title">
+    <Setter Property="FontSize" Value="23" />
+    <Setter Property="FontWeight" Value="Bold" />
+    <Setter Property="TextAlignment" Value="Center" />
+    <Setter Property="TextWrapping" Value="Wrap" />
+  </Style>
+  <Style Selector="TextBlock.note">
+    <Setter Property="FontSize" Value="14" />
+    <Setter Property="Foreground" Value="{StaticResource GoletherMuted}" />
+    <Setter Property="TextAlignment" Value="Center" />
+    <Setter Property="TextWrapping" Value="Wrap" />
+  </Style>
+  <Style Selector="TextBlock.error">
+    <Setter Property="FontSize" Value="13" />
+    <Setter Property="Foreground" Value="{StaticResource GoletherBad}" />
+    <Setter Property="TextWrapping" Value="Wrap" />
+  </Style>
+  <Style Selector="TextBlock.wordmark">
+    <Setter Property="FontWeight" Value="ExtraBold" />
+    <Setter Property="LetterSpacing" Value="0.3" />
+  </Style>
+
+  <!-- Surfaces -->
+  <Style Selector="Border.card">
+    <Setter Property="Background" Value="{StaticResource GoletherPanel}" />
+    <Setter Property="BorderBrush" Value="{StaticResource GoletherLine}" />
+    <Setter Property="BorderThickness" Value="1" />
+    <Setter Property="CornerRadius" Value="18" />
+    <Setter Property="Padding" Value="16" />
+  </Style>
+  <Style Selector="Border.chip">
+    <Setter Property="BorderBrush" Value="{StaticResource GoletherLine}" />
+    <Setter Property="BorderThickness" Value="1" />
+    <Setter Property="CornerRadius" Value="999" />
+    <Setter Property="Padding" Value="9,4" />
+    <Setter Property="VerticalAlignment" Value="Center" />
+  </Style>
+  <Style Selector="Border.chip TextBlock">
+    <Setter Property="FontFamily" Value="{StaticResource GoletherMono}" />
+    <Setter Property="FontSize" Value="11" />
+    <Setter Property="FontWeight" Value="SemiBold" />
+    <Setter Property="VerticalAlignment" Value="Center" />
+  </Style>
+  <Style Selector="Border.code">
+    <Setter Property="Background" Value="{StaticResource GoletherSecureTint}" />
+    <Setter Property="BorderBrush" Value="{StaticResource GoletherSecureFrame}" />
+    <Setter Property="BorderThickness" Value="1" />
+    <Setter Property="CornerRadius" Value="9" />
+    <Setter Property="Padding" Value="12,7" />
+    <Setter Property="Margin" Value="4" />
+  </Style>
+  <Style Selector="Border.code TextBlock">
+    <Setter Property="FontFamily" Value="{StaticResource GoletherMono}" />
+    <Setter Property="FontSize" Value="15" />
+    <Setter Property="FontWeight" Value="SemiBold" />
+    <Setter Property="Foreground" Value="{StaticResource GoletherSecureLight}" />
+  </Style>
+  <Style Selector="Border.toast">
+    <Setter Property="Background" Value="{StaticResource GoletherPanel2}" />
+    <Setter Property="BorderBrush" Value="{StaticResource GoletherBad}" />
+    <Setter Property="BorderThickness" Value="1" />
+    <Setter Property="CornerRadius" Value="12" />
+    <Setter Property="Padding" Value="12,8" />
+    <Setter Property="Margin" Value="12" />
+  </Style>
+  <Style Selector="Border.overFilm">
+    <Setter Property="Background" Value="{StaticResource GoletherOverFilm}" />
+    <Setter Property="CornerRadius" Value="12" />
+    <Setter Property="Padding" Value="11,6" />
+  </Style>
+  <Style Selector="Border.overFilm.warn">
+    <Setter Property="BorderBrush" Value="{StaticResource GoletherAccent}" />
+    <Setter Property="BorderThickness" Value="1" />
+  </Style>
+
+  <!-- A person: the camera, the chosen picture or the coloured letter. -->
+  <Style Selector="Border.tile">
+    <Setter Property="Background" Value="{StaticResource GoletherPanel2}" />
+    <Setter Property="BorderBrush" Value="{StaticResource GoletherLine}" />
+    <Setter Property="BorderThickness" Value="1" />
+    <Setter Property="CornerRadius" Value="13" />
+    <Setter Property="ClipToBounds" Value="True" />
+  </Style>
+  <Style Selector="Border.speaking">
+    <Setter Property="BorderBrush" Value="{StaticResource GoletherGood}" />
+    <Setter Property="BorderThickness" Value="2" />
+    <Setter Property="CornerRadius" Value="13" />
+    <Setter Property="BoxShadow" Value="0 0 14 0 #7362C28E" />
+  </Style>
+  <Style Selector="Border.badge">
+    <Setter Property="Background" Value="{StaticResource GoletherOverFilm}" />
+    <Setter Property="CornerRadius" Value="6" />
+    <Setter Property="Padding" Value="5,1" />
+  </Style>
+
+  <!-- Buttons -->
+  <Style Selector="Button">
+    <Setter Property="CornerRadius" Value="12" />
+  </Style>
+  <Style Selector="Button.primary">
+    <Setter Property="HorizontalAlignment" Value="Stretch" />
+    <Setter Property="HorizontalContentAlignment" Value="Center" />
+    <Setter Property="Padding" Value="13" />
+    <Setter Property="FontSize" Value="16" />
+    <Setter Property="FontWeight" Value="Bold" />
+    <Setter Property="Background" Value="{StaticResource GoletherAccent}" />
+    <Setter Property="Foreground" Value="{StaticResource GoletherAccentInk}" />
+  </Style>
+  <Style Selector="Button.primary /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="{StaticResource GoletherAccent}" />
+    <Setter Property="Foreground" Value="{StaticResource GoletherAccentInk}" />
+    <Setter Property="BoxShadow" Value="0 6 24 0 #47F0A860" />
+  </Style>
+  <Style Selector="Button.primary:pressed /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="#D98E45" />
+  </Style>
+  <Style Selector="Button.primary:disabled /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="#5A4632" />
+    <Setter Property="BoxShadow" Value="0 0 0 0 #00000000" />
+  </Style>
+  <Style Selector="Button.ghost">
+    <Setter Property="HorizontalAlignment" Value="Stretch" />
+    <Setter Property="HorizontalContentAlignment" Value="Center" />
+    <Setter Property="Padding" Value="12" />
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="BorderBrush" Value="{StaticResource GoletherLine}" />
+    <Setter Property="BorderThickness" Value="1" />
+    <Setter Property="Foreground" Value="{StaticResource GoletherText}" />
+  </Style>
+  <Style Selector="Button.ghost:pressed /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="{StaticResource GoletherPanel2}" />
+  </Style>
+
+  <!-- The keys of the dock. -->
+  <Style Selector="Button.key, ToggleButton.key">
+    <Setter Property="Width" Value="48" />
+    <Setter Property="Height" Value="48" />
+    <Setter Property="Padding" Value="0" />
+    <Setter Property="CornerRadius" Value="17" />
+    <Setter Property="Background" Value="{StaticResource GoletherPanel2}" />
+    <Setter Property="Foreground" Value="{StaticResource GoletherText}" />
+    <Setter Property="HorizontalContentAlignment" Value="Center" />
+    <Setter Property="VerticalContentAlignment" Value="Center" />
+  </Style>
+  <Style Selector="ToggleButton.key:checked /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="{StaticResource GoletherOffKey}" />
+    <Setter Property="Foreground" Value="{StaticResource GoletherBad}" />
+  </Style>
+  <Style Selector="ToggleButton.key.lamp:checked /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="{StaticResource GoletherAccent}" />
+    <Setter Property="Foreground" Value="{StaticResource GoletherAccentInk}" />
+  </Style>
+  <Style Selector="ToggleButton.key:disabled /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Foreground" Value="{StaticResource GoletherMuted}" />
+  </Style>
+  <Style Selector="Button.key.end /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="{StaticResource GoletherBad}" />
+    <Setter Property="Foreground" Value="#1D0D0A" />
+  </Style>
+
+  <!-- The controls over the film: no plates of their own, the shade under them keeps them readable. -->
+  <Style Selector="Button.film, ToggleButton.film">
+    <Setter Property="Padding" Value="0" />
+    <Setter Property="Width" Value="40" />
+    <Setter Property="Height" Value="40" />
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="Foreground" Value="#FFFFFF" />
+    <Setter Property="HorizontalContentAlignment" Value="Center" />
+    <Setter Property="VerticalContentAlignment" Value="Center" />
+  </Style>
+  <Style Selector="Button.film:pressed /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="#33FFFFFF" />
+  </Style>
+  <Style Selector="ToggleButton.film:checked /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="Foreground" Value="{StaticResource GoletherBad}" />
+  </Style>
+  <Style Selector="ToggleButton.film.lamp:checked /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Foreground" Value="{StaticResource GoletherAccent}" />
+  </Style>
+  <Style Selector="Button.film.end">
+    <Setter Property="Foreground" Value="{StaticResource GoletherBad}" />
+  </Style>
+  <Style Selector="Button.play">
+    <Setter Property="Width" Value="56" />
+    <Setter Property="Height" Value="56" />
+    <Setter Property="Padding" Value="0" />
+    <Setter Property="CornerRadius" Value="28" />
+    <Setter Property="Foreground" Value="{StaticResource GoletherAccentInk}" />
+    <Setter Property="HorizontalContentAlignment" Value="Center" />
+    <Setter Property="VerticalContentAlignment" Value="Center" />
+  </Style>
+  <Style Selector="Button.play /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="{StaticResource GoletherAccent}" />
+    <Setter Property="BoxShadow" Value="0 4 22 0 #80F0A860" />
+  </Style>
+  <Style Selector="Button.play:pressed /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="#D98E45" />
+  </Style>
+
+  <!-- A language, a tile, a line of a list. -->
+  <Style Selector="Button.plain">
+    <Setter Property="Padding" Value="0" />
+    <Setter Property="Background" Value="Transparent" />
+  </Style>
+  <Style Selector="Button.plain:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="Transparent" />
+  </Style>
+  <Style Selector="Button.plain:pressed /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="Transparent" />
+  </Style>
+  <Style Selector="Button.option">
+    <Setter Property="MinHeight" Value="44" />
+    <Setter Property="Padding" Value="2,0" />
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="Foreground" Value="{StaticResource GoletherText}" />
+    <Setter Property="FontSize" Value="15" />
+    <Setter Property="HorizontalAlignment" Value="Stretch" />
+    <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+    <Setter Property="VerticalContentAlignment" Value="Center" />
+  </Style>
+  <Style Selector="Button.option:pressed /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="{StaticResource GoletherPanel2}" />
+  </Style>
+  <Style Selector="Button.option.add">
+    <Setter Property="Foreground" Value="{StaticResource GoletherAccent}" />
+    <Setter Property="FontWeight" Value="SemiBold" />
+  </Style>
+  <Style Selector="Button.reaction">
+    <Setter Property="Width" Value="56" />
+    <Setter Property="Height" Value="56" />
+    <Setter Property="Padding" Value="0" />
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="FontSize" Value="28" />
+    <Setter Property="HorizontalContentAlignment" Value="Center" />
+    <Setter Property="VerticalContentAlignment" Value="Center" />
+  </Style>
+
+  <!-- Inputs -->
+  <Style Selector="TextBox">
+    <Setter Property="CornerRadius" Value="11" />
+    <Setter Property="Padding" Value="12,10" />
+    <Setter Property="FontSize" Value="15" />
+  </Style>
+  <Style Selector="TextBox.message">
+    <Setter Property="CornerRadius" Value="20" />
+    <Setter Property="Padding" Value="15,9" />
+    <Setter Property="FontSize" Value="14" />
+    <Setter Property="MinHeight" Value="40" />
+    <Setter Property="Background" Value="{StaticResource GoletherPanel}" />
+  </Style>
+  <Style Selector="TextBox.message:focus /template/ Border#PART_BorderElement">
+    <Setter Property="Background" Value="{StaticResource GoletherPanel}" />
+  </Style>
+
+  <!-- The waiting rings around the logo. -->
+  <Style Selector="Ellipse.ring">
+    <Setter Property="Stroke" Value="{StaticResource GoletherAccent}" />
+    <Setter Property="StrokeThickness" Value="1" />
+    <Setter Property="Opacity" Value="0" />
+    <Style.Animations>
+      <Animation Duration="0:0:2.4" IterationCount="INFINITE">
+        <KeyFrame Cue="0%">
+          <Setter Property="Opacity" Value="0.5" />
+          <Setter Property="ScaleTransform.ScaleX" Value="0.7" />
+          <Setter Property="ScaleTransform.ScaleY" Value="0.7" />
+        </KeyFrame>
+        <KeyFrame Cue="100%">
+          <Setter Property="Opacity" Value="0" />
+          <Setter Property="ScaleTransform.ScaleX" Value="1.25" />
+          <Setter Property="ScaleTransform.ScaleY" Value="1.25" />
+        </KeyFrame>
+      </Animation>
+    </Style.Animations>
+  </Style>
+  <Style Selector="Ellipse.ring.late">
+    <Style.Animations>
+      <Animation Duration="0:0:2.4" IterationCount="INFINITE" Delay="0:0:1.2">
+        <KeyFrame Cue="0%">
+          <Setter Property="Opacity" Value="0.5" />
+          <Setter Property="ScaleTransform.ScaleX" Value="0.7" />
+          <Setter Property="ScaleTransform.ScaleY" Value="0.7" />
+        </KeyFrame>
+        <KeyFrame Cue="100%">
+          <Setter Property="Opacity" Value="0" />
+          <Setter Property="ScaleTransform.ScaleX" Value="1.25" />
+          <Setter Property="ScaleTransform.ScaleY" Value="1.25" />
+        </KeyFrame>
+      </Animation>
+    </Style.Animations>
+  </Style>
+
+  <!-- A reaction rises over the film and fades out (ChatViewModel.ReactionLifetime). -->
+  <Style Selector="StackPanel.floatingReaction">
+    <Setter Property="Opacity" Value="0" />
+    <Style.Animations>
+      <Animation Duration="0:0:3" FillMode="Forward">
+        <KeyFrame Cue="0%">
+          <Setter Property="Opacity" Value="0" />
+          <Setter Property="TranslateTransform.Y" Value="0" />
+        </KeyFrame>
+        <KeyFrame Cue="12%">
+          <Setter Property="Opacity" Value="1" />
+          <Setter Property="TranslateTransform.Y" Value="-24" />
+        </KeyFrame>
+        <KeyFrame Cue="70%">
+          <Setter Property="Opacity" Value="1" />
+        </KeyFrame>
+        <KeyFrame Cue="100%">
+          <Setter Property="Opacity" Value="0" />
+          <Setter Property="TranslateTransform.Y" Value="-120" />
+        </KeyFrame>
+      </Animation>
+    </Style.Animations>
+  </Style>
+
+  <!-- The panel from below. -->
+  <Style Selector="controls|BottomSheet">
+    <Setter Property="Template">
+      <ControlTemplate>
+        <Panel>
+          <Border Name="PART_Dim" Background="#990A0F11" />
+          <Border Name="PART_Panel" VerticalAlignment="Bottom" MaxWidth="520" Background="{StaticResource GoletherPanel}" BorderBrush="{StaticResource GoletherLine}"
+                  BorderThickness="1,1,1,0" CornerRadius="24,24,0,0">
+            <DockPanel>
+              <Border Name="PART_Grip" DockPanel.Dock="Top" Height="26" Background="Transparent">
+                <Border Width="40" Height="4" CornerRadius="2" Background="{StaticResource GoletherLine}" />
+              </Border>
+              <ScrollViewer HorizontalScrollBarVisibility="Disabled">
+                <ContentPresenter Margin="18,0,18,16" Content="{TemplateBinding Content}" ContentTemplate="{TemplateBinding ContentTemplate}" />
+              </ScrollViewer>
+            </DockPanel>
+          </Border>
+        </Panel>
+      </ControlTemplate>
+    </Setter>
+  </Style>
+  <Style Selector="controls|BottomSheet /template/ Border#PART_Panel">
+    <Setter Property="RenderTransform" Value="translateY(90px)" />
+    <Setter Property="Opacity" Value="0" />
+    <Setter Property="Transitions">
+      <Transitions>
+        <TransformOperationsTransition Property="RenderTransform" Duration="0:0:0.18" Easing="CubicEaseOut" />
+        <DoubleTransition Property="Opacity" Duration="0:0:0.14" />
+      </Transitions>
+    </Setter>
+  </Style>
+  <Style Selector="controls|BottomSheet.open /template/ Border#PART_Panel">
+    <Setter Property="RenderTransform" Value="none" />
+    <Setter Property="Opacity" Value="1" />
+  </Style>
+  <Style Selector="controls|BottomSheet /template/ Border#PART_Dim">
+    <Setter Property="Opacity" Value="0" />
+    <Setter Property="Transitions">
+      <Transitions>
+        <DoubleTransition Property="Opacity" Duration="0:0:0.14" />
+      </Transitions>
+    </Setter>
+  </Style>
+  <Style Selector="controls|BottomSheet.open /template/ Border#PART_Dim">
+    <Setter Property="Opacity" Value="1" />
+  </Style>
+</Styles>

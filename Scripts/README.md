@@ -39,6 +39,19 @@ every pull request.
 | `Server/publish-server-macos.ps1` | Windows (Git Bash) | `GoletherServer-<version>-osx-arm64.tar.gz` (`-Runtime osx-x64` as well) |
 | `Server/publish-server.sh [runtime]` | Linux, macOS, Git Bash | any of the Linux and macOS packages; the two scripts above run it |
 
+## Android — the emulator and the native components of the Android client
+
+| Script | Runs on | Makes |
+|---|---|---|
+| `Android/enable-windows-features.bat` | Windows | turns on the Windows Hypervisor Platform for the emulator |
+| `Android/install-android-tools.bat` | Windows | the .NET Android workload, the JDK, the Android SDK and the emulator in `C:\Program Files\AndroidTools` |
+| `Android/create-emulator.bat` | Windows | the virtual device, ready to use, and its shortcut on the desktop |
+| `Android/start-emulator.bat` | Windows | starts the virtual device |
+| `Android/build-natives.ps1` | Windows (Docker) | `Native/android-<abi>/`: libmpv without GPL parts and GStreamer with the plugins of cameras and voice, built in the image of `Android/Natives/Dockerfile` by `Android/Natives/build-natives.sh`; see `Native/README.md` |
+
+The first four run in this order and are described in `Docs/En/AndroidEmulator.md`; `android-env.bat` keeps the
+versions and folders they share.
+
 ## Assets — pictures made from sources
 
 | Script | Makes |

@@ -185,5 +185,24 @@ finally {
     $writer.Dispose()
 }
 
+# The foreground of the Android adaptive icon: 108 dp at 4x with a transparent background. The whole logo stands on the
+# dark plate of the package (ic_launcher_background): the launcher cuts the plate to its own shape, and the logo stays
+# inside the 66 dp circle it never cuts, so no part of the amber case touches the edge and reads as a ring.
+if (-not $Server) {
+    $logoLeft = 88
+    $logoTop = 92
+    $logoSide = 256
+    $android = New-Object System.Drawing.Bitmap 432, 432, ([System.Drawing.Imaging.PixelFormat]::Format32bppArgb)
+    $graphics = [System.Drawing.Graphics]::FromImage($android)
+    $graphics.InterpolationMode = [System.Drawing.Drawing2D.InterpolationMode]::HighQualityBicubic
+    $graphics.PixelOffsetMode = [System.Drawing.Drawing2D.PixelOffsetMode]::HighQuality
+    $graphics.DrawImage($master, $logoLeft, $logoTop, $logoSide, $logoSide)
+    $graphics.Dispose()
+    $androidDirectory = Join-Path $root 'Sources\Apps\Golether.Mobile.Android\Resources\drawable-xxxhdpi'
+    New-Item -ItemType Directory -Force -Path $androidDirectory | Out-Null
+    $android.Save((Join-Path $androidDirectory 'ic_launcher_foreground.png'), [System.Drawing.Imaging.ImageFormat]::Png)
+    $android.Dispose()
+}
+
 $master.Dispose()
 Write-Host "Icon written to $OutputDirectory"

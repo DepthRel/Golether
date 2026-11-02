@@ -38,6 +38,7 @@ Sources/
   Database/Golether.Dbs.SQLite.DbMigrator  консольный мигратор
   Security/Golether.Security               ключ устройства, защита секретов, приглашения, код сверки, допуск,
                                            запечатанный адрес сервера рукопожатий
+  Security/Golether.Security.Android       секреты под ключом Android Keystore
   Components/Golether.Components          каталог нативных компонентов (libmpv, GStreamer, AmneziaWG), поиск и установка
   Tools/Golether.Tools.Components          утилита golether-components: готовит компоненты для сборки пакета
   Transports/Golether.Transports.Abstractions  PeerStream, коннектор и листенер, FrameChannel
@@ -48,11 +49,15 @@ Sources/
   Sync/Golether.Sync                       протокол, оценка смещения часов, PlaybackAuthority, PlaybackFollower
   Media/Golether.Media.Streaming           сервер кусков, параллельный клиент, кэш, упреждающая загрузка, поток для плеера
   Media/Golether.Media.Player              libmpv (P/Invoke, встраивание, golether://), плеер-симулятор
+  Media/Golether.Media.Player.Android      libmpv на Android: аппаратные декодеры FFmpeg
   Media/Golether.Media.Conference          контракт камер и голоса, заглушка
   Media/Golether.Media.Conference.GStreamer  камеры и голос: захват, VP8/Opus, webrtcbin, микшер, эхоподавление
+  Media/Golether.Media.Conference.GStreamer.Android  запуск GStreamer на Android
   Tunnels/Golether.Tunnels.AmneziaWG       ключи X25519, маскировка, .conf, подписанные пакеты, управление через CLI
   Session/Golether.Session                 HostSession и ParticipantSession
   Apps/Golether.Client                     общий слой клиента: сервисы, модели представления и элементы управления без окон, цвета темы, платные функции
+  Apps/Golether.Mobile                     экраны мобильного клиента: Avalonia, один вид вместо окон, своя тема и значки
+  Apps/Golether.Mobile.Android             пакет Android: Activity, foreground-сервис сессии, нативные компоненты
   Apps/Golether.UI                         Avalonia: окно, диалоги, композиция зависимостей
   Apps/Golether.Web.Server                 сервер рукопожатий (отдельное приложение, см. RendezvousServer.md)
   Apps/Golether.Web.Server.Contracts       общее у сервера и монитора: настройки, имена службы, здоровье, журнал

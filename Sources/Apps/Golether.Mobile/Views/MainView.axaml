@@ -1,0 +1,594 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:client="using:Golether.Client.ViewModels"
+             xmlns:clientControls="using:Golether.Client.Controls"
+             xmlns:controls="using:Golether.Mobile.Controls"
+             xmlns:loc="using:Golether.Client.Localization"
+             xmlns:protocol="using:Golether.Sync.Protocol"
+             xmlns:vm="using:Golether.Mobile.ViewModels"
+             x:Class="Golether.Mobile.Views.MainView"
+             x:DataType="vm:MainViewModel"
+             Background="{StaticResource GoletherBackground}"
+             Foreground="{StaticResource GoletherText}"
+             FontFamily="{StaticResource GoletherFont}">
+  <UserControl.Resources>
+    <RadialGradientBrush x:Key="LampGlow" Center="50%,42%" GradientOrigin="50%,42%" RadiusX="58%" RadiusY="58%">
+      <GradientStop Offset="0" Color="#3DF0A860" />
+      <GradientStop Offset="1" Color="#00F0A860" />
+    </RadialGradientBrush>
+    <LinearGradientBrush x:Key="FilmShade" StartPoint="50%,0%" EndPoint="50%,100%">
+      <GradientStop Offset="0" Color="#660A0F11" />
+      <GradientStop Offset="0.34" Color="#000A0F11" />
+      <GradientStop Offset="0.5" Color="#000A0F11" />
+      <GradientStop Offset="1" Color="#D10A0F11" />
+    </LinearGradientBrush>
+
+    <!-- What stands for a person: the camera, else the chosen picture, else the coloured letter. -->
+    <DataTemplate x:Key="Face" x:DataType="client:ParticipantItemViewModel">
+      <Panel>
+        <Border Width="46" Height="46" CornerRadius="23" ClipToBounds="True" HorizontalAlignment="Center" VerticalAlignment="Center"
+                Background="{Binding AvatarColor, Converter={x:Static clientControls:ColorTextBrushConverter.Instance}}">
+          <Panel>
+            <TextBlock FontSize="19" FontWeight="ExtraBold" Foreground="#0C1315" HorizontalAlignment="Center" VerticalAlignment="Center" Text="{Binding Initial}" />
+            <Image Source="{Binding AvatarImage}" Stretch="UniformToFill" IsVisible="{Binding HasAvatar}" />
+          </Panel>
+        </Border>
+        <Image Source="{Binding CameraImage}" Stretch="UniformToFill" />
+      </Panel>
+    </DataTemplate>
+
+    <DataTemplate x:Key="GalleryTile" x:DataType="client:GalleryItemViewModel">
+      <!--
+        A tap puts the item on everybody's screen; holding it opens the choice to look alone. This is not a button: a
+        button also clicks when the finger lifts after holding, and the picture would change for everybody.
+      -->
+      <controls:SquarePanel Margin="0,0,7,7" Background="Transparent" Tapped="OnTileTapped" ContextRequested="OnTileHeld" AutomationProperties.Name="{Binding FullName}">
+        <Border Background="{StaticResource GoletherPanel2}" CornerRadius="12" ClipToBounds="True">
+          <Image Source="{Binding Thumbnail}" Stretch="UniformToFill" />
+        </Border>
+        <controls:StrokeIcon Width="30" Height="30" Data="{StaticResource IconFilm}" IsFilled="True" Foreground="#FFFFFF" HorizontalAlignment="Center" VerticalAlignment="Center" IsVisible="{Binding IsVideo}" />
+        <Border Classes="badge" Margin="6" HorizontalAlignment="Left" VerticalAlignment="Bottom">
+          <TextBlock Classes="mono" Text="{Binding Number}" FontSize="10" FontWeight="SemiBold" Foreground="#FFFFFF" />
+        </Border>
+        <Border CornerRadius="12" BorderThickness="1" BorderBrush="{StaticResource GoletherText}" IsVisible="{Binding IsShown}" />
+        <Border CornerRadius="12" BorderThickness="3" BorderBrush="{StaticResource GoletherAccent}" BoxShadow="0 0 16 0 #80F0A860" IsVisible="{Binding IsStage}" />
+      </controls:SquarePanel>
+    </DataTemplate>
+
+    <DataTemplate x:Key="TrackOption" x:DataType="client:TrackOptionViewModel">
+      <Button Classes="option" Command="{Binding SelectCommand}" Click="OnTrackChosen">
+        <Grid ColumnDefinitions="30,*">
+          <controls:StrokeIcon Width="18" Height="18" Thickness="2.6" Data="{StaticResource IconCheck}" Foreground="{StaticResource GoletherAccent}" HorizontalAlignment="Left" IsVisible="{Binding IsSelected}" />
+          <TextBlock Grid.Column="1" Text="{Binding Label}" TextTrimming="CharacterEllipsis" VerticalAlignment="Center" />
+        </Grid>
+      </Button>
+    </DataTemplate>
+
+    <DataTemplate x:Key="PersonPanel" x:DataType="client:ParticipantItemViewModel">
+      <StackPanel Spacing="10">
+        <Grid ColumnDefinitions="Auto,*">
+          <Border Width="46" Height="46" CornerRadius="23" ClipToBounds="True" Background="{Binding AvatarColor, Converter={x:Static clientControls:ColorTextBrushConverter.Instance}}">
+            <Panel>
+              <TextBlock FontSize="19" FontWeight="ExtraBold" Foreground="#0C1315" HorizontalAlignment="Center" VerticalAlignment="Center" Text="{Binding Initial}" />
+              <Image Source="{Binding AvatarImage}" Stretch="UniformToFill" IsVisible="{Binding HasAvatar}" />
+            </Panel>
+          </Border>
+          <StackPanel Grid.Column="1" Margin="12,0,0,0" VerticalAlignment="Center">
+            <TextBlock FontSize="16" FontWeight="Bold" Text="{Binding Name}" TextTrimming="CharacterEllipsis" />
+            <TextBlock Classes="muted" FontSize="12" Text="{Binding RoleText}" />
+          </StackPanel>
+        </Grid>
+        <Grid ColumnDefinitions="Auto,*,Auto" IsVisible="{Binding !IsLocal}">
+          <Button Classes="film" Foreground="{StaticResource GoletherMuted}" Command="{Binding ToggleVoiceMuteCommand}" AutomationProperties.Name="{Binding VoiceMuteText}">
+            <Panel>
+              <controls:StrokeIcon Data="{StaticResource IconSound}" IsVisible="{Binding !IsVoiceMuted}" />
+              <controls:StrokeIcon Data="{StaticResource IconSoundOff}" IsVisible="{Binding IsVoiceMuted}" />
+            </Panel>
+          </Button>
+          <Slider Grid.Column="1" Margin="8,0" Minimum="0" Maximum="100" VerticalAlignment="Center" Value="{Binding VoiceVolume, Mode=TwoWay}" />
+          <TextBlock Grid.Column="2" Classes="muted mono" FontSize="12" VerticalAlignment="Center" Text="{Binding VoiceVolumeText}" />
+        </Grid>
+        <Button Classes="ghost" Command="{Binding $parent[UserControl].((vm:MainViewModel)DataContext).SwitchCameraCommand}" Click="OnPersonDone">
+          <Button.IsVisible>
+            <MultiBinding Converter="{x:Static BoolConverters.And}">
+              <Binding Path="IsLocal" />
+              <Binding Path="$parent[UserControl].((vm:MainViewModel)DataContext).CanSwitchCamera" />
+            </MultiBinding>
+          </Button.IsVisible>
+          <StackPanel Orientation="Horizontal" Spacing="9">
+            <controls:StrokeIcon Width="20" Height="20" Data="{StaticResource IconSwitchCamera}" />
+            <TextBlock Text="{loc:Loc Mobile.Camera.Switch}" VerticalAlignment="Center" />
+          </StackPanel>
+        </Button>
+      </StackPanel>
+    </DataTemplate>
+
+    <DataTemplate x:Key="PictureMenu" x:DataType="client:GalleryItemViewModel">
+      <StackPanel Spacing="4">
+        <TextBlock FontSize="15" FontWeight="SemiBold" Margin="2,0,2,6" TextTrimming="CharacterEllipsis" Text="{Binding FullName}" />
+        <Button Classes="option" Content="{loc:Loc Gallery.Item.ShowAll}" Command="{Binding ShowToAllCommand}" Click="OnPictureMenuDone" />
+        <Button Classes="option" Content="{loc:Loc Gallery.Item.OpenAlone}" Command="{Binding OpenAloneCommand}" Click="OnPictureMenuDone" />
+      </StackPanel>
+    </DataTemplate>
+  </UserControl.Resources>
+
+  <Grid x:Name="Root">
+    <!--
+      The video view is always there, under the other screens: its surface must exist before a file opens, and a view
+      that leaves the tree loses it. Upright the people are under the film; on its side the film takes the whole screen,
+      and a tap brings the controls back (the view moves the parts between the cells).
+    -->
+    <Grid x:Name="Session" ColumnDefinitions="*,Auto" RowDefinitions="Auto,Auto,*">
+      <Grid x:Name="Header" Grid.ColumnSpan="2" Margin="14,8" ColumnDefinitions="Auto,*,Auto">
+        <Image Source="avares://Golether.Mobile/Assets/golether-512.png" Width="26" Height="26" />
+        <TextBlock Grid.Column="1" Margin="9,0" FontSize="15" FontWeight="Bold" VerticalAlignment="Center" Text="{Binding SessionName}" TextTrimming="CharacterEllipsis" />
+        <Border Grid.Column="2" Classes="chip">
+          <StackPanel Orientation="Horizontal" Spacing="5">
+            <controls:StrokeIcon Width="14" Height="14" Foreground="{StaticResource GoletherMuted}" Data="{StaticResource IconPeople}" />
+            <TextBlock Text="{Binding Participants.Count}" />
+          </StackPanel>
+        </Border>
+      </Grid>
+
+      <Panel x:Name="VideoArea" Grid.Row="1" Background="Transparent">
+        <controls:MpvVideoView x:Name="Video" />
+        <Panel Background="{StaticResource GoletherBackground}" IsVisible="{Binding Gallery.ShowsPicture}">
+          <clientControls:ZoomableImage x:Name="Picture" Source="{Binding Gallery.ShownImage}" />
+          <ProgressBar IsIndeterminate="True" Width="160" Height="3" MinHeight="3" HorizontalAlignment="Center" VerticalAlignment="Center" IsVisible="{Binding Gallery.IsLoading}" />
+          <TextBlock Classes="note" HorizontalAlignment="Center" VerticalAlignment="Center" Margin="24,0"
+                     IsVisible="{Binding Gallery.HasError}" Text="{loc:Loc Gallery.LoadFailed}" />
+        </Panel>
+        <clientControls:StrokeCanvas Source="{Binding Drawing}" Aspect="{Binding VideoAspect}" Zoom="{Binding #Picture.Zoom}" Center="{Binding #Picture.Center}" />
+
+        <!-- No background of its own: fingers on the picture go through to the picture. -->
+        <Panel x:Name="Controls">
+          <Border Background="{StaticResource FilmShade}" IsHitTestVisible="False" />
+          <StackPanel x:Name="FilmTitle" Orientation="Horizontal" Spacing="9" Margin="20,12" VerticalAlignment="Top" HorizontalAlignment="Left" IsHitTestVisible="False">
+            <Image Source="avares://Golether.Mobile/Assets/golether-512.png" Width="24" Height="24" />
+            <TextBlock FontWeight="Bold" Foreground="#FFFFFF" VerticalAlignment="Center" Text="{Binding SessionName}" MaxWidth="360" TextTrimming="CharacterEllipsis" />
+          </StackPanel>
+          <StackPanel Orientation="Horizontal" Spacing="30" HorizontalAlignment="Center" VerticalAlignment="Center" IsVisible="{Binding !Gallery.ShowsPicture}">
+            <Button Classes="film" Command="{Binding SkipBackCommand}" AutomationProperties.Name="{loc:Loc Main.Back.Name}">
+              <Panel>
+                <controls:StrokeIcon Width="32" Height="32" Thickness="1.8" Data="{StaticResource IconSkipBack}" />
+                <TextBlock Classes="mono" FontSize="9" FontWeight="Bold" Text="10" HorizontalAlignment="Center" VerticalAlignment="Center" />
+              </Panel>
+            </Button>
+            <Button Classes="play" Command="{Binding TogglePlayCommand}" AutomationProperties.Name="{loc:Loc Main.PlayName}">
+              <Panel>
+                <controls:StrokeIcon Width="26" Height="26" IsFilled="True" Data="{StaticResource IconPlay}" IsVisible="{Binding IsPaused}" />
+                <controls:StrokeIcon Width="26" Height="26" Thickness="2.6" Data="{StaticResource IconPause}" IsVisible="{Binding !IsPaused}" />
+              </Panel>
+            </Button>
+            <Button Classes="film" Command="{Binding SkipForwardCommand}" AutomationProperties.Name="{loc:Loc Main.Forward.Name}">
+              <Panel>
+                <controls:StrokeIcon Width="32" Height="32" Thickness="1.8" Data="{StaticResource IconSkipForward}" />
+                <TextBlock Classes="mono" FontSize="9" FontWeight="Bold" Text="10" HorizontalAlignment="Center" VerticalAlignment="Center" />
+              </Panel>
+            </Button>
+          </StackPanel>
+
+          <StackPanel x:Name="Transport" VerticalAlignment="Bottom" Margin="10,0,10,2">
+            <Grid ColumnDefinitions="Auto,*,Auto,Auto" Margin="0,0,0,4" IsVisible="{Binding Gallery.IsActive}">
+              <Button Classes="film" Command="{Binding Gallery.PreviousCommand}" AutomationProperties.Name="{loc:Loc Gallery.Previous}">
+                <controls:StrokeIcon Data="{StaticResource IconPrevious}" />
+              </Button>
+              <StackPanel Grid.Column="1" Margin="8,0" VerticalAlignment="Center">
+                <TextBlock Classes="mono" FontWeight="SemiBold" HorizontalAlignment="Center" Foreground="#FFFFFF" Text="{Binding Gallery.CounterText}" />
+                <TextBlock HorizontalAlignment="Center" Foreground="#C6D1CF" FontSize="11" TextTrimming="CharacterEllipsis" Text="{Binding Gallery.ShownName}" />
+              </StackPanel>
+              <Button Grid.Column="2" Classes="film" Command="{Binding Gallery.NextCommand}" AutomationProperties.Name="{loc:Loc Gallery.Next}">
+                <controls:StrokeIcon Data="{StaticResource IconNext}" />
+              </Button>
+              <Button Grid.Column="3" Classes="film" Margin="4,0,0,0" Command="{Binding Gallery.ToggleGridCommand}" AutomationProperties.Name="{loc:Loc Gallery.Grid}">
+                <controls:StrokeIcon Data="{StaticResource IconGrid}" />
+              </Button>
+            </Grid>
+
+            <Grid ColumnDefinitions="Auto,Auto,*,Auto" IsVisible="{Binding !Gallery.ShowsPicture}">
+              <TextBlock Classes="mono" FontSize="11" FontWeight="SemiBold" Foreground="#FFFFFF" VerticalAlignment="Center" Margin="4,0,0,0" Text="{Binding PositionText}" />
+              <TextBlock Grid.Column="1" Classes="mono" FontSize="11" Foreground="#C6D1CF" VerticalAlignment="Center" Margin="6,0,0,0" Text="{Binding DurationText, StringFormat='/ {0}'}" />
+              <StackPanel x:Name="Tools" Grid.Column="3" Orientation="Horizontal">
+                <StackPanel x:Name="WideTools" Orientation="Horizontal">
+                  <ToggleButton Classes="film" IsChecked="{Binding MicrophoneMuted, Mode=OneWay}" Command="{Binding ToggleMicrophoneCommand}" AutomationProperties.Name="{loc:Loc Main.Microphone.Name}">
+                    <Panel>
+                      <controls:StrokeIcon Data="{StaticResource IconMicrophone}" IsVisible="{Binding !MicrophoneMuted}" />
+                      <controls:StrokeIcon Data="{StaticResource IconMicrophoneOff}" IsVisible="{Binding MicrophoneMuted}" />
+                    </Panel>
+                  </ToggleButton>
+                  <ToggleButton Classes="film" IsChecked="{Binding CameraOff, Mode=OneWay}" Command="{Binding ToggleCameraCommand}" AutomationProperties.Name="{loc:Loc Main.Camera.Name}">
+                    <Panel>
+                      <controls:StrokeIcon Data="{StaticResource IconCamera}" IsVisible="{Binding !CameraOff}" />
+                      <controls:StrokeIcon Data="{StaticResource IconCameraOff}" IsVisible="{Binding CameraOff}" />
+                    </Panel>
+                  </ToggleButton>
+                  <ToggleButton Classes="film lamp" IsEnabled="{Binding Drawing.CanDraw}" IsChecked="{Binding Drawing.IsPenActive, Mode=TwoWay}" AutomationProperties.Name="{loc:Loc Main.Pen.Name}">
+                    <controls:StrokeIcon Data="{StaticResource IconPen}" />
+                  </ToggleButton>
+                  <Button Classes="film" Click="OnReactionsClicked" AutomationProperties.Name="{loc:Loc Main.Reactions.Name}">
+                    <controls:StrokeIcon Data="{StaticResource IconReaction}" />
+                  </Button>
+                  <Button Classes="film" Click="OnChatClicked" AutomationProperties.Name="{loc:Loc Main.Chat.InputName}">
+                    <controls:StrokeIcon Data="{StaticResource IconChat}" />
+                  </Button>
+                </StackPanel>
+                <Button Classes="film" Click="OnTracksClicked" IsVisible="{Binding Tracks.HasTracks, FallbackValue=False}" AutomationProperties.Name="{loc:Loc Main.Tracks.Name}">
+                  <Panel>
+                    <controls:StrokeIcon Data="{StaticResource IconSubtitles}" IsVisible="{Binding !Tracks.SubtitlesShown, FallbackValue=True}" />
+                    <controls:StrokeIcon Data="{StaticResource IconSubtitles}" Foreground="{StaticResource GoletherAccent}" IsVisible="{Binding Tracks.SubtitlesShown, FallbackValue=False}" />
+                  </Panel>
+                </Button>
+                <Button Classes="film" Command="{Binding Volume.ToggleMuteCommand, FallbackValue={x:Null}}" AutomationProperties.Name="{loc:Loc Main.Volume.ButtonName}">
+                  <Panel>
+                    <controls:StrokeIcon Data="{StaticResource IconSound}" IsVisible="{Binding !Volume.IsSilent, FallbackValue=True}" />
+                    <controls:StrokeIcon Data="{StaticResource IconSoundOff}" Foreground="{StaticResource GoletherBad}" IsVisible="{Binding Volume.IsSilent, FallbackValue=False}" />
+                  </Panel>
+                </Button>
+                <Button x:Name="WideLeave" Classes="film end" Command="{Binding LeaveCommand}" AutomationProperties.Name="{loc:Loc Main.Leave}">
+                  <controls:StrokeIcon Data="{StaticResource IconLeave}" />
+                </Button>
+              </StackPanel>
+            </Grid>
+            <Slider x:Name="Timeline" Classes="timeline" Minimum="0" Maximum="{Binding DurationSeconds}" Value="{Binding PositionSeconds, Mode=TwoWay}" IsVisible="{Binding !Gallery.ShowsPicture}" />
+          </StackPanel>
+
+          <!-- On its side the people stand along the edge of the film. -->
+          <ItemsControl x:Name="PeopleStrip" ItemsSource="{Binding Participants}" HorizontalAlignment="Right" VerticalAlignment="Center" Margin="0,0,10,0">
+            <ItemsControl.ItemsPanel>
+              <ItemsPanelTemplate>
+                <StackPanel Spacing="9" />
+              </ItemsPanelTemplate>
+            </ItemsControl.ItemsPanel>
+            <ItemsControl.ItemTemplate>
+              <DataTemplate x:DataType="client:ParticipantItemViewModel">
+                <Button Classes="plain" Click="OnTileClicked" AutomationProperties.Name="{Binding Name}">
+                  <Panel Width="52" Height="52">
+                    <Border CornerRadius="26" ClipToBounds="True">
+                      <ContentControl Content="{Binding}" ContentTemplate="{StaticResource Face}" HorizontalContentAlignment="Stretch" VerticalContentAlignment="Stretch" />
+                    </Border>
+                    <Border CornerRadius="26" BorderThickness="2" BorderBrush="{StaticResource GoletherGood}" BoxShadow="0 0 12 0 #B362C28E" IsVisible="{Binding IsSpeaking}" />
+                  </Panel>
+                </Button>
+              </DataTemplate>
+            </ItemsControl.ItemTemplate>
+          </ItemsControl>
+        </Panel>
+
+        <ToggleButton x:Name="PenExit" Classes="key lamp" Margin="0,12,12,0" HorizontalAlignment="Right" VerticalAlignment="Top" IsChecked="{Binding Drawing.IsPenActive, Mode=TwoWay}" AutomationProperties.Name="{loc:Loc Main.Pen.Name}">
+          <controls:StrokeIcon Data="{StaticResource IconPen}" />
+        </ToggleButton>
+
+        <Border Classes="overFilm" Margin="12" VerticalAlignment="Top" IsVisible="{Binding Gallery.IsAlone}">
+          <StackPanel Spacing="8">
+            <TextBlock FontSize="13" TextWrapping="Wrap" Text="{Binding Gallery.AloneText}" />
+            <StackPanel Orientation="Horizontal" Spacing="8">
+              <Button Classes="ghost" HorizontalAlignment="Left" Padding="10,6" FontSize="13" Content="{loc:Loc Gallery.Alone.Return}" Command="{Binding Gallery.ReturnToCommonCommand}" />
+              <Button Classes="ghost" HorizontalAlignment="Left" Padding="10,6" FontSize="13" Content="{loc:Loc Gallery.Alone.ShowAll}" Command="{Binding Gallery.ShowMineToAllCommand}" />
+            </StackPanel>
+          </StackPanel>
+        </Border>
+        <Border Classes="overFilm warn" Margin="12" VerticalAlignment="Top" HorizontalAlignment="Center" IsHitTestVisible="False"
+                IsVisible="{Binding ReconnectMessage, Converter={x:Static StringConverters.IsNotNullOrEmpty}}">
+          <TextBlock Foreground="#FFFFFF" FontSize="13" TextWrapping="Wrap" TextAlignment="Center" Text="{Binding ReconnectMessage}" />
+        </Border>
+        <Border x:Name="ChatBubble" Classes="overFilm" Margin="20,0,84,96" HorizontalAlignment="Left" VerticalAlignment="Bottom" IsHitTestVisible="False" IsVisible="False">
+          <StackPanel Orientation="Horizontal" Spacing="6">
+            <TextBlock x:Name="ChatBubbleSender" FontSize="12" FontWeight="Bold" VerticalAlignment="Center" MaxWidth="120" TextTrimming="CharacterEllipsis" />
+            <TextBlock x:Name="ChatBubbleText" FontSize="13" Foreground="#FFFFFF" VerticalAlignment="Center" MaxWidth="360" TextTrimming="CharacterEllipsis" />
+          </StackPanel>
+        </Border>
+        <Border Width="240" Height="120" IsHitTestVisible="False" HorizontalAlignment="Right" VerticalAlignment="Bottom" Margin="0,0,8,8">
+          <ItemsControl ItemsSource="{Binding Chat.Reactions}">
+            <ItemsControl.ItemsPanel>
+              <ItemsPanelTemplate>
+                <Canvas />
+              </ItemsPanelTemplate>
+            </ItemsControl.ItemsPanel>
+            <ItemsControl.Styles>
+              <Style Selector="ContentPresenter" x:DataType="client:FloatingReactionViewModel">
+                <Setter Property="Canvas.Right" Value="{Binding Offset}" />
+                <Setter Property="Canvas.Bottom" Value="0" />
+              </Style>
+            </ItemsControl.Styles>
+            <ItemsControl.ItemTemplate>
+              <DataTemplate x:DataType="client:FloatingReactionViewModel">
+                <StackPanel Classes="floatingReaction" Width="60" Spacing="1">
+                  <TextBlock Text="{Binding Emoji}" FontSize="30" TextAlignment="Center" />
+                  <Border Classes="badge" HorizontalAlignment="Center">
+                    <TextBlock Text="{Binding Sender}" FontSize="10" Foreground="#FFFFFF" MaxWidth="56" TextTrimming="CharacterEllipsis" />
+                  </Border>
+                </StackPanel>
+              </DataTemplate>
+            </ItemsControl.ItemTemplate>
+          </ItemsControl>
+        </Border>
+      </Panel>
+
+      <DockPanel x:Name="Side" Grid.Row="2">
+        <Border x:Name="Dock" DockPanel.Dock="Bottom" Margin="12,2,12,12" Padding="7" Background="{StaticResource GoletherPanel}" BorderBrush="{StaticResource GoletherLine}" BorderThickness="1" CornerRadius="24">
+          <Grid ColumnDefinitions="Auto,*,Auto,*,Auto,*,Auto,*,Auto">
+            <ToggleButton Grid.Column="0" Classes="key" IsChecked="{Binding MicrophoneMuted, Mode=OneWay}" Command="{Binding ToggleMicrophoneCommand}" AutomationProperties.Name="{loc:Loc Main.Microphone.Name}">
+              <Panel>
+                <controls:StrokeIcon Data="{StaticResource IconMicrophone}" IsVisible="{Binding !MicrophoneMuted}" />
+                <controls:StrokeIcon Data="{StaticResource IconMicrophoneOff}" IsVisible="{Binding MicrophoneMuted}" />
+              </Panel>
+            </ToggleButton>
+            <ToggleButton Grid.Column="2" Classes="key" IsChecked="{Binding CameraOff, Mode=OneWay}" Command="{Binding ToggleCameraCommand}" AutomationProperties.Name="{loc:Loc Main.Camera.Name}">
+              <Panel>
+                <controls:StrokeIcon Data="{StaticResource IconCamera}" IsVisible="{Binding !CameraOff}" />
+                <controls:StrokeIcon Data="{StaticResource IconCameraOff}" IsVisible="{Binding CameraOff}" />
+              </Panel>
+            </ToggleButton>
+            <ToggleButton Grid.Column="4" Classes="key lamp" IsEnabled="{Binding Drawing.CanDraw}" IsChecked="{Binding Drawing.IsPenActive, Mode=TwoWay}" AutomationProperties.Name="{loc:Loc Main.Pen.Name}">
+              <controls:StrokeIcon Data="{StaticResource IconPen}" />
+            </ToggleButton>
+            <Button Grid.Column="6" Classes="key" Click="OnReactionsClicked" AutomationProperties.Name="{loc:Loc Main.Reactions.Name}">
+              <controls:StrokeIcon Data="{StaticResource IconReaction}" />
+            </Button>
+            <Button Grid.Column="8" Classes="key end" Command="{Binding LeaveCommand}" AutomationProperties.Name="{loc:Loc Main.Leave}">
+              <controls:StrokeIcon Data="{StaticResource IconLeave}" />
+            </Button>
+          </Grid>
+        </Border>
+        <Grid DockPanel.Dock="Bottom" Margin="12,5" ColumnDefinitions="*,Auto">
+          <TextBox x:Name="ChatInput" Classes="message" Text="{Binding Chat.Draft}" PlaceholderText="{loc:Loc Main.Chat.InputName}" MaxLength="{x:Static protocol:ChatMessage.MAX_TEXT_LENGTH}"
+                   AcceptsReturn="False" TextWrapping="Wrap" MaxHeight="80" VerticalContentAlignment="Center" AutomationProperties.Name="{loc:Loc Main.Chat.InputName}">
+            <TextBox.KeyBindings>
+              <KeyBinding Gesture="Enter" Command="{Binding Chat.SendCommand}" />
+            </TextBox.KeyBindings>
+          </TextBox>
+          <Button Grid.Column="1" Classes="key" Width="40" Height="40" CornerRadius="20" Margin="8,0,0,0" Foreground="{StaticResource GoletherAccent}" VerticalAlignment="Bottom" Command="{Binding Chat.SendCommand}" AutomationProperties.Name="{loc:Loc Main.Chat.SendName}">
+            <controls:StrokeIcon Width="20" Height="20" Data="{StaticResource IconSend}" />
+          </Button>
+        </Grid>
+        <ScrollViewer x:Name="Tiles" DockPanel.Dock="Top" Margin="12,11,12,4" HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Disabled">
+          <ItemsControl ItemsSource="{Binding Participants}">
+            <ItemsControl.ItemsPanel>
+              <ItemsPanelTemplate>
+                <StackPanel Orientation="Horizontal" Spacing="8" />
+              </ItemsPanelTemplate>
+            </ItemsControl.ItemsPanel>
+            <ItemsControl.ItemTemplate>
+              <DataTemplate x:DataType="client:ParticipantItemViewModel">
+                <!-- A tap on a tile opens what can be done about that person on this device. -->
+                <Button Classes="plain" Click="OnTileClicked" AutomationProperties.Name="{Binding Name}">
+                  <Panel Width="104" Height="78" Margin="2">
+                    <Border Classes="tile">
+                      <ContentControl Content="{Binding}" ContentTemplate="{StaticResource Face}" HorizontalContentAlignment="Stretch" VerticalContentAlignment="Stretch" />
+                    </Border>
+                    <Border Classes="badge" Margin="5,0,0,4" HorizontalAlignment="Left" VerticalAlignment="Bottom" MaxWidth="92">
+                      <TextBlock FontSize="11" Foreground="#FFFFFF" Text="{Binding Name}" TextTrimming="CharacterEllipsis" />
+                    </Border>
+                    <Border Classes="badge" Margin="0,5,5,0" Padding="3" HorizontalAlignment="Right" VerticalAlignment="Top" IsVisible="{Binding MicrophoneOff}">
+                      <controls:StrokeIcon Width="12" Height="12" Thickness="2.4" Foreground="{StaticResource GoletherBad}" Data="{StaticResource IconMicrophoneOff}" />
+                    </Border>
+                    <Border Classes="speaking" IsVisible="{Binding IsSpeaking}" />
+                  </Panel>
+                </Button>
+              </DataTemplate>
+            </ItemsControl.ItemTemplate>
+          </ItemsControl>
+        </ScrollViewer>
+        <ScrollViewer x:Name="ChatScroll" Margin="14,6,14,0">
+          <ItemsControl ItemsSource="{Binding Chat.Lines}">
+            <ItemsControl.ItemsPanel>
+              <ItemsPanelTemplate>
+                <StackPanel Spacing="9" />
+              </ItemsPanelTemplate>
+            </ItemsControl.ItemsPanel>
+            <ItemsControl.ItemTemplate>
+              <DataTemplate x:DataType="client:ChatLineViewModel">
+                <Panel>
+                  <TextBlock Classes="mono muted" FontSize="11" TextAlignment="Center" TextWrapping="Wrap" Text="{Binding Text}" IsVisible="{Binding IsSystem}" />
+                  <StackPanel Spacing="1" IsVisible="{Binding !IsSystem}">
+                    <StackPanel Orientation="Horizontal" Spacing="6">
+                      <TextBlock FontSize="12" FontWeight="Bold" Text="{Binding SenderText}" TextTrimming="CharacterEllipsis" MaxWidth="200" IsVisible="{Binding IsFromOther}"
+                                 Foreground="{Binding SenderColor, Converter={x:Static clientControls:ColorTextBrushConverter.Instance}}" />
+                      <TextBlock FontSize="12" FontWeight="Bold" Foreground="{StaticResource GoletherAccent}" Text="{Binding SenderText}" IsVisible="{Binding IsOwn}" />
+                      <TextBlock Classes="mono muted" FontSize="10" VerticalAlignment="Bottom" Text="{Binding TimeText}" />
+                    </StackPanel>
+                    <TextBlock FontSize="14" TextWrapping="Wrap" Text="{Binding Text}" />
+                  </StackPanel>
+                </Panel>
+              </DataTemplate>
+            </ItemsControl.ItemTemplate>
+          </ItemsControl>
+        </ScrollViewer>
+      </DockPanel>
+    </Grid>
+
+    <Border Background="{StaticResource GoletherBackground}" IsVisible="{Binding !IsWatch}" />
+
+    <!-- All items of the folder at once, on this screen only. -->
+    <DockPanel Background="{StaticResource GoletherBackground}" IsVisible="{Binding Gallery.IsGridOpen}">
+      <Grid DockPanel.Dock="Top" Margin="16,8,8,10" ColumnDefinitions="*,Auto">
+        <TextBlock FontSize="18" FontWeight="Bold" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" Text="{Binding Gallery.Title}" />
+        <Button Grid.Column="1" Classes="film" Foreground="{StaticResource GoletherText}" Command="{Binding Gallery.CloseGridCommand}" AutomationProperties.Name="{loc:Loc Common.Close}">
+          <controls:StrokeIcon Data="{StaticResource IconClose}" />
+        </Button>
+      </Grid>
+      <ItemsControl x:Name="GalleryGrid" Margin="12,0,5,0" ItemsSource="{Binding Gallery.GridRows}">
+        <ItemsControl.Template>
+          <ControlTemplate>
+            <ScrollViewer HorizontalScrollBarVisibility="Disabled">
+              <ItemsPresenter Name="PART_ItemsPresenter" ItemsPanel="{TemplateBinding ItemsPanel}" />
+            </ScrollViewer>
+          </ControlTemplate>
+        </ItemsControl.Template>
+        <ItemsControl.ItemsPanel>
+          <ItemsPanelTemplate>
+            <VirtualizingStackPanel />
+          </ItemsPanelTemplate>
+        </ItemsControl.ItemsPanel>
+        <ItemsControl.ItemTemplate>
+          <DataTemplate x:CompileBindings="False">
+            <ItemsControl ItemsSource="{Binding}" ItemTemplate="{StaticResource GalleryTile}">
+              <ItemsControl.ItemsPanel>
+                <ItemsPanelTemplate>
+                  <UniformGrid Rows="1" Columns="{Binding $parent[UserControl].DataContext.Gallery.GridColumns}" />
+                </ItemsPanelTemplate>
+              </ItemsControl.ItemsPanel>
+            </ItemsControl>
+          </DataTemplate>
+        </ItemsControl.ItemTemplate>
+      </ItemsControl>
+    </DockPanel>
+
+    <ScrollViewer IsVisible="{Binding IsJoin}">
+      <Panel>
+        <Border Height="420" Margin="-60,-30,-60,0" VerticalAlignment="Top" Background="{StaticResource LampGlow}" IsHitTestVisible="False" />
+        <StackPanel Margin="22,8,22,24" MaxWidth="440" Spacing="0">
+          <Button Classes="plain" HorizontalAlignment="Right" Click="OnLanguageClicked" AutomationProperties.Name="{loc:Loc Settings.Language}">
+            <Border Classes="chip" Background="{StaticResource GoletherPanel}" Padding="10,5">
+              <StackPanel Orientation="Horizontal" Spacing="7">
+                <Image Width="18" Height="12" Source="{Binding Language.Flag, FallbackValue={x:Null}}" />
+                <TextBlock Text="{Binding LanguageCode}" />
+              </StackPanel>
+            </Border>
+          </Button>
+          <Image Source="avares://Golether.Mobile/Assets/golether-512.png" Width="118" Height="118" Margin="0,18,0,6" />
+          <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
+            <TextBlock Classes="wordmark" FontSize="34" Text="gole" />
+            <TextBlock Classes="wordmark" FontSize="34" Foreground="{StaticResource GoletherAccent}" Text="ther" />
+          </StackPanel>
+          <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" Margin="0,2,0,24">
+            <TextBlock FontSize="14" FontWeight="Bold" Foreground="{StaticResource GoletherAccent}" Text="LET" />
+            <TextBlock FontSize="14" Foreground="{StaticResource GoletherMuted}" Text="'s " xml:space="preserve" />
+            <TextBlock FontSize="14" FontWeight="Bold" Foreground="{StaticResource GoletherAccent}" Text="GO" />
+            <TextBlock FontSize="14" Foreground="{StaticResource GoletherMuted}" Text=" toget" xml:space="preserve" />
+            <TextBlock FontSize="14" FontWeight="Bold" Foreground="{StaticResource GoletherAccent}" Text="HER" />
+          </StackPanel>
+          <Border Classes="card">
+            <StackPanel Spacing="7">
+              <TextBlock Classes="label" Text="{loc:Loc Main.YourName}" />
+              <TextBox Text="{Binding DisplayName}" Margin="0,0,0,7" />
+              <TextBlock Classes="label" Text="{loc:Loc Main.Join.Label}" />
+              <Grid Margin="0,0,0,7">
+                <TextBox Text="{Binding InviteLink}" TextWrapping="NoWrap" AcceptsReturn="False" MaxHeight="44" Padding="12,10,44,10" />
+                <Button Classes="film" Foreground="{StaticResource GoletherAccent}" HorizontalAlignment="Right" Click="OnPasteClicked" AutomationProperties.Name="{loc:Loc Mobile.Join.Paste}">
+                  <controls:StrokeIcon Width="22" Height="22" Data="{StaticResource IconPaste}" />
+                </Button>
+              </Grid>
+              <Button Classes="primary" Content="{loc:Loc Main.Join.Connect}" Command="{Binding JoinCommand}" />
+              <TextBlock Classes="error" Margin="0,4,0,0" Text="{Binding Error}" IsVisible="{Binding Error, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+            </StackPanel>
+          </Border>
+        </StackPanel>
+      </Panel>
+    </ScrollViewer>
+
+    <Panel IsVisible="{Binding IsConnecting}">
+      <Border Height="420" Margin="-60,-30,-60,0" VerticalAlignment="Top" Background="{StaticResource LampGlow}" IsHitTestVisible="False" />
+      <StackPanel Margin="22" Spacing="14" VerticalAlignment="Center" MaxWidth="440">
+        <Panel Width="170" Height="170">
+          <Ellipse Classes="ring" Width="170" Height="170" />
+          <Ellipse Classes="ring late" Width="170" Height="170" />
+          <Image Source="avares://Golether.Mobile/Assets/golether-512.png" Width="84" Height="84" />
+        </Panel>
+        <TextBlock Classes="title" Text="{loc:Loc Main.Joining.Title}" />
+        <TextBlock Classes="note" Text="{loc:Loc Main.Joining.Text}" />
+        <Button Classes="ghost" Margin="0,8,0,0" Content="{loc:Loc Main.Approval.Cancel}" Command="{Binding LeaveCommand}" />
+      </StackPanel>
+    </Panel>
+
+    <Panel IsVisible="{Binding IsApproval}">
+      <Border Height="420" Margin="-60,-30,-60,0" VerticalAlignment="Top" Background="{StaticResource LampGlow}" IsHitTestVisible="False" />
+      <StackPanel Margin="22" Spacing="14" VerticalAlignment="Center" MaxWidth="440">
+        <Panel Width="170" Height="170">
+          <Ellipse Classes="ring" Width="170" Height="170" />
+          <Ellipse Classes="ring late" Width="170" Height="170" />
+          <Image Source="avares://Golether.Mobile/Assets/golether-512.png" Width="84" Height="84" />
+        </Panel>
+        <TextBlock Classes="title" Text="{loc:Loc Main.Approval.Title}" />
+        <TextBlock Classes="note" Text="{loc:Loc Main.Approval.Text}" />
+        <ItemsControl ItemsSource="{Binding VerificationParts}" HorizontalAlignment="Center" Margin="0,2,0,6">
+          <ItemsControl.ItemsPanel>
+            <ItemsPanelTemplate>
+              <WrapPanel HorizontalAlignment="Center" />
+            </ItemsPanelTemplate>
+          </ItemsControl.ItemsPanel>
+          <ItemsControl.ItemTemplate>
+            <DataTemplate x:DataType="x:String">
+              <Border Classes="code">
+                <TextBlock Text="{Binding}" />
+              </Border>
+            </DataTemplate>
+          </ItemsControl.ItemTemplate>
+        </ItemsControl>
+        <Button Classes="ghost" Content="{loc:Loc Main.Approval.Cancel}" Command="{Binding LeaveCommand}" />
+      </StackPanel>
+    </Panel>
+
+    <!-- Sound and subtitles of this device only: every participant picks their own. -->
+    <controls:BottomSheet x:Name="TracksSheet">
+      <StackPanel>
+        <TextBlock Classes="label" Text="{loc:Loc Mobile.Tracks.Volume}" />
+        <Grid ColumnDefinitions="Auto,*" Margin="0,6,0,8">
+          <controls:StrokeIcon Foreground="{StaticResource GoletherMuted}" Data="{StaticResource IconSound}" />
+          <Slider Grid.Column="1" Margin="10,0,0,0" Minimum="0" Maximum="100" VerticalAlignment="Center" Value="{Binding Volume.Volume, Mode=TwoWay, FallbackValue=100}" />
+        </Grid>
+        <TextBlock Classes="label" Margin="0,4,0,2" Text="{loc:Loc Main.Tracks.Audio}" />
+        <ItemsControl ItemsSource="{Binding Tracks.AudioTracks, FallbackValue={x:Null}}" ItemTemplate="{StaticResource TrackOption}" />
+        <Button Classes="option add" Command="{Binding Tracks.AddAudioCommand, FallbackValue={x:Null}}" Click="OnTrackChosen">
+          <Grid ColumnDefinitions="30,*">
+            <controls:StrokeIcon Width="18" Height="18" Thickness="2.6" Data="{StaticResource IconPlus}" HorizontalAlignment="Left" />
+            <TextBlock Grid.Column="1" Text="{loc:Loc Main.Tracks.AudioFile}" VerticalAlignment="Center" />
+          </Grid>
+        </Button>
+        <StackPanel IsVisible="{Binding Tracks.SubtitlesAvailable, FallbackValue=False}">
+          <Border Height="1" Margin="0,8,0,12" Background="{StaticResource GoletherLine}" />
+          <TextBlock Classes="label" Margin="0,0,0,2" Text="{loc:Loc Main.Tracks.Subtitles}" />
+          <ItemsControl ItemsSource="{Binding Tracks.SubtitleTracks, FallbackValue={x:Null}}" ItemTemplate="{StaticResource TrackOption}" />
+          <Button Classes="option add" Command="{Binding Tracks.AddSubtitlesCommand, FallbackValue={x:Null}}" Click="OnTrackChosen">
+            <Grid ColumnDefinitions="30,*">
+              <controls:StrokeIcon Width="18" Height="18" Thickness="2.6" Data="{StaticResource IconPlus}" HorizontalAlignment="Left" />
+              <TextBlock Grid.Column="1" Text="{loc:Loc Main.Tracks.SubtitlesFile}" VerticalAlignment="Center" />
+            </Grid>
+          </Button>
+        </StackPanel>
+      </StackPanel>
+    </controls:BottomSheet>
+
+    <controls:BottomSheet x:Name="ReactionsSheet">
+      <ItemsControl ItemsSource="{Binding Chat.AvailableReactions}" HorizontalAlignment="Center">
+        <ItemsControl.ItemsPanel>
+          <ItemsPanelTemplate>
+            <WrapPanel HorizontalAlignment="Center" />
+          </ItemsPanelTemplate>
+        </ItemsControl.ItemsPanel>
+        <ItemsControl.ItemTemplate>
+          <DataTemplate x:DataType="x:String">
+            <Button Classes="reaction" Content="{Binding}" Click="OnReactionChosen"
+                    Command="{Binding $parent[ItemsControl].((vm:MainViewModel)DataContext).Chat.ReactCommand}" CommandParameter="{Binding}" />
+          </DataTemplate>
+        </ItemsControl.ItemTemplate>
+      </ItemsControl>
+    </controls:BottomSheet>
+
+    <controls:BottomSheet x:Name="PersonSheet" ContentTemplate="{StaticResource PersonPanel}" />
+
+    <controls:BottomSheet x:Name="PictureSheet" ContentTemplate="{StaticResource PictureMenu}" />
+
+    <controls:BottomSheet x:Name="LanguageSheet">
+      <ItemsControl ItemsSource="{Binding Languages}">
+        <ItemsControl.ItemTemplate>
+          <DataTemplate x:DataType="client:LanguageOption">
+            <Button Classes="option" Command="{Binding $parent[UserControl].((vm:MainViewModel)DataContext).ChooseLanguageCommand}" CommandParameter="{Binding}" Click="OnLanguageChosen">
+              <Grid ColumnDefinitions="34,*">
+                <Image Width="24" Height="16" HorizontalAlignment="Left" Source="{Binding Flag}" />
+                <TextBlock Grid.Column="1" Text="{Binding Name}" VerticalAlignment="Center" />
+              </Grid>
+            </Button>
+          </DataTemplate>
+        </ItemsControl.ItemTemplate>
+      </ItemsControl>
+    </controls:BottomSheet>
+
+    <!-- A failure during a session: it stays until the user has read it. -->
+    <Button x:Name="ErrorToast" Classes="plain" VerticalAlignment="Top" HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch" Command="{Binding ClearErrorCommand}" IsVisible="False">
+      <Border Classes="toast">
+        <TextBlock Classes="error" Text="{Binding Error}" />
+      </Border>
+    </Button>
+  </Grid>
+</UserControl>

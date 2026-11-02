@@ -1,0 +1,18 @@
+mpv-android d25d7c1eecaa2ee7ead1715bac3c7e19f2eddab9
+curl (release archive, version in include/depinfo.sh)
+dav1d 1.5.4-41-gc6f51c88 c6f51c881d80b43830b7c1fff2ba0d48599e8073
+ffmpeg n9.0.2 946fcce07b6dcd0331c8cc609192aeff5e1924f8
+fontconfig (release archive, version in include/depinfo.sh)
+freetype2 VER-2-15-0 37515cf56ba3349656049edbed89ffc6f6466f2d
+fribidi (release archive, version in include/depinfo.sh)
+harfbuzz (release archive, version in include/depinfo.sh)
+libass 0.17.5-14-gfe25f50 fe25f50686b1a6babef2f9b703abead0e97e0fec
+libplacebo v7.387.0 275f7dea27924cdd34ab2e6c20e448b6bc4fab65
+libxml2 (release archive, version in include/depinfo.sh)
+lua (release archive, version in include/depinfo.sh)
+mbedtls (release archive, version in include/depinfo.sh)
+mpv git-release-628-gac4f3f3929 ac4f3f392907e6fc4b8b525fae236eb4e6b18cb5
+unibreak (release archive, version in include/depinfo.sh)
+
+FFmpeg license: #define FFMPEG_LICENSE "LGPL version 3 or later"
+mpv gpl option: False

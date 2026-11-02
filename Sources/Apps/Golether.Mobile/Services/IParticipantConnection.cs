@@ -1,0 +1,62 @@
+using Golether.Security.Invites;
+using Golether.Session;
+using Golether.Sync.Protocol;
+
+namespace Golether.Mobile.Services;
+
+/// <summary>
+/// The place of this device in a session, as the screen sees it.
+/// </summary>
+public interface IParticipantConnection : IAsyncDisposable
+{
+    /// <summary>
+    /// Raised on any thread when anything about the session changes.
+    /// </summary>
+    event EventHandler? Changed;
+
+    /// <summary>
+    /// Raised on any thread when a participant chose a picture.
+    /// </summary>
+    event EventHandler<AvatarUpdate>? AvatarReceived;
+
+    /// <summary>
+    /// Gets a value indicating whether the device is on its way back to the session.
+    /// </summary>
+    bool IsReconnecting { get; }
+
+    /// <summary>
+    /// Gets how the way back goes, empty outside it.
+    /// </summary>
+    string ReconnectMessage { get; }
+
+    /// <summary>
+    /// Gets the reason why the session ended, when there is one to tell.
+    /// </summary>
+    string? EndReason { get; }
+
+    /// <summary>
+    /// Connects to the host of the invitation.
+    /// </summary>
+    /// <param name="invite">The invitation.</param>
+    /// <param name="cancellationToken">Stops joining.</param>
+    /// <returns>A task that completes when the host has answered.</returns>
+    Task JoinAsync(Invite invite, CancellationToken cancellationToken);
+
+    /// <summary>
+    /// Reads the state of the session.
+    /// </summary>
+    /// <returns>The state, or <see langword="null"/> once the user left.</returns>
+    SessionSnapshot? GetSnapshot();
+
+    /// <summary>
+    /// Sends a request of the user to the host.
+    /// </summary>
+    /// <param name="request">The request.</param>
+    /// <returns>A task that completes when the request is sent.</returns>
+    Task RequestAsync(PlaybackRequest request);
+
+    /// <summary>
+    /// Starts the next attempt to come back without waiting any longer: the network is here again.
+    /// </summary>
+    void RetryNow();
+}

@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The mark of a running session in the status bar: the system paints it, only the shape counts. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+        android:width="24dp"
+        android:height="24dp"
+        android:viewportWidth="24"
+        android:viewportHeight="24">
+  <path android:fillColor="#FFFFFFFF"
+        android:pathData="M12,3 A4.5,4.5 0 1 1 11.99,3 Z M4,21 C4,16.6 7.6,14 12,14 C16.4,14 20,16.6 20,21 Z" />
+</vector>

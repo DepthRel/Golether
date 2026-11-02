@@ -26,3 +26,18 @@ them into the data folder of the user (`components/`) without administrator righ
 | Cameras and voice (GStreamer) | the official 1.28.7 installer: a silent installation into a temporary folder, the needed files are picked, the temporary installation is removed. A complete GStreamer that is already installed is used without a download | the `gstreamer1.0-plugins-{base,good,bad}` and `gstreamer1.0-nice` packages | `brew install gstreamer` |
 
 An explicit path to libmpv can still be given with the `GOLETHER_LIBMPV` variable.
+
+## Android
+
+The Android client carries its components inside the package: a store forbids downloading code. They are built once
+per version, in Docker, by `Scripts/Android/build-natives.ps1`, from sources and official binaries only:
+
+```
+Native/android-<abi>/libmpv.so, libav*.so, libsw*.so ...   libmpv with FFmpeg, built without GPL parts (LGPL)
+Native/android-<abi>/gstreamer/libgstreamer_android.so    GStreamer 1.28.7 with the plugins of cameras and voice
+Native/android-<abi>/gstreamer/libgolether-*.so           six empty libraries over it: imports open exact names
+Native/android/gstreamer-java/                            the Java glue of GStreamer
+Native/LIBMPV-BUILDINFO.txt, GSTREAMER-BUILDINFO.txt      the versions of every library and the licence of the build
+```
+
+`<abi>` is `arm64`, `arm` or `x64` (the .NET runtime identifiers `android-arm64`, `android-arm`, `android-x64`).

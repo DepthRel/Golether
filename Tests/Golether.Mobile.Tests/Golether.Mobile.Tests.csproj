@@ -1,0 +1,8 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- Tests of the mobile client: its services and models without a device. -->
+  <ItemGroup>
+    <ProjectReference Include="../../Sources/Apps/Golether.Mobile/Golether.Mobile.csproj" />
+  </ItemGroup>
+
+</Project>

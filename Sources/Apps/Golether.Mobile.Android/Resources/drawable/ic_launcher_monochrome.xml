@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The logo in one colour for themed icons: the system paints it, only the shape counts. The field of the logo is 1024. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+        android:width="108dp"
+        android:height="108dp"
+        android:viewportWidth="108"
+        android:viewportHeight="108">
+  <group android:translateX="19"
+         android:translateY="16"
+         android:scaleX="0.068359"
+         android:scaleY="0.068359">
+    <path android:strokeColor="#FFFFFFFF"
+          android:strokeWidth="40"
+          android:strokeLineCap="round"
+          android:pathData="M512,232 L380,96 M512,232 L644,96 M300,800 L270,900 M724,800 L754,900" />
+    <path android:fillColor="#FFFFFFFF"
+          android:fillType="evenOdd"
+          android:pathData="M222,232 H802 A110,110 0 0 1 912,342 V702 A110,110 0 0 1 802,812 H222 A110,110 0 0 1 112,702 V342 A110,110 0 0 1 222,232 Z M232,288 A64,64 0 0 0 168,352 V692 A64,64 0 0 0 232,756 H313 A200,180 0 0 1 711,756 H792 A64,64 0 0 0 856,692 V352 A64,64 0 0 0 792,288 Z" />
+    <path android:fillColor="#FFFFFFFF"
+          android:pathData="M512,356 A96,96 0 1 1 511.9,356 Z" />
+  </group>
+</vector>

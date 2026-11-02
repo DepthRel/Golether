@@ -83,7 +83,8 @@ only through migrations and projects in their solution folders.
 ```
 Sources/
   Apps/          applications (the desktop application Golether.UI, the client layer it shares with the mobile
-                 client Golether.Client, the rendezvous server Golether.Web.Server, its monitor
+                 client Golether.Client, the mobile client Golether.Mobile with its Android package
+                 Golether.Mobile.Android, the rendezvous server Golether.Web.Server, its monitor
                  Golether.Web.Server.UI and their shared contracts Golether.Web.Server.Contracts,
                  the project page Golether.Pages)
   Components/    native components: catalog, checksums, installation
@@ -98,8 +99,9 @@ Sources/
   Tunnels/       AmneziaWG tunnels
 Tests/           test projects (<Project>.Tests)
 Docs/            documentation by language: En (the main set), De, Es, Fr, Pt, Ru (the same set translated), images
-Scripts/         packaging: App (the application), Server (the server and its monitor), Assets (pictures),
-                 Shared (helpers of the others); build-release.ps1 builds a whole release; see Scripts/README.md
+Scripts/         packaging: App (the application), Server (the server and its monitor), Android (native components,
+                 the emulator), Assets (pictures), Shared (helpers of the others); build-release.ps1 builds a whole
+                 release; see Scripts/README.md
 ```
 
 A new project is added to `Golether.slnx` in the solution folder that repeats its path on disk.

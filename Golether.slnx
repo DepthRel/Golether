@@ -14,6 +14,7 @@
     <File Path="Native/README.md" />
   </Folder>
   <Folder Name="/Docs/En/">
+    <File Path="Docs/En/AndroidEmulator.md" />
     <File Path="Docs/En/Architecture.md" />
     <File Path="Docs/En/Development.md" />
     <File Path="Docs/En/Protocol.md" />
@@ -22,6 +23,7 @@
     <File Path="Docs/En/Privacy.md" />
   </Folder>
   <Folder Name="/Docs/Ru/">
+    <File Path="Docs/Ru/AndroidEmulator.md" />
     <File Path="Docs/Ru/Architecture.md" />
     <File Path="Docs/Ru/Development.md" />
     <File Path="Docs/Ru/Protocol.md" />
@@ -31,6 +33,18 @@
   </Folder>
   <Folder Name="/Scripts/">
     <File Path="Scripts/README.md" />
+  </Folder>
+  <Folder Name="/Scripts/Android/">
+    <File Path="Scripts/Android/android-env.bat" />
+    <File Path="Scripts/Android/build-natives.ps1" />
+    <File Path="Scripts/Android/create-emulator.bat" />
+    <File Path="Scripts/Android/enable-windows-features.bat" />
+    <File Path="Scripts/Android/install-android-tools.bat" />
+    <File Path="Scripts/Android/start-emulator.bat" />
+  </Folder>
+  <Folder Name="/Scripts/Android/Natives/">
+    <File Path="Scripts/Android/Natives/build-natives.sh" />
+    <File Path="Scripts/Android/Natives/Dockerfile" />
   </Folder>
   <Folder Name="/Scripts/App/">
     <File Path="Scripts/App/build-installer.ps1" />
@@ -59,6 +73,12 @@
   <Folder Name="/Sources/" />
   <Folder Name="/Sources/Apps/">
     <Project Path="Sources/Apps/Golether.Client/Golether.Client.csproj" />
+    <Project Path="Sources/Apps/Golether.Mobile/Golether.Mobile.csproj">
+      <Build Project="false" />
+    </Project>
+    <Project Path="Sources/Apps/Golether.Mobile.Android/Golether.Mobile.Android.csproj">
+      <Build Project="false" />
+    </Project>
     <Project Path="Sources/Apps/Golether.UI/Golether.UI.csproj" />
     <Project Path="Sources/Apps/Golether.Web.Server/Golether.Web.Server.csproj" />
     <Project Path="Sources/Apps/Golether.Web.Server.Contracts/Golether.Web.Server.Contracts.csproj" />
@@ -80,11 +100,20 @@
   <Folder Name="/Sources/Media/">
     <Project Path="Sources/Media/Golether.Media.Conference/Golether.Media.Conference.csproj" />
     <Project Path="Sources/Media/Golether.Media.Conference.GStreamer/Golether.Media.Conference.GStreamer.csproj" />
+    <Project Path="Sources/Media/Golether.Media.Conference.GStreamer.Android/Golether.Media.Conference.GStreamer.Android.csproj">
+      <Build Project="false" />
+    </Project>
     <Project Path="Sources/Media/Golether.Media.Player/Golether.Media.Player.csproj" />
+    <Project Path="Sources/Media/Golether.Media.Player.Android/Golether.Media.Player.Android.csproj">
+      <Build Project="false" />
+    </Project>
     <Project Path="Sources/Media/Golether.Media.Streaming/Golether.Media.Streaming.csproj" />
   </Folder>
   <Folder Name="/Sources/Security/">
     <Project Path="Sources/Security/Golether.Security/Golether.Security.csproj" />
+    <Project Path="Sources/Security/Golether.Security.Android/Golether.Security.Android.csproj">
+      <Build Project="false" />
+    </Project>
   </Folder>
   <Folder Name="/Sources/Session/">
     <Project Path="Sources/Session/Golether.Session/Golether.Session.csproj" />
@@ -118,6 +147,9 @@
     <Project Path="Tests/Golether.Media.Conference.GStreamer.Tests/Golether.Media.Conference.GStreamer.Tests.csproj" />
     <Project Path="Tests/Golether.Media.Player.Tests/Golether.Media.Player.Tests.csproj" />
     <Project Path="Tests/Golether.Media.Streaming.Tests/Golether.Media.Streaming.Tests.csproj" />
+    <Project Path="Tests/Golether.Mobile.Tests/Golether.Mobile.Tests.csproj">
+      <Build Project="false" />
+    </Project>
     <Project Path="Tests/Golether.Security.Tests/Golether.Security.Tests.csproj" />
     <Project Path="Tests/Golether.Session.Tests/Golether.Session.Tests.csproj" />
     <Project Path="Tests/Golether.Sync.Tests/Golether.Sync.Tests.csproj" />

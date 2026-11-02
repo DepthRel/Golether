@@ -1,0 +1,2 @@
+GStreamer 1.28.7 (https://gstreamer.freedesktop.org/data/pkg/android/1.28.7/gstreamer-1.0-android-universal-1.28.7.tar.xz)
+fa914bcf8695af1c6fa1f81db2e8da019a0306a89c2c3e48659438e1654023da  gstreamer-1.0-android-universal-1.28.7.tar.xz

@@ -6,6 +6,7 @@
 - VS Code with C# Dev Kit and the Avalonia extension, or Visual Studio / Rider.
 - The native components (libmpv, GStreamer) are prepared by the `golether-components` utility, see
   [Native/README.md](../../Native/README.md).
+- The Android emulator on Windows: see [AndroidEmulator.md](AndroidEmulator.md).
 - Windows PowerShell 5.1 or PowerShell 7 for `Scripts/*/*.ps1`, bash for `Scripts/*/*.sh`. The scripts are grouped
   by what they build: `Scripts/App`, `Scripts/Server`, `Scripts/Assets` (see `Scripts/README.md`).
 

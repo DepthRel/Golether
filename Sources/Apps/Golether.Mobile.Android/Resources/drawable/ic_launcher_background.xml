@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The plate of the launcher icon: ink with the warm light of a projector lamp in the middle. -->
+<shape xmlns:android="http://schemas.android.com/apk/res/android" android:shape="rectangle">
+  <gradient android:type="radial"
+            android:gradientRadius="58dp"
+            android:startColor="#3A2A1A"
+            android:centerColor="#141B1E"
+            android:endColor="#0E1517" />
+</shape>

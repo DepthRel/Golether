@@ -5,6 +5,7 @@
 - .NET SDK 10.0.100+ (`global.json`, rollForward `latestFeature`).
 - VS Code с C# Dev Kit и расширением Avalonia, либо Visual Studio / Rider.
 - Нативные компоненты (libmpv, GStreamer) готовит утилита `golether-components`, см. [Native/README.md](../../Native/README.md).
+- Android-эмулятор в Windows: см. [AndroidEmulator.md](AndroidEmulator.md).
 - Windows PowerShell 5.1 или PowerShell 7 для `Scripts/*/*.ps1`, bash для `Scripts/*/*.sh`. Скрипты разложены по
   тому, что собирают: `Scripts/App`, `Scripts/Server`, `Scripts/Assets` (см. `Scripts/README.md`).
 

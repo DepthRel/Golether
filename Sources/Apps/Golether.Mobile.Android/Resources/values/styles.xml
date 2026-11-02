@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+  <!-- The window the system shows before the first frame, and the bars around the application: all in the ink of the screens. -->
+  <style name="Theme.Golether" parent="Theme.AppCompat.NoActionBar">
+    <item name="android:windowBackground">@color/golether_ink</item>
+    <item name="android:statusBarColor">@color/golether_ink</item>
+    <item name="android:navigationBarColor">@color/golether_ink</item>
+  </style>
+</resources>

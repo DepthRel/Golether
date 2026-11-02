@@ -38,6 +38,7 @@ Sources/
   Database/Golether.Dbs.SQLite.DbMigrator  the console migrator
   Security/Golether.Security               device key, secret protection, invitations, verification code, admission,
                                            the sealed address of the rendezvous server
+  Security/Golether.Security.Android       secrets under a key of the Android Keystore
   Components/Golether.Components          catalog of native components (libmpv, GStreamer, AmneziaWG), lookup and installation
   Tools/Golether.Tools.Components          the golether-components utility: prepares the components for a package build
   Transports/Golether.Transports.Abstractions  PeerStream, connector and listener, FrameChannel
@@ -48,11 +49,15 @@ Sources/
   Sync/Golether.Sync                       protocol, clock offset estimation, PlaybackAuthority, PlaybackFollower
   Media/Golether.Media.Streaming           chunk server, parallel client, cache, read-ahead, stream for the player
   Media/Golether.Media.Player              libmpv (P/Invoke, embedding, golether://), a simulated player
+  Media/Golether.Media.Player.Android      libmpv on Android: the hardware decoders of FFmpeg
   Media/Golether.Media.Conference          contract of cameras and voice, a stub
   Media/Golether.Media.Conference.GStreamer  cameras and voice: capture, VP8/Opus, webrtcbin, mixer, echo cancellation
+  Media/Golether.Media.Conference.GStreamer.Android  the start of GStreamer on Android
   Tunnels/Golether.Tunnels.AmneziaWG       X25519 keys, obfuscation, .conf, signed packages, control through the CLI
   Session/Golether.Session                 HostSession and ParticipantSession
   Apps/Golether.Client                     shared client layer: services, view models and controls without windows, the colours of the theme, paid features
+  Apps/Golether.Mobile                     the screens of the mobile client: Avalonia, one view instead of windows, its own theme and icons
+  Apps/Golether.Mobile.Android             the Android package: activity, foreground service of a session, native components
   Apps/Golether.UI                         Avalonia: window, dialogs, composition of dependencies
   Apps/Golether.Web.Server                 the rendezvous server (a separate application, see RendezvousServer.md)
   Apps/Golether.Web.Server.Contracts       what the server and its monitor share: settings, service names, health, journal

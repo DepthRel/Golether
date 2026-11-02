@@ -342,6 +342,8 @@ ASALocalRun/
 healthchecksdb
 
 # Custom area
+# Working plans of coding agents stay on the developer's machine.
+.claude/plans/
 .vscode/dev/*/data/
 .vscode/dev/*/portable-data/
 

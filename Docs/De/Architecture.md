@@ -39,6 +39,7 @@ Sources/
   Database/Golether.Dbs.SQLite.DbMigrator  der Konsolen-Migrator
   Security/Golether.Security               Geräteschlüssel, Schutz von Geheimnissen, Einladungen, Prüfcode, Einlass,
                                            die versiegelte Adresse des Vermittlungsservers
+  Security/Golether.Security.Android       Geheimnisse unter einem Schlüssel des Android Keystore
   Components/Golether.Components          Katalog der nativen Komponenten (libmpv, GStreamer, AmneziaWG), Suche und Installation
   Tools/Golether.Tools.Components          das Werkzeug golether-components: bereitet die Komponenten für einen Paketbau vor
   Transports/Golether.Transports.Abstractions  PeerStream, Connector und Listener, FrameChannel
@@ -49,11 +50,15 @@ Sources/
   Sync/Golether.Sync                       Protokoll, Schätzung des Uhrenversatzes, PlaybackAuthority, PlaybackFollower
   Media/Golether.Media.Streaming           Stück-Server, paralleler Client, Cache, Vorauslesen, Stream für den Player
   Media/Golether.Media.Player              libmpv (P/Invoke, Einbettung, golether://), ein simulierter Player
+  Media/Golether.Media.Player.Android      libmpv unter Android: die Hardware-Decoder von FFmpeg
   Media/Golether.Media.Conference          Vertrag für Kameras und Sprache, ein Platzhalter
   Media/Golether.Media.Conference.GStreamer  Kameras und Sprache: Aufnahme, VP8/Opus, webrtcbin, Mischer, Echounterdrückung
+  Media/Golether.Media.Conference.GStreamer.Android  der Start von GStreamer unter Android
   Tunnels/Golether.Tunnels.AmneziaWG       X25519-Schlüssel, Verschleierung, .conf, signierte Pakete, Steuerung über die CLI
   Session/Golether.Session                 HostSession und ParticipantSession
   Apps/Golether.Client                     gemeinsame Client-Schicht: Dienste, View-Models und Steuerelemente ohne Fenster, die Farben des Designs, Bezahlfunktionen
+  Apps/Golether.Mobile                     die Bildschirme des mobilen Clients: Avalonia, eine Ansicht statt Fenster, eigenes Design und eigene Symbole
+  Apps/Golether.Mobile.Android             das Android-Paket: Activity, Vordergrunddienst der Sitzung, native Komponenten
   Apps/Golether.UI                         Avalonia: Fenster, Dialoge, Zusammensetzung der Abhängigkeiten
   Apps/Golether.Web.Server                 der Vermittlungsserver (eine eigene Anwendung, siehe RendezvousServer.md)
   Apps/Golether.Web.Server.Contracts       was Server und Monitor teilen: Einstellungen, Dienstnamen, Zustand, Journal
