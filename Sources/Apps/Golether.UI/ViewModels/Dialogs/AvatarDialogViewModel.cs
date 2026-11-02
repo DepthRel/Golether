@@ -1,6 +1,7 @@
 using Avalonia.Media.Imaging;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using Golether.Client.Services;
 using Golether.Localization;
 using Golether.UI.Services;
 

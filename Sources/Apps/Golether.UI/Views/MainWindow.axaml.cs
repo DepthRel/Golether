@@ -4,6 +4,8 @@ using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
+using Golether.Client.Controls;
+using Golether.Client.ViewModels;
 using Golether.Core.Data.Enums;
 using Golether.UI.Enums;
 using Golether.UI.Services;
@@ -29,7 +31,7 @@ public sealed partial class MainWindow : Window
     /// <summary>
     /// Draws camera frames into the participant tiles.
     /// </summary>
-    private Controls.CameraRenderer? _cameras;
+    private CameraRenderer? _cameras;
 
     /// <summary>
     /// The native window of the overlay above the video, or <c>0</c> while it is closed. The pen takes the mouse on
@@ -212,7 +214,7 @@ public sealed partial class MainWindow : Window
     public void Initialize(MainWindowViewModel viewModel, PlayerHost player, Golether.Media.Conference.IConferenceMedia conference)
     {
         DataContext = viewModel;
-        _cameras = new Controls.CameraRenderer(conference, viewModel);
+        _cameras = new CameraRenderer(conference, viewModel);
         _timeline.Attach(viewModel);
         viewModel.Chat.LineAdded += (_, _) => Dispatcher.UIThread.Post(() => ChatScroll.ScrollToEnd(), DispatcherPriority.Background);
         ReactionOverlay.Opened += (_, _) =>
@@ -245,7 +247,7 @@ public sealed partial class MainWindow : Window
         ReactionOverlay.Closed += (_, _) => _overlayHandle = 0;
         viewModel.Drawing.PropertyChanged += (_, e) =>
         {
-            if (e.PropertyName is nameof(Golether.UI.ViewModels.DrawingViewModel.IsPenActive) && _overlayHandle != 0)
+            if (e.PropertyName is nameof(Golether.Client.ViewModels.DrawingViewModel.IsPenActive) && _overlayHandle != 0)
             {
                 Controls.ClickThroughWindow.SetClickThrough(_overlayHandle, !viewModel.Drawing.IsPenActive);
             }
@@ -253,7 +255,7 @@ public sealed partial class MainWindow : Window
         viewModel.Gallery.PropertyChanged += (_, e) =>
         {
             // The item on this screen stays in sight in the strip and in the grid, whoever chose it.
-            if (e.PropertyName is nameof(Golether.UI.ViewModels.GalleryViewModel.CounterText) or nameof(Golether.UI.ViewModels.GalleryViewModel.IsGridOpen) &&
+            if (e.PropertyName is nameof(Golether.Client.ViewModels.GalleryViewModel.CounterText) or nameof(Golether.Client.ViewModels.GalleryViewModel.IsGridOpen) &&
                 viewModel.Gallery.IsActive)
             {
                 GalleryStrip.ScrollIntoView(viewModel.Gallery.ShownIndex);
@@ -983,11 +985,11 @@ public sealed partial class MainWindow : Window
                 e.Handled = true;
                 break;
             case Key.OemPlus or Key.Add when viewModel.ShowPictures && e.KeyModifiers is KeyModifiers.None or KeyModifiers.Shift:
-                PictureView.ZoomBy(Controls.ZoomableImage.STEP);
+                PictureView.ZoomBy(ZoomableImage.STEP);
                 e.Handled = true;
                 break;
             case Key.OemMinus or Key.Subtract when viewModel.ShowPictures && e.KeyModifiers == KeyModifiers.None:
-                PictureView.ZoomBy(1 / Controls.ZoomableImage.STEP);
+                PictureView.ZoomBy(1 / ZoomableImage.STEP);
                 e.Handled = true;
                 break;
             case Key.D0 or Key.NumPad0 when viewModel.ShowPictures && e.KeyModifiers == KeyModifiers.None:

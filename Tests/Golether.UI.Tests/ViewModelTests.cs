@@ -1,5 +1,8 @@
 using NSubstitute;
 using NSubstitute.ExceptionExtensions;
+using Golether.Client.Enums;
+using Golether.Client.Services;
+using Golether.Client.ViewModels;
 using Golether.Components.Catalog;
 using Golether.Components.Installation;
 using Golether.Core.Data.Enums;

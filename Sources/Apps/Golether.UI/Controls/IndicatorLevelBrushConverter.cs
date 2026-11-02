@@ -1,7 +1,7 @@
 using System.Globalization;
 using Avalonia.Data.Converters;
 using Avalonia.Media;
-using Golether.UI.Enums;
+using Golether.Client.Enums;
 
 namespace Golether.UI.Controls;
 

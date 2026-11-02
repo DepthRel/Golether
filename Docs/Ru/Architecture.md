@@ -52,6 +52,7 @@ Sources/
   Media/Golether.Media.Conference.GStreamer  камеры и голос: захват, VP8/Opus, webrtcbin, микшер, эхоподавление
   Tunnels/Golether.Tunnels.AmneziaWG       ключи X25519, маскировка, .conf, подписанные пакеты, управление через CLI
   Session/Golether.Session                 HostSession и ParticipantSession
+  Apps/Golether.Client                     общий слой клиента: сервисы, модели представления и элементы управления без окон, цвета темы, платные функции
   Apps/Golether.UI                         Avalonia: окно, диалоги, композиция зависимостей
   Apps/Golether.Web.Server                 сервер рукопожатий (отдельное приложение, см. RendezvousServer.md)
   Apps/Golether.Web.Server.Contracts       общее у сервера и монитора: настройки, имена службы, здоровье, журнал
@@ -166,7 +167,7 @@ flowchart LR
 - Координаты штриха — доли *картинки*, а не окна: `StrokeCanvas` считает прямоугольник кадра по соотношению сторон
   из mpv (`video-params/aspect`), поэтому при разной форме окон обведённое место совпадает. Цвет штриха — цвет
   участника из `ParticipantColors`, тот же, что у аватара.
-- При приёме участник получает билет (`reconnectTicket`), действующий до конца сеанса. После обрыва `SessionService`
+- При приёме участник получает билет (`reconnectTicket`), действующий до конца сеанса. После обрыва `ParticipantReconnector`
   пробует вернуться восемь раз с паузами 2, 3, 5, 10, 20 и 30 секунд; ведущий каждый раз подтверждает вход.
 
 ## Показ папки

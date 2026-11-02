@@ -651,6 +651,61 @@ public sealed class ConferenceTests
     }
 
     /// <summary>
+    /// A camera that stops by itself is reported once, and it stays shown as on: on a phone the system takes the camera
+    /// from an application off the screen, and only the application knows that it comes back.
+    /// </summary>
+    /// <returns>A task that completes when the test is done.</returns>
+    [Fact]
+    public async Task Camera_ThatStops_IsReportedAndStaysOn()
+    {
+        var (a, _, skip) = _pair.Value;
+        Assert.SkipWhen(skip is not null, skip ?? string.Empty);
+        var token = TestContext.Current.CancellationToken;
+        var reported = 0;
+        EventHandler onFailed = (_, _) => Interlocked.Increment(ref reported);
+        a!.CameraFailed += onFailed;
+        try
+        {
+            a.SetMuted(false, false);
+            await a.StartCaptureAsync(null, null, token);
+
+            a.BreakCamera();
+            await Task.Delay(500, token);
+
+            Assert.Equal(1, Volatile.Read(ref reported));
+            Assert.False(a.CameraOff);
+
+            await a.StartCaptureAsync(null, null, token);
+            Assert.True(a.HasCameraPipeline, "The camera comes back when it is asked for again.");
+        }
+        finally
+        {
+            a.CameraFailed -= onFailed;
+        }
+    }
+
+    /// <summary>
+    /// Asking for the same devices again restarts the camera only: a phone does that on every turn of the screen, and the
+    /// others would hear a gap in the voice each time.
+    /// </summary>
+    /// <returns>A task that completes when the test is done.</returns>
+    [Fact]
+    public async Task StartCapture_WithTheSameMicrophone_LeavesItRunning()
+    {
+        var (a, _, skip) = _pair.Value;
+        Assert.SkipWhen(skip is not null, skip ?? string.Empty);
+        var token = TestContext.Current.CancellationToken;
+        a!.SetMuted(false, false);
+        await a.StartCaptureAsync(null, null, token);
+        var microphone = a.MicrophonePipeline;
+
+        await a.StartCaptureAsync(null, null, token);
+
+        Assert.NotNull(microphone);
+        Assert.Same(microphone, a.MicrophonePipeline);
+    }
+
+    /// <summary>
     /// <see cref="IPeerMessageTransport"/> over a conference backend.
     /// </summary>
     private sealed class Transport : IPeerMessageTransport, IDisposable

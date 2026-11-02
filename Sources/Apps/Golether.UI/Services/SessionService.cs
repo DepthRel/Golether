@@ -1,4 +1,6 @@
 using Microsoft.Extensions.Logging;
+using Golether.Client.Enums;
+using Golether.Client.Services;
 using Golether.Core.Data.Enums;
 using Golether.Core.Data.Stores;
 using Golether.Core.Identity;
@@ -17,14 +19,13 @@ using Golether.Transports.PortMapping;
 using Golether.Transports.Relay;
 using Golether.Transports.Rendezvous;
 using Golether.Transports.Tls;
-using Golether.UI.Enums;
 
 namespace Golether.UI.Services;
 
 /// <summary>
 /// <see cref="ISessionService"/> over <see cref="HostSession"/> and <see cref="ParticipantSession"/>.
 /// </summary>
-public sealed class SessionService : ISessionService, IAsyncDisposable
+public sealed class SessionService : ISessionService, IReconnectionClient, IAsyncDisposable
 {
     /// <summary>
     /// The local device.
@@ -111,24 +112,6 @@ public sealed class SessionService : ISessionService, IAsyncDisposable
     /// of the system's temporary files.
     /// </summary>
     private readonly string? _galleryDirectory;
-
-    /// <summary>
-    /// The number of reconnection attempts after the connection to the host broke.
-    /// </summary>
-    private const int RECONNECT_ATTEMPTS = 8;
-
-    /// <summary>
-    /// The waits before the attempts; the last one repeats.
-    /// </summary>
-    private static readonly TimeSpan[] _reconnectDelays =
-    [
-        TimeSpan.FromSeconds(2),
-        TimeSpan.FromSeconds(3),
-        TimeSpan.FromSeconds(5),
-        TimeSpan.FromSeconds(10),
-        TimeSpan.FromSeconds(20),
-        TimeSpan.FromSeconds(30),
-    ];
 
     /// <summary>
     /// The hosted session.
@@ -783,79 +766,10 @@ public sealed class SessionService : ISessionService, IAsyncDisposable
     /// <returns>A task that completes when the session is back or the attempts stop.</returns>
     private async Task ReconnectLoopAsync(ParticipantSession ended, CancellationTokenSource cancellation)
     {
-        var token = cancellation.Token;
         try
         {
-            for (var attempt = 1; attempt <= RECONNECT_ATTEMPTS && !token.IsCancellationRequested; attempt++)
-            {
-                var delay = _reconnectDelays[Math.Min(attempt - 1, _reconnectDelays.Length - 1)];
-                Report(Texts.Format("Session.Reconnect.Lost", attempt, RECONNECT_ATTEMPTS, delay.TotalSeconds.ToString("0", System.Globalization.CultureInfo.InvariantCulture)));
-                await Task.Delay(delay, _timeProvider, token).ConfigureAwait(false);
-                if (!ReferenceEquals(_participant, ended) || _reconnectInvite is not { } ticket)
-                {
-                    return;
-                }
-
-                Report(Texts.Format("Session.Reconnect.Trying", attempt, RECONNECT_ATTEMPTS));
-
-                // The ended session shares the player and the cameras with the new one. It is released before the
-                // new one starts: released afterwards, its shutdown would stop the film and the cameras the new
-                // session has just started.
-                await ended.DisposeAsync().ConfigureAwait(false);
-                var session = CreateParticipant(_joinName);
-                try
-                {
-                    await session.RejoinAsync(ticket, token).ConfigureAwait(false);
-                }
-                catch (Exception ex) when (ex is not (OperationCanceledException or OutOfMemoryException))
-                {
-                    // Whatever went wrong, the half-open session is released: left behind, it would keep its
-                    // connection and its loops for ever.
-                    var refused = session.ClosedByHost;
-                    await session.DisposeAsync().ConfigureAwait(false);
-                    _loggerFactory.CreateLogger<SessionService>().LogInformation("Reconnect attempt {Attempt} failed: {Error}", attempt, ex.Message);
-                    if (refused)
-                    {
-                        // The host answered and said no: asking again would only bother it.
-                        break;
-                    }
-
-                    continue;
-                }
-                catch (OperationCanceledException)
-                {
-                    // The user left while the attempt was running: the half-open session must not stay behind.
-                    await session.DisposeAsync().ConfigureAwait(false);
-                    throw;
-                }
-
-                if (!ReferenceEquals(Interlocked.CompareExchange(ref _participant, session, ended), ended))
-                {
-                    // The user left while the host was admitting this device again.
-                    await session.DisposeAsync().ConfigureAwait(false);
-                    return;
-                }
-
-                _reconnectInvite = session.ReconnectInvite ?? ticket;
-                if (_avatar is { Length: > 0 } avatar)
-                {
-                    try
-                    {
-                        await session.SendAvatarAsync(avatar, token).ConfigureAwait(false);
-                    }
-                    catch (Exception ex) when (ex is IOException or ObjectDisposedException or InvalidOperationException)
-                    {
-                        // The connection broke again: the next restoring sends the picture.
-                    }
-                }
-
-                Report(Texts.Get("Session.Reconnect.Restored"));
-                ReconnectMessage = string.Empty;
-                Changed?.Invoke(this, EventArgs.Empty);
-                return;
-            }
-
-            Report(Texts.Get("Session.Reconnect.Failed"));
+            var reconnector = new ParticipantReconnector(this, _timeProvider, _loggerFactory.CreateLogger<ParticipantReconnector>());
+            await reconnector.RunAsync(ended, cancellation.Token).ConfigureAwait(false);
         }
         catch (OperationCanceledException)
         {
@@ -872,6 +786,39 @@ public sealed class SessionService : ISessionService, IAsyncDisposable
             Changed?.Invoke(this, EventArgs.Empty);
         }
     }
+
+    /// <inheritdoc />
+    Invite? IReconnectionClient.GetTicket(ParticipantSession ended) => ReferenceEquals(_participant, ended) ? _reconnectInvite : null;
+
+    /// <inheritdoc />
+    ParticipantSession IReconnectionClient.CreateSession() => CreateParticipant(_joinName);
+
+    /// <inheritdoc />
+    async Task<bool> IReconnectionClient.AdoptAsync(ParticipantSession ended, ParticipantSession session, Invite ticket, CancellationToken cancellationToken)
+    {
+        if (!ReferenceEquals(Interlocked.CompareExchange(ref _participant, session, ended), ended))
+        {
+            return false;
+        }
+
+        _reconnectInvite = session.ReconnectInvite ?? ticket;
+        if (_avatar is { Length: > 0 } avatar)
+        {
+            try
+            {
+                await session.SendAvatarAsync(avatar, cancellationToken).ConfigureAwait(false);
+            }
+            catch (Exception ex) when (ex is IOException or ObjectDisposedException or InvalidOperationException)
+            {
+                // The connection broke again: the next restoring sends the picture.
+            }
+        }
+
+        return true;
+    }
+
+    /// <inheritdoc />
+    void IReconnectionClient.Report(string text) => Report(text);
 
     /// <summary>
     /// Shows the state of the reconnection in the interface and in the event feed.

@@ -9,34 +9,36 @@ namespace Golether.Media.Conference.GStreamer.Native;
 internal static unsafe partial class Gst
 {
     /// <summary>
-    /// The logical name of GLib.
+    /// The name of GLib in imports. On desktop systems <see cref="GstRuntime"/> answers for these names with the files
+    /// it found. On Android the runtime opens exactly the given name and never asks a resolver, and all of GStreamer is
+    /// one library, so each name is the file of a small library of the package that depends on it.
     /// </summary>
-    public const string G_LIB = "golether-glib";
+    public const string G_LIB = "libgolether-glib.so";
 
     /// <summary>
-    /// The logical name of GObject.
+    /// The name of GObject in imports.
     /// </summary>
-    public const string G_OBJECT = "golether-gobject";
+    public const string G_OBJECT = "libgolether-gobject.so";
 
     /// <summary>
-    /// The logical name of the GStreamer core.
+    /// The name of the GStreamer core in imports.
     /// </summary>
-    public const string CORE = "golether-gstreamer";
+    public const string CORE = "libgolether-gstreamer.so";
 
     /// <summary>
-    /// The logical name of the app library.
+    /// The name of the app library in imports.
     /// </summary>
-    public const string APP = "golether-gstapp";
+    public const string APP = "libgolether-gstapp.so";
 
     /// <summary>
-    /// The logical name of the SDP library.
+    /// The name of the SDP library in imports.
     /// </summary>
-    public const string SDP = "golether-gstsdp";
+    public const string SDP = "libgolether-gstsdp.so";
 
     /// <summary>
-    /// The logical name of the WebRTC library.
+    /// The name of the WebRTC library in imports.
     /// </summary>
-    public const string WEB_RTC = "golether-gstwebrtc";
+    public const string WEB_RTC = "libgolether-gstwebrtc.so";
 
     /// <summary>
     /// <c>GST_CLOCK_TIME_NONE</c>.

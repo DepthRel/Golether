@@ -63,8 +63,12 @@ public static unsafe class GstRuntime
                     ConfigureBundle(bundleRoot, registryFile);
                 }
 
-                LoadLibraries(bundleRoot);
-                NativeLibrary.SetDllImportResolver(typeof(GstRuntime).Assembly, Resolve);
+                // On Android the imports find their libraries by file name, GStreamerAndroid has started the library.
+                if (!OperatingSystem.IsAndroid())
+                {
+                    LoadLibraries(bundleRoot);
+                    NativeLibrary.SetDllImportResolver(typeof(GstRuntime).Assembly, Resolve);
+                }
 
                 GError* gerror = null;
                 if (Gst.InitCheck(0, 0, &gerror) == 0)

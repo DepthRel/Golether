@@ -1,7 +1,8 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:vm="using:Golether.UI.ViewModels"
-             xmlns:controls="using:Golether.UI.Controls"
+             xmlns:client="using:Golether.Client.ViewModels"
+             xmlns:clientControls="using:Golether.Client.Controls"
              xmlns:views="using:Golether.UI.Views"
              x:Class="Golether.UI.Views.SessionOverlay"
              x:DataType="vm:MainWindowViewModel">
@@ -12,8 +13,8 @@
     No fill: the layer must not answer clicks; only the canvas of the pen catches them while the pen is on.
   -->
   <Panel>
-    <controls:StrokeCanvas Source="{Binding Drawing}" Aspect="{Binding VideoAspect}"
-                           Zoom="{Binding $parent[views:SessionOverlay].Zoom}" Center="{Binding $parent[views:SessionOverlay].Center}" />
+    <clientControls:StrokeCanvas x:Name="Strokes" Source="{Binding Drawing}" Aspect="{Binding VideoAspect}"
+                                 Zoom="{Binding $parent[views:SessionOverlay].Zoom}" Center="{Binding $parent[views:SessionOverlay].Center}" />
     <Border Width="280" Height="360" Background="Transparent" IsHitTestVisible="False"
             HorizontalAlignment="Right" VerticalAlignment="Bottom" Margin="0,0,18,18">
       <ItemsControl ItemsSource="{Binding Chat.Reactions}">
@@ -23,13 +24,13 @@
           </ItemsPanelTemplate>
         </ItemsControl.ItemsPanel>
         <ItemsControl.Styles>
-          <Style Selector="ContentPresenter" x:DataType="vm:FloatingReactionViewModel">
+          <Style Selector="ContentPresenter" x:DataType="client:FloatingReactionViewModel">
             <Setter Property="Canvas.Right" Value="{Binding Offset}" />
             <Setter Property="Canvas.Bottom" Value="0" />
           </Style>
         </ItemsControl.Styles>
         <ItemsControl.ItemTemplate>
-          <DataTemplate x:DataType="vm:FloatingReactionViewModel">
+          <DataTemplate x:DataType="client:FloatingReactionViewModel">
             <StackPanel Classes="floatingReaction" Width="72" Height="84" Spacing="1">
               <TextBlock Classes="emoji" Text="{Binding Emoji}" FontSize="30" Padding="10,13,10,7" TextAlignment="Center"
                          HorizontalAlignment="Center" VerticalAlignment="Center" />

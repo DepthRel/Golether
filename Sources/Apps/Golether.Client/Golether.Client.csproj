@@ -1,0 +1,31 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    The client layer shared by the desktop application and the mobile client: services and view models that know
+    neither windows nor a platform. The applications compose them with their own views.
+  -->
+  <PropertyGroup>
+    <RootNamespace>Golether.Client</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="Golether.Client.Tests" />
+    <InternalsVisibleTo Include="Golether" />
+    <InternalsVisibleTo Include="Golether.UI.Tests" />
+    <InternalsVisibleTo Include="Golether.UI.Headless.Tests" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Avalonia" />
+    <PackageReference Include="Avalonia.Skia" />
+    <PackageReference Include="CommunityToolkit.Mvvm" />
+    <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="../../Core/Golether.Localization/Golether.Localization.csproj" />
+    <ProjectReference Include="../../Media/Golether.Media.Player/Golether.Media.Player.csproj" />
+    <ProjectReference Include="../../Session/Golether.Session/Golether.Session.csproj" />
+  </ItemGroup>
+
+</Project>

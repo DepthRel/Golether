@@ -11,6 +11,10 @@ using Avalonia.VisualTree;
 using Microsoft.Extensions.Logging.Abstractions;
 using NSubstitute;
 using SkiaSharp;
+using Golether.Client.Controls;
+using Golether.Client.Enums;
+using Golether.Client.Services;
+using Golether.Client.ViewModels;
 using Golether.Components.Installation;
 using Golether.Core.Data.Enums;
 using Golether.Core.Data.Stores;
@@ -24,7 +28,6 @@ using Golether.Media.Player;
 using Golether.Session;
 using Golether.Sync.Protocol;
 using Golether.UI.Controls;
-using Golether.UI.Enums;
 using Golether.UI.Services;
 using Golether.UI.ViewModels;
 using Golether.UI.Views;
@@ -1346,7 +1349,7 @@ public sealed class MainWindowTests
         await service.InitializeAsync(CancellationToken.None);
 
         // The flags are images of the application resources, so the selector is built where the application runs.
-        var selector = await _session.Value.Dispatch(() => new LanguageViewModel(service, Golether.UI.Localization.FlagImages.Load), TestContext.Current.CancellationToken);
+        var selector = await _session.Value.Dispatch(() => new LanguageViewModel(service, code => Golether.Client.Localization.FlagImages.Load("Golether", code)), TestContext.Current.CancellationToken);
 
         await RunAsync(
             async fixture =>

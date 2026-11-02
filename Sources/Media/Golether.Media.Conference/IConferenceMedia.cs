@@ -136,6 +136,13 @@ public interface IConferenceMedia : IAsyncDisposable
     event EventHandler? MicrophoneFailed;
 
     /// <summary>
+    /// Raised when the camera could not be opened or stopped by itself. <see cref="CameraOff"/> does not change: a phone
+    /// loses the camera whenever the application leaves the screen and takes it back on return, so what a failure means
+    /// is for the application to judge. May be raised on any thread.
+    /// </summary>
+    event EventHandler? CameraFailed;
+
+    /// <summary>
     /// Starts media with a peer.
     /// </summary>
     /// <param name="peer">The peer.</param>

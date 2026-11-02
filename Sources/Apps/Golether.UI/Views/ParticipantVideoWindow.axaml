@@ -1,6 +1,7 @@
 <Window xmlns="https://github.com/avaloniaui"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        xmlns:vm="using:Golether.UI.ViewModels"
+        xmlns:vm="using:Golether.Client.ViewModels"
+        xmlns:clientControls="using:Golether.Client.Controls"
         xmlns:controls="using:Golether.UI.Controls"
         x:Class="Golether.UI.Views.ParticipantVideoWindow"
         x:DataType="vm:ParticipantItemViewModel"
@@ -10,7 +11,7 @@
   <!-- The camera of one participant, as large as the window; the same picture the tile shows. -->
   <Panel Background="#0E1518">
     <Border Width="120" Height="120" CornerRadius="60" HorizontalAlignment="Center" VerticalAlignment="Center"
-            Background="{Binding AvatarColor, Converter={x:Static controls:ColorTextBrushConverter.Instance}}">
+            Background="{Binding AvatarColor, Converter={x:Static clientControls:ColorTextBrushConverter.Instance}}">
       <TextBlock Text="{Binding Initial}" FontSize="52" FontWeight="Bold" Foreground="#0A0F11"
                  HorizontalAlignment="Center" VerticalAlignment="Center" />
     </Border>

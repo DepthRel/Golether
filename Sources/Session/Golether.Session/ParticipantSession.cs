@@ -1420,7 +1420,7 @@ public sealed class ParticipantSession : IAsyncDisposable
         {
             KeepStream = KeepMediaStreamAsync,
         };
-        var cache = new ChunkCache();
+        var cache = new ChunkCache(_options.MediaCacheCapacity);
         IChunkSource chunks = source;
         if (_conferenceMedia is { IsAvailable: true } conference)
         {

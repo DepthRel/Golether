@@ -51,6 +51,7 @@
   </ItemGroup>
 
   <ItemGroup>
+    <ProjectReference Include="../Golether.Client/Golether.Client.csproj" />
     <ProjectReference Include="../../Components/Golether.Components/Golether.Components.csproj" />
     <ProjectReference Include="../../Core/Golether.Core.Data.Migrations.SQLite/Golether.Core.Data.Migrations.SQLite.csproj" />
     <ProjectReference Include="../../Media/Golether.Media.Conference.GStreamer/Golether.Media.Conference.GStreamer.csproj" />

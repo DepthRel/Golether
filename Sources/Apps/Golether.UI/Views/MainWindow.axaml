@@ -1,9 +1,11 @@
 <Window xmlns="https://github.com/avaloniaui"
-        xmlns:loc="using:Golether.UI.Localization"
+        xmlns:loc="using:Golether.Client.Localization"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         xmlns:vm="using:Golether.UI.ViewModels"
+        xmlns:client="using:Golether.Client.ViewModels"
+        xmlns:clientControls="using:Golether.Client.Controls"
         xmlns:controls="using:Golether.UI.Controls"
         xmlns:views="using:Golether.UI.Views"
         xmlns:enums="using:Golether.UI.Enums"
@@ -329,7 +331,7 @@
                     </ItemsPanelTemplate>
                   </ItemsControl.ItemsPanel>
                   <ItemsControl.ItemTemplate>
-                    <DataTemplate x:DataType="vm:GalleryItemViewModel">
+                    <DataTemplate x:DataType="client:GalleryItemViewModel">
                       <views:GalleryTile Width="112" Height="96" Margin="0,0,6,0" />
                     </DataTemplate>
                   </ItemsControl.ItemTemplate>
@@ -342,15 +344,15 @@
                       </ItemsPanelTemplate>
                     </ItemsControl.ItemsPanel>
                     <ItemsControl.Styles>
-                      <Style Selector="ContentPresenter" x:DataType="vm:ParticipantItemViewModel">
+                      <Style Selector="ContentPresenter" x:DataType="client:ParticipantItemViewModel">
                         <Setter Property="controls:FractionPanel.Fraction" Value="{Binding TimelineFraction}" />
                       </Style>
                     </ItemsControl.Styles>
                     <ItemsControl.ItemTemplate>
-                      <DataTemplate x:DataType="vm:ParticipantItemViewModel">
+                      <DataTemplate x:DataType="client:ParticipantItemViewModel">
                         <!-- The mark of a participant: the chosen avatar, or the coloured initial when there is none. -->
                         <Panel Width="18" Height="18" ToolTip.Tip="{Binding Name}">
-                          <Border CornerRadius="9" Background="{Binding AvatarColor, Converter={x:Static controls:ColorTextBrushConverter.Instance}}">
+                          <Border CornerRadius="9" Background="{Binding AvatarColor, Converter={x:Static clientControls:ColorTextBrushConverter.Instance}}">
                             <TextBlock Text="{Binding Initial}" FontSize="9" FontWeight="Bold" Foreground="#0A0F11"
                                        HorizontalAlignment="Center" VerticalAlignment="Center" />
                           </Border>
@@ -452,7 +454,7 @@
                               <TextBlock Classes="muted" FontSize="11" Text="{loc:Loc Main.Tracks.Audio}" Margin="6,0,0,2" />
                               <ItemsControl ItemsSource="{Binding Tracks.AudioTracks, FallbackValue={x:Null}}">
                                 <ItemsControl.ItemTemplate>
-                                  <DataTemplate x:DataType="vm:TrackOptionViewModel">
+                                  <DataTemplate x:DataType="client:TrackOptionViewModel">
                                     <Button Classes="ghost trackOption" Command="{Binding SelectCommand}" Click="OnTrackChosen"
                                             HorizontalAlignment="Stretch" HorizontalContentAlignment="Left">
                                       <StackPanel Orientation="Horizontal" Spacing="8">
@@ -467,7 +469,7 @@
                               <TextBlock Classes="muted" FontSize="11" Text="{loc:Loc Main.Tracks.Subtitles}" Margin="6,8,0,2" />
                               <ItemsControl ItemsSource="{Binding Tracks.SubtitleTracks, FallbackValue={x:Null}}">
                                 <ItemsControl.ItemTemplate>
-                                  <DataTemplate x:DataType="vm:TrackOptionViewModel">
+                                  <DataTemplate x:DataType="client:TrackOptionViewModel">
                                     <Button Classes="ghost trackOption" Command="{Binding SelectCommand}" Click="OnTrackChosen"
                                             HorizontalAlignment="Stretch" HorizontalContentAlignment="Left">
                                       <StackPanel Orientation="Horizontal" Spacing="8">
@@ -646,7 +648,7 @@
                 enlarge and move the picture on this screen.
               -->
               <Panel x:Name="PictureArea" IsVisible="{Binding ShowPictures}">
-                <controls:ZoomableImage x:Name="PictureView" Source="{Binding Gallery.ShownImage}" />
+                <clientControls:ZoomableImage x:Name="PictureView" Source="{Binding Gallery.ShownImage}" />
                 <ProgressBar IsIndeterminate="True" Width="200" HorizontalAlignment="Center" VerticalAlignment="Center"
                              IsVisible="{Binding Gallery.IsLoading}" />
                 <TextBlock Classes="muted" HorizontalAlignment="Center" VerticalAlignment="Center" TextWrapping="Wrap" MaxWidth="420"
@@ -692,7 +694,7 @@
                               </ItemsPanelTemplate>
                             </ItemsControl.ItemsPanel>
                             <ItemsControl.ItemTemplate>
-                              <DataTemplate x:DataType="vm:GalleryItemViewModel">
+                              <DataTemplate x:DataType="client:GalleryItemViewModel">
                                 <views:GalleryTile Width="180" Height="146" Margin="0,0,10,10" />
                               </DataTemplate>
                             </ItemsControl.ItemTemplate>
@@ -834,7 +836,7 @@
                           </ItemsPanelTemplate>
                         </ItemsControl.ItemsPanel>
                         <ItemsControl.ItemTemplate>
-                          <DataTemplate x:DataType="vm:ChatLineViewModel">
+                          <DataTemplate x:DataType="client:ChatLineViewModel">
                             <StackPanel Spacing="1">
                               <StackPanel Orientation="Horizontal" Spacing="6" IsVisible="{Binding !IsSystem}">
                                 <TextBlock FontSize="12" FontWeight="SemiBold" Text="{Binding SenderText}"
@@ -876,7 +878,7 @@
                     </ItemsPanelTemplate>
                   </ItemsControl.ItemsPanel>
                   <ItemsControl.ItemTemplate>
-                    <DataTemplate x:DataType="vm:ParticipantItemViewModel">
+                    <DataTemplate x:DataType="client:ParticipantItemViewModel">
                       <Panel>
                       <Border Classes="tile">
                         <Border.ContextMenu>
@@ -939,7 +941,7 @@
                           -->
                           <controls:AspectPanel HeightPerWidth="0.5625" Background="#0E1518">
                             <Border Width="64" Height="64" CornerRadius="32" HorizontalAlignment="Center" VerticalAlignment="Center"
-                                    Background="{Binding AvatarColor, Converter={x:Static controls:ColorTextBrushConverter.Instance}}">
+                                    Background="{Binding AvatarColor, Converter={x:Static clientControls:ColorTextBrushConverter.Instance}}">
                               <TextBlock Text="{Binding Initial}" FontSize="28" FontWeight="Bold" Foreground="#0A0F11"
                                          HorizontalAlignment="Center" VerticalAlignment="Center" />
                             </Border>

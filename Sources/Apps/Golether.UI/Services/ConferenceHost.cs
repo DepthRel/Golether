@@ -14,7 +14,7 @@ namespace Golether.UI.Services;
 /// <remarks>
 /// Sessions keep this proxy, so the component can be installed while the application runs; the next session uses it.
 /// </remarks>
-public sealed class ConferenceHost : IConferenceMedia, Golether.UI.ViewModels.ICaptureDeviceSelector
+public sealed class ConferenceHost : IConferenceMedia, Golether.Client.ViewModels.ICaptureDeviceSelector
 {
     /// <summary>
     /// The logger factory.
@@ -152,6 +152,7 @@ public sealed class ConferenceHost : IConferenceMedia, Golether.UI.ViewModels.IC
             MuteChanged?.Invoke(this, EventArgs.Empty);
             MicrophoneFailed?.Invoke(this, EventArgs.Empty);
         };
+        media.CameraFailed += (_, _) => CameraFailed?.Invoke(this, EventArgs.Empty);
         media.SetMuted(_microphoneMuted, _cameraOff);
         media.SetRelay(_relay);
         media.SetStunServer(_stunServer);
@@ -201,6 +202,9 @@ public sealed class ConferenceHost : IConferenceMedia, Golether.UI.ViewModels.IC
 
     /// <inheritdoc />
     public event EventHandler? MicrophoneFailed;
+
+    /// <inheritdoc />
+    public event EventHandler? CameraFailed;
 
     /// <inheritdoc />
     public Task ConnectAsync(PeerId peer, bool isOfferer, CancellationToken cancellationToken) => _current.ConnectAsync(peer, isOfferer, cancellationToken);

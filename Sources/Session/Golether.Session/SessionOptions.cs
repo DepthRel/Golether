@@ -1,4 +1,5 @@
 using Golether.Core.Playback;
+using Golether.Media.Streaming.Caching;
 using Golether.Sync.Engine;
 
 namespace Golether.Session;
@@ -59,6 +60,11 @@ public sealed record SessionOptions
     public PlaybackAuthorityOptions Authority { get; init; } = new();
 
     /// <summary>
+    /// Gets how many bytes of the film a participant keeps in memory; a phone has less room than a computer.
+    /// </summary>
+    public long MediaCacheCapacity { get; init; } = ChunkCache.DEFAULT_CAPACITY;
+
+    /// <summary>
     /// Validates the options.
     /// </summary>
     /// <exception cref="ArgumentOutOfRangeException">A value is out of range.</exception>
@@ -68,6 +74,7 @@ public sealed record SessionOptions
         ArgumentOutOfRangeException.ThrowIfGreaterThan(MaxParticipants, MAX_PARTICIPANTS_LIMIT);
         ArgumentOutOfRangeException.ThrowIfLessThan(MediaDataStreams, 1);
         ArgumentOutOfRangeException.ThrowIfGreaterThan(MediaDataStreams, 16);
+        ArgumentOutOfRangeException.ThrowIfLessThan(MediaCacheCapacity, 1);
         DriftCorrection.Validate();
     }
 }

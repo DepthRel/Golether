@@ -1,4 +1,5 @@
 using Avalonia.Threading;
+using Golether.Client.Services;
 
 namespace Golether.UI.Services;
 

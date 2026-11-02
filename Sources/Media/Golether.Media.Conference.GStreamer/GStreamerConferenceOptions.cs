@@ -16,6 +16,12 @@ public sealed record GStreamerConferenceOptions
     public required string RegistryFile { get; init; }
 
     /// <summary>
+    /// Gets the camera to use when nothing else was chosen, or <see langword="null"/> for the choice of the system. It
+    /// is asked on every start of the camera, because on a phone the answer changes with the turn of the screen.
+    /// </summary>
+    public Func<CaptureDevice?>? DefaultCamera { get; init; }
+
+    /// <summary>
     /// Gets a value indicating whether test patterns replace the camera and microphone (tests, machines without devices).
     /// </summary>
     public bool UseTestSources { get; init; }

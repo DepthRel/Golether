@@ -1,8 +1,10 @@
 using System.Collections.Concurrent;
 using System.Security.Cryptography;
+using Microsoft.Extensions.Logging.Abstractions;
 using NSubstitute;
 using Golether.Core.Data.Enums;
 using Golether.Core.Enums;
+using Golether.Core.Identity;
 using Golether.Core.Networking;
 using Golether.Core.Session;
 using Golether.Core.Time;
@@ -214,6 +216,157 @@ public sealed class SessionIntegrationTests : IAsyncLifetime
         // A ticket that was not issued is worthless.
         await using var stranger = CreateGuest();
         await Assert.ThrowsAsync<SessionJoinException>(() => stranger.RejoinAsync(ticket with { Token = new string('f', 48) }, token));
+    }
+
+    /// <summary>
+    /// After a broken connection the participant comes back by itself, and the application is told how it goes.
+    /// </summary>
+    /// <returns>A task that completes when the test is done.</returns>
+    [Fact]
+    public async Task Reconnector_BringsTheParticipantBack()
+    {
+        var token = TestContext.Current.CancellationToken;
+        var (ended, ticket) = await JoinAndLoseAsync(token);
+        var client = new ReconnectingClient(CreateGuest, ticket);
+
+        var restored = await CreateReconnector(client).RunAsync(ended, token);
+
+        Assert.True(restored);
+        await using var session = client.Adopted;
+        await WaitUntilAsync(() => _host.GetSnapshot().Participants.Count == 2, token);
+        Assert.Equal(
+            [
+                Texts.Format("Session.Reconnect.Lost", 1, 8, "2"),
+                Texts.Format("Session.Reconnect.Trying", 1, 8),
+                Texts.Get("Session.Reconnect.Restored"),
+            ],
+            client.Reports);
+    }
+
+    /// <summary>
+    /// When the network comes back the next attempt starts at once: the user does not sit out a wait of half a minute.
+    /// </summary>
+    /// <returns>A task that completes when the test is done.</returns>
+    [Fact]
+    public async Task Reconnector_Retry_CutsTheWaitShort()
+    {
+        var token = TestContext.Current.CancellationToken;
+        var (ended, ticket) = await JoinAndLoseAsync(token);
+        var client = new ReconnectingClient(CreateGuest, ticket);
+        var reconnector = new ParticipantReconnector(client, new FrozenClock(), NullLogger<ParticipantReconnector>.Instance);
+
+        var running = reconnector.RunAsync(ended, token);
+        reconnector.Retry();
+
+        Assert.True(await running.WaitAsync(TimeSpan.FromSeconds(30), token));
+        await using var session = client.Adopted;
+    }
+
+    /// <summary>
+    /// A return of the network between two waits is not lost: the wait after it does not start.
+    /// </summary>
+    /// <returns>A task that completes when the test is done.</returns>
+    [Fact]
+    public async Task Reconnector_RetryBeforeTheWait_IsKept()
+    {
+        var token = TestContext.Current.CancellationToken;
+        var (ended, ticket) = await JoinAndLoseAsync(token);
+        var client = new ReconnectingClient(CreateGuest, ticket);
+        var reconnector = new ParticipantReconnector(client, new FrozenClock(), NullLogger<ParticipantReconnector>.Instance);
+
+        reconnector.Retry();
+
+        Assert.True(await reconnector.RunAsync(ended, token).WaitAsync(TimeSpan.FromSeconds(30), token));
+        await using var session = client.Adopted;
+    }
+
+    /// <summary>
+    /// A host that answered "no" is not asked again: the attempts stop at once.
+    /// </summary>
+    /// <returns>A task that completes when the test is done.</returns>
+    [Fact]
+    public async Task Reconnector_StopsWhenTheHostRefuses()
+    {
+        var token = TestContext.Current.CancellationToken;
+        var (ended, ticket) = await JoinAndLoseAsync(token);
+        var client = new ReconnectingClient(CreateGuest, ticket with { Token = new string('f', 48) });
+
+        var restored = await CreateReconnector(client).RunAsync(ended, token);
+
+        Assert.False(restored);
+        Assert.Single(client.Created);
+        Assert.Equal(Texts.Get("Session.Reconnect.Failed"), client.Reports.Last());
+    }
+
+    /// <summary>
+    /// A host that can not be reached is tried a limited number of times, and no half-open session stays behind.
+    /// </summary>
+    /// <returns>A task that completes when the test is done.</returns>
+    [Fact]
+    public async Task Reconnector_GivesUpOnAnUnreachableHost()
+    {
+        var token = TestContext.Current.CancellationToken;
+        var (ended, ticket) = await JoinAndLoseAsync(token);
+        var client = new ReconnectingClient(CreateUnreachableGuest, ticket);
+
+        var restored = await CreateReconnector(client).RunAsync(ended, token);
+
+        Assert.False(restored);
+        Assert.Equal(8, client.Created.Count);
+        Assert.Equal(Texts.Get("Session.Reconnect.Failed"), client.Reports.Last());
+        Assert.All(client.Created, session => Assert.Equal(SessionState.Ended, session.GetSnapshot().State));
+    }
+
+    /// <summary>
+    /// When the user has left, nothing is started for a session nobody wants.
+    /// </summary>
+    /// <returns>A task that completes when the test is done.</returns>
+    [Fact]
+    public async Task Reconnector_StopsWhenTheUserLeft()
+    {
+        var token = TestContext.Current.CancellationToken;
+        var (ended, _) = await JoinAndLoseAsync(token);
+        var client = new ReconnectingClient(CreateGuest, null);
+
+        var restored = await CreateReconnector(client).RunAsync(ended, token);
+
+        Assert.False(restored);
+        Assert.Empty(client.Created);
+    }
+
+    /// <summary>
+    /// When the user left while the host was letting the device in, the restored session is closed again.
+    /// </summary>
+    /// <returns>A task that completes when the test is done.</returns>
+    [Fact]
+    public async Task Reconnector_ClosesASessionNobodyTook()
+    {
+        var token = TestContext.Current.CancellationToken;
+        var (ended, ticket) = await JoinAndLoseAsync(token);
+        var client = new ReconnectingClient(CreateGuest, ticket, adopts: false);
+
+        var restored = await CreateReconnector(client).RunAsync(ended, token);
+
+        Assert.False(restored);
+        await WaitUntilAsync(() => _host.GetSnapshot().Participants.Count == 1, token);
+    }
+
+    /// <summary>
+    /// Stopping the attempts is not a failure the user has to read about.
+    /// </summary>
+    /// <returns>A task that completes when the test is done.</returns>
+    [Fact]
+    public async Task Reconnector_Cancelled_DoesNotReportAFailure()
+    {
+        var token = TestContext.Current.CancellationToken;
+        var (ended, ticket) = await JoinAndLoseAsync(token);
+        var client = new ReconnectingClient(CreateGuest, ticket);
+        using var cancellation = CancellationTokenSource.CreateLinkedTokenSource(token);
+        await cancellation.CancelAsync();
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => CreateReconnector(client).RunAsync(ended, cancellation.Token));
+
+        Assert.DoesNotContain(Texts.Get("Session.Reconnect.Failed"), client.Reports);
     }
 
     /// <summary>
@@ -804,6 +957,54 @@ public sealed class SessionIntegrationTests : IAsyncLifetime
             _options);
 
     /// <summary>
+    /// Creates a reconnector that does not wait between its attempts.
+    /// </summary>
+    /// <param name="client">The application.</param>
+    /// <returns>The reconnector.</returns>
+    private static ParticipantReconnector CreateReconnector(IReconnectionClient client)
+        => new(client, new NoWaitClock(), NullLogger<ParticipantReconnector>.Instance);
+
+    /// <summary>
+    /// Joins the host and loses the connection.
+    /// </summary>
+    /// <param name="cancellationToken">The cancellation token.</param>
+    /// <returns>The session that ended and the ticket to come back with.</returns>
+    private async Task<(ParticipantSession Ended, Invite Ticket)> JoinAndLoseAsync(CancellationToken cancellationToken)
+    {
+        var session = CreateGuest();
+        await session.JoinAsync(_host.CreateInvite([new PeerEndpoint("127.0.0.1", _host.Port)]), cancellationToken);
+        var ticket = session.ReconnectInvite;
+        Assert.NotNull(ticket);
+
+        await session.DisposeAsync();
+        await WaitUntilAsync(() => _host.GetSnapshot().Participants.Count == 1, cancellationToken);
+
+        return (session, ticket);
+    }
+
+    /// <summary>
+    /// Creates a participant session whose connection attempts fail at once.
+    /// </summary>
+    /// <returns>The session.</returns>
+    private ParticipantSession CreateUnreachableGuest()
+    {
+        var connector = Substitute.For<IPeerConnector>();
+        connector.ConnectAsync(Arg.Any<PeerEndpoint>(), Arg.Any<PeerId>(), Arg.Any<StreamPurpose>(), Arg.Any<CancellationToken>())
+            .Returns(Task.FromException<PeerStream>(new IOException("The host is unreachable.")));
+
+        return new ParticipantSession(
+            _guestIdentity,
+            connector,
+            _guestPlayer,
+            _registry,
+            SystemMonotonicClock.Instance,
+            TimeProvider.System,
+            "Марина",
+            _options,
+            conference: _guestConference);
+    }
+
+    /// <summary>
     /// Creates a participant session.
     /// </summary>
     /// <returns>The session.</returns>
@@ -1169,6 +1370,71 @@ public sealed class SessionIntegrationTests : IAsyncLifetime
             Points.Add(point);
             return _tls.ConnectAsync(new PeerEndpoint("127.0.0.1", hostPort), expectedPeer, purpose, cancellationToken);
         }
+    }
+
+    /// <summary>
+    /// A clock that does not wait: the timers of the attempts fire at once.
+    /// </summary>
+    private sealed class NoWaitClock : TimeProvider
+    {
+        /// <inheritdoc />
+        public override ITimer CreateTimer(TimerCallback callback, object? state, TimeSpan dueTime, TimeSpan period)
+            => System.CreateTimer(callback, state, TimeSpan.Zero, period);
+    }
+
+    /// <summary>
+    /// A clock that never comes: a wait on it ends only by other means.
+    /// </summary>
+    private sealed class FrozenClock : TimeProvider
+    {
+        /// <inheritdoc />
+        public override ITimer CreateTimer(TimerCallback callback, object? state, TimeSpan dueTime, TimeSpan period)
+            => System.CreateTimer(callback, state, Timeout.InfiniteTimeSpan, Timeout.InfiniteTimeSpan);
+    }
+
+    /// <summary>
+    /// The application around a session being restored.
+    /// </summary>
+    /// <param name="create">Creates the sessions of the attempts.</param>
+    /// <param name="ticket">The ticket, or <see langword="null"/> when the user has left.</param>
+    /// <param name="adopts">Whether the user is still there when the session is back.</param>
+    private sealed class ReconnectingClient(Func<ParticipantSession> create, Invite? ticket, bool adopts = true) : IReconnectionClient
+    {
+        /// <summary>
+        /// Gets what the user was told.
+        /// </summary>
+        public List<string> Reports { get; } = [];
+
+        /// <summary>
+        /// Gets the sessions of the attempts.
+        /// </summary>
+        public List<ParticipantSession> Created { get; } = [];
+
+        /// <summary>
+        /// Gets the restored session.
+        /// </summary>
+        public ParticipantSession? Adopted { get; private set; }
+
+        /// <inheritdoc />
+        public Invite? GetTicket(ParticipantSession ended) => ticket;
+
+        /// <inheritdoc />
+        public ParticipantSession CreateSession()
+        {
+            var session = create();
+            Created.Add(session);
+            return session;
+        }
+
+        /// <inheritdoc />
+        public Task<bool> AdoptAsync(ParticipantSession ended, ParticipantSession session, Invite ticket, CancellationToken cancellationToken)
+        {
+            Adopted = adopts ? session : null;
+            return Task.FromResult(adopts);
+        }
+
+        /// <inheritdoc />
+        public void Report(string text) => Reports.Add(text);
     }
 
     /// <summary>

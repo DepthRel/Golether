@@ -7,6 +7,7 @@ using Golether.Core.Data.Enums;
 using Golether.Core.Identity;
 using Golether.Localization;
 using Golether.Media.Conference.GStreamer.Native;
+using Golether.Media.Conference.GStreamer.Pipelines;
 
 namespace Golether.Media.Conference.GStreamer;
 
@@ -44,6 +45,11 @@ public sealed class GStreamerConferenceMedia : IConferenceMedia, IPeerHost
     /// The options.
     /// </summary>
     private readonly GStreamerConferenceOptions _options;
+
+    /// <summary>
+    /// The capture and playback elements of the platform.
+    /// </summary>
+    private readonly IPipelineSources _sources;
 
     /// <summary>
     /// The logger.
@@ -164,6 +170,7 @@ public sealed class GStreamerConferenceMedia : IConferenceMedia, IPeerHost
     public GStreamerConferenceMedia(GStreamerConferenceOptions options, ILogger<GStreamerConferenceMedia>? logger = null)
     {
         _options = options ?? throw new ArgumentNullException(nameof(options));
+        _sources = PipelineSources.ForCurrentPlatform(options.UseTestSources);
         _logger = logger ?? NullLogger<GStreamerConferenceMedia>.Instance;
         _self = GCHandle.Alloc(this);
         _voiceTimer = new Timer(_ => ExpireVoices(), null, TimeSpan.FromMilliseconds(150), TimeSpan.FromMilliseconds(150));
@@ -191,6 +198,9 @@ public sealed class GStreamerConferenceMedia : IConferenceMedia, IPeerHost
 
     /// <inheritdoc />
     public event EventHandler? MicrophoneFailed;
+
+    /// <inheritdoc />
+    public event EventHandler? CameraFailed;
 
     /// <inheritdoc />
     public event EventHandler<VideoQualityChange>? VideoQualityChanged;
@@ -327,6 +337,7 @@ public sealed class GStreamerConferenceMedia : IConferenceMedia, IPeerHost
         {
             lock (_gate)
             {
+                var keepsMicrophone = _audioCapture is not null && Equals(_microphone, microphone);
                 _camera = camera;
                 _microphone = microphone;
                 _captureRequested = true;
@@ -334,11 +345,18 @@ public sealed class GStreamerConferenceMedia : IConferenceMedia, IPeerHost
                 // The playback pipeline owns the echo probe the canceller of the microphone looks up on start.
                 if (_options.EnablePlayback && _playback is null)
                 {
-                    _playback = TryStart("playback", BuildPlayback(), pipeline => pipeline.UseTimeline(_audioOrigin));
+                    _playback = TryStart("playback", PipelineDescriptions.Playback(_sources, MAX_REMOTE_PEERS), pipeline => pipeline.UseTimeline(_audioOrigin));
+                    keepsMicrophone = keepsMicrophone && _playback is null;
                 }
 
                 RestartVideo();
-                RestartAudio();
+
+                // A phone asks again on every turn of the screen, for the sake of the camera: the voice must not break.
+                if (!keepsMicrophone)
+                {
+                    RestartAudio();
+                }
+
                 if (_videoCapture is null && _audioCapture is null && !_cameraOff && !_microphoneMuted)
                 {
                     UnavailableReason = Texts.Get("Conference.DevicesUnavailable");
@@ -397,14 +415,43 @@ public sealed class GStreamerConferenceMedia : IConferenceMedia, IPeerHost
     private void RestartVideo()
     {
         _videoCapture?.Dispose();
-        _videoCapture = _cameraOff ? null : TryStart("camera", BuildVideoCapture(_camera), pipeline =>
+        _videoCapture = _cameraOff ? null : TryStart("camera", PipelineDescriptions.VideoCapture(_sources, _camera ?? _options.DefaultCamera?.Invoke(), _options.VideoBitrate, _options.LowVideoBitrate), pipeline =>
         {
             Connect(pipeline.Element("preview"), Callbacks.Preview);
             Connect(pipeline.Element("venc"), Callbacks.EncodedVideo);
             Connect(pipeline.Element("venclow"), Callbacks.EncodedVideoLow);
             SetEconomyEncoder(pipeline, _peers.Values.Any(p => p.VideoQuality == VideoQuality.Low));
+            pipeline.Failed += (_, _) => OnCameraFailed(pipeline);
         });
+
+        if (_videoCapture is null && !_cameraOff)
+        {
+            _ = Task.Run(() => CameraFailed?.Invoke(this, EventArgs.Empty));
+        }
     }
+
+    /// <summary>
+    /// Lets go of a camera pipeline that stopped by itself and reports it.
+    /// </summary>
+    /// <param name="failed">The pipeline that failed.</param>
+    private void OnCameraFailed(GstPipeline failed)
+        => _ = Task.Run(() =>
+        {
+            lock (_gate)
+            {
+                // The pipeline is still the current one: a turn of the screen replaces it all the time.
+                if (!ReferenceEquals(_videoCapture, failed))
+                {
+                    return;
+                }
+
+                _logger.LogWarning("The camera stopped");
+                failed.Dispose();
+                _videoCapture = null;
+            }
+
+            CameraFailed?.Invoke(this, EventArgs.Empty);
+        });
 
     /// <summary>
     /// Recreates the microphone pipeline for the current device, or only stops it while the microphone is muted.
@@ -443,7 +490,7 @@ public sealed class GStreamerConferenceMedia : IConferenceMedia, IPeerHost
     /// <param name="echoCancellation">Whether to use echo cancellation.</param>
     /// <returns>The pipeline, or <see langword="null"/> when it could not start.</returns>
     private GstPipeline? TryStartMicrophone(bool echoCancellation)
-        => TryStart(echoCancellation ? "microphone" : "microphone (without echo cancellation)", BuildAudioCapture(_microphone, echoCancellation), pipeline =>
+        => TryStart(echoCancellation ? "microphone" : "microphone (without echo cancellation)", PipelineDescriptions.AudioCapture(_sources, _microphone, echoCancellation), pipeline =>
         {
             Connect(pipeline.Element("aenc"), Callbacks.EncodedAudio);
             Connect(pipeline.Element("alevel"), Callbacks.MicrophoneLevel);
@@ -506,6 +553,45 @@ public sealed class GStreamerConferenceMedia : IConferenceMedia, IPeerHost
         lock (_gate)
         {
             _audioCapture?.Break("The microphone was broken by a test.");
+        }
+    }
+
+    /// <summary>
+    /// Stops the camera pipeline as a failing device would (tests).
+    /// </summary>
+    internal void BreakCamera()
+    {
+        lock (_gate)
+        {
+            _videoCapture?.Break("The camera was broken by a test.");
+        }
+    }
+
+    /// <summary>
+    /// Gets a value indicating whether a camera pipeline runs (tests).
+    /// </summary>
+    internal bool HasCameraPipeline
+    {
+        get
+        {
+            lock (_gate)
+            {
+                return _videoCapture is not null;
+            }
+        }
+    }
+
+    /// <summary>
+    /// Gets the microphone pipeline, or <see langword="null"/> (tests).
+    /// </summary>
+    internal object? MicrophonePipeline
+    {
+        get
+        {
+            lock (_gate)
+            {
+                return _audioCapture;
+            }
         }
     }
 
@@ -1006,71 +1092,6 @@ public sealed class GStreamerConferenceMedia : IConferenceMedia, IPeerHost
     /// <returns>The value or an empty string.</returns>
     private static string FirstProperty(nint properties, params string[] names)
         => names.Select(n => ReadProperty(properties, n)).FirstOrDefault(v => v.Length > 0) ?? string.Empty;
-
-    /// <summary>
-    /// Quotes a value for a pipeline description.
-    /// </summary>
-    /// <param name="value">The value.</param>
-    /// <returns>The quoted value.</returns>
-    private static string Quote(string value) => "\"" + value.Replace("\\", "\\\\", StringComparison.Ordinal).Replace("\"", "\\\"", StringComparison.Ordinal) + "\"";
-
-    /// <summary>
-    /// Builds the video capture description.
-    /// </summary>
-    /// <param name="camera">The camera or <see langword="null"/> for the default.</param>
-    /// <returns>The description.</returns>
-    private string BuildVideoCapture(CaptureDevice? camera)
-    {
-        var source = _options.UseTestSources ? "videotestsrc is-live=true pattern=ball"
-            : OperatingSystem.IsWindows() ? "mfvideosrc" + (camera is null ? string.Empty : " device-path=" + Quote(camera.Id))
-            : OperatingSystem.IsMacOS() ? "avfvideosrc" + (camera is null ? string.Empty : " device-unique-id=" + Quote(camera.Id))
-            : camera is null ? "autovideosrc" : "v4l2src device=" + Quote(camera.Id);
-        return $"{source} ! videoconvert ! videoscale ! videorate ! " +
-               "video/x-raw,width=640,height=360,framerate=15/1,pixel-aspect-ratio=1/1 ! tee name=split " +
-               "split. ! queue leaky=downstream max-size-buffers=2 ! videoconvert ! video/x-raw,format=BGRA ! " +
-               "appsink name=preview emit-signals=true max-buffers=1 drop=true sync=false " +
-               "split. ! queue leaky=downstream max-size-buffers=5 ! videoconvert ! video/x-raw,format=I420 ! " +
-               $"vp8enc deadline=1 cpu-used=8 target-bitrate={_options.VideoBitrate} keyframe-max-dist=30 lag-in-frames=0 " +
-               "error-resilient=partitions threads=2 ! appsink name=venc emit-signals=true sync=false max-buffers=10 drop=true " +
-               "split. ! queue leaky=downstream max-size-buffers=5 ! valve name=lowgate drop=true drop-mode=forward-sticky-events ! videoscale ! videorate ! " +
-               "video/x-raw,width=320,height=180,framerate=10/1,pixel-aspect-ratio=1/1 ! videoconvert ! video/x-raw,format=I420 ! " +
-               $"vp8enc deadline=1 cpu-used=16 target-bitrate={_options.LowVideoBitrate} keyframe-max-dist=10 lag-in-frames=0 " +
-               "error-resilient=partitions threads=1 ! appsink name=venclow emit-signals=true sync=false async=false max-buffers=10 drop=true";
-    }
-
-    /// <summary>
-    /// Builds the audio capture description.
-    /// </summary>
-    /// <param name="microphone">The microphone or <see langword="null"/> for the default.</param>
-    /// <param name="echoCancellation">Whether to use <c>webrtcdsp</c>.</param>
-    /// <returns>The description.</returns>
-    private string BuildAudioCapture(CaptureDevice? microphone, bool echoCancellation)
-    {
-        var source = _options.UseTestSources ? "audiotestsrc is-live=true wave=sine freq=440 volume=0.2"
-            : OperatingSystem.IsWindows() ? "wasapi2src low-latency=true" + (microphone is null ? string.Empty : " device=" + Quote(microphone.Id))
-            : OperatingSystem.IsMacOS() ? "osxaudiosrc"
-            : microphone is null ? "autoaudiosrc" : "pulsesrc device=" + Quote(microphone.Id);
-        var dsp = echoCancellation ? "webrtcdsp probe=golether-echo echo-cancel=true noise-suppression=true gain-control=true ! " : string.Empty;
-        return $"{source} ! audioconvert ! audioresample ! audio/x-raw,format=S16LE,rate=48000,channels=1 ! {dsp}" +
-               "audioconvert ! audio/x-raw,format=S16LE,rate=48000,channels=1 ! tee name=mic " +
-               "mic. ! queue max-size-buffers=50 leaky=downstream ! opusenc bitrate=32000 frame-size=20 ! " +
-               "appsink name=aenc emit-signals=true sync=false max-buffers=50 drop=true " +
-               "mic. ! queue max-size-buffers=10 leaky=downstream ! appsink name=alevel emit-signals=true sync=false max-buffers=10 drop=true";
-    }
-
-    /// <summary>
-    /// Builds the playback description with one mixer input per remote peer.
-    /// </summary>
-    /// <returns>The description.</returns>
-    private static string BuildPlayback()
-    {
-        var sink = OperatingSystem.IsWindows() ? "wasapi2sink low-latency=true" : "autoaudiosink";
-        var slots = string.Concat(Enumerable.Range(0, MAX_REMOTE_PEERS).Select(i =>
-            $" appsrc name=slot{i} is-live=true do-timestamp=true format=time " +
-            "caps=\"audio/x-raw,format=S16LE,rate=48000,channels=1,layout=interleaved\" ! queue ! mix."));
-        return $"audiomixer name=mix latency=60000000 ! audioconvert ! audioresample ! webrtcechoprobe name=golether-echo ! " +
-               $"audioconvert ! audioresample ! {sink}{slots}";
-    }
 
     /// <summary>
     /// Creates and starts a pipeline, logging failures.

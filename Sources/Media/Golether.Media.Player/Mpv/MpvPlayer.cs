@@ -16,7 +16,7 @@ namespace Golether.Media.Player.Mpv;
 /// Keyboard and mouse bindings and the on-screen controller of mpv are disabled: all user intents go through the
 /// Golether UI so they can be synchronized. Observed properties are updated by a dedicated event thread.
 /// </remarks>
-public sealed class MpvPlayer : IPlaybackController, ILocalPlayerControls
+public sealed class MpvPlayer : IPlaybackController, ILocalPlayerControls, ISubtitleScale
 {
     /// <summary>
     /// The first argument of the messages sent by the video input bindings.
@@ -234,6 +234,17 @@ public sealed class MpvPlayer : IPlaybackController, ILocalPlayerControls
             double.IsFinite(aspect) && aspect > 0
                 ? aspect
                 : 0;
+    }
+
+    /// <inheritdoc />
+    public void SetSubtitleScale(double scale)
+    {
+        ThrowIfDisposed();
+        var result = LibMpv.SetPropertyString(_handle, "sub-scale", scale.ToString(CultureInfo.InvariantCulture));
+        if (result < 0)
+        {
+            _logger.LogWarning("Setting the size of the subtitles failed: {Error}", LibMpv.Describe(result));
+        }
     }
 
     /// <inheritdoc />
@@ -474,6 +485,20 @@ public sealed class MpvPlayer : IPlaybackController, ILocalPlayerControls
         return Task.CompletedTask;
     }
 
+    /// <summary>
+    /// Creates the drawing context of the video for a player made with <see cref="MpvPlayerOptions.UseRenderApi"/>.
+    /// The OpenGL context of the view must be current. Dispose of it before the player. A view that loses its surface
+    /// creates a new context, and the video of the current file comes back with it.
+    /// </summary>
+    /// <param name="getProcAddress">Returns the addresses of OpenGL functions.</param>
+    /// <returns>The drawing context.</returns>
+    public MpvRenderContext CreateRenderContext(Func<string, nint> getProcAddress)
+    {
+        ThrowIfDisposed();
+
+        return new MpvRenderContext(_handle, getProcAddress);
+    }
+
     /// <inheritdoc />
     public Task StopAsync(CancellationToken cancellationToken = default)
     {
@@ -503,41 +528,9 @@ public sealed class MpvPlayer : IPlaybackController, ILocalPlayerControls
     /// <param name="options">The options.</param>
     private static void Configure(nint handle, MpvPlayerOptions options)
     {
-        var settings = new List<(string Name, string Value)>
-        {
-            ("terminal", "no"),
-            ("idle", "yes"),
-            ("keep-open", "yes"),
-            ("input-default-bindings", "no"),
-            ("input-vo-keyboard", "no"),
-            ("osc", "no"),
-            ("osd-level", "0"),
-            ("hwdec", options.HardwareDecoding),
-            ("cache", "yes"),
-            ("demuxer-max-bytes", options.DemuxerCacheSize),
-            ("demuxer-readahead-secs", "30"),
-            ("audio-pitch-correction", "yes"),
-            ("hr-seek", "yes"),
-            ("ytdl", "no"),
-        };
+        var configDirectoryExists = options.ConfigDirectory is { } configDirectory && Directory.Exists(configDirectory);
 
-        if (options.WindowHandle != 0)
-        {
-            settings.Add(("wid", options.WindowHandle.ToString(CultureInfo.InvariantCulture)));
-            settings.Add(("force-window", "yes"));
-        }
-
-        if (options.ConfigDirectory is { } configDirectory && Directory.Exists(configDirectory))
-        {
-            settings.Add(("config-dir", configDirectory));
-            settings.Add(("config", "yes"));
-        }
-        else
-        {
-            settings.Add(("config", "no"));
-        }
-
-        foreach (var (name, value) in settings)
+        foreach (var (name, value) in MpvOptionList.Build(options, configDirectoryExists))
         {
             LibMpv.Check(LibMpv.SetOptionString(handle, name, value), $"option {name}");
         }

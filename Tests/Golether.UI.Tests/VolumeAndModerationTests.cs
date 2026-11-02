@@ -1,11 +1,11 @@
 using System.Collections.Concurrent;
 using NSubstitute;
+using Golether.Client.ViewModels;
 using Golether.Core.Data.Stores;
 using Golether.Core.Identity;
 using Golether.Core.Session;
 using Golether.Media.Player;
 using Golether.Session;
-using Golether.UI.ViewModels;
 
 namespace Golether.UI.Tests;
 

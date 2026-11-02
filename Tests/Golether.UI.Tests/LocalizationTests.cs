@@ -2,6 +2,8 @@ using System.Collections.Concurrent;
 using System.Globalization;
 using Microsoft.Extensions.Logging;
 using NSubstitute;
+using Golether.Client.Services;
+using Golether.Client.ViewModels;
 using Golether.Components.Catalog;
 using Golether.Components.Installation;
 using Golether.Core.Data.Enums;

@@ -1,6 +1,7 @@
 using System.Buffers.Binary;
 using Microsoft.Extensions.Time.Testing;
 using NSubstitute;
+using Golether.Client.Services;
 using Golether.Components.Installation;
 using Golether.Core.Data.Enums;
 using Golether.Core.Data.Stores;

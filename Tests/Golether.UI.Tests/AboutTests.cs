@@ -1,4 +1,5 @@
 using NSubstitute;
+using Golether.Client.Services;
 using Golether.Core.Configuration;
 using Golether.UI.Services;
 using Golether.UI.ViewModels.Dialogs;

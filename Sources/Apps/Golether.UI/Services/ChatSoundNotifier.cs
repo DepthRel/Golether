@@ -1,3 +1,4 @@
+using Golether.Client.Services;
 using Golether.Core.Data.Enums;
 using Golether.Core.Data.Stores;
 using Golether.Session;

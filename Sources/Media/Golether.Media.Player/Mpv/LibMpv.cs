@@ -10,9 +10,10 @@ namespace Golether.Media.Player.Mpv;
 internal static unsafe partial class LibMpv
 {
     /// <summary>
-    /// The logical library name resolved by <see cref="MpvLibraryResolver"/>.
+    /// The library name in imports. On desktop systems the resolver answers for it with the file it found; on Android
+    /// the runtime opens exactly this name and never asks the resolver, so it is the name of the file in the package.
     /// </summary>
-    public const string LIBRARY_NAME = "golether-libmpv";
+    public const string LIBRARY_NAME = "libmpv.so";
 
     /// <summary>
     /// <c>mpv_client_api_version</c>.
@@ -146,6 +147,17 @@ internal static unsafe partial class LibMpv
     public static partial int Command(nint handle, byte** args);
 
     /// <summary>
+    /// Queues a command and returns at once; for the thread that renders, which must not wait for the core of mpv.
+    /// </summary>
+    /// <param name="handle">The handle.</param>
+    /// <param name="replyUserData">The value of the reply event; nobody waits for it here.</param>
+    /// <param name="args">The command and its arguments, ended by a null pointer.</param>
+    /// <returns>Zero or an error code.</returns>
+    [LibraryImport(LIBRARY_NAME, EntryPoint = "mpv_command_async")]
+    [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
+    public static partial int CommandAsync(nint handle, ulong replyUserData, byte** args);
+
+    /// <summary>
     /// <c>mpv_observe_property</c>.
     /// </summary>
     /// <param name="handle">The handle.</param>
@@ -214,6 +226,45 @@ internal static unsafe partial class LibMpv
     public static string Describe(int error) => $"{Marshal.PtrToStringUTF8(ErrorString(error))} ({error})";
 
     /// <summary>
+    /// Creates a render context.
+    /// </summary>
+    /// <param name="context">Receives the context.</param>
+    /// <param name="handle">The handle.</param>
+    /// <param name="parameters">The parameters, ended by an empty one.</param>
+    /// <returns>Zero or an error code.</returns>
+    [LibraryImport(LIBRARY_NAME, EntryPoint = "mpv_render_context_create")]
+    [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
+    public static partial int RenderContextCreate(nint* context, nint handle, MpvRenderParam* parameters);
+
+    /// <summary>
+    /// Sets the callback that tells about new frames.
+    /// </summary>
+    /// <param name="context">The context.</param>
+    /// <param name="callback">The callback or <see langword="null"/>.</param>
+    /// <param name="userData">The argument of the callback.</param>
+    [LibraryImport(LIBRARY_NAME, EntryPoint = "mpv_render_context_set_update_callback")]
+    [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
+    public static partial void RenderContextSetUpdateCallback(nint context, delegate* unmanaged[Cdecl]<nint, void> callback, nint userData);
+
+    /// <summary>
+    /// Draws the current frame.
+    /// </summary>
+    /// <param name="context">The context.</param>
+    /// <param name="parameters">The parameters, ended by an empty one.</param>
+    /// <returns>Zero or an error code.</returns>
+    [LibraryImport(LIBRARY_NAME, EntryPoint = "mpv_render_context_render")]
+    [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
+    public static partial int RenderContextRender(nint context, MpvRenderParam* parameters);
+
+    /// <summary>
+    /// Destroys a render context.
+    /// </summary>
+    /// <param name="context">The context.</param>
+    [LibraryImport(LIBRARY_NAME, EntryPoint = "mpv_render_context_free")]
+    [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
+    public static partial void RenderContextFree(nint context);
+
+    /// <summary>
     /// Throws when a call failed.
     /// </summary>
     /// <param name="error">The error code.</param>
@@ -234,6 +285,24 @@ internal static unsafe partial class LibMpv
     /// <param name="args">The command and its arguments.</param>
     /// <returns>An error code.</returns>
     public static int Command(nint handle, params string[] args)
+        => WithArguments(args, native => Command(handle, native));
+
+    /// <summary>
+    /// Queues a command and returns at once.
+    /// </summary>
+    /// <param name="handle">The handle.</param>
+    /// <param name="args">The command and its arguments.</param>
+    /// <returns>Zero or an error code.</returns>
+    public static int CommandAsync(nint handle, params string[] args)
+        => WithArguments(args, native => CommandAsync(handle, 0, native));
+
+    /// <summary>
+    /// Calls a command function with its arguments as a native list of strings.
+    /// </summary>
+    /// <param name="args">The arguments.</param>
+    /// <param name="call">The call.</param>
+    /// <returns>The result of the call.</returns>
+    private static int WithArguments(string[] args, NativeCommand call)
     {
         var pointers = new nint[args.Length + 1];
         try
@@ -245,7 +314,7 @@ internal static unsafe partial class LibMpv
 
             fixed (nint* array = pointers)
             {
-                return Command(handle, (byte**)array);
+                return call((byte**)array);
             }
         }
         finally
@@ -256,4 +325,11 @@ internal static unsafe partial class LibMpv
             }
         }
     }
+
+    /// <summary>
+    /// A command function of libmpv.
+    /// </summary>
+    /// <param name="args">The command and its arguments, ended by a null pointer.</param>
+    /// <returns>Zero or an error code.</returns>
+    private delegate int NativeCommand(byte** args);
 }

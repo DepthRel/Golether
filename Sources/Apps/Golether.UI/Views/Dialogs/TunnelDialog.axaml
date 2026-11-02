@@ -1,5 +1,5 @@
 <Window xmlns="https://github.com/avaloniaui"
-        xmlns:loc="using:Golether.UI.Localization"
+        xmlns:loc="using:Golether.Client.Localization"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:vm="using:Golether.UI.ViewModels.Dialogs"
         x:Class="Golether.UI.Views.Dialogs.TunnelDialog"

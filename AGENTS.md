@@ -21,9 +21,12 @@ webcams and voice. Design documentation: [Docs/En/Architecture.md](Docs/En/Archi
 
 - **One type per file.** Every class, struct, enum, record, interface or delegate that is not `private` lives in a file
   of its own named after it. Only `private` nested types may share a file with their owner.
-- **Enumerations live in `Enums` folders.** An enum shared by several projects belongs to the shared core:
+- **Enumerations live in `Enums` folders.** An enum shared by several projects belongs to the `Enums` folder of the
+  nearest project they all reference and whose layer it belongs to. A domain enum goes to the shared core:
   `Golether.Core.Data/Enums`, or `Golether.Core/Enums` when `Golether.Core` itself or a project that does not reference
-  `Golether.Core.Data` needs it. An enum that only one project needs (a way of showing something in the UI, a code of
+  `Golether.Core.Data` needs it. An enum of the client applications (a way of showing something, a choice in the
+  settings) shared by the desktop and the mobile client goes to `Golether.Client/Enums`, not to the core: the domain
+  does not know the UI. An enum that only one project needs (a way of showing something in the UI, a code of
   a native library) lives in the `Enums` folder at the root of that project, with the narrowest access that works as
   is: `internal` when nothing public exposes it, otherwise `public`. Access is never bent around the enum. A `private`
   nested enum stays inside its owner.
@@ -79,7 +82,8 @@ only through migrations and projects in their solution folders.
 
 ```
 Sources/
-  Apps/          applications (Golether.UI, the rendezvous server Golether.Web.Server, its monitor
+  Apps/          applications (the desktop application Golether.UI, the client layer it shares with the mobile
+                 client Golether.Client, the rendezvous server Golether.Web.Server, its monitor
                  Golether.Web.Server.UI and their shared contracts Golether.Web.Server.Contracts,
                  the project page Golether.Pages)
   Components/    native components: catalog, checksums, installation

@@ -3,6 +3,9 @@ using System.Globalization;
 using Avalonia.Media.Imaging;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using Golether.Client.Enums;
+using Golether.Client.Services;
+using Golether.Client.ViewModels;
 using Golether.Core.Data.Enums;
 using Golether.Core.Data.Stores;
 using Golether.Core.Enums;
@@ -24,12 +27,12 @@ namespace Golether.UI.ViewModels;
 /// <summary>
 /// The main window: the start screen and the running session.
 /// </summary>
-public sealed partial class MainWindowViewModel : ObservableObject
+public sealed partial class MainWindowViewModel : ObservableObject, ICameraTiles
 {
     /// <summary>
     /// The setting with the user name.
     /// </summary>
-    public const string DISPLAY_NAME_SETTING = "displayName";
+    public const string DISPLAY_NAME_SETTING = ClientSettings.DISPLAY_NAME;
 
     /// <summary>
     /// The setting that keeps the event feed shown or hidden.
@@ -82,7 +85,7 @@ public sealed partial class MainWindowViewModel : ObservableObject
     /// <summary>
     /// The prefix of the settings with the local voice volume of a participant (by device identifier).
     /// </summary>
-    public const string VOICE_VOLUME_SETTING_PREFIX = "voice.volume.";
+    public const string VOICE_VOLUME_SETTING_PREFIX = VoiceVolumeStore.SETTING_PREFIX;
 
     /// <summary>
     /// How long a voice volume change waits before it is stored.
@@ -173,7 +176,7 @@ public sealed partial class MainWindowViewModel : ObservableObject
     /// <summary>
     /// The avatar bitmaps received for each participant, applied to their tiles.
     /// </summary>
-    private readonly Dictionary<PeerId, object?> _peerAvatars = [];
+    private readonly PeerAvatars _peerAvatars = new();
 
     /// <summary>
     /// This device's chosen avatar (PNG bytes), sent to a session as soon as it starts, or <see langword="null"/>.
@@ -227,9 +230,9 @@ public sealed partial class MainWindowViewModel : ObservableObject
     private UpdateInfo? _update;
 
     /// <summary>
-    /// Counts voice volume changes, so only the last one is stored.
+    /// Remembers the volumes of the voices.
     /// </summary>
-    private long _voiceVolumeVersion;
+    private readonly VoiceVolumeStore _voiceVolumes;
 
     /// <summary>
     /// Cancels the join that is waiting for the host, or <see langword="null"/> when no join is running.
@@ -310,9 +313,11 @@ public sealed partial class MainWindowViewModel : ObservableObject
         _tunnelDialogFactory = tunnelDialogFactory ?? throw new ArgumentNullException(nameof(tunnelDialogFactory));
         _conference = conference ?? throw new ArgumentNullException(nameof(conference));
 
+        // The desktop application has no paid features.
+        var features = new AllFeaturesAccess();
         _playerControls = playerControls;
         Volume = playerControls is null ? null : new VolumeViewModel(playerControls, _settings);
-        Tracks = playerControls is null ? null : new TracksViewModel(playerControls, _settings, _dialogs, _dispatcher);
+        Tracks = playerControls is null ? null : new TracksViewModel(playerControls, _settings, _dialogs, _dispatcher, features);
         _resume = new ResumeTracker(_settings);
         _diagnostics = diagnostics;
         _updates = updates;
@@ -325,8 +330,9 @@ public sealed partial class MainWindowViewModel : ObservableObject
                 OnPropertyChanged(nameof(HighlightPanelToggle));
             }
         };
-        Drawing = new DrawingViewModel(_session, _dispatcher);
+        Drawing = new DrawingViewModel(_session, _dispatcher, features);
         _pictures = pictures ?? new SkiaPictureCodec();
+        _voiceVolumes = new VoiceVolumeStore(_settings, VoiceVolumeSaveDelay);
         Gallery = new GalleryViewModel(_session, _pictures, _timeProvider);
         Gallery.PictureChanged += (_, _) => Drawing.Reset();
         Gallery.PropertyChanged += (_, e) =>
@@ -998,28 +1004,7 @@ public sealed partial class MainWindowViewModel : ObservableObject
     /// <param name="update">The avatar.</param>
     private void ApplyAvatar(AvatarUpdate update)
     {
-        object? image = null;
-        if (update.Image is { Length: > 0 } bytes)
-        {
-            try
-            {
-                image = new Bitmap(new MemoryStream(bytes));
-            }
-            catch (Exception ex) when (ex is not OutOfMemoryException)
-            {
-                // The bytes came from another device: a picture that cannot be decoded is simply not shown.
-                image = null;
-            }
-        }
-
-        if (image is null)
-        {
-            _peerAvatars.Remove(update.Peer);
-        }
-        else
-        {
-            _peerAvatars[update.Peer] = image;
-        }
+        var image = _peerAvatars.Apply(update);
 
         if (Participants.FirstOrDefault(p => p.PeerId == update.Peer) is { } tile)
         {
@@ -2462,7 +2447,7 @@ public sealed partial class MainWindowViewModel : ObservableObject
             }
 
             item.Update(views[i], duration);
-            item.AvatarImage = _peerAvatars.GetValueOrDefault(item.PeerId);
+            item.AvatarImage = _peerAvatars.Find(item.PeerId);
             item.CanModerate = IsHost && !item.IsLocal;
         }
     }
@@ -2475,24 +2460,7 @@ public sealed partial class MainWindowViewModel : ObservableObject
     private void ChangeVoiceVolume(PeerId peer, double percent)
     {
         _conference.SetVoiceVolume(peer, percent / 100);
-        var version = Interlocked.Increment(ref _voiceVolumeVersion);
-        _ = SaveVoiceVolumeLaterAsync(peer, percent, version);
-    }
-
-    /// <summary>
-    /// Stores a voice volume once the slider has stopped.
-    /// </summary>
-    /// <param name="peer">The participant.</param>
-    /// <param name="percent">The volume in percent.</param>
-    /// <param name="version">The change number; newer changes replace this one.</param>
-    /// <returns>A task that completes when the value is stored.</returns>
-    private async Task SaveVoiceVolumeLaterAsync(PeerId peer, double percent, long version)
-    {
-        await Task.Delay(VoiceVolumeSaveDelay).ConfigureAwait(false);
-        if (Interlocked.Read(ref _voiceVolumeVersion) == version)
-        {
-            await _settings.SetAsync(VOICE_VOLUME_SETTING_PREFIX + peer.Value, percent.ToString(CultureInfo.InvariantCulture), CancellationToken.None).ConfigureAwait(false);
-        }
+        _ = _voiceVolumes.SaveAsync(peer, percent);
     }
 
     /// <summary>
@@ -2502,8 +2470,7 @@ public sealed partial class MainWindowViewModel : ObservableObject
     /// <returns>A task that completes when the volume is applied.</returns>
     private async Task RestoreVoiceVolumeAsync(ParticipantItemViewModel item)
     {
-        var stored = await _settings.GetAsync(VOICE_VOLUME_SETTING_PREFIX + item.PeerId.Value, CancellationToken.None);
-        if (double.TryParse(stored, NumberStyles.Float, CultureInfo.InvariantCulture, out var percent) && percent != item.VoiceVolume)
+        if (await _voiceVolumes.ReadAsync(item.PeerId) is { } percent && percent != item.VoiceVolume)
         {
             item.RestoreVoiceVolume(percent);
             _conference.SetVoiceVolume(item.PeerId, item.VoiceVolume / 100);

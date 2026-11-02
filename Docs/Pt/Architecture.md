@@ -53,6 +53,7 @@ Sources/
   Media/Golether.Media.Conference.GStreamer  câmaras e voz: captura, VP8/Opus, webrtcbin, misturador, cancelamento de eco
   Tunnels/Golether.Tunnels.AmneziaWG       chaves X25519, ofuscação, .conf, pacotes assinados, controlo através da CLI
   Session/Golether.Session                 HostSession e ParticipantSession
+  Apps/Golether.Client                     camada comum do cliente: serviços, modelos de visão e controlos sem janelas, as cores do tema, recursos pagos
   Apps/Golether.UI                         Avalonia: janela, diálogos, composição de dependências
   Apps/Golether.Web.Server                 o servidor de encontro (uma aplicação à parte, ver RendezvousServer.md)
   Apps/Golether.Web.Server.Contracts       o que o servidor e o monitor partilham: definições, nomes do serviço, estado, registo
@@ -173,7 +174,7 @@ O estado da sessão (`PlaybackState`): “no momento `ReferenceTime` segundo o r
   partir da proporção indicada pelo mpv (`video-params/aspect`), para que o sítio rodeado coincida seja qual for a forma
   das janelas. A cor de um traço é a cor do participante em `ParticipantColors`, a mesma do avatar.
 - Ao ser admitido, um participante recebe um bilhete (`reconnectTicket`) válido até ao fim da sessão. Depois de uma
-  quebra, o `SessionService` tenta voltar oito vezes com pausas de 2, 3, 5, 10, 20 e 30 segundos; o anfitrião confirma a
+  quebra, o `ParticipantReconnector` tenta voltar oito vezes com pausas de 2, 3, 5, 10, 20 e 30 segundos; o anfitrião confirma a
   entrada de cada vez.
 
 ## Mostrar uma pasta

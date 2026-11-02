@@ -1,0 +1,8 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- Tests of the shared client layer: services and view models without windows. -->
+  <ItemGroup>
+    <ProjectReference Include="../../Sources/Apps/Golether.Client/Golether.Client.csproj" />
+  </ItemGroup>
+
+</Project>

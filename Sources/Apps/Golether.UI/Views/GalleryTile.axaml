@@ -1,10 +1,10 @@
 <UserControl xmlns="https://github.com/avaloniaui"
-             xmlns:loc="using:Golether.UI.Localization"
+             xmlns:loc="using:Golether.Client.Localization"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-             xmlns:vm="using:Golether.UI.ViewModels"
-             xmlns:controls="using:Golether.UI.Controls"
+             xmlns:client="using:Golether.Client.ViewModels"
+             xmlns:clientControls="using:Golether.Client.Controls"
              x:Class="Golether.UI.Views.GalleryTile"
-             x:DataType="vm:GalleryItemViewModel">
+             x:DataType="client:GalleryItemViewModel">
   <UserControl.Resources>
     <StreamGeometry x:Key="IconFilm">M2,4 H22 V20 H2 Z M4,6 V8 H6 V6 Z M4,11 V13 H6 V11 Z M4,16 V18 H6 V16 Z M18,6 V8 H20 V6 Z M18,11 V13 H20 V11 Z M18,16 V18 H20 V16 Z M10,8.5 V15.5 L15.5,12 Z</StreamGeometry>
   </UserControl.Resources>
@@ -48,9 +48,9 @@
         </ItemsPanelTemplate>
       </ItemsControl.ItemsPanel>
       <ItemsControl.ItemTemplate>
-        <DataTemplate x:DataType="vm:ParticipantItemViewModel">
+        <DataTemplate x:DataType="client:ParticipantItemViewModel">
           <Panel Width="18" Height="18" ToolTip.Tip="{Binding Name}">
-            <Border CornerRadius="9" Background="{Binding AvatarColor, Converter={x:Static controls:ColorTextBrushConverter.Instance}}">
+            <Border CornerRadius="9" Background="{Binding AvatarColor, Converter={x:Static clientControls:ColorTextBrushConverter.Instance}}">
               <TextBlock Text="{Binding Initial}" FontSize="9" FontWeight="Bold" Foreground="#0A0F11"
                          HorizontalAlignment="Center" VerticalAlignment="Center" />
             </Border>

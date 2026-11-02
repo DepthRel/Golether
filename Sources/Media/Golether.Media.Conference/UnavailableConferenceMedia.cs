@@ -88,6 +88,13 @@ public sealed class UnavailableConferenceMedia : IConferenceMedia
     }
 
     /// <inheritdoc />
+    public event EventHandler? CameraFailed
+    {
+        add { }
+        remove { }
+    }
+
+    /// <inheritdoc />
     public Task ConnectAsync(PeerId peer, bool isOfferer, CancellationToken cancellationToken) => Task.CompletedTask;
 
     /// <inheritdoc />

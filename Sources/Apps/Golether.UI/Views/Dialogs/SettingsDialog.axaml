@@ -1,5 +1,6 @@
 <Window xmlns="https://github.com/avaloniaui"
-        xmlns:loc="using:Golether.UI.Localization"
+        xmlns:client="using:Golether.Client.ViewModels"
+        xmlns:loc="using:Golether.Client.Localization"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:vm="using:Golether.UI.ViewModels"
         xmlns:vmd="using:Golether.UI.ViewModels.Dialogs"
@@ -48,7 +49,7 @@
                   AutomationProperties.Name="{loc:Loc Main.Language.Name}" ToolTip.Tip="{loc:Loc Main.Language.Tip}"
                   Padding="10,6" CornerRadius="7">
           <ComboBox.ItemTemplate>
-            <DataTemplate x:DataType="vm:LanguageOption">
+            <DataTemplate x:DataType="client:LanguageOption">
               <StackPanel Orientation="Horizontal" Spacing="8">
                 <Image Source="{Binding Flag}" Width="20" Height="14" Stretch="Uniform" VerticalAlignment="Center" />
                 <TextBlock Text="{Binding Name}" VerticalAlignment="Center" />

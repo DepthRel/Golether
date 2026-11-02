@@ -1,5 +1,6 @@
 using Avalonia;
 using Avalonia.Controls;
+using Golether.UI.Controls;
 
 namespace Golether.UI.Views;
 
@@ -26,6 +27,8 @@ public sealed partial class SessionOverlay : UserControl
     public SessionOverlay()
     {
         InitializeComponent();
+
+        Strokes.PenCursor = PenCursor.Get;
     }
 
     /// <summary>

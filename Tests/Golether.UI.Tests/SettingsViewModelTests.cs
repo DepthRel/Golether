@@ -1,9 +1,9 @@
 using NSubstitute;
+using Golether.Client.Services;
+using Golether.Client.ViewModels;
 using Golether.Core.Data.Enums;
 using Golether.Core.Data.Stores;
 using Golether.Media.Conference;
-using Golether.UI.Services;
-using Golether.UI.ViewModels;
 using Golether.UI.ViewModels.Dialogs;
 
 namespace Golether.UI.Tests;

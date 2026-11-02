@@ -1,10 +1,11 @@
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using Golether.Client.Services;
+using Golether.Client.ViewModels;
 using Golether.Core.Media;
 using Golether.Localization;
 using Golether.Media.Streaming.Gallery;
 using Golether.UI.Enums;
-using Golether.UI.Services;
 
 namespace Golether.UI.ViewModels.Dialogs;
 

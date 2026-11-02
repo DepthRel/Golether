@@ -3,7 +3,7 @@ using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.Media.Imaging;
-using Golether.UI.Services;
+using Golether.Client.Services;
 using Golether.UI.ViewModels.Dialogs;
 
 namespace Golether.UI.Views.Dialogs;

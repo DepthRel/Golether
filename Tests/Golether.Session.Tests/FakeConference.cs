@@ -86,6 +86,13 @@ internal sealed class FakeConference : IConferenceMedia
     }
 
     /// <inheritdoc />
+    public event EventHandler? CameraFailed
+    {
+        add { }
+        remove { }
+    }
+
+    /// <inheritdoc />
     public Task ConnectAsync(PeerId peer, bool isOfferer, CancellationToken cancellationToken)
     {
         Connected[peer] = isOfferer;

@@ -24,6 +24,7 @@ Full design: `Docs/En/Architecture.md`, wire formats: `Docs/En/Protocol.md`.
 | `Media.Streaming` / `Media.Player` / `Media.Conference*` | 256 KiB chunk serving + peer sharing / libmpv / GStreamer `webrtcbin` |
 | `Tunnels.AmneziaWG` | AWG keys, signed offer/answer packages, CLI control |
 | `Session` | `HostSession`, `ParticipantSession` |
+| `Apps/Golether.Client` | client layer shared with the mobile client: services and view models without windows, the colours of the theme (`Styles/Palette.axaml`), `IFeatureAccess` (paid features) |
 | `Apps/Golether.UI` | Avalonia MVVM app, composition root `AppServices` |
 | `Apps/Golether.Web.Server(.UI/.Contracts)` | rendezvous + STUN server, its monitor window, shared contracts |
 | `Apps/Golether.Pages` | static GitHub Pages site: landing, `join/` link page, `updates.json`, `config.json` |

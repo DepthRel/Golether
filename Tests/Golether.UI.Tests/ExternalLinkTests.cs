@@ -1,4 +1,6 @@
 using NSubstitute;
+using Golether.Client.Enums;
+using Golether.Client.Services;
 using Golether.Components.Installation;
 using Golether.Core.Data.Enums;
 using Golether.Core.Data.Stores;
@@ -6,7 +8,6 @@ using Golether.Core.Identity;
 using Golether.Core.Networking;
 using Golether.Media.Conference;
 using Golether.Security.Invites;
-using Golether.UI.Enums;
 using Golether.UI.Services;
 using Golether.UI.ViewModels;
 

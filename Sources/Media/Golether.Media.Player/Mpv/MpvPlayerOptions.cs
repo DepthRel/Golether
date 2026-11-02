@@ -24,4 +24,15 @@ public sealed record MpvPlayerOptions
     /// Gets the demuxer cache size (default <c>512MiB</c>).
     /// </summary>
     public string DemuxerCacheSize { get; init; } = "512MiB";
+
+    /// <summary>
+    /// Gets a value indicating whether the application draws the video itself through
+    /// <see cref="MpvPlayer.CreateRenderContext"/>; <see cref="WindowHandle"/> is not used then.
+    /// </summary>
+    public bool UseRenderApi { get; init; }
+
+    /// <summary>
+    /// Gets a value indicating whether the subtitles of a file may start by themselves (default <see langword="true"/>).
+    /// </summary>
+    public bool SubtitlesAtStart { get; init; } = true;
 }

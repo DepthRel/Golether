@@ -1,3 +1,4 @@
+using Golether.Client.Services;
 using Golether.Security.Admission;
 using Golether.UI.ViewModels.Dialogs;
 
@@ -6,7 +7,7 @@ namespace Golether.UI.Services;
 /// <summary>
 /// Dialogs, pickers and clipboard used by view models.
 /// </summary>
-public interface IDialogService
+public interface IDialogService : ICommonDialogs
 {
     /// <summary>
     /// Asks the host whether a peer may join.
@@ -29,14 +30,6 @@ public interface IDialogService
     /// <param name="viewModel">The dialog view model.</param>
     /// <returns>A task that completes when the dialog is closed.</returns>
     Task ShowTunnelsAsync(TunnelDialogViewModel viewModel);
-
-    /// <summary>
-    /// Shows an error; the user can report it to the project from the same window.
-    /// </summary>
-    /// <param name="title">The title.</param>
-    /// <param name="message">The message.</param>
-    /// <returns>A task that completes when the dialog is closed.</returns>
-    Task ShowErrorAsync(string title, string message);
 
     /// <summary>
     /// Opens a letter about a problem in the mail program of the user; when no mail program opens, offers to copy
@@ -94,18 +87,6 @@ public interface IDialogService
     /// <param name="viewModel">The browser.</param>
     /// <returns>The choice, or <see langword="null"/> when cancelled.</returns>
     Task<GalleryChoice?> ChooseGalleryAsync(FolderBrowserViewModel viewModel);
-
-    /// <summary>
-    /// Asks for a subtitle file.
-    /// </summary>
-    /// <returns>The path, or <see langword="null"/> when cancelled.</returns>
-    Task<string?> PickSubtitleFileAsync();
-
-    /// <summary>
-    /// Asks for a sound file (an external dubbing).
-    /// </summary>
-    /// <returns>The path, or <see langword="null"/> when cancelled.</returns>
-    Task<string?> PickAudioFileAsync();
 
     /// <summary>
     /// Lets the user pick an image file for the avatar.

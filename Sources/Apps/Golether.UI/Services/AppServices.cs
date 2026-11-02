@@ -1,5 +1,7 @@
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
+using Golether.Client.Localization;
+using Golether.Client.Services;
 using Golether.Components.Installation;
 using Golether.Core.Configuration;
 using Golether.Core.Data;
@@ -12,7 +14,6 @@ using Golether.Security.Identity;
 using Golether.Security.Secrets;
 using Golether.Transports.PortMapping;
 using Golether.Tunnels.AmneziaWG.Control;
-using Golether.UI.Localization;
 using Golether.UI.ViewModels;
 using Golether.UI.ViewModels.Dialogs;
 
@@ -241,7 +242,7 @@ public sealed class AppServices : IAsyncDisposable
             Player,
             Diagnostics,
             Updates,
-            new LanguageViewModel(Language, FlagImages.Load, dialogs),
+            new LanguageViewModel(Language, code => FlagImages.Load("Golether", code), dialogs),
             new AvatarStore(Paths.AvatarsDirectory),
             TimeProvider.System,
             ChatSound);

@@ -4,6 +4,7 @@ using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Input.Platform;
 using Avalonia.Platform.Storage;
 using Avalonia.Threading;
+using Golether.Client.Services;
 using Golether.Core.Configuration;
 using Golether.Localization;
 using Golether.Security.Admission;
