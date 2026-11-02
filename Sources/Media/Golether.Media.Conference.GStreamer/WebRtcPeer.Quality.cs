@@ -140,15 +140,7 @@ internal sealed partial class WebRtcPeer
         try
         {
             // The wait runs aside, so a closing pipeline that never answers cannot block the caller.
-            var wait = Task.Run(() => Gst.PromiseWait(promise));
-            if (!wait.Wait(_statsTimeout))
-            {
-                Gst.PromiseInterrupt(promise);
-                wait.Wait();
-                return (null, null);
-            }
-
-            if (wait.Result != 2)
+            if (WaitForPromise(promise, _statsTimeout) != PROMISE_REPLIED)
             {
                 return (null, null);
             }

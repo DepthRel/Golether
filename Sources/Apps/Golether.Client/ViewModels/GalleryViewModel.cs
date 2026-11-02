@@ -140,7 +140,7 @@ public sealed partial class GalleryViewModel : ObservableObject
     /// Gets the picture this person looks at alone, or <see langword="null"/> while following the common screen.
     /// </summary>
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(IsAlone), nameof(ShownIndex), nameof(CanDraw))]
+    [NotifyPropertyChangedFor(nameof(IsAlone), nameof(ShownIndex), nameof(CanDraw), nameof(CanReact))]
     public partial int? PersonalIndex { get; private set; }
 
     /// <summary>
@@ -153,6 +153,12 @@ public sealed partial class GalleryViewModel : ObservableObject
     /// the grid covers the screen.
     /// </summary>
     public bool CanDraw => IsActive && !IsAlone && !IsGridOpen;
+
+    /// <summary>
+    /// Gets a value indicating whether reactions may be sent: they float over what everybody sees, and over a picture
+    /// looked at alone they would answer something the others do not see.
+    /// </summary>
+    public bool CanReact => !IsAlone;
 
     /// <summary>
     /// Gets the index of the item on this screen.

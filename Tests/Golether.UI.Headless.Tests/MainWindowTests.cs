@@ -1,4 +1,5 @@
 using System.Reflection;
+using System.Runtime.InteropServices;
 using Avalonia;
 using Avalonia.Automation;
 using Avalonia.Controls;
@@ -6,6 +7,8 @@ using Avalonia.Controls.Primitives;
 using Avalonia.Headless;
 using Avalonia.Input;
 using Avalonia.LogicalTree;
+using Avalonia.Media.Imaging;
+using Avalonia.Platform;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -63,6 +66,44 @@ public sealed class MainWindowTests
     /// A participant.
     /// </summary>
     private static readonly PeerId _guest = PeerId.Parse(new string('b', 64));
+
+    /// <summary>
+    /// A photo in the round frame that is too large for a message of the session at 256 pixels is rendered smaller:
+    /// the others would drop it without a word.
+    /// </summary>
+    /// <returns>A task that completes when the test ends.</returns>
+    [Fact]
+    public Task AvatarRendering_FitsAMessageOfTheSession() => _session.Value.Dispatch(
+        () =>
+        {
+            const int SIDE = 256;
+            var noise = new WriteableBitmap(new PixelSize(SIDE, SIDE), new Vector(96, 96), PixelFormat.Bgra8888, AlphaFormat.Opaque);
+            using (var pixels = noise.Lock())
+            {
+                var bytes = new byte[SIDE * pixels.RowBytes];
+                new Random(7).NextBytes(bytes);
+                for (var i = 3; i < bytes.Length; i += 4)
+                {
+                    bytes[i] = 0xFF;
+                }
+
+                Marshal.Copy(bytes, 0, pixels.Address, bytes.Length);
+            }
+
+            var frame = new Image { Source = noise, Width = SIDE, Height = SIDE };
+            var window = new Window { Content = frame, Width = SIDE, Height = SIDE };
+            window.Show();
+            Dispatcher.UIThread.RunJobs();
+
+            var avatar = AvatarRendering.Render(frame, SIDE);
+            window.Close();
+
+            Assert.NotNull(avatar);
+            Assert.InRange(avatar.Length, 1, AvatarMessage.MAX_IMAGE_BYTES);
+            using var decoded = SKBitmap.Decode(avatar);
+            Assert.InRange(decoded.Width, 1, SIDE - 1);
+        },
+        TestContext.Current.CancellationToken);
 
     /// <summary>
     /// A right click on a participant tile opens the menu: the local voice volume, and for the host the two
@@ -1919,9 +1960,12 @@ public sealed class MainWindowTests
         await fixture.SettleFor(TimeSpan.FromMilliseconds(300));
         Assert.True(gallery.IsAlone);
         Assert.False(fixture.ViewModel.Drawing.CanDraw);
+        Assert.False(fixture.Window.FindControl<Button>("ReactionsButton")!.IsEffectivelyEnabled);
         fixture.Sessions.Received().SetGalleryView(7);
         SaveFrame(fixture.Window, "gallery-alone");
         gallery.ReturnToCommonCommand.Execute(null);
+        await fixture.Settle();
+        Assert.True(fixture.Window.FindControl<Button>("ReactionsButton")!.IsEffectivelyEnabled);
 
         // A video of the folder on everybody's screen: the film, its timeline and its sound come back under the strip.
         fixture.Gallery = fixture.Gallery with { Stage = 9, StageVersion = 2 };

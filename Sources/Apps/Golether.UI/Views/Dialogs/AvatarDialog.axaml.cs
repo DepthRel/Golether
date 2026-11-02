@@ -2,7 +2,6 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Interactivity;
-using Avalonia.Media.Imaging;
 using Golether.Client.Services;
 using Golether.UI.ViewModels.Dialogs;
 
@@ -100,23 +99,19 @@ public sealed partial class AvatarDialog : Window
     }
 
     /// <summary>
-    /// Renders the visible circle to a PNG and closes with its bytes.
+    /// Renders the visible circle to a PNG the session takes and closes with its bytes.
     /// </summary>
     /// <param name="sender">The save button.</param>
     /// <param name="e">The event data.</param>
     private void OnSave(object? sender, RoutedEventArgs e)
     {
-        if (Model is not { CanConfirm: true, OriginalBytes: { } original } model)
+        if (Model is not { CanConfirm: true, OriginalBytes: { } original } model ||
+            AvatarRendering.Render(CropArea, AvatarDialogViewModel.CROP_SIZE) is not { } avatar)
         {
             return;
         }
 
-        var size = AvatarDialogViewModel.CROP_SIZE;
-        using var target = new RenderTargetBitmap(new PixelSize(size, size), new Vector(96, 96));
-        target.Render(CropArea);
-        using var stream = new MemoryStream();
-        target.Save(stream, PngBitmapEncoderOptions.Default);
-        Close(new AvatarSelection(stream.ToArray(), original, new AvatarFraming(model.Zoom, model.OffsetX, model.OffsetY)));
+        Close(new AvatarSelection(avatar, original, new AvatarFraming(model.Zoom, model.OffsetX, model.OffsetY)));
     }
 
     /// <summary>

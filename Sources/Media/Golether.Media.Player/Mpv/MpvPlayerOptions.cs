@@ -35,4 +35,11 @@ public sealed record MpvPlayerOptions
     /// Gets a value indicating whether the subtitles of a file may start by themselves (default <see langword="true"/>).
     /// </summary>
     public bool SubtitlesAtStart { get; init; } = true;
+
+    /// <summary>
+    /// Gets a value indicating whether the film is drawn with the cheapest filters: on a phone the default ones keep
+    /// the graphics busy for every frame, warm the device and empty the battery, and on its small screen nobody sees
+    /// the difference.
+    /// </summary>
+    public bool LowPower { get; init; }
 }

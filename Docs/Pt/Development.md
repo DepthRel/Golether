@@ -154,6 +154,7 @@ não fiáveis são sempre validadas.
 | `Scripts/App/publish-linux.sh [linux-x64] [Release] [out]` | `.tar.gz` e `.zip` (se o `zip` existir), `install-desktop-entry.sh`, `.deb` (onde existir `dpkg-deb`: Debian, Ubuntu, WSL) |
 | `Scripts/App/publish-macos.sh [osx-arm64\|osx-x64] ...` | `Golether.app` (Info.plist, ícone, assinatura ad hoc) num arquivo |
 | `Scripts/App/publish-linux.ps1 [-Runtime linux-x64]` | o mesmo arquivo Linux, compilado a partir do Windows no WSL (ver abaixo) |
+| `Scripts/Android/publish-android.ps1` | `artifacts/publish/Golether-<version>-android.apk` para todos os processadores, assinado com a chave de depuração deste computador: para instalar à mão, não para uma loja (os componentes nativos são compilados por `Scripts/Android/build-natives.ps1`) |
 | `Scripts/Assets/update-site-screenshot.ps1` | a imagem da página do projeto a partir de `Docs/images/screenshot.png` |
 | `Scripts/Assets/generate-installer-art.ps1` | as imagens do assistente de instalação (um painel escuro com o logótipo e o logótipo do cabeçalho) em `artifacts/installer-art`; os dois scripts de compilação dos instaladores chamam-no sozinhos |
 | `Scripts/Assets/generate-icon.ps1` | `golether.ico`, PNG 256/512 a partir da geometria de `golether.svg` |

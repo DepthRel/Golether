@@ -180,6 +180,7 @@ Output goes to `artifacts/publish/`. Windows (PowerShell):
 ```powershell
 ./Scripts/App/publish-win.ps1            # Golether-<version>-win-x64.zip, native components included
 ./Scripts/App/build-installer.ps1        # the same archive plus a Windows installer (needs Inno Setup 6+)
+./Scripts/Android/publish-android.ps1    # Golether-<version>-android.apk for installing by hand (see Native/README.md)
 ```
 
 Linux and macOS (bash). Build on the target OS, so that executable permissions survive in the archive:

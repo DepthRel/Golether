@@ -93,6 +93,9 @@ internal sealed class StubServices : IMobileServices, IDisposable
     public VoiceVolumeStore VoiceVolumes { get; }
 
     /// <inheritdoc />
+    public IAvatarStore Avatars { get; } = Substitute.For<IAvatarStore>();
+
+    /// <inheritdoc />
     public ILanguageService Language { get; }
 
     /// <inheritdoc />

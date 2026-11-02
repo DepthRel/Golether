@@ -39,6 +39,7 @@ public sealed class SessionIntegrationTests : IAsyncLifetime
         Authority = new() { StartLead = TimeSpan.FromMilliseconds(500) },
         TickInterval = TimeSpan.FromMilliseconds(50),
         StatusInterval = TimeSpan.FromMilliseconds(200),
+        SilenceTimeout = TimeSpan.FromSeconds(3),
     };
 
     /// <summary>
@@ -151,6 +152,53 @@ public sealed class SessionIntegrationTests : IAsyncLifetime
         await WaitUntilAsync(() => _hostConference.Connected.IsEmpty, token);
         Assert.True(_guestConference.Stopped);
         Assert.Null(_guestConference.Relay);
+    }
+
+    /// <summary>
+    /// The cameras of the host stop answering in the middle of a negotiation: the chat and the goodbye of the
+    /// participant still reach the host, which reads the control channel without waiting for the cameras.
+    /// </summary>
+    /// <returns>A task that completes when the test is done.</returns>
+    [Fact]
+    public async Task HungCameras_DoNotHoldTheControlChannel()
+    {
+        var token = TestContext.Current.CancellationToken;
+        _hostConference.HangsOnSignals = true;
+        var hostLines = new ConcurrentQueue<ChatEntry>();
+        _host.ChatReceived += (_, e) => hostLines.Enqueue(e);
+        var guest = CreateGuest();
+        await guest.JoinAsync(_host.CreateInvite([new PeerEndpoint("127.0.0.1", _host.Port)]), token);
+
+        _guestConference.Emit(new ConferenceSignal(_hostIdentity.PeerId, "offer", "v=0 from guest"));
+        await WaitUntilAsync(() => !_hostConference.Received.IsEmpty, token);
+        await guest.SendChatAsync(ChatKind.Text, "Привет", token);
+
+        await WaitUntilAsync(() => hostLines.Any(e => e.Text == "Привет"), token);
+        await guest.DisposeAsync();
+        await WaitUntilAsync(() => _host.GetSnapshot().Participants.Count == 1, token);
+    }
+
+    /// <summary>
+    /// A participant whose connection broke without a word (it stays open, but nothing comes) is let go after the
+    /// silence limit instead of hanging in the session.
+    /// </summary>
+    /// <returns>A task that completes when the test is done.</returns>
+    [Fact]
+    public async Task SilentParticipant_IsLetGo()
+    {
+        var token = TestContext.Current.CancellationToken;
+        var invite = _host.CreateInvite([new PeerEndpoint("127.0.0.1", _host.Port)]);
+        var connector = new TlsPeerConnector(_guestIdentity, _transport);
+        await using var stream = await connector.ConnectAsync(new PeerEndpoint("127.0.0.1", _host.Port), _hostIdentity.PeerId, StreamPurpose.Control, token);
+        await using var channel = new SessionMessageChannel(stream.Stream);
+        await channel.SendAsync(new HelloMessage(SessionMessage.PROTOCOL_VERSION, "Марина", invite.Token), token);
+        while (await channel.ReceiveAsync(token) is not WelcomeMessage)
+        {
+        }
+
+        await WaitUntilAsync(() => _host.GetSnapshot().Participants.Count == 2, token);
+
+        await WaitUntilAsync(() => _host.GetSnapshot().Participants.Count == 1, token);
     }
 
     /// <summary>

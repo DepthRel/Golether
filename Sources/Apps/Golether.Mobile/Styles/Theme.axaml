@@ -128,6 +128,38 @@
     <Setter Property="CornerRadius" Value="12" />
     <Setter Property="Padding" Value="11,6" />
   </Style>
+  <Style Selector="Border.overFilm.start">
+    <Setter Property="CornerRadius" Value="999" />
+    <Setter Property="Padding" Value="12,5" />
+  </Style>
+  <!-- The lamp pulses only while the note is on the screen: an endless animation wakes the drawing of the window. -->
+  <Style Selector="Border.live Ellipse.pulse">
+    <Style.Animations>
+      <Animation Duration="0:0:1" IterationCount="INFINITE" PlaybackDirection="Alternate">
+        <KeyFrame Cue="0%">
+          <Setter Property="Opacity" Value="1" />
+        </KeyFrame>
+        <KeyFrame Cue="100%">
+          <Setter Property="Opacity" Value="0.25" />
+        </KeyFrame>
+      </Animation>
+    </Style.Animations>
+  </Style>
+  <!-- Over a picture the timeline is away but keeps its place, so the bar above it never moves. -->
+  <Style Selector="Slider.timeline.gone">
+    <Setter Property="Opacity" Value="0" />
+    <Setter Property="IsHitTestVisible" Value="False" />
+  </Style>
+  <!-- The sign of a skip by a double tap on a side of the film; the view lights it for a moment. -->
+  <Style Selector="Border.skipHint">
+    <Setter Property="Background" Value="{StaticResource GoletherOverFilm}" />
+    <Setter Property="CornerRadius" Value="999" />
+    <Setter Property="Padding" Value="14,8" />
+    <Setter Property="VerticalAlignment" Value="Center" />
+    <Setter Property="Opacity" Value="0" />
+    <Setter Property="IsHitTestVisible" Value="False" />
+    <Setter Property="TextElement.Foreground" Value="#FFFFFF" />
+  </Style>
   <Style Selector="Border.overFilm.warn">
     <Setter Property="BorderBrush" Value="{StaticResource GoletherAccent}" />
     <Setter Property="BorderThickness" Value="1" />
@@ -136,10 +168,15 @@
   <!-- A person: the camera, the chosen picture or the coloured letter. -->
   <Style Selector="Border.tile">
     <Setter Property="Background" Value="{StaticResource GoletherPanel2}" />
-    <Setter Property="BorderBrush" Value="{StaticResource GoletherLine}" />
-    <Setter Property="BorderThickness" Value="1" />
     <Setter Property="CornerRadius" Value="13" />
     <Setter Property="ClipToBounds" Value="True" />
+  </Style>
+  <!-- The frame lies over the camera: under it the square corners of the picture would cover the round corners of the line. -->
+  <Style Selector="Border.frame">
+    <Setter Property="BorderBrush" Value="#1FFFFFFF" />
+    <Setter Property="BorderThickness" Value="1" />
+    <Setter Property="CornerRadius" Value="13" />
+    <Setter Property="IsHitTestVisible" Value="False" />
   </Style>
   <Style Selector="Border.speaking">
     <Setter Property="BorderBrush" Value="{StaticResource GoletherGood}" />
@@ -178,6 +215,40 @@
     <Setter Property="Background" Value="#5A4632" />
     <Setter Property="BoxShadow" Value="0 0 0 0 #00000000" />
   </Style>
+  <Style Selector="Button.danger">
+    <Setter Property="HorizontalAlignment" Value="Stretch" />
+    <Setter Property="HorizontalContentAlignment" Value="Center" />
+    <Setter Property="Padding" Value="12" />
+    <Setter Property="FontWeight" Value="Bold" />
+  </Style>
+  <Style Selector="Button.danger /template/ ContentPresenter#PART_ContentPresenter, Button.danger:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="{StaticResource GoletherBad}" />
+    <Setter Property="Foreground" Value="#1D0D0A" />
+  </Style>
+  <Style Selector="Button.danger:pressed /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="#C9584A" />
+  </Style>
+  <!-- A quiet link at the foot of the join screen, in the dimmed colour of the words of the code. -->
+  <Style Selector="Button.link">
+    <Setter Property="Padding" Value="10,6" />
+    <Setter Property="FontSize" Value="13" />
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="Foreground" Value="{StaticResource GoletherSecureLight}" />
+    <Setter Property="Opacity" Value="0.7" />
+    <Setter Property="FocusAdorner" Value="{x:Null}" />
+  </Style>
+  <Style Selector="Button.link /template/ ContentPresenter#PART_ContentPresenter, Button.link:pointerover /template/ ContentPresenter#PART_ContentPresenter, Button.link:pressed /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="Foreground" Value="{StaticResource GoletherSecureLight}" />
+  </Style>
+  <Style Selector="Button.link:pressed">
+    <Setter Property="Opacity" Value="1" />
+  </Style>
+  <Style Selector="TextBlock.version">
+    <Setter Property="FontSize" Value="11" />
+    <Setter Property="Foreground" Value="{StaticResource GoletherMuted}" />
+    <Setter Property="Opacity" Value="0.6" />
+  </Style>
   <Style Selector="Button.ghost">
     <Setter Property="HorizontalAlignment" Value="Stretch" />
     <Setter Property="HorizontalContentAlignment" Value="Center" />
@@ -213,49 +284,104 @@
   <Style Selector="ToggleButton.key:disabled /template/ ContentPresenter#PART_ContentPresenter">
     <Setter Property="Foreground" Value="{StaticResource GoletherMuted}" />
   </Style>
+  <Style Selector="Button.key:disabled /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="{StaticResource GoletherPanel2}" />
+    <Setter Property="Foreground" Value="{StaticResource GoletherMuted}" />
+  </Style>
   <Style Selector="Button.key.end /template/ ContentPresenter#PART_ContentPresenter">
     <Setter Property="Background" Value="{StaticResource GoletherBad}" />
     <Setter Property="Foreground" Value="#1D0D0A" />
   </Style>
 
-  <!-- The controls over the film: no plates of their own, the shade under them keeps them readable. -->
+  <!--
+    The controls over the film: no plates of their own, the shade under them keeps them readable. A touch leaves the
+    button "under the pointer" until the next one, so the plate of the theme for a hovered button would stay behind it:
+    there is none, and the press lights a circle, the shape of the button.
+  -->
   <Style Selector="Button.film, ToggleButton.film">
     <Setter Property="Padding" Value="0" />
     <Setter Property="Width" Value="40" />
     <Setter Property="Height" Value="40" />
+    <Setter Property="CornerRadius" Value="20" />
     <Setter Property="Background" Value="Transparent" />
+    <Setter Property="BorderThickness" Value="0" />
     <Setter Property="Foreground" Value="#FFFFFF" />
+    <Setter Property="FocusAdorner" Value="{x:Null}" />
     <Setter Property="HorizontalContentAlignment" Value="Center" />
     <Setter Property="VerticalContentAlignment" Value="Center" />
   </Style>
-  <Style Selector="Button.film:pressed /template/ ContentPresenter#PART_ContentPresenter">
+  <Style Selector="Button.film:pointerover /template/ ContentPresenter#PART_ContentPresenter, ToggleButton.film:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="Transparent" />
+  </Style>
+  <Style Selector="Button.film:pressed /template/ ContentPresenter#PART_ContentPresenter, ToggleButton.film:pressed /template/ ContentPresenter#PART_ContentPresenter">
     <Setter Property="Background" Value="#33FFFFFF" />
+  </Style>
+  <!-- A control that waits for something (the sound over a picture, the pen over a picture looked at alone) fades. -->
+  <Style Selector="Button.film:disabled, ToggleButton.film:disabled">
+    <Setter Property="Opacity" Value="0.35" />
+  </Style>
+  <Style Selector="Button.film:disabled /template/ ContentPresenter#PART_ContentPresenter, ToggleButton.film:disabled /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="Foreground" Value="#FFFFFF" />
   </Style>
   <Style Selector="ToggleButton.film:checked /template/ ContentPresenter#PART_ContentPresenter">
     <Setter Property="Background" Value="Transparent" />
     <Setter Property="Foreground" Value="{StaticResource GoletherBad}" />
   </Style>
+  <!-- A tool in use (the pen, the open chat) glows with the lamp. -->
   <Style Selector="ToggleButton.film.lamp:checked /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="#33F0A860" />
     <Setter Property="Foreground" Value="{StaticResource GoletherAccent}" />
   </Style>
   <Style Selector="Button.film.end">
     <Setter Property="Foreground" Value="{StaticResource GoletherBad}" />
   </Style>
+  <!-- The play button is the round plate inside it (Border.disc); the button itself has no plate in any state. -->
   <Style Selector="Button.play">
     <Setter Property="Width" Value="56" />
     <Setter Property="Height" Value="56" />
     <Setter Property="Padding" Value="0" />
     <Setter Property="CornerRadius" Value="28" />
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="BorderThickness" Value="0" />
+    <Setter Property="FocusAdorner" Value="{x:Null}" />
     <Setter Property="Foreground" Value="{StaticResource GoletherAccentInk}" />
+    <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+    <Setter Property="VerticalContentAlignment" Value="Stretch" />
+  </Style>
+  <Style Selector="Button.play /template/ ContentPresenter#PART_ContentPresenter, Button.play:pointerover /template/ ContentPresenter#PART_ContentPresenter, Button.play:pressed /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="Transparent" />
+  </Style>
+  <Style Selector="Button.play Border.disc">
+    <Setter Property="CornerRadius" Value="28" />
+    <Setter Property="Background" Value="{StaticResource GoletherAccent}" />
+  </Style>
+  <Style Selector="Button.play:pressed Border.disc">
+    <Setter Property="Background" Value="#D98E45" />
+  </Style>
+
+  <!-- The key that takes the chat to its last line: a dark disc with the arrow of the lamp. -->
+  <Style Selector="Button.toEnd">
+    <Setter Property="Width" Value="36" />
+    <Setter Property="Height" Value="36" />
+    <Setter Property="Padding" Value="0" />
+    <Setter Property="CornerRadius" Value="18" />
+    <Setter Property="Background" Value="{StaticResource GoletherPanel2}" />
+    <Setter Property="BorderBrush" Value="{StaticResource GoletherLine}" />
+    <Setter Property="BorderThickness" Value="1" />
+    <Setter Property="Foreground" Value="{StaticResource GoletherAccent}" />
+    <Setter Property="FocusAdorner" Value="{x:Null}" />
     <Setter Property="HorizontalContentAlignment" Value="Center" />
     <Setter Property="VerticalContentAlignment" Value="Center" />
   </Style>
-  <Style Selector="Button.play /template/ ContentPresenter#PART_ContentPresenter">
-    <Setter Property="Background" Value="{StaticResource GoletherAccent}" />
-    <Setter Property="BoxShadow" Value="0 4 22 0 #80F0A860" />
+  <Style Selector="Button.toEnd:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="{StaticResource GoletherPanel2}" />
+    <Setter Property="BorderBrush" Value="{StaticResource GoletherLine}" />
+    <Setter Property="Foreground" Value="{StaticResource GoletherAccent}" />
   </Style>
-  <Style Selector="Button.play:pressed /template/ ContentPresenter#PART_ContentPresenter">
-    <Setter Property="Background" Value="#D98E45" />
+  <Style Selector="Button.toEnd:pressed /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="{StaticResource GoletherPanel}" />
+    <Setter Property="Foreground" Value="{StaticResource GoletherAccent}" />
   </Style>
 
   <!-- A language, a tile, a line of a list. -->
@@ -266,8 +392,18 @@
   <Style Selector="Button.plain:pointerover /template/ ContentPresenter#PART_ContentPresenter">
     <Setter Property="Background" Value="Transparent" />
   </Style>
-  <Style Selector="Button.plain:pressed /template/ ContentPresenter#PART_ContentPresenter">
+  <Style Selector="Button.plain:pressed /template/ ContentPresenter#PART_ContentPresenter, Button.plain:disabled /template/ ContentPresenter#PART_ContentPresenter">
     <Setter Property="Background" Value="Transparent" />
+  </Style>
+  <!-- The mark on the own picture that says a tap changes it. -->
+  <Style Selector="Border.avatarBadge">
+    <Setter Property="Width" Value="20" />
+    <Setter Property="Height" Value="20" />
+    <Setter Property="CornerRadius" Value="10" />
+    <Setter Property="Background" Value="{StaticResource GoletherAccent}" />
+    <Setter Property="BorderBrush" Value="{StaticResource GoletherPanel}" />
+    <Setter Property="BorderThickness" Value="2" />
+    <Setter Property="TextElement.Foreground" Value="{StaticResource GoletherAccentInk}" />
   </Style>
   <Style Selector="Button.option">
     <Setter Property="MinHeight" Value="44" />
@@ -302,6 +438,9 @@
     <Setter Property="Padding" Value="12,10" />
     <Setter Property="FontSize" Value="15" />
   </Style>
+  <Style Selector="TextBox.invite">
+    <Setter Property="Padding" Value="12,10,4,10" />
+  </Style>
   <Style Selector="TextBox.message">
     <Setter Property="CornerRadius" Value="20" />
     <Setter Property="Padding" Value="15,9" />
@@ -313,11 +452,16 @@
     <Setter Property="Background" Value="{StaticResource GoletherPanel}" />
   </Style>
 
-  <!-- The waiting rings around the logo. -->
+  <!--
+    The waiting rings around the logo. They move only on the screen that is shown (Panel.live): the hidden screens stay in
+    the tree for the whole session, and an endless animation on them would wake the drawing of the window all the time.
+  -->
   <Style Selector="Ellipse.ring">
     <Setter Property="Stroke" Value="{StaticResource GoletherAccent}" />
     <Setter Property="StrokeThickness" Value="1" />
     <Setter Property="Opacity" Value="0" />
+  </Style>
+  <Style Selector="Panel.live Ellipse.ring">
     <Style.Animations>
       <Animation Duration="0:0:2.4" IterationCount="INFINITE">
         <KeyFrame Cue="0%">
@@ -333,7 +477,7 @@
       </Animation>
     </Style.Animations>
   </Style>
-  <Style Selector="Ellipse.ring.late">
+  <Style Selector="Panel.live Ellipse.ring.late">
     <Style.Animations>
       <Animation Duration="0:0:2.4" IterationCount="INFINITE" Delay="0:0:1.2">
         <KeyFrame Cue="0%">
@@ -345,30 +489,6 @@
           <Setter Property="Opacity" Value="0" />
           <Setter Property="ScaleTransform.ScaleX" Value="1.25" />
           <Setter Property="ScaleTransform.ScaleY" Value="1.25" />
-        </KeyFrame>
-      </Animation>
-    </Style.Animations>
-  </Style>
-
-  <!-- A reaction rises over the film and fades out (ChatViewModel.ReactionLifetime). -->
-  <Style Selector="StackPanel.floatingReaction">
-    <Setter Property="Opacity" Value="0" />
-    <Style.Animations>
-      <Animation Duration="0:0:3" FillMode="Forward">
-        <KeyFrame Cue="0%">
-          <Setter Property="Opacity" Value="0" />
-          <Setter Property="TranslateTransform.Y" Value="0" />
-        </KeyFrame>
-        <KeyFrame Cue="12%">
-          <Setter Property="Opacity" Value="1" />
-          <Setter Property="TranslateTransform.Y" Value="-24" />
-        </KeyFrame>
-        <KeyFrame Cue="70%">
-          <Setter Property="Opacity" Value="1" />
-        </KeyFrame>
-        <KeyFrame Cue="100%">
-          <Setter Property="Opacity" Value="0" />
-          <Setter Property="TranslateTransform.Y" Value="-120" />
         </KeyFrame>
       </Animation>
     </Style.Animations>

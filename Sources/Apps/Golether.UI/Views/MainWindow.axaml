@@ -411,9 +411,9 @@
                                   AutomationProperties.Name="{loc:Loc Main.Pen.Name}" ToolTip.Tip="{loc:Loc Main.Pen.Tip}">
                       <PathIcon Data="{StaticResource IconPen}" />
                     </ToggleButton>
-                    <!-- Reactions float over everybody's video for a few seconds. -->
+                    <!-- Reactions float over everybody's video for a few seconds; not over a picture looked at alone. -->
                     <Button Focusable="False" x:Name="ReactionsButton" Classes="ghost square" Margin="0,0,4,0"
-                            IsVisible="{Binding IsInSession}" AutomationProperties.Name="{loc:Loc Main.Reactions.Name}" ToolTip.Tip="{loc:Loc Main.Reactions.Tip}">
+                            IsVisible="{Binding IsInSession}" IsEnabled="{Binding Gallery.CanReact}" AutomationProperties.Name="{loc:Loc Main.Reactions.Name}" ToolTip.Tip="{loc:Loc Main.Reactions.Tip}">
                       <PathIcon Data="{StaticResource IconReaction}" />
                       <Button.Flyout>
                         <Flyout Placement="Top">
@@ -712,10 +712,11 @@
                 reaction that left it would come back when it opened again. Only while a picture of a folder is shown
                 (no native window to cover) is it closed: an open window over the picture, even an empty one, would
                 catch the clicks of the pen. The layer inside the picture is used then, and there the pointer reaches
-                the picture on every system.
+                the picture on every system. Like the bars, it stays exactly over the video: a layer moved up out of
+                the way of the taskbar would put every stroke higher in the picture than the others see it.
               -->
               <Popup x:Name="ReactionOverlay" PlacementTarget="{Binding #VideoArea}" Placement="AnchorAndGravity"
-                     PlacementAnchor="TopLeft" PlacementGravity="BottomRight"
+                     PlacementAnchor="TopLeft" PlacementGravity="BottomRight" PlacementConstraintAdjustment="None"
                      IsLightDismissEnabled="False" IsOpen="{Binding ShowVideoOverlay}">
                 <views:SessionOverlay x:Name="VideoOverlay" Width="{Binding #VideoArea.Bounds.Width}" Height="{Binding #VideoArea.Bounds.Height}" />
               </Popup>

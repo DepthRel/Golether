@@ -40,6 +40,7 @@
     <File Path="Scripts/Android/create-emulator.bat" />
     <File Path="Scripts/Android/enable-windows-features.bat" />
     <File Path="Scripts/Android/install-android-tools.bat" />
+    <File Path="Scripts/Android/publish-android.ps1" />
     <File Path="Scripts/Android/start-emulator.bat" />
   </Folder>
   <Folder Name="/Scripts/Android/Natives/">

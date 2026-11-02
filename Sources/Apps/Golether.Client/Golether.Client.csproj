@@ -16,6 +16,11 @@
   </ItemGroup>
 
   <ItemGroup>
+    <!-- The notification sounds were made by the project itself; the code reads them, not the windows. -->
+    <EmbeddedResource Include="Assets\Sounds\*.wav" LogicalName="Golether.Client.Sounds.%(Filename)%(Extension)" />
+  </ItemGroup>
+
+  <ItemGroup>
     <PackageReference Include="Avalonia" />
     <PackageReference Include="Avalonia.Skia" />
     <PackageReference Include="CommunityToolkit.Mvvm" />

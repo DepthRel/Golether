@@ -1,3 +1,4 @@
+using Golether.Client.Services;
 using Golether.Media.Conference;
 using Golether.Security.Secrets;
 
@@ -79,14 +80,27 @@ public interface IMobilePlatform
     void SwitchCamera();
 
     /// <summary>
-    /// Takes the application off the screen and keeps it running.
-    /// </summary>
-    void MoveToBackground();
-
-    /// <summary>
-    /// Tells the system that a session started or ended: it keeps the screen on and sends the voices to the loudspeaker
-    /// or the headset, as in a call.
+    /// Tells the system that a session started or ended: it keeps the session alive off the screen, the screen on and
+    /// the sound to itself.
     /// </summary>
     /// <param name="active">Whether a session runs.</param>
     void SetSessionActive(bool active);
+
+    /// <summary>
+    /// Reads the text in the clipboard of the system, whatever form it was copied in (plain text, a link, a page).
+    /// </summary>
+    /// <returns>The text, or <see langword="null"/> when the clipboard holds none.</returns>
+    string? ReadClipboardText();
+
+    /// <summary>
+    /// Gets the player of the short sounds of the application, such as the one of a new message.
+    /// </summary>
+    ISoundPlayer Sounds { get; }
+
+    /// <summary>
+    /// Holds the screen on its side, whichever way the device is turned, or lets it go: then the screen stands upright
+    /// and follows the device again once the device is held upright too.
+    /// </summary>
+    /// <param name="hold">Whether to hold the screen on its side.</param>
+    void HoldLandscape(bool hold);
 }

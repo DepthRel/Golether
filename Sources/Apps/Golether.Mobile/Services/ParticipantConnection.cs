@@ -70,6 +70,11 @@ public sealed class ParticipantConnection : IParticipantConnection, IReconnectio
     private ParticipantReconnector? _reconnector;
 
     /// <summary>
+    /// The picture of the user, sent into every session this connection joins, or <see langword="null"/>.
+    /// </summary>
+    private byte[]? _avatar;
+
+    /// <summary>
     /// Initializes a new instance of the <see cref="ParticipantConnection"/> class.
     /// </summary>
     /// <param name="services">The services.</param>
@@ -108,6 +113,18 @@ public sealed class ParticipantConnection : IParticipantConnection, IReconnectio
 
         await session.JoinAsync(invite, cancellationToken);
         _ticket = session.ReconnectInvite;
+        await SendAvatarAsync(session, cancellationToken);
+    }
+
+    /// <inheritdoc />
+    public async Task SetAvatarAsync(byte[]? image)
+    {
+        _avatar = image;
+
+        if (_session is { } session)
+        {
+            await SendAvatarAsync(session, CancellationToken.None);
+        }
     }
 
     /// <inheritdoc />
@@ -143,17 +160,18 @@ public sealed class ParticipantConnection : IParticipantConnection, IReconnectio
     Invite? IReconnectionClient.GetTicket(ParticipantSession ended) => ReferenceEquals(_session, ended) ? _ticket : null;
 
     /// <inheritdoc />
-    Task<bool> IReconnectionClient.AdoptAsync(ParticipantSession ended, ParticipantSession session, Invite ticket, CancellationToken cancellationToken)
+    async Task<bool> IReconnectionClient.AdoptAsync(ParticipantSession ended, ParticipantSession session, Invite ticket, CancellationToken cancellationToken)
     {
         if (!ReferenceEquals(Interlocked.CompareExchange(ref _session, session, ended), ended))
         {
-            return Task.FromResult(false);
+            return false;
         }
 
         _ticket = session.ReconnectInvite ?? ticket;
         _current.Attach(session);
+        await SendAvatarAsync(session, cancellationToken);
 
-        return Task.FromResult(true);
+        return true;
     }
 
     /// <inheritdoc />
@@ -183,6 +201,29 @@ public sealed class ParticipantConnection : IParticipantConnection, IReconnectio
         session.Changed += (_, _) => OnSessionChanged(session);
         session.AvatarReceived += (_, update) => AvatarReceived?.Invoke(this, update);
         return session;
+    }
+
+    /// <summary>
+    /// Sends the picture of the user into a session; a broken connection is no failure, the way back sends it again.
+    /// </summary>
+    /// <param name="session">The session.</param>
+    /// <param name="cancellationToken">Stops sending.</param>
+    /// <returns>A task that completes when the picture is sent.</returns>
+    private async Task SendAvatarAsync(ParticipantSession session, CancellationToken cancellationToken)
+    {
+        if (_avatar is not { Length: > 0 } avatar)
+        {
+            return;
+        }
+
+        try
+        {
+            await session.SendAvatarAsync(avatar, cancellationToken);
+        }
+        catch (Exception ex) when (ex is IOException or ObjectDisposedException or InvalidOperationException or OperationCanceledException)
+        {
+            // The connection broke: the way back sends the picture again.
+        }
     }
 
     /// <summary>

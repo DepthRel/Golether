@@ -44,6 +44,11 @@ public interface IMobileServices
     VoiceVolumeStore VoiceVolumes { get; }
 
     /// <summary>
+    /// Gets the picture of the user, shown to the others while the camera is off.
+    /// </summary>
+    IAvatarStore Avatars { get; }
+
+    /// <summary>
     /// Gets the language of the application.
     /// </summary>
     ILanguageService Language { get; }

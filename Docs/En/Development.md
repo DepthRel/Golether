@@ -153,6 +153,7 @@ dependencies, time through `TimeProvider`/`IMonotonicClock`, untrusted input is 
 | `Scripts/App/publish-linux.sh [linux-x64] [Release] [out]` | `.tar.gz` and `.zip` (when `zip` is available), `install-desktop-entry.sh`, `.deb` (where `dpkg-deb` is: Debian, Ubuntu, WSL) |
 | `Scripts/App/publish-macos.sh [osx-arm64\|osx-x64] ...` | `Golether.app` (Info.plist, icon, ad-hoc signature) in an archive |
 | `Scripts/App/publish-linux.ps1 [-Runtime linux-x64]` | the same Linux archive, built from Windows inside WSL (see below) |
+| `Scripts/Android/publish-android.ps1` | `artifacts/publish/Golether-<version>-android.apk` for every processor, signed with the debug key of this computer: for installing by hand, not for a store (the native components are built by `Scripts/Android/build-natives.ps1`) |
 | `Scripts/Assets/update-site-screenshot.ps1` | the picture of the project page from `Docs/images/screenshot.png` |
 | `Scripts/Assets/generate-installer-art.ps1` | the pictures of the setup wizard (a dark panel with the logo and the logo for the header) in `artifacts/installer-art`; both installer build scripts call it themselves |
 | `Scripts/Assets/generate-icon.ps1` | `golether.ico`, PNG 256/512 from the geometry of `golether.svg` |

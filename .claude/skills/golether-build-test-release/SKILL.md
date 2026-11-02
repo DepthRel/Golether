@@ -24,6 +24,7 @@ dotnet run --project Sources/Apps/Golether.Web.Server        # rendezvous server
 | Whole release from Windows | `Scripts/build-release.ps1` (app installer, Linux app via WSL, server installer, Linux/macOS server via Git Bash, SHA256SUMS) |
 | Linux / macOS app | `Scripts/App/publish-linux.sh`, `publish-macos.sh`, or `publish-linux.ps1` (WSL); macOS app on GitHub only (Packages workflow) |
 | Server packages | `Scripts/Server/publish-server-win.ps1`, `build-server-installer.ps1`, `publish-server.sh <rid>` |
+| Android .apk to install by hand | `Scripts/Android/publish-android.ps1` (needs `Native/android-*` from `build-natives.ps1`; debug-key signature) |
 | Site locally | any static server in `Sources/Apps/Golether.Pages` (CSP blocks `file://`) |
 
 ## Test facts

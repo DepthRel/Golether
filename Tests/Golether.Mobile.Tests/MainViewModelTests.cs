@@ -1,8 +1,10 @@
 using NSubstitute;
 using Golether.Client.Services;
 using Golether.Core.Data.Enums;
+using Golether.Core.Enums;
 using Golether.Core.Identity;
 using Golether.Core.Networking;
+using Golether.Core.Playback;
 using Golether.Core.Session;
 using Golether.Localization;
 using Golether.Mobile.Services;
@@ -10,6 +12,7 @@ using Golether.Mobile.ViewModels;
 using Golether.Security.Invites;
 using Golether.Security.Verification;
 using Golether.Session;
+using Golether.Sync.Engine;
 
 namespace Golether.Mobile.Tests;
 
@@ -201,18 +204,46 @@ public sealed class MainViewModelTests : IDisposable
     public void GoBack_OutsideASession_IsLeftToTheSystem() => Assert.False(_model.GoBack());
 
     /// <summary>
-    /// Inside a session the back button never ends it: the application only leaves the screen.
+    /// Inside a session the back button asks whether to leave, and a second press takes the question back: the
+    /// session never ends without the answer.
     /// </summary>
     /// <returns>A task that completes when the test ends.</returns>
     [Fact]
-    public async Task GoBack_InASession_MovesToTheBackground()
+    public async Task GoBack_InASession_AsksToLeave()
     {
         await JoinAsync(SessionState.Active);
 
         Assert.True(_model.GoBack());
 
-        _platform.Received(1).MoveToBackground();
+        Assert.True(_model.IsLeaveAsked);
         Assert.True(_model.IsWatch);
+
+        Assert.True(_model.GoBack());
+
+        Assert.False(_model.IsLeaveAsked);
+        Assert.True(_model.IsWatch);
+        Assert.False(_services.Connection.IsDisposed);
+    }
+
+    /// <summary>
+    /// The red button only asks; the answer leaves the session and takes the question away.
+    /// </summary>
+    /// <returns>A task that completes when the test ends.</returns>
+    [Fact]
+    public async Task AskLeave_LeavesOnlyWithTheAnswer()
+    {
+        await JoinAsync(SessionState.Active);
+
+        _model.AskLeaveCommand.Execute(null);
+
+        Assert.True(_model.IsLeaveAsked);
+        Assert.False(_services.Connection.IsDisposed);
+
+        await _model.LeaveCommand.ExecuteAsync(null);
+
+        Assert.False(_model.IsLeaveAsked);
+        Assert.True(_model.IsJoin);
+        Assert.True(_services.Connection.IsDisposed);
     }
 
     /// <summary>
@@ -370,6 +401,197 @@ public sealed class MainViewModelTests : IDisposable
         _model.ClearErrorCommand.Execute(null);
 
         Assert.Empty(_model.Error);
+    }
+
+    /// <summary>
+    /// An invitation whose time is over is turned away on the join screen, before the session and its service start:
+    /// a service started and stopped at once would end the application.
+    /// </summary>
+    /// <returns>A task that completes when the test ends.</returns>
+    [Fact]
+    public async Task Join_WithAnExpiredInvitation_StartsNothing()
+    {
+        await _model.StartAsync();
+        _model.DisplayName = "Катя";
+        _model.InviteLink = new Invite
+        {
+            HostPeerId = _host,
+            HostName = "Хост",
+            SessionName = "Киновечер",
+            Endpoints = [PeerEndpoint.Parse("192.168.1.10:47800")],
+            Token = Invite.CreateToken(),
+            ExpiresAt = DateTimeOffset.FromUnixTimeSeconds(1_000_000_000),
+        }.ToLink();
+
+        await _model.JoinCommand.ExecuteAsync(null);
+
+        Assert.True(_model.IsJoin);
+        Assert.Equal(Texts.Get("Session.Error.InviteExpired"), _model.Error);
+        _platform.DidNotReceive().SetSessionActive(Arg.Any<bool>());
+        await _platform.DidNotReceive().RequestCaptureAccessAsync(Arg.Any<bool>(), Arg.Any<bool>());
+    }
+
+    /// <summary>
+    /// The paste button takes the text of the system clipboard; the cross empties the field and the message about it.
+    /// </summary>
+    /// <returns>A task that completes when the test ends.</returns>
+    [Fact]
+    public async Task PasteAndClear_FillAndEmptyTheInvitation()
+    {
+        await _model.StartAsync();
+        _platform.ReadClipboardText().Returns("  golether://join/v1/abc \n");
+
+        _model.PasteInviteCommand.Execute(null);
+
+        Assert.Equal("golether://join/v1/abc", _model.InviteLink);
+
+        _model.Error = "старая ошибка";
+        _model.ClearInviteCommand.Execute(null);
+
+        Assert.Empty(_model.InviteLink);
+        Assert.Empty(_model.Error);
+    }
+
+    /// <summary>
+    /// An empty clipboard leaves the field as it was.
+    /// </summary>
+    /// <returns>A task that completes when the test ends.</returns>
+    [Fact]
+    public async Task Paste_WithAnEmptyClipboard_KeepsTheField()
+    {
+        await _model.StartAsync();
+        _model.InviteLink = "уже было";
+        _platform.ReadClipboardText().Returns((string?)null);
+
+        _model.PasteInviteCommand.Execute(null);
+
+        Assert.Equal("уже было", _model.InviteLink);
+    }
+
+    /// <summary>
+    /// The full-screen button holds the film on its side until the user takes it back: turning the device does not end
+    /// it, the back button does before it asks to leave, and so does the end of the session.
+    /// </summary>
+    /// <returns>A task that completes when the test ends.</returns>
+    [Fact]
+    public async Task FullScreen_StaysUntilTheUserTakesItBack()
+    {
+        await JoinAsync(SessionState.Active);
+
+        _model.ToggleFullScreenCommand.Execute(null);
+        _model.FitSubtitles(upright: false);
+        _model.FitSubtitles(upright: true);
+
+        Assert.True(_model.IsFullScreen);
+        _platform.Received(1).HoldLandscape(true);
+        _platform.DidNotReceive().HoldLandscape(false);
+
+        Assert.True(_model.GoBack());
+
+        Assert.False(_model.IsFullScreen);
+        Assert.False(_model.IsLeaveAsked);
+        _platform.Received(1).HoldLandscape(false);
+
+        _model.ToggleFullScreenCommand.Execute(null);
+        await _model.LeaveCommand.ExecuteAsync(null);
+
+        Assert.False(_model.IsFullScreen);
+        _platform.Received(2).HoldLandscape(false);
+    }
+
+    /// <summary>
+    /// The picture the user chose before goes into the session with the join, and the own tile shows it at once.
+    /// </summary>
+    /// <returns>A task that completes when the test ends.</returns>
+    [Fact]
+    public async Task Join_SendsTheStoredPicture()
+    {
+        byte[] avatar = [0x89, 0x50, 0x4E, 0x47];
+        _services.Avatars.LoadCurrentAsync().Returns(avatar);
+
+        await JoinAsync(SessionState.Active);
+        _services.Connection.Snapshot = Snapshot(SessionState.Active) with
+        {
+            Participants =
+            [
+                new ParticipantView(new ParticipantInfo(_host, "Хост", true), null, false),
+                new ParticipantView(new ParticipantInfo(_services.Identity.PeerId, "Катя", false), null, true),
+            ],
+        };
+        _model.Refresh();
+
+        Assert.Same(avatar, _services.Connection.Avatar);
+        Assert.Same(avatar, _model.Participants.Single(p => p.IsLocal).AvatarImage);
+    }
+
+    /// <summary>
+    /// A film that played to its end starts again from the start, as on the desktop.
+    /// </summary>
+    /// <returns>A task that completes when the test ends.</returns>
+    [Fact]
+    public async Task TogglePlay_AfterTheEnd_StartsFromTheStart()
+    {
+        await JoinAsync(SessionState.Active);
+        _services.Connection.Snapshot = Snapshot(SessionState.Active) with
+        {
+            Playback = new PlaybackState
+            {
+                State = PlayState.Paused,
+                Position = TimeSpan.FromMinutes(90),
+                ReferenceTime = 0,
+                Version = 3,
+                Origin = _host,
+                Cause = PlaybackCause.Ended,
+            },
+        };
+        _model.Refresh();
+
+        _model.TogglePlayCommand.Execute(null);
+
+        Assert.True(_model.IsEnded);
+        var request = Assert.Single(_services.Connection.Requests);
+        Assert.Equal(PlaybackRequestKind.Play, request.Kind);
+        Assert.Equal(TimeSpan.Zero, request.Position);
+    }
+
+    /// <summary>
+    /// A start pressed here comes a few seconds later: the screen counts them, and says when the participants are
+    /// waited for.
+    /// </summary>
+    /// <returns>A task that completes when the test ends.</returns>
+    [Fact]
+    public async Task Refresh_TellsWhatTheStartWaitsFor()
+    {
+        await JoinAsync(SessionState.Active);
+        Assert.Empty(_model.StartText);
+
+        _services.Connection.Snapshot = Snapshot(SessionState.Active) with
+        {
+            Local = new FollowerStatus(default, null, TimeSpan.Zero, TimeSpan.FromSeconds(2.3)),
+        };
+        _model.Refresh();
+
+        Assert.Equal(Texts.Format("Main.StartsIn", "3"), _model.StartText);
+
+        _services.Connection.Snapshot = Snapshot(SessionState.Active) with
+        {
+            Playback = new PlaybackState
+            {
+                State = PlayState.Paused,
+                Position = TimeSpan.Zero,
+                ReferenceTime = 0,
+                Version = 1,
+                Origin = _host,
+                Cause = PlaybackCause.WaitingForParticipants,
+            },
+        };
+        _model.Refresh();
+
+        Assert.Equal(Texts.Get("Main.Waiting.Everybody"), _model.StartText);
+
+        await _model.LeaveCommand.ExecuteAsync(null);
+
+        Assert.Empty(_model.StartText);
     }
 
     /// <summary>

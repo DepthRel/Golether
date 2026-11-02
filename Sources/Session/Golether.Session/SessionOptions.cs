@@ -50,6 +50,13 @@ public sealed record SessionOptions
     public TimeSpan SendTimeout { get; init; } = TimeSpan.FromSeconds(10);
 
     /// <summary>
+    /// Gets how long the other side of a running session may stay silent before its connection counts as gone (default
+    /// 30 s). Both sides send at least every <see cref="StatusInterval"/>, so silence means a connection that broke
+    /// without a word: a phone that lost its network, a route that dropped it.
+    /// </summary>
+    public TimeSpan SilenceTimeout { get; init; } = TimeSpan.FromSeconds(30);
+
+    /// <summary>
     /// Gets the drift correction settings.
     /// </summary>
     public DriftCorrectionOptions DriftCorrection { get; init; } = new();
@@ -75,6 +82,7 @@ public sealed record SessionOptions
         ArgumentOutOfRangeException.ThrowIfLessThan(MediaDataStreams, 1);
         ArgumentOutOfRangeException.ThrowIfGreaterThan(MediaDataStreams, 16);
         ArgumentOutOfRangeException.ThrowIfLessThan(MediaCacheCapacity, 1);
+        ArgumentOutOfRangeException.ThrowIfLessThanOrEqual(SilenceTimeout, StatusInterval);
         DriftCorrection.Validate();
     }
 }

@@ -32,6 +32,16 @@ internal sealed class SessionForegroundService : Service
     /// </summary>
     private const int LAMP_COLOR = unchecked((int)0xFFF0A860);
 
+    /// <summary>
+    /// Gets or sets a value indicating whether a session wants the service. Set and read on the main thread only.
+    /// </summary>
+    public static bool IsWanted { get; set; }
+
+    /// <summary>
+    /// Gets a value indicating whether the service runs in the foreground, so stopping it is safe.
+    /// </summary>
+    public static bool IsInForeground { get; private set; }
+
     /// <inheritdoc />
     public override IBinder? OnBind(Intent? intent) => null;
 
@@ -40,6 +50,8 @@ internal sealed class SessionForegroundService : Service
     {
         var notification = CreateNotification();
 
+        // The foreground comes first even when the session is already over (a join that failed at once): a service
+        // asked to start there and stopped before it did ends the whole application.
         if (OperatingSystem.IsAndroidVersionAtLeast(29))
         {
             StartForeground(NOTIFICATION_ID, notification, AllowedTypes());
@@ -49,7 +61,21 @@ internal sealed class SessionForegroundService : Service
             StartForeground(NOTIFICATION_ID, notification);
         }
 
+        IsInForeground = true;
+
+        if (!IsWanted)
+        {
+            StopSelf(startId);
+        }
+
         return StartCommandResult.NotSticky;
+    }
+
+    /// <inheritdoc />
+    public override void OnDestroy()
+    {
+        IsInForeground = false;
+        base.OnDestroy();
     }
 
     /// <summary>

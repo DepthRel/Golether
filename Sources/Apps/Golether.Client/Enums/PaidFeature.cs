@@ -14,4 +14,10 @@ public enum PaidFeature
     /// Subtitles: the embedded tracks and files of the user; the sound tracks are free.
     /// </summary>
     Subtitles = 1,
+
+    /// <summary>
+    /// A picture of the user's own, shown to the others while the camera is off; the pictures of the others are seen
+    /// without it.
+    /// </summary>
+    Avatar = 2,
 }

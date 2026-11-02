@@ -156,6 +156,7 @@ bibliothèques, Golether, uniquement des dépendances compatibles avec la GPL, l
 | `Scripts/App/publish-linux.sh [linux-x64] [Release] [out]` | `.tar.gz` et `.zip` (si `zip` est disponible), `install-desktop-entry.sh`, `.deb` (là où `dpkg-deb` est disponible : Debian, Ubuntu, WSL) |
 | `Scripts/App/publish-macos.sh [osx-arm64\|osx-x64] ...` | `Golether.app` (Info.plist, icône, signature ad hoc) dans une archive |
 | `Scripts/App/publish-linux.ps1 [-Runtime linux-x64]` | la même archive Linux, construite depuis Windows dans WSL (voir plus bas) |
+| `Scripts/Android/publish-android.ps1` | `artifacts/publish/Golether-<version>-android.apk` pour tous les processeurs, signé avec la clé de débogage de cet ordinateur : pour une installation à la main, pas pour une boutique (les composants natifs sont construits par `Scripts/Android/build-natives.ps1`) |
 | `Scripts/Assets/update-site-screenshot.ps1` | l'image de la page du projet à partir de `Docs/images/screenshot.png` |
 | `Scripts/Assets/generate-installer-art.ps1` | les images de l'assistant d'installation (un panneau sombre avec le logo et le logo de l'en-tête) dans `artifacts/installer-art` ; les deux scripts de construction des programmes d'installation l'appellent eux-mêmes |
 | `Scripts/Assets/generate-icon.ps1` | `golether.ico`, PNG 256/512 à partir de la géométrie de `golether.svg` |

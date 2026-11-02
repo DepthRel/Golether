@@ -5,6 +5,7 @@ using Android.Hardware.Display;
 using Android.Media;
 using Android.Net;
 using Android.Views;
+using Golether.Client.Services;
 using Golether.Media.Conference;
 using Golether.Media.Conference.GStreamer.Android;
 using Golether.Media.Player.Android;
@@ -24,18 +25,6 @@ internal sealed class AndroidPlatform(Context context) : IMobilePlatform
     /// The number of the request for the camera and the microphone.
     /// </summary>
     public const int CAPTURE_REQUEST = 1;
-
-    /// <summary>
-    /// The outputs that stay private: with one of them the voices do not go to the loudspeaker.
-    /// </summary>
-    private static readonly AudioDeviceType[] _headsets =
-    [
-        AudioDeviceType.WiredHeadset,
-        AudioDeviceType.WiredHeadphones,
-        AudioDeviceType.UsbHeadset,
-        AudioDeviceType.BluetoothA2dp,
-        AudioDeviceType.BluetoothSco,
-    ];
 
     /// <summary>
     /// The activity on the screen, or <see langword="null"/>.
@@ -62,6 +51,11 @@ internal sealed class AndroidPlatform(Context context) : IMobilePlatform
     /// </summary>
     private ConnectivityManager.NetworkCallback? _networks;
 
+    /// <summary>
+    /// Follows how the device is held after the film left the whole screen, or <see langword="null"/> before that.
+    /// </summary>
+    private TurnListener? _turns;
+
     /// <inheritdoc />
     public event EventHandler? Returned;
 
@@ -86,10 +80,8 @@ internal sealed class AndroidPlatform(Context context) : IMobilePlatform
     /// <inheritdoc />
     public bool IsOnScreen { get; private set; }
 
-    /// <summary>
-    /// Gets a value indicating whether a session runs.
-    /// </summary>
-    public bool IsSessionActive => _audioFocus is not null;
+    /// <inheritdoc />
+    public ISoundPlayer Sounds { get; } = new AndroidSoundPlayer(context);
 
     /// <summary>
     /// Remembers the activity on the screen; a request nobody can answer any more ends.
@@ -185,22 +177,22 @@ internal sealed class AndroidPlatform(Context context) : IMobilePlatform
     public void SwitchCamera() => _backCamera = !_backCamera;
 
     /// <inheritdoc />
-    public void MoveToBackground() => _activity?.MoveTaskToBack(true);
-
-    /// <inheritdoc />
     public void SetSessionActive(bool active)
     {
         var keeper = new Intent(context, typeof(SessionForegroundService));
+        // A service asked to come to the foreground must get there before it stops, or the system ends the application:
+        // one that has not started yet stops itself as soon as it has.
+        SessionForegroundService.IsWanted = active;
         if (active)
         {
             context.StartForegroundService(keeper);
         }
-        else
+        else if (SessionForegroundService.IsInForeground)
         {
             context.StopService(keeper);
         }
 
-        if (_activity?.Window is { } window)
+        if (_activity is { Window: { } window } activity)
         {
             if (active)
             {
@@ -210,13 +202,13 @@ internal sealed class AndroidPlatform(Context context) : IMobilePlatform
             {
                 window.ClearFlags(WindowManagerFlags.KeepScreenOn);
             }
+
+            // The film and the voices play as media, with no call around them: the keys of the phone move the volume of
+            // media only, even in a silence, and the sound stays where media plays (the headphones of the user).
+            activity.VolumeControlStream = active ? global::Android.Media.Stream.Music : (global::Android.Media.Stream)AudioManager.UseDefaultStreamType;
         }
 
-        // The voice stream of the conference plays from the earpiece by itself, and nobody holds a phone to the ear
-        // while watching a film. A headset that is connected stays in charge.
         var audio = (AudioManager)context.GetSystemService(Context.AudioService)!;
-        audio.Mode = active ? Mode.InCommunication : Mode.Normal;
-        UseLoudspeaker(audio, active && !HasHeadset(audio));
         HoldSound(audio, active);
         FollowNetworks(active);
     }
@@ -241,19 +233,83 @@ internal sealed class AndroidPlatform(Context context) : IMobilePlatform
         }
     }
 
-    /// <summary>
-    /// Changes the sound of the session by a step. A session runs in the mode of a call, where the system gives the keys
-    /// to the voices only and asks nobody, and the film stays as loud as it was: the keys must move both.
-    /// </summary>
-    /// <param name="louder">Whether to make it louder.</param>
-    public void ChangeVolume(bool louder)
+    /// <inheritdoc />
+    public string? ReadClipboardText()
     {
-        var audio = (AudioManager)context.GetSystemService(Context.AudioService)!;
-        var direction = louder ? Adjust.Raise : Adjust.Lower;
+        // The clipboard of Avalonia reads plain text only, and a link copied from a messenger or a browser is often
+        // kept as a link or a page: the system turns any of them into text.
+        var clipboard = (ClipboardManager?)context.GetSystemService(Context.ClipboardService);
+        if (clipboard?.PrimaryClip is not { ItemCount: > 0 } clip)
+        {
+            return null;
+        }
 
-        audio.AdjustStreamVolume(global::Android.Media.Stream.VoiceCall, direction, 0);
-        audio.AdjustStreamVolume(global::Android.Media.Stream.Music, direction, VolumeNotificationFlags.ShowUi);
+        return clip.GetItemAt(0)?.CoerceToText(context);
     }
+
+    /// <inheritdoc />
+    public void HoldLandscape(bool hold)
+    {
+        if (_activity is not { } activity)
+        {
+            return;
+        }
+
+        _turns?.Disable();
+
+        // On the whole screen the film stays on its side (either side, as the device is turned) until the user takes
+        // it back; turning the device upright does not end it.
+        if (hold)
+        {
+            activity.RequestedOrientation = ScreenOrientation.SensorLandscape;
+            return;
+        }
+
+        // Taken back, the screen stands upright and follows the device again once the device stands upright too: let go
+        // at once, it would fall back on its side in the hands that still hold the device so.
+        if (!TurnsByItself())
+        {
+            activity.RequestedOrientation = ScreenOrientation.Unspecified;
+            return;
+        }
+
+        activity.RequestedOrientation = ScreenOrientation.SensorPortrait;
+        _turns ??= new TurnListener(context, OnDeviceTurned);
+        if (_turns.CanDetectOrientation())
+        {
+            _turns.Enable();
+        }
+        else
+        {
+            activity.RequestedOrientation = ScreenOrientation.Unspecified;
+        }
+    }
+
+    /// <summary>
+    /// Lets the screen follow the device again once the device is held upright after the film left the whole screen.
+    /// </summary>
+    /// <param name="degrees">How far the device is turned from upright, or <see cref="OrientationEventListener.OrientationUnknown"/>.</param>
+    private void OnDeviceTurned(int degrees)
+    {
+        var upright = degrees is (>= 0 and < 30) or > 330 or (> 150 and < 210);
+        if (!upright)
+        {
+            return;
+        }
+
+        _turns?.Disable();
+        if (_activity is { RequestedOrientation: ScreenOrientation.SensorPortrait } activity)
+        {
+            activity.RequestedOrientation = ScreenOrientation.Unspecified;
+        }
+    }
+
+    /// <summary>
+    /// Checks whether the user lets the screen turn with the device.
+    /// </summary>
+    /// <returns><see langword="true"/> when it turns.</returns>
+    private bool TurnsByItself()
+        => global::Android.Provider.Settings.System.GetInt(context.ContentResolver, global::Android.Provider.Settings.System.AccelerometerRotation, 0) == 1;
 
     /// <summary>
     /// Takes the sound of the phone for a session or gives it back: other players stop, and a call takes it away.
@@ -264,7 +320,7 @@ internal sealed class AndroidPlatform(Context context) : IMobilePlatform
     {
         if (active && _audioFocus is null)
         {
-            var attributes = new AudioAttributes.Builder().SetUsage(AudioUsageKind.VoiceCommunication)!.Build();
+            var attributes = new AudioAttributes.Builder().SetUsage(AudioUsageKind.Media)!.SetContentType(AudioContentType.Movie)!.Build();
             _audioFocus = new AudioFocusRequestClass.Builder(AudioFocus.Gain)
                 .SetAudioAttributes(attributes!)
                 .SetOnAudioFocusChangeListener(new SoundListener(interrupted => AudioInterrupted?.Invoke(this, interrupted)))
@@ -277,40 +333,6 @@ internal sealed class AndroidPlatform(Context context) : IMobilePlatform
             _audioFocus = null;
         }
     }
-
-    /// <summary>
-    /// Sends the voices to the loudspeaker or back to where the system sends them.
-    /// </summary>
-    /// <param name="audio">The audio service.</param>
-    /// <param name="loudspeaker">Whether to use the loudspeaker.</param>
-    private static void UseLoudspeaker(AudioManager audio, bool loudspeaker)
-    {
-        if (!OperatingSystem.IsAndroidVersionAtLeast(31))
-        {
-#pragma warning disable CA1422
-            audio.SpeakerphoneOn = loudspeaker;
-#pragma warning restore CA1422
-            return;
-        }
-
-        var device = audio.AvailableCommunicationDevices.FirstOrDefault(d => d.Type == AudioDeviceType.BuiltinSpeaker);
-        if (loudspeaker && device is not null)
-        {
-            audio.SetCommunicationDevice(device);
-        }
-        else
-        {
-            audio.ClearCommunicationDevice();
-        }
-    }
-
-    /// <summary>
-    /// Checks whether a headset is connected.
-    /// </summary>
-    /// <param name="audio">The audio service.</param>
-    /// <returns><see langword="true"/> when there is one.</returns>
-    private static bool HasHeadset(AudioManager audio)
-        => audio.GetDevices(GetDevicesTargets.Outputs)!.Any(device => _headsets.Contains(device.Type));
 
     /// <summary>
     /// Checks whether a permission was given.
@@ -327,6 +349,17 @@ internal sealed class AndroidPlatform(Context context) : IMobilePlatform
     {
         /// <inheritdoc />
         public override void OnAvailable(Network network) => available();
+    }
+
+    /// <summary>
+    /// Tells how far the device is turned from upright.
+    /// </summary>
+    /// <param name="context">The application context.</param>
+    /// <param name="turned">Told the angle in degrees.</param>
+    private sealed class TurnListener(Context context, Action<int> turned) : OrientationEventListener(context)
+    {
+        /// <inheritdoc />
+        public override void OnOrientationChanged(int orientation) => turned(orientation);
     }
 
     /// <summary>

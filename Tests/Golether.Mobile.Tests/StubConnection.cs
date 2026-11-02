@@ -61,6 +61,18 @@ internal sealed class StubConnection : IParticipantConnection
     /// <inheritdoc />
     public void RetryNow() => Retries++;
 
+    /// <summary>
+    /// Gets the picture of the user the connection was given last, or <see langword="null"/>.
+    /// </summary>
+    public byte[]? Avatar { get; private set; }
+
+    /// <inheritdoc />
+    public Task SetAvatarAsync(byte[]? image)
+    {
+        Avatar = image;
+        return Task.CompletedTask;
+    }
+
     /// <inheritdoc />
     public ValueTask DisposeAsync()
     {

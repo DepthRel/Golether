@@ -5,11 +5,28 @@ using Golether.Media.Player.Mpv;
 namespace Golether.Media.Player.Tests;
 
 /// <summary>
-/// Tests of the real libmpv prepared in <c>Native/&lt;runtime&gt;</c>: mouse bindings of the video and local volume.
-/// Skipped when the library is not there.
+/// Tests of the real libmpv prepared in <c>Native/&lt;runtime&gt;</c>: mouse bindings of the video, local volume and the
+/// options of a phone. Skipped when the library is not there.
 /// </summary>
 public sealed class MpvInputTests
 {
+    /// <summary>
+    /// The real libmpv knows every option of the cheap drawing of a phone and its hardware decoding: an unknown one
+    /// would stop the player from starting.
+    /// </summary>
+    /// <returns>A task that completes when the test is done.</returns>
+    [Fact]
+    public async Task LowPower_OptionsAreAccepted()
+    {
+        var library = FindLibrary();
+        Assert.SkipWhen(library is null, "libmpv is not prepared (run golether-components fetch).");
+        MpvLibraryResolver.PreferredPath = library;
+
+        var options = new MpvPlayerOptions { LowPower = true, HardwareDecoding = "mediacodec,mediacodec-copy" };
+        Assert.True(MpvPlayer.TryCreate(options, null, out var player, out var error), error);
+        await player!.DisposeAsync();
+    }
+
     /// <summary>
     /// A left click and a double click on the video are reported, other keys are not; volume and mute are accepted.
     /// </summary>

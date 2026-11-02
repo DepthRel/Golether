@@ -75,17 +75,17 @@ public sealed class PipelineDescriptionsTests
 
     /// <summary>
     /// Android uses the camera and the sound of the system: the voice preset turns on the echo cancellation of the
-    /// phone, and there is one camera and one microphone to choose from here.
+    /// phone, the voices play as media, and there is one camera and one microphone to choose from here.
     /// </summary>
     [Fact]
     public void Android_Sources()
     {
         var sources = new AndroidPipelineSources();
 
-        Assert.Equal("ahcsrc ! video/x-raw,width=[640,1280],height=[360,720]", sources.VideoSource(null));
+        Assert.Equal("ahcsrc ! video/x-raw,width=[640,1280],height=[360,720] ! videorate drop-only=true max-rate=15", sources.VideoSource(null));
         Assert.Equal("openslessrc preset=voice-communication", sources.AudioSource(null));
         Assert.Equal("openslessrc preset=voice-communication", sources.AudioSource(_microphone));
-        Assert.Equal("openslessink stream-type=voice", sources.AudioSink);
+        Assert.Equal("openslessink stream-type=media", sources.AudioSink);
     }
 
     /// <summary>
@@ -104,7 +104,7 @@ public sealed class PipelineDescriptionsTests
 
         var source = new AndroidPipelineSources().VideoSource(camera);
 
-        Assert.Equal($"ahcsrc device=1 ! video/x-raw,width=[640,1280],height=[360,720]{flip}", source);
+        Assert.Equal($"ahcsrc device=1 ! video/x-raw,width=[640,1280],height=[360,720] ! videorate drop-only=true max-rate=15{flip}", source);
     }
 
     /// <summary>

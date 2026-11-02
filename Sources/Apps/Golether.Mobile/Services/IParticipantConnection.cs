@@ -56,6 +56,14 @@ public interface IParticipantConnection : IAsyncDisposable
     Task RequestAsync(PlaybackRequest request);
 
     /// <summary>
+    /// Remembers the picture of the user and sends it into the session, if there is one yet; it goes in again after
+    /// joining and after every way back.
+    /// </summary>
+    /// <param name="image">The round picture as PNG, or <see langword="null"/> for none.</param>
+    /// <returns>A task that completes when the picture is sent.</returns>
+    Task SetAvatarAsync(byte[]? image);
+
+    /// <summary>
     /// Starts the next attempt to come back without waiting any longer: the network is here again.
     /// </summary>
     void RetryNow();

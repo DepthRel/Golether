@@ -48,6 +48,20 @@ internal static class MpvOptionList
             settings.Add(("force-window", "yes"));
         }
 
+        if (options.LowPower)
+        {
+            // What the built-in profile "fast" of mpv sets, spelled out so it does not depend on the version.
+            settings.Add(("scale", "bilinear"));
+            settings.Add(("dscale", "bilinear"));
+            settings.Add(("cscale", "bilinear"));
+            settings.Add(("dither-depth", "no"));
+            settings.Add(("correct-downscaling", "no"));
+            settings.Add(("linear-downscaling", "no"));
+            settings.Add(("sigmoid-upscaling", "no"));
+            settings.Add(("deband", "no"));
+            settings.Add(("hdr-compute-peak", "no"));
+        }
+
         if (!options.SubtitlesAtStart)
         {
             settings.Add(("sid", "no"));

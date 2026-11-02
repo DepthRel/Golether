@@ -3,10 +3,12 @@ using System.Globalization;
 using Avalonia.Platform.Storage;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using Golether.Client.Enums;
 using Golether.Client.Localization;
 using Golether.Client.Services;
 using Golether.Client.ViewModels;
 using Golether.Core.Data.Enums;
+using Golether.Core.Enums;
 using Golether.Core.Identity;
 using Golether.Core.Session;
 using Golether.Localization;
@@ -37,14 +39,35 @@ public sealed partial class MainViewModel : ObservableObject, ICameraTiles
     private const double UPRIGHT_SUBTITLE_SCALE = 1.5;
 
     /// <summary>
+    /// The largest image the picture of the user may be chosen from: a photo of a phone is far smaller, and a bigger
+    /// file would only fill the memory.
+    /// </summary>
+    private const long MAX_AVATAR_SOURCE_BYTES = 32L * 1024 * 1024;
+
+    /// <summary>
     /// How far the skip buttons move the film.
     /// </summary>
     private static readonly TimeSpan _skip = TimeSpan.FromSeconds(10);
 
     /// <summary>
+    /// The shortest time between two sounds of new messages: a burst of messages claps once, not in a rattle.
+    /// </summary>
+    private static readonly TimeSpan _messageSoundInterval = TimeSpan.FromSeconds(1);
+
+    /// <summary>
+    /// The version of the application, as three numbers; the package of the application carries the same.
+    /// </summary>
+    private static readonly string _version = (typeof(MainViewModel).Assembly.GetName().Version ?? new Version(0, 0, 0)).ToString(3);
+
+    /// <summary>
     /// The UI dispatcher.
     /// </summary>
     private readonly IUiDispatcher _dispatcher;
+
+    /// <summary>
+    /// The time source.
+    /// </summary>
+    private readonly TimeProvider _timeProvider;
 
     /// <summary>
     /// The system.
@@ -75,6 +98,27 @@ public sealed partial class MainViewModel : ObservableObject, ICameraTiles
     /// The pictures the participants chose.
     /// </summary>
     private readonly PeerAvatars _avatars;
+
+    /// <summary>
+    /// Decodes the shown pictures and the image of the picture of the user, upright.
+    /// </summary>
+    private readonly SkiaPictureCodec _pictures = new();
+
+    /// <summary>
+    /// The picture of the user as the others get it, or <see langword="null"/> when there is none.
+    /// </summary>
+    private byte[]? _ownAvatar;
+
+    /// <summary>
+    /// The sound of a new message, the clapperboard of the desktop, read once when it is first needed.
+    /// </summary>
+    private readonly Lazy<byte[]?> _messageSound = new(LoadMessageSound);
+
+    /// <summary>
+    /// When the sound of a new message was last played (a timestamp of <see cref="_timeProvider"/>), or
+    /// <see langword="null"/>.
+    /// </summary>
+    private long? _messageSoundPlayed;
 
     /// <summary>
     /// The services, once they are ready.
@@ -119,15 +163,18 @@ public sealed partial class MainViewModel : ObservableObject, ICameraTiles
     /// <param name="storage">Gives the file picker of the system.</param>
     /// <param name="start">Prepares the services.</param>
     /// <param name="decodeAvatar">Turns the bytes of a chosen picture into an image, or <see langword="null"/> for a bitmap.</param>
+    /// <param name="timeProvider">The time source, or <see langword="null"/> for the system clock.</param>
     public MainViewModel(
         IMobilePlatform platform,
         IUiDispatcher dispatcher,
         Func<IStorageProvider?> storage,
         Func<IFeatureAccess, Task<IMobileServices>> start,
-        Func<byte[], object?>? decodeAvatar = null)
+        Func<byte[], object?>? decodeAvatar = null,
+        TimeProvider? timeProvider = null)
     {
         _platform = platform ?? throw new ArgumentNullException(nameof(platform));
         _dispatcher = dispatcher ?? throw new ArgumentNullException(nameof(dispatcher));
+        _timeProvider = timeProvider ?? TimeProvider.System;
         _storage = storage ?? throw new ArgumentNullException(nameof(storage));
         _start = start ?? throw new ArgumentNullException(nameof(start));
         _avatars = new PeerAvatars(decodeAvatar);
@@ -137,8 +184,9 @@ public sealed partial class MainViewModel : ObservableObject, ICameraTiles
         _platform.NetworkReturned += (_, _) => _connection?.RetryNow();
 
         Chat = new ChatViewModel(_current, dispatcher);
+        Chat.LineAdded += (_, _) => AnnounceMessage();
         Drawing = new DrawingViewModel(_current, dispatcher, _features);
-        Gallery = new GalleryViewModel(_current, new SkiaPictureCodec());
+        Gallery = new GalleryViewModel(_current, _pictures);
         Gallery.PictureChanged += (_, _) => Drawing.Reset();
     }
 
@@ -251,6 +299,48 @@ public sealed partial class MainViewModel : ObservableObject, ICameraTiles
     public partial bool IsPaused { get; set; } = true;
 
     /// <summary>
+    /// Gets or sets a value indicating whether the film played to its end, so the button starts it again from the start.
+    /// </summary>
+    [ObservableProperty]
+    public partial bool IsEnded { get; set; }
+
+    /// <summary>
+    /// Gets or sets what the start of the film waits for: the seconds of a scheduled start or the readiness of the
+    /// participants; empty when it waits for nothing.
+    /// </summary>
+    [ObservableProperty]
+    public partial string StartText { get; set; } = string.Empty;
+
+    /// <summary>
+    /// Gets or sets a value indicating whether the user gave the film the whole screen: it stays on its side however
+    /// the device is held, until the user takes it back.
+    /// </summary>
+    [ObservableProperty]
+    public partial bool IsFullScreen { get; set; }
+
+    /// <summary>
+    /// Gets or sets a value indicating whether the user is asked to confirm leaving the session.
+    /// </summary>
+    [ObservableProperty]
+    public partial bool IsLeaveAsked { get; set; }
+
+    /// <summary>
+    /// Gets or sets the frame in which the user places a chosen image as their picture, or <see langword="null"/>.
+    /// </summary>
+    [ObservableProperty]
+    public partial AvatarEditorViewModel? AvatarEditor { get; set; }
+
+    /// <summary>
+    /// Gets a value indicating whether the user may choose their own picture.
+    /// </summary>
+    public bool CanChooseAvatar => _features.IsAvailable(PaidFeature.Avatar);
+
+    /// <summary>
+    /// Gets the version of the application, as the join screen shows it.
+    /// </summary>
+    public string VersionText => Texts.Format("About.Version", _version);
+
+    /// <summary>
     /// Gets the chat and the reactions.
     /// </summary>
     public ChatViewModel Chat { get; }
@@ -352,6 +442,7 @@ public sealed partial class MainViewModel : ObservableObject, ICameraTiles
 
             var name = await services.Settings.GetAsync(ClientSettings.DISPLAY_NAME, CancellationToken.None);
             DisplayName = name ?? string.Empty;
+            _ownAvatar = await LoadOwnAvatarAsync(services);
         }
         catch (Exception ex) when (ex is not (OutOfMemoryException or StackOverflowException))
         {
@@ -372,6 +463,12 @@ public sealed partial class MainViewModel : ObservableObject, ICameraTiles
             InviteLink = link;
         }
     }
+
+    /// <summary>
+    /// Reads the text the user copied, for the field of the invitation.
+    /// </summary>
+    /// <returns>The text, or <see langword="null"/> when nothing was copied.</returns>
+    public string? ReadClipboard() => _platform.ReadClipboardText();
 
     /// <summary>
     /// Reads the state of the session and of the player into the screen.
@@ -411,6 +508,8 @@ public sealed partial class MainViewModel : ObservableObject, ICameraTiles
         Chat.Tick();
         VideoAspect = Gallery.ShowsPicture ? Gallery.PictureAspect : services.Controls.GetVideoAspect();
         IsPaused = player.IsPaused;
+        IsEnded = snapshot.Playback is { State: PlayState.Paused, Cause: PlaybackCause.Ended };
+        StartText = DescribeStart(snapshot);
         PositionText = DisplayFormat.Position(player.Position);
         DurationText = DisplayFormat.Position(player.Duration);
         DurationSeconds = Math.Max(player.Duration?.TotalSeconds ?? 0, 1);
@@ -421,8 +520,8 @@ public sealed partial class MainViewModel : ObservableObject, ICameraTiles
     }
 
     /// <summary>
-    /// Answers the back button of the system: inside a session it never ends the session, which only the button for
-    /// that does. What lies on top goes first, then the application leaves the screen.
+    /// Answers the back button of the system: what lies on top goes first, then the film leaves the whole screen, and
+    /// then the user is asked whether to leave the session; the session never ends without the answer.
     /// </summary>
     /// <returns><see langword="true"/> when the button was used here.</returns>
     public bool GoBack()
@@ -432,7 +531,11 @@ public sealed partial class MainViewModel : ObservableObject, ICameraTiles
             return false;
         }
 
-        if (Gallery.IsGridOpen)
+        if (IsLeaveAsked)
+        {
+            IsLeaveAsked = false;
+        }
+        else if (Gallery.IsGridOpen)
         {
             Gallery.CloseGridCommand.Execute(null);
         }
@@ -444,9 +547,14 @@ public sealed partial class MainViewModel : ObservableObject, ICameraTiles
         {
             Drawing.TogglePen();
         }
+        else if (IsFullScreen)
+        {
+            // The film on the whole screen goes back upright first, as in the players people know.
+            ToggleFullScreen();
+        }
         else
         {
-            _platform.MoveToBackground();
+            IsLeaveAsked = true;
         }
 
         return true;
@@ -500,6 +608,13 @@ public sealed partial class MainViewModel : ObservableObject, ICameraTiles
         try
         {
             var invite = Invite.ParseLink(InviteLink.Trim());
+
+            // An old invitation is turned away here, before the cameras and the service of the session start for it.
+            if (invite.ExpiresAt <= _timeProvider.GetUtcNow())
+            {
+                throw new SessionJoinException(Texts.Get("Session.Error.InviteExpired"));
+            }
+
             var name = ParticipantInfo.NormalizeDisplayName(DisplayName);
             DisplayName = name;
             await services.Settings.SetAsync(ClientSettings.DISPLAY_NAME, name, CancellationToken.None);
@@ -513,6 +628,12 @@ public sealed partial class MainViewModel : ObservableObject, ICameraTiles
             connection.Changed += (_, _) => _dispatcher.Post(Refresh);
             connection.AvatarReceived += (_, update) => _dispatcher.Post(() => ShowAvatar(update));
             _connection = connection;
+            if (_ownAvatar is { } avatar)
+            {
+                _avatars.Apply(new AvatarUpdate(services.Identity.PeerId, avatar, true));
+                await connection.SetAvatarAsync(avatar);
+            }
+
             _platform.SetSessionActive(true);
 
             await connection.JoinAsync(invite, cancellation.Token);
@@ -523,6 +644,118 @@ public sealed partial class MainViewModel : ObservableObject, ICameraTiles
             await FinishAsync(ex is OperationCanceledException ? null : ex.Message);
         }
     }
+
+    /// <summary>
+    /// Puts the copied invitation into its field.
+    /// </summary>
+    [RelayCommand]
+    private void PasteInvite()
+    {
+        if (ReadClipboard() is { } text && !string.IsNullOrWhiteSpace(text))
+        {
+            OpenInvite(text.Trim());
+        }
+    }
+
+    /// <summary>
+    /// Empties the field of the invitation for another one.
+    /// </summary>
+    [RelayCommand]
+    private void ClearInvite()
+    {
+        InviteLink = string.Empty;
+        Error = string.Empty;
+    }
+
+    /// <summary>
+    /// Gives the film the whole screen on its side, or takes it back upright.
+    /// </summary>
+    [RelayCommand]
+    private void ToggleFullScreen()
+    {
+        IsFullScreen = !IsFullScreen;
+        _platform.HoldLandscape(IsFullScreen);
+    }
+
+    /// <summary>
+    /// Opens the own picture in its frame as the user left it, with the image it was made from; without one the user
+    /// chooses an image first.
+    /// </summary>
+    /// <returns>A task that completes when the frame is open or the choice was given up.</returns>
+    [RelayCommand]
+    private async Task EditAvatarAsync()
+    {
+        if (!CanChooseAvatar || _services is not { } services)
+        {
+            return;
+        }
+
+        StoredAvatar? stored = null;
+        try
+        {
+            stored = await services.Avatars.LoadForEditingAsync();
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            // A kept picture that cannot be read is as good as none: the user chooses an image.
+        }
+
+        if (stored is not null && AvatarEditorViewModel.TryOpen(stored.Original, _pictures, stored.Framing) is { } editor)
+        {
+            AvatarEditor = editor;
+            return;
+        }
+
+        await PickAvatarAsync();
+    }
+
+    /// <summary>
+    /// Lets the user choose an image for their picture and opens it in the frame.
+    /// </summary>
+    /// <returns>A task that completes when the image is chosen or the choice was given up.</returns>
+    [RelayCommand]
+    private async Task PickAvatarAsync()
+    {
+        if (!CanChooseAvatar || _storage() is not { } storage)
+        {
+            return;
+        }
+
+        var files = await storage.OpenFilePickerAsync(new FilePickerOpenOptions
+        {
+            Title = Texts.Get("Avatar.Pick"),
+            AllowMultiple = false,
+            FileTypeFilter = [FilePickerFileTypes.ImageAll],
+        });
+        if (files.Count == 0)
+        {
+            return;
+        }
+
+        using var file = files[0];
+        try
+        {
+            await using var source = await file.OpenReadAsync();
+            var bytes = await ReadLimitedAsync(source, MAX_AVATAR_SOURCE_BYTES);
+            AvatarEditor = AvatarEditorViewModel.TryOpen(bytes, _pictures) ?? throw new InvalidDataException(Texts.Get("Avatar.BadImage.Title"));
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidOperationException)
+        {
+            Error = Texts.Get("Avatar.BadImage.Title");
+        }
+    }
+
+    /// <summary>
+    /// Leaves the picture as it was.
+    /// </summary>
+    [RelayCommand]
+    private void CancelAvatar() => AvatarEditor = null;
+
+    /// <summary>
+    /// Asks the user whether to leave the session: a single touch of the button must not end it.
+    /// </summary>
+    [RelayCommand]
+    private void AskLeave() => IsLeaveAsked = true;
 
     /// <summary>
     /// Takes a language the user chose.
@@ -608,10 +841,13 @@ public sealed partial class MainViewModel : ObservableObject, ICameraTiles
     }
 
     /// <summary>
-    /// Starts or pauses the film for everybody.
+    /// Starts or pauses the film for everybody; a film that played to its end starts again from the start.
     /// </summary>
     [RelayCommand]
-    private void TogglePlay() => Request(new PlaybackRequest(IsPaused ? PlaybackRequestKind.Play : PlaybackRequestKind.Pause, null));
+    private void TogglePlay()
+        => Request(IsEnded
+            ? new PlaybackRequest(PlaybackRequestKind.Play, TimeSpan.Zero)
+            : new PlaybackRequest(IsPaused ? PlaybackRequestKind.Play : PlaybackRequestKind.Pause, null));
 
     /// <summary>
     /// Moves the film back for everybody.
@@ -655,6 +891,7 @@ public sealed partial class MainViewModel : ObservableObject, ICameraTiles
         }
 
         Volume?.RefreshTexts();
+        OnPropertyChanged(nameof(VersionText));
     }
 
     /// <summary>
@@ -742,6 +979,138 @@ public sealed partial class MainViewModel : ObservableObject, ICameraTiles
 
         _shownVerification = text;
         VerificationParts = code is null ? [] : [.. code.Words, code.Number.ToString("00", CultureInfo.InvariantCulture)];
+    }
+
+    /// <summary>
+    /// Takes the picture the user framed: it is kept for later sessions, shown on this screen and sent to the others.
+    /// </summary>
+    /// <param name="avatar">The circle of the frame as PNG.</param>
+    /// <returns>A task that completes when the picture is kept and sent.</returns>
+    public async Task ApplyAvatarAsync(byte[] avatar)
+    {
+        ArgumentNullException.ThrowIfNull(avatar);
+        if (AvatarEditor is not { } editor || _services is not { } services)
+        {
+            return;
+        }
+
+        AvatarEditor = null;
+        try
+        {
+            await services.Avatars.SaveAsync(new AvatarSelection(avatar, editor.Original, editor.Framing));
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            Error = Texts.Get("Avatar.NotSaved.Title");
+            return;
+        }
+
+        _ownAvatar = avatar;
+        if (_connection is { } connection)
+        {
+            ShowAvatar(new AvatarUpdate(services.Identity.PeerId, avatar, true));
+            await connection.SetAvatarAsync(avatar);
+        }
+    }
+
+    /// <summary>
+    /// Reads the picture the user chose before; a picture that cannot be read is as good as none.
+    /// </summary>
+    /// <param name="services">The services.</param>
+    /// <returns>The picture, or <see langword="null"/>.</returns>
+    private static async Task<byte[]?> LoadOwnAvatarAsync(IMobileServices services)
+    {
+        try
+        {
+            return await services.Avatars.LoadCurrentAsync();
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            return null;
+        }
+    }
+
+    /// <summary>
+    /// Reads a chosen file, as long as it is not larger than allowed.
+    /// </summary>
+    /// <param name="source">The file.</param>
+    /// <param name="limit">The most bytes.</param>
+    /// <returns>The bytes.</returns>
+    /// <exception cref="InvalidDataException">The file is larger.</exception>
+    private static async Task<byte[]> ReadLimitedAsync(Stream source, long limit)
+    {
+        using var copy = new MemoryStream();
+        var buffer = new byte[81920];
+        int read;
+        while ((read = await source.ReadAsync(buffer)) > 0)
+        {
+            if (copy.Length + read > limit)
+            {
+                throw new InvalidDataException(Texts.Get("Avatar.BadImage.Title"));
+            }
+
+            copy.Write(buffer, 0, read);
+        }
+
+        return copy.ToArray();
+    }
+
+    /// <summary>
+    /// Claps the clapperboard when somebody else writes in the chat, as the desktop does. The sender hears nothing for
+    /// their own message, and reactions are silent: they float over the film and come in handfuls.
+    /// </summary>
+    private void AnnounceMessage()
+    {
+        if (Chat.Lines.LastOrDefault() is not { IsFromOther: true } || _messageSound.Value is not { } sound)
+        {
+            return;
+        }
+
+        var now = _timeProvider.GetTimestamp();
+        if (_messageSoundPlayed is { } last && _timeProvider.GetElapsedTime(last, now) < _messageSoundInterval)
+        {
+            return;
+        }
+
+        _messageSoundPlayed = now;
+        _platform.Sounds.Play(sound);
+    }
+
+    /// <summary>
+    /// Reads the sound of a new message; a build without it stays silent rather than broken.
+    /// </summary>
+    /// <returns>The sound, or <see langword="null"/>.</returns>
+    private static byte[]? LoadMessageSound()
+    {
+        try
+        {
+            return ClapperboardSound.Load();
+        }
+        catch (InvalidOperationException)
+        {
+            return null;
+        }
+    }
+
+    /// <summary>
+    /// Words what the start of the film waits for, as the desktop does: a start pressed here comes a few seconds later,
+    /// and without a word the button would seem broken.
+    /// </summary>
+    /// <param name="snapshot">The session.</param>
+    /// <returns>The text, empty when the film waits for nothing.</returns>
+    private static string DescribeStart(SessionSnapshot snapshot)
+    {
+        if (snapshot.Playback is { State: PlayState.Paused, Cause: PlaybackCause.WaitingForParticipants })
+        {
+            return Texts.Get("Main.Waiting.Everybody");
+        }
+
+        if (snapshot.Local?.StartsIn is not { } startsIn)
+        {
+            return string.Empty;
+        }
+
+        return Texts.Format("Main.StartsIn", Math.Ceiling(startsIn.TotalSeconds).ToString("0", CultureInfo.InvariantCulture));
     }
 
     /// <summary>
@@ -890,7 +1259,16 @@ public sealed partial class MainViewModel : ObservableObject, ICameraTiles
         var connection = _connection;
         _connection = null;
         _microphoneTaken = false;
+        IsLeaveAsked = false;
+        AvatarEditor = null;
+        if (IsFullScreen)
+        {
+            ToggleFullScreen();
+        }
+
         Screen = MobileScreen.Join;
+        StartText = string.Empty;
+        IsEnded = false;
         Error = reason ?? string.Empty;
         ReconnectMessage = string.Empty;
         Gallery.Update(null, Participants);

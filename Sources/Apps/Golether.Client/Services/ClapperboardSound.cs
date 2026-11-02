@@ -1,4 +1,4 @@
-namespace Golether.UI.Services;
+namespace Golether.Client.Services;
 
 /// <summary>
 /// The sound of a film clapperboard that tells about a new chat message: a short dry wooden clack built into the
@@ -9,7 +9,7 @@ public static class ClapperboardSound
     /// <summary>
     /// The name of the built-in file.
     /// </summary>
-    private const string RESOURCE_NAME = "Golether.UI.Sounds.clapperboard.wav";
+    private const string RESOURCE_NAME = "Golether.Client.Sounds.clapperboard.wav";
 
     /// <summary>
     /// The length of the header of a WAV file in bytes.

@@ -1,3 +1,4 @@
+using System.Threading.Channels;
 using Microsoft.Extensions.Logging;
 using Golether.Core.Identity;
 using Golether.Media.Conference;
@@ -10,10 +11,23 @@ namespace Golether.Session;
 /// </summary>
 /// <remarks>
 /// Of two participants, the one with the smaller identifier creates the offer, so both sides agree without extra
-/// messages.
+/// messages. The work with the backend runs in a queue of its own, in the order it came: the loop that reads the
+/// control channel only puts it there. A backend that stops answering (a native pipeline that hangs) then costs the
+/// cameras, never the chat, the pen, the statuses or the goodbye that travel the same channel.
 /// </remarks>
 public sealed class ConferenceLink : IAsyncDisposable
 {
+    /// <summary>
+    /// The most work waiting for the backend at once: a backend that stopped answering must not let the network fill
+    /// the memory with signals.
+    /// </summary>
+    private const int MAX_PENDING = 256;
+
+    /// <summary>
+    /// How long stopping waits for the work in progress: a hung backend does not hold the end of the session.
+    /// </summary>
+    private static readonly TimeSpan _stopPatience = TimeSpan.FromSeconds(2);
+
     /// <summary>
     /// The conferencing backend.
     /// </summary>
@@ -35,19 +49,25 @@ public sealed class ConferenceLink : IAsyncDisposable
     private readonly ILogger _logger;
 
     /// <summary>
-    /// Serializes peer set updates.
+    /// The work for the backend, in the order it came.
     /// </summary>
-    private readonly SemaphoreSlim _gate = new(1, 1);
+    private readonly Channel<(Func<Task> Operation, string What)> _work = Channel.CreateBounded<(Func<Task> Operation, string What)>(
+        new BoundedChannelOptions(MAX_PENDING) { SingleReader = true, FullMode = BoundedChannelFullMode.DropWrite });
 
     /// <summary>
-    /// The connected participants.
+    /// Takes the work out of the queue one by one.
+    /// </summary>
+    private Task _worker = Task.CompletedTask;
+
+    /// <summary>
+    /// The connected participants; only the queue touches them.
     /// </summary>
     private readonly HashSet<PeerId> _connected = [];
 
     /// <summary>
     /// Whether the link was started.
     /// </summary>
-    private bool _started;
+    private volatile bool _started;
 
     /// <summary>
     /// Initializes a new instance of the <see cref="ConferenceLink"/> class.
@@ -150,15 +170,15 @@ public sealed class ConferenceLink : IAsyncDisposable
 
         _started = true;
         _media.SignalReady += OnSignalReady;
-        _ = RunAsync(() => _media.StartCaptureAsync(null, null, CancellationToken.None), "starting capture");
+        _worker = Task.Run(WorkAsync);
+        Enqueue(() => _media.StartCaptureAsync(null, null, CancellationToken.None), "starting capture");
     }
 
     /// <summary>
-    /// Connects to new participants and disconnects from those who left.
+    /// Connects to new participants and disconnects from those who left, in the queue of the backend.
     /// </summary>
     /// <param name="participants">The current participants (this device is ignored).</param>
-    /// <returns>A task that completes when the set is updated.</returns>
-    public async Task SyncAsync(IEnumerable<PeerId> participants)
+    public void Sync(IEnumerable<PeerId> participants)
     {
         if (!_started)
         {
@@ -166,42 +186,23 @@ public sealed class ConferenceLink : IAsyncDisposable
         }
 
         var wanted = participants.Where(p => p != _self && !p.IsEmpty).ToHashSet();
-        await _gate.WaitAsync().ConfigureAwait(false);
-        try
-        {
-            foreach (var peer in wanted.Except(_connected).ToArray())
-            {
-                _connected.Add(peer);
-                await RunAsync(() => _media.ConnectAsync(peer, IsOfferer(_self, peer), CancellationToken.None), "connecting").ConfigureAwait(false);
-            }
-
-            foreach (var peer in _connected.Except(wanted).ToArray())
-            {
-                _connected.Remove(peer);
-                await RunAsync(() => _media.DisconnectAsync(peer), "disconnecting").ConfigureAwait(false);
-            }
-        }
-        finally
-        {
-            _gate.Release();
-        }
+        Enqueue(() => UpdatePeersAsync(wanted), "updating the participants");
     }
 
     /// <summary>
-    /// Applies a signal received from a participant.
+    /// Applies a signal received from a participant, in the queue of the backend.
     /// </summary>
     /// <param name="source">The authenticated source.</param>
     /// <param name="kind">The kind.</param>
     /// <param name="payload">The payload.</param>
-    /// <returns>A task that completes when the signal was applied.</returns>
-    public Task ReceiveAsync(PeerId source, string kind, string payload)
+    public void Receive(PeerId source, string kind, string payload)
     {
         if (!_started || source == _self)
         {
-            return Task.CompletedTask;
+            return;
         }
 
-        return RunAsync(() => _media.HandleSignalAsync(new ConferenceSignal(source, kind, payload), CancellationToken.None), "applying a signal");
+        Enqueue(() => _media.HandleSignalAsync(new ConferenceSignal(source, kind, payload), CancellationToken.None), "applying a signal");
     }
 
     /// <summary>
@@ -217,10 +218,63 @@ public sealed class ConferenceLink : IAsyncDisposable
 
         _started = false;
         _media.SignalReady -= OnSignalReady;
+        _work.Writer.TryComplete();
+        await Task.WhenAny(_worker, Task.Delay(_stopPatience)).ConfigureAwait(false);
         await RunAsync(_media.StopAsync, "stopping").ConfigureAwait(false);
         SetRelay(null);
         SetStunServer(null);
         _connected.Clear();
+    }
+
+    /// <summary>
+    /// Puts work into the queue of the backend; when the queue is full the backend has stopped answering, and the work
+    /// is dropped.
+    /// </summary>
+    /// <param name="operation">The work.</param>
+    /// <param name="what">The description for the log.</param>
+    private void Enqueue(Func<Task> operation, string what)
+    {
+        if (!_work.Writer.TryWrite((operation, what)) && _started)
+        {
+            _logger.LogWarning("Conference: {What} dropped, the cameras do not answer", what);
+        }
+    }
+
+    /// <summary>
+    /// Takes the work out of the queue one by one, until the link stops.
+    /// </summary>
+    /// <returns>A task that completes when the queue is closed.</returns>
+    private async Task WorkAsync()
+    {
+        await foreach (var (operation, what) in _work.Reader.ReadAllAsync().ConfigureAwait(false))
+        {
+            if (!_started)
+            {
+                return;
+            }
+
+            await RunAsync(operation, what).ConfigureAwait(false);
+        }
+    }
+
+    /// <summary>
+    /// Connects to the new participants and disconnects from those who left. Runs in the queue of the backend.
+    /// </summary>
+    /// <param name="wanted">The other participants of the session.</param>
+    /// <returns>A task that completes when the set is updated.</returns>
+    private async Task UpdatePeersAsync(HashSet<PeerId> wanted)
+    {
+        foreach (var peer in wanted.Except(_connected).ToArray())
+        {
+            _connected.Add(peer);
+            await RunAsync(() => _media.ConnectAsync(peer, IsOfferer(_self, peer), CancellationToken.None), "connecting").ConfigureAwait(false);
+        }
+
+        foreach (var peer in _connected.Except(wanted).ToArray())
+        {
+            _connected.Remove(peer);
+            await RunAsync(() => _media.DisconnectAsync(peer), "disconnecting").ConfigureAwait(false);
+        }
     }
 
     /// <summary>

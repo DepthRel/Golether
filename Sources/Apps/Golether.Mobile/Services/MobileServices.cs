@@ -58,7 +58,8 @@ public sealed class MobileServices : IMobileServices
     /// <param name="identity">The device key.</param>
     /// <param name="player">The player.</param>
     /// <param name="language">The language of the application.</param>
-    private MobileServices(ServiceProvider provider, IMobilePlatform platform, DeviceIdentity identity, MpvPlayer player, ILanguageService language)
+    /// <param name="avatarsDirectory">The folder of the picture of the user.</param>
+    private MobileServices(ServiceProvider provider, IMobilePlatform platform, DeviceIdentity identity, MpvPlayer player, ILanguageService language, string avatarsDirectory)
     {
         _provider = provider;
         _platform = platform;
@@ -67,6 +68,7 @@ public sealed class MobileServices : IMobileServices
         Controls = new BackgroundPlayerControls(player, provider.GetRequiredService<ILogger<BackgroundPlayerControls>>());
         TrackFiles = new ImportedTrackFiles(Path.Combine(platform.CacheDirectory, TRACK_FILES_FOLDER));
         VoiceVolumes = new VoiceVolumeStore(Settings, _voiceVolumeSaveDelay);
+        Avatars = new AvatarStore(avatarsDirectory);
         Language = language;
     }
 
@@ -92,6 +94,9 @@ public sealed class MobileServices : IMobileServices
 
     /// <inheritdoc />
     public VoiceVolumeStore VoiceVolumes { get; }
+
+    /// <inheritdoc />
+    public IAvatarStore Avatars { get; }
 
     /// <inheritdoc />
     public ILanguageService Language { get; }
@@ -133,7 +138,11 @@ public sealed class MobileServices : IMobileServices
         var options = new MpvPlayerOptions
         {
             UseRenderApi = true,
-            HardwareDecoding = "mediacodec-copy",
+
+            // Decoded frames go to the drawing as images of the graphics, without a copy through the processor for
+            // every frame; a device without that falls back to the copy.
+            HardwareDecoding = "mediacodec,mediacodec-copy",
+            LowPower = true,
             DemuxerCacheSize = "64MiB",
             SubtitlesAtStart = features.IsAvailable(PaidFeature.Subtitles),
         };
@@ -142,7 +151,7 @@ public sealed class MobileServices : IMobileServices
             throw new InvalidOperationException(error);
         }
 
-        var services = new MobileServices(provider, platform, identity, player!, language);
+        var services = new MobileServices(provider, platform, identity, player!, language, paths.AvatarsDirectory);
         services.TrackFiles.Clear();
 
         return services;

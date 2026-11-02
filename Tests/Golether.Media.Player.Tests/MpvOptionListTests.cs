@@ -75,6 +75,32 @@ public sealed class MpvOptionListTests
     }
 
     /// <summary>
+    /// On a battery the film is drawn with the cheapest filters: the default ones keep the graphics of a phone busy for
+    /// every frame.
+    /// </summary>
+    [Fact]
+    public void Build_WithLowPower_UsesTheCheapFilters()
+    {
+        var options = MpvOptionList.Build(new MpvPlayerOptions { LowPower = true }, configDirectoryExists: false);
+
+        Assert.Equal(
+            [
+                .. _defaults,
+                ("scale", "bilinear"),
+                ("dscale", "bilinear"),
+                ("cscale", "bilinear"),
+                ("dither-depth", "no"),
+                ("correct-downscaling", "no"),
+                ("linear-downscaling", "no"),
+                ("sigmoid-upscaling", "no"),
+                ("deband", "no"),
+                ("hdr-compute-peak", "no"),
+                ("config", "no"),
+            ],
+            options);
+    }
+
+    /// <summary>
     /// Subtitles that must not appear are off from the start, so they do not flash before the first track update.
     /// </summary>
     [Fact]

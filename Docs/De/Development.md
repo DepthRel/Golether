@@ -156,6 +156,7 @@ nicht vertrauenswürdige Eingaben werden immer geprüft.
 | `Scripts/App/publish-linux.sh [linux-x64] [Release] [out]` | `.tar.gz` und `.zip` (wenn `zip` vorhanden ist), `install-desktop-entry.sh`, `.deb` (wo `dpkg-deb` vorhanden ist: Debian, Ubuntu, WSL) |
 | `Scripts/App/publish-macos.sh [osx-arm64\|osx-x64] ...` | `Golether.app` (Info.plist, Symbol, Ad-hoc-Signatur) in einem Archiv |
 | `Scripts/App/publish-linux.ps1 [-Runtime linux-x64]` | dasselbe Linux-Archiv, unter Windows in WSL gebaut (siehe unten) |
+| `Scripts/Android/publish-android.ps1` | `artifacts/publish/Golether-<version>-android.apk` für alle Prozessoren, mit dem Debug-Schlüssel dieses Rechners signiert: zum Installieren von Hand, nicht für einen Store (die nativen Komponenten baut `Scripts/Android/build-natives.ps1`) |
 | `Scripts/Assets/update-site-screenshot.ps1` | das Bild der Projektseite aus `Docs/images/screenshot.png` |
 | `Scripts/Assets/generate-installer-art.ps1` | die Bilder des Installationsassistenten (eine dunkle Fläche mit dem Logo und das Logo für die Kopfzeile) in `artifacts/installer-art`; beide Build-Skripte der Installationsprogramme rufen es selbst auf |
 | `Scripts/Assets/generate-icon.ps1` | `golether.ico`, PNG 256/512 aus der Geometrie von `golether.svg` |

@@ -29,6 +29,14 @@ public sealed class MainActivity : AvaloniaMainActivity
     protected override void OnCreate(Bundle? savedInstanceState)
     {
         base.OnCreate(savedInstanceState);
+
+        // On its side the film reaches into the cut-out of the camera as well; the view keeps the controls clear of it.
+        if (OperatingSystem.IsAndroidVersionAtLeast(28) && Window?.Attributes is { } attributes)
+        {
+            attributes.LayoutInDisplayCutoutMode = LayoutInDisplayCutoutMode.ShortEdges;
+            Window.Attributes = attributes;
+        }
+
         Platform.Attach(this);
         OpenLink(Intent);
 
@@ -73,22 +81,6 @@ public sealed class MainActivity : AvaloniaMainActivity
     {
         base.OnNewIntent(intent);
         OpenLink(intent);
-    }
-
-    /// <inheritdoc />
-    public override bool DispatchKeyEvent(KeyEvent? e)
-    {
-        if (e is { KeyCode: Keycode.VolumeUp or Keycode.VolumeDown } && Platform.IsSessionActive)
-        {
-            if (e.Action == KeyEventActions.Down)
-            {
-                Platform.ChangeVolume(e.KeyCode == Keycode.VolumeUp);
-            }
-
-            return true;
-        }
-
-        return base.DispatchKeyEvent(e);
     }
 
     /// <inheritdoc />

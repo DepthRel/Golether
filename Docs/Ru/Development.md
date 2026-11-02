@@ -149,6 +149,7 @@ GPL-совместимые зависимости, время через `TimePr
 | `Scripts/App/publish-linux.sh [linux-x64] [Release] [out]` | `.tar.gz` и `.zip` (если есть `zip`), `install-desktop-entry.sh`, `.deb` (где есть `dpkg-deb`: Debian, Ubuntu, WSL) |
 | `Scripts/App/publish-macos.sh [osx-arm64\|osx-x64] ...` | `Golether.app` (Info.plist, иконка, ad-hoc подпись) в архиве |
 | `Scripts/App/publish-linux.ps1 [-Runtime linux-x64]` | тот же Linux-архив, собранный с Windows внутри WSL (см. ниже) |
+| `Scripts/Android/publish-android.ps1` | `artifacts/publish/Golether-<версия>-android.apk` для всех процессоров, подписан отладочным ключом этого компьютера: для установки вручную, не для магазина (нативные компоненты собирает `Scripts/Android/build-natives.ps1`) |
 | `Scripts/Assets/update-site-screenshot.ps1` | картинка страницы проекта из `Docs/images/screenshot.png` |
 | `Scripts/Assets/generate-installer-art.ps1` | картинки мастера установки (тёмная панель с логотипом и логотип для шапки) в `artifacts/installer-art`; оба скрипта сборки установщиков вызывают его сами |
 | `Scripts/Assets/generate-icon.ps1` | `golether.ico`, PNG 256/512 из геометрии `golether.svg` |

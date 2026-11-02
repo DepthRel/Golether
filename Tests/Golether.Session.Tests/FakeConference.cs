@@ -39,6 +39,12 @@ internal sealed class FakeConference : IConferenceMedia
     /// </summary>
     public bool Stopped { get; private set; }
 
+    /// <summary>
+    /// Gets or sets a value indicating whether the backend never finishes applying a signal, as a hung native
+    /// pipeline would.
+    /// </summary>
+    public bool HangsOnSignals { get; set; }
+
     /// <inheritdoc />
     public bool IsAvailable => true;
 
@@ -103,7 +109,7 @@ internal sealed class FakeConference : IConferenceMedia
     public Task HandleSignalAsync(ConferenceSignal signal, CancellationToken cancellationToken)
     {
         Received.Enqueue(signal);
-        return Task.CompletedTask;
+        return HangsOnSignals ? new TaskCompletionSource().Task : Task.CompletedTask;
     }
 
     /// <inheritdoc />

@@ -53,6 +53,17 @@ internal sealed partial class WebRtcPeer : IDisposable
     private static readonly TimeSpan _connectTimeout = TimeSpan.FromSeconds(20);
 
     /// <summary>
+    /// The result of a promise that webrtcbin answered.
+    /// </summary>
+    private const int PROMISE_REPLIED = 2;
+
+    /// <summary>
+    /// How long webrtcbin may take to answer a step of the negotiation: it answers in milliseconds, and one that does
+    /// not answer at all must not keep the signaling of the peer waiting forever.
+    /// </summary>
+    private static readonly TimeSpan _negotiationTimeout = TimeSpan.FromSeconds(10);
+
+    /// <summary>
     /// The last <c>GstWebRTCICEConnectionState</c> reported by webrtcbin.
     /// </summary>
     private volatile int _iceState;
@@ -1071,7 +1082,7 @@ internal sealed partial class WebRtcPeer : IDisposable
         try
         {
             Signals.Emit(webrtc, action, SignalArg.Boxed(Gst.StructureGetType(), 0), SignalArg.Boxed(Gst.PromiseGetType(), promise));
-            if (Gst.PromiseWait(promise) != 2)
+            if (WaitForPromise(promise, _negotiationTimeout) != PROMISE_REPLIED)
             {
                 throw new GstException($"{action} was not answered.");
             }
@@ -1093,6 +1104,25 @@ internal sealed partial class WebRtcPeer : IDisposable
         {
             Gst.MiniObjectUnref(promise);
         }
+    }
+
+    /// <summary>
+    /// Waits for an answer of webrtcbin aside, so a pipeline that never answers holds the caller no longer than the
+    /// limit: the signaling of the peer, and with it the queue of the conference, would otherwise wait forever.
+    /// </summary>
+    /// <param name="promise">The promise handed to webrtcbin.</param>
+    /// <param name="timeout">How long to wait.</param>
+    /// <returns>The result of the promise; <see cref="PROMISE_REPLIED"/> when it was answered.</returns>
+    private static int WaitForPromise(nint promise, TimeSpan timeout)
+    {
+        var wait = Task.Run(() => Gst.PromiseWait(promise));
+        if (!wait.Wait(timeout))
+        {
+            Gst.PromiseInterrupt(promise);
+            wait.Wait();
+        }
+
+        return wait.Result;
     }
 
     /// <summary>
@@ -1124,7 +1154,10 @@ internal sealed partial class WebRtcPeer : IDisposable
         {
             Signals.Emit(_pipeline.Element("webrtc"), "set-remote-description",
                 SignalArg.Boxed(Gst.SessionDescriptionGetType(), description), SignalArg.Boxed(Gst.PromiseGetType(), promise));
-            Gst.PromiseWait(promise);
+            if (WaitForPromise(promise, _negotiationTimeout) != PROMISE_REPLIED)
+            {
+                throw new GstException("set-remote-description was not answered.");
+            }
         }
         finally
         {

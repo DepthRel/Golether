@@ -546,7 +546,7 @@ public sealed class ParticipantSession : IAsyncDisposable
         // reach the others directly through the routers as well.
         _conference?.SetStunServer(invite.Rendezvous?.StunUri);
         _conference?.Start();
-        _ = SyncConferenceAsync();
+        SyncConference();
         if (welcome.Media is not null)
         {
             await PrepareMediaAsync(welcome.Media, cancellationToken).ConfigureAwait(false);
@@ -615,7 +615,7 @@ public sealed class ParticipantSession : IAsyncDisposable
             _playerGate.Release();
         }
 
-        await channel.SendAsync(new PlaybackRequestMessage(request), cancellationToken).ConfigureAwait(false);
+        await SendAsync(channel, new PlaybackRequestMessage(request), cancellationToken).ConfigureAwait(false);
     }
 
     /// <summary>
@@ -630,7 +630,7 @@ public sealed class ParticipantSession : IAsyncDisposable
         var channel = _channel ?? throw new InvalidOperationException(Texts.Get("Session.Error.NotJoined"));
         if (ChatMessage.Create(kind, text) is { } message)
         {
-            await channel.SendAsync(message, cancellationToken).ConfigureAwait(false);
+            await SendAsync(channel, message, cancellationToken).ConfigureAwait(false);
         }
     }
 
@@ -647,7 +647,7 @@ public sealed class ParticipantSession : IAsyncDisposable
         var channel = _channel ?? throw new InvalidOperationException(Texts.Get("Session.Error.NotJoined"));
         if (DrawMessage.Create(strokeId, phase, points) is { } message)
         {
-            await channel.SendAsync(message, cancellationToken).ConfigureAwait(false);
+            await SendAsync(channel, message, cancellationToken).ConfigureAwait(false);
         }
     }
 
@@ -660,7 +660,7 @@ public sealed class ParticipantSession : IAsyncDisposable
     public async Task SendAvatarAsync(byte[]? image, CancellationToken cancellationToken)
     {
         var channel = _channel ?? throw new InvalidOperationException(Texts.Get("Session.Error.NotJoined"));
-        await channel.SendAsync(new AvatarMessage(image, null), cancellationToken).ConfigureAwait(false);
+        await SendAsync(channel, new AvatarMessage(image, null), cancellationToken).ConfigureAwait(false);
     }
 
     /// <summary>
@@ -673,7 +673,7 @@ public sealed class ParticipantSession : IAsyncDisposable
     public async Task ShowItemAsync(string catalogId, int index, CancellationToken cancellationToken)
     {
         var channel = _channel ?? throw new InvalidOperationException(Texts.Get("Session.Error.NotJoined"));
-        await channel.SendAsync(new GalleryShowMessage(catalogId, index, 0, null), cancellationToken).ConfigureAwait(false);
+        await SendAsync(channel, new GalleryShowMessage(catalogId, index, 0, null), cancellationToken).ConfigureAwait(false);
     }
 
     /// <summary>
@@ -712,7 +712,7 @@ public sealed class ParticipantSession : IAsyncDisposable
             var waiting = _thumbnailRequests.GetOrAdd(key, fresh);
             if (ReferenceEquals(waiting, fresh))
             {
-                await channel.SendAsync(new ThumbnailMessage(catalogId, index, null), cancellationToken).ConfigureAwait(false);
+                await SendAsync(channel, new ThumbnailMessage(catalogId, index, null), cancellationToken).ConfigureAwait(false);
             }
 
             return await waiting.Task.WaitAsync(_thumbnailPatience, _timeProvider, cancellationToken).ConfigureAwait(false);
@@ -1094,7 +1094,7 @@ public sealed class ParticipantSession : IAsyncDisposable
         {
             while (!cancellationToken.IsCancellationRequested)
             {
-                var message = await _channel!.ReceiveAsync(cancellationToken).ConfigureAwait(false);
+                var message = await ReceiveOrSilenceAsync(_channel!, cancellationToken).ConfigureAwait(false);
                 switch (message)
                 {
                     case null:
@@ -1106,11 +1106,11 @@ public sealed class ParticipantSession : IAsyncDisposable
                         OnState(stateMessage.State);
                         break;
                     case ConferenceSignalMessage { Kind.Length: <= 16, Payload.Length: <= 64 * 1024 } signal:
-                        await (_conference?.ReceiveAsync(signal.Peer, signal.Kind, signal.Payload) ?? Task.CompletedTask).ConfigureAwait(false);
+                        _conference?.Receive(signal.Peer, signal.Kind, signal.Payload);
                         break;
                     case ParticipantsMessage { Participants: not null } participants:
                         OnParticipants(participants);
-                        await SyncConferenceAsync().ConfigureAwait(false);
+                        SyncConference();
                         break;
                     case MediaChangedMessage media when media.Media is not null:
                         media.Media.Validate();
@@ -1191,6 +1191,52 @@ public sealed class ParticipantSession : IAsyncDisposable
     }
 
     /// <summary>
+    /// Reads the next message of the host. The host sends at least every status interval, so a long silence is a
+    /// connection that broke without a word, and the way back starts instead of waiting for nothing.
+    /// </summary>
+    /// <param name="channel">The control channel.</param>
+    /// <param name="cancellationToken">Stops the loop.</param>
+    /// <returns>The message, or <see langword="null"/> when the host closed the channel.</returns>
+    /// <exception cref="IOException">The host was silent too long.</exception>
+    private async Task<SessionMessage?> ReceiveOrSilenceAsync(SessionMessageChannel channel, CancellationToken cancellationToken)
+    {
+        using var timer = new CancellationTokenSource(_options.SilenceTimeout, _timeProvider);
+        using var silence = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, timer.Token);
+        try
+        {
+            return await channel.ReceiveAsync(silence.Token).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException) when (timer.IsCancellationRequested && !cancellationToken.IsCancellationRequested)
+        {
+            throw new IOException("The host was silent for too long.");
+        }
+    }
+
+    /// <summary>
+    /// Sends a message to the host within the time limit of a message. A host that stopped reading leaves the
+    /// connection as good as broken: it is closed, which starts the way back, instead of every later message (the
+    /// statuses, the chat, the strokes) waiting behind the stuck one forever.
+    /// </summary>
+    /// <param name="channel">The control channel.</param>
+    /// <param name="message">The message.</param>
+    /// <param name="cancellationToken">The cancellation token.</param>
+    /// <returns>A task that completes when the message was sent.</returns>
+    /// <exception cref="IOException">The message was not sent in time; the connection is closed.</exception>
+    private async Task SendAsync(SessionMessageChannel channel, SessionMessage message, CancellationToken cancellationToken)
+    {
+        try
+        {
+            await channel.SendAsync(message, _options.SendTimeout, cancellationToken).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+        {
+            _logger.LogWarning("A message to the host was not sent in time; the connection is closed");
+            await channel.DisposeAsync().ConfigureAwait(false);
+            throw new IOException(Texts.Get("Session.Error.ConnectionLost"));
+        }
+    }
+
+    /// <summary>
     /// Shows a chat message relayed by the host.
     /// </summary>
     /// <param name="message">The clean message.</param>
@@ -1219,7 +1265,7 @@ public sealed class ParticipantSession : IAsyncDisposable
         {
             for (var probe = 0; !cancellationToken.IsCancellationRequested; probe++)
             {
-                await _channel!.SendAsync(new ClockPingMessage(_monotonic.NowMicroseconds), cancellationToken).ConfigureAwait(false);
+                await SendAsync(_channel!, new ClockPingMessage(_monotonic.NowMicroseconds), cancellationToken).ConfigureAwait(false);
                 var delay = probe < INITIAL_PROBES ? TimeSpan.FromMilliseconds(300) : _options.ClockProbeInterval;
                 await Task.Delay(delay, _timeProvider, cancellationToken).ConfigureAwait(false);
             }
@@ -1267,7 +1313,7 @@ public sealed class ParticipantSession : IAsyncDisposable
                 if (_timeProvider.GetElapsedTime(lastReport) >= _options.StatusInterval)
                 {
                     lastReport = _timeProvider.GetTimestamp();
-                    await _channel!.SendAsync(new StatusReportMessage(BuildStatus()), cancellationToken).ConfigureAwait(false);
+                    await SendAsync(_channel!, new StatusReportMessage(BuildStatus()), cancellationToken).ConfigureAwait(false);
                     Changed?.Invoke(this, EventArgs.Empty);
                 }
             }
@@ -1286,19 +1332,18 @@ public sealed class ParticipantSession : IAsyncDisposable
     {
         if (_channel is { } channel && _disposed == 0)
         {
-            await channel.SendAsync(new ConferenceSignalMessage(signal.PeerId, signal.Kind, signal.Payload), _stopping.Token).ConfigureAwait(false);
+            await SendAsync(channel, new ConferenceSignalMessage(signal.PeerId, signal.Kind, signal.Payload), _stopping.Token).ConfigureAwait(false);
         }
     }
 
     /// <summary>
-    /// Connects the cameras of the other participants.
+    /// Connects the cameras of the other participants; the connecting runs aside.
     /// </summary>
-    /// <returns>A task that completes when the set is updated.</returns>
-    private Task SyncConferenceAsync()
+    private void SyncConference()
     {
         if (_conference is null)
         {
-            return Task.CompletedTask;
+            return;
         }
 
         PeerId[] peers;
@@ -1307,7 +1352,7 @@ public sealed class ParticipantSession : IAsyncDisposable
             peers = _participants.Select(p => p.Info.PeerId).ToArray();
         }
 
-        return _conference.SyncAsync(peers);
+        _conference.Sync(peers);
     }
 
     /// <summary>

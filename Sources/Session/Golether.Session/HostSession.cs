@@ -713,7 +713,7 @@ public sealed class HostSession : IAsyncDisposable
             _avatars.TryRemove(peerId, out _);
             await TrySendAsync(connection, new RejectedMessage(RejectReason.Removed, nameof(RejectReason.Removed))).ConfigureAwait(false);
             Raise(peerId, Texts.Format("Session.Event.ParticipantRemoved", connection.Info.DisplayName));
-            await SyncConferenceAsync().ConfigureAwait(false);
+            SyncConference();
             await BroadcastParticipantsAsync().ConfigureAwait(false);
 
             await CloseAfterFarewellAsync(connection, Task.Delay(_farewellTime, _timeProvider)).ConfigureAwait(false);
@@ -918,7 +918,7 @@ public sealed class HostSession : IAsyncDisposable
 
             while (!cancellationToken.IsCancellationRequested)
             {
-                var message = await channel.ReceiveAsync(cancellationToken).ConfigureAwait(false);
+                var message = await ReceiveOrSilenceAsync(channel, cancellationToken).ConfigureAwait(false);
                 if (message is null or ByeMessage)
                 {
                     return;
@@ -944,12 +944,35 @@ public sealed class HostSession : IAsyncDisposable
             {
                 _avatars.TryRemove(peer, out _);
                 Raise(peer, Texts.Format("Session.Event.ParticipantLeft", connection.Info.DisplayName));
-                await SyncConferenceAsync().ConfigureAwait(false);
+                SyncConference();
                 await BroadcastParticipantsAsync().ConfigureAwait(false);
             }
 
             await channel.DisposeAsync().ConfigureAwait(false);
             connection?.MarkClosed();
+        }
+    }
+
+    /// <summary>
+    /// Reads the next message of an admitted participant. A participant sends at least every status interval, so a
+    /// long silence is a connection that broke without a word, and the participant is let go instead of hanging in
+    /// the session.
+    /// </summary>
+    /// <param name="channel">The control channel.</param>
+    /// <param name="cancellationToken">Stops the session.</param>
+    /// <returns>The message, or <see langword="null"/> when the participant closed the channel.</returns>
+    /// <exception cref="IOException">The participant was silent too long.</exception>
+    private async Task<SessionMessage?> ReceiveOrSilenceAsync(SessionMessageChannel channel, CancellationToken cancellationToken)
+    {
+        using var timer = new CancellationTokenSource(_options.SilenceTimeout, _timeProvider);
+        using var silence = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, timer.Token);
+        try
+        {
+            return await channel.ReceiveAsync(silence.Token).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException) when (timer.IsCancellationRequested && !cancellationToken.IsCancellationRequested)
+        {
+            throw new IOException("The participant was silent for too long.");
         }
     }
 
@@ -1051,7 +1074,7 @@ public sealed class HostSession : IAsyncDisposable
             cancellationToken).ConfigureAwait(false);
         _logger.LogInformation("Admitted {Peer}", peer.ToShortString());
         Raise(peer, Texts.Format("Session.Event.ParticipantJoined", name));
-        _ = SyncConferenceAsync();
+        SyncConference();
         await BroadcastParticipantsAsync().ConfigureAwait(false);
 
         // The pictures and the avatars go last and are not waited for: they are by far the largest messages of a
@@ -1157,8 +1180,10 @@ public sealed class HostSession : IAsyncDisposable
         switch (message)
         {
             case ClockPingMessage ping:
+                // The answer has the same time limit as everything else sent: a participant that stopped reading must
+                // not hold this loop, or nothing it says afterwards (its goodbye included) would be read.
                 var received = _clock.NowMicroseconds;
-                await connection.Channel.SendAsync(new ClockPongMessage(ping.ClientSendTime, received, _clock.NowMicroseconds), cancellationToken).ConfigureAwait(false);
+                await TrySendAsync(connection, new ClockPongMessage(ping.ClientSendTime, received, _clock.NowMicroseconds)).ConfigureAwait(false);
                 break;
 
             case PlaybackRequestMessage request:
@@ -1183,7 +1208,7 @@ public sealed class HostSession : IAsyncDisposable
             case ConferenceSignalMessage { Kind.Length: <= 16, Payload.Length: <= 64 * 1024 } signal:
                 if (signal.Peer == _identity.PeerId)
                 {
-                    await (_conference?.ReceiveAsync(connection.Info.PeerId, signal.Kind, signal.Payload) ?? Task.CompletedTask).ConfigureAwait(false);
+                    _conference?.Receive(connection.Info.PeerId, signal.Kind, signal.Payload);
                 }
                 else if (_participants.TryGetValue(signal.Peer, out var target))
                 {
@@ -1300,11 +1325,9 @@ public sealed class HostSession : IAsyncDisposable
             : Task.CompletedTask;
 
     /// <summary>
-    /// Connects the cameras of the admitted participants.
+    /// Connects the cameras of the admitted participants; the connecting runs aside.
     /// </summary>
-    /// <returns>A task that completes when the set is updated.</returns>
-    private Task SyncConferenceAsync()
-        => _conference?.SyncAsync(_participants.Keys.ToArray()) ?? Task.CompletedTask;
+    private void SyncConference() => _conference?.Sync(_participants.Keys.ToArray());
 
     /// <summary>
     /// Runs the synchronization loop.
