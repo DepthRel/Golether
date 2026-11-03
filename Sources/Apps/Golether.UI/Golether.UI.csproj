@@ -55,6 +55,7 @@
     <ProjectReference Include="../../Media/Golether.Media.Conference.GStreamer/Golether.Media.Conference.GStreamer.csproj" />
     <ProjectReference Include="../../Media/Golether.Media.Player/Golether.Media.Player.csproj" />
     <ProjectReference Include="../../Session/Golether.Session/Golether.Session.csproj" />
+    <ProjectReference Include="../../Session/Golether.Session.Hosting/Golether.Session.Hosting.csproj" />
     <ProjectReference Include="../../Transports/Golether.Transports.PortMapping/Golether.Transports.PortMapping.csproj" />
     <ProjectReference Include="../../Transports/Golether.Transports.Relay/Golether.Transports.Relay.csproj" />
     <ProjectReference Include="../../Transports/Golether.Transports.Tls/Golether.Transports.Tls.csproj" />

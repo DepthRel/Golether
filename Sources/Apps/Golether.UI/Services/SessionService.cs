@@ -14,9 +14,9 @@ using Golether.Security.Admission;
 using Golether.Security.Identity;
 using Golether.Security.Invites;
 using Golether.Session;
+using Golether.Session.Hosting;
 using Golether.Sync.Protocol;
 using Golether.Transports.PortMapping;
-using Golether.Transports.Relay;
 using Golether.Transports.Rendezvous;
 using Golether.Transports.Tls;
 
@@ -73,26 +73,6 @@ public sealed class SessionService : ISessionService, IReconnectionClient, IAsyn
     private readonly IRendezvousDirectory? _rendezvousDirectory;
 
     /// <summary>
-    /// The router mapping of the hosted session.
-    /// </summary>
-    private PortMappingLease? _portLease;
-
-    /// <summary>
-    /// The router mapping of the relay port.
-    /// </summary>
-    private PortMappingLease? _relayLease;
-
-    /// <summary>
-    /// The TURN relay of the hosted session.
-    /// </summary>
-    private TurnServer? _relay;
-
-    /// <summary>
-    /// Holds the room of the hosted session on the rendezvous server, or <see langword="null"/>.
-    /// </summary>
-    private RendezvousHost? _rendezvousHost;
-
-    /// <summary>
     /// The session options.
     /// </summary>
     private readonly SessionOptions _options = new();
@@ -114,9 +94,9 @@ public sealed class SessionService : ISessionService, IReconnectionClient, IAsyn
     private readonly string? _galleryDirectory;
 
     /// <summary>
-    /// The hosted session.
+    /// The hosted session on its network: the session, its relay, its room and the ports on the router.
     /// </summary>
-    private HostSession? _host;
+    private SessionHosting? _hosting;
 
     /// <summary>
     /// The joined session.
@@ -210,11 +190,16 @@ public sealed class SessionService : ISessionService, IReconnectionClient, IAsyn
     /// then, and the next session releases what is left of it (see <see cref="ReleaseEndedAsync"/>).
     /// </remarks>
     public bool IsActive
-        => _host is not null ||
+        => _hosting is not null ||
            (_participant is { } participant && (_reconnecting is not null || participant.GetSnapshot().State != SessionState.Ended));
 
     /// <inheritdoc />
-    public bool IsHost => _host is not null;
+    public bool IsHost => _hosting is not null;
+
+    /// <summary>
+    /// Gets the hosted session, or <see langword="null"/> when this device does not host one.
+    /// </summary>
+    private HostSession? Host => _hosting?.Session;
 
     /// <inheritdoc />
     public string ReconnectMessage { get; private set; } = string.Empty;
@@ -239,54 +224,33 @@ public sealed class SessionService : ISessionService, IReconnectionClient, IAsyn
         // A fresh room for every session: an old invitation does not lead to a new session.
         var rendezvous = server is { } found ? new RendezvousPoint(found, RendezvousPoint.CreateRoom()) : null;
 
-        var listener = new TlsPeerListener(_identity, new TlsTransportOptions { Port = port }, _loggerFactory.CreateLogger<TlsPeerListener>());
-        try
+        var hosting = SessionHosting.Create(new HostingSetup
         {
-            listener.Start();
-        }
-        catch (System.Net.Sockets.SocketException ex)
-        {
-            _ = listener.DisposeAsync();
-            throw new InvalidOperationException(Texts.Format("Session.Error.PortBusy", port, ex.Message), ex);
-        }
-
-        var host = new HostSession(
-            _identity,
-            listener,
-            new InviteRegistry(_timeProvider),
-            new AdmissionService(_prompt, new AdmissionOptions(), _timeProvider),
-            _contacts,
-            _player,
-            SystemMonotonicClock.Instance,
-            _timeProvider,
-            sessionName,
-            displayName,
-            _options,
-            _loggerFactory,
-            _conference,
-            _thumbnails,
-            _frames,
-            _galleryDirectory);
-        _relay = StartRelay(listener.Port);
-        host.Relay = _relay?.Credentials;
-        host.RelayServer = _relay;
-        host.Rendezvous = rendezvous;
-        Attach(host);
-        _host = host;
-        host.Start();
-        if (rendezvous is not null)
-        {
-            _rendezvousHost = StartRendezvous(host, listener, rendezvous);
-        }
-        else if (mode == RendezvousMode.Automatic)
+            Identity = _identity,
+            Prompt = _prompt,
+            Contacts = _contacts,
+            Player = _player,
+            TimeProvider = _timeProvider,
+            LoggerFactory = _loggerFactory,
+            Conference = _conference,
+            SessionName = sessionName,
+            DisplayName = displayName,
+            Port = port,
+            Options = _options,
+            Thumbnails = _thumbnails,
+            Frames = _frames,
+            GalleryDirectory = _galleryDirectory,
+            Rendezvous = rendezvous,
+            PortMapper = OpenRouterPort ? _portMapper : null,
+        });
+        Attach(hosting.Session);
+        hosting.EventRaised += (_, e) => EventRaised?.Invoke(this, e);
+        _hosting = hosting;
+        hosting.Start();
+        if (rendezvous is null && mode == RendezvousMode.Automatic)
         {
             // The session works without the server; the host learns why guests from other networks may not get in.
             EventRaised?.Invoke(this, new SessionEvent(_timeProvider.GetLocalNow(), null, Texts.Get("Session.Rendezvous.NotFound")));
-        }
-
-        if (_portMapper is not null && OpenRouterPort)
-        {
-            _ = OpenPortAsync(host, host.Port, _relay?.Port);
         }
 
         ReportFirewall();
@@ -318,25 +282,11 @@ public sealed class SessionService : ISessionService, IReconnectionClient, IAsyn
 
     /// <inheritdoc />
     public Task ShareMediaAsync(string path, CancellationToken cancellationToken)
-        => (_host ?? throw new InvalidOperationException(Texts.Get("Session.Error.OnlyHostShares"))).ShareMediaAsync(path, cancellationToken);
+        => (Host ?? throw new InvalidOperationException(Texts.Get("Session.Error.OnlyHostShares"))).ShareMediaAsync(path, cancellationToken);
 
     /// <inheritdoc />
     public Invite CreateInvite(IReadOnlyList<PeerEndpoint> additionalEndpoints, TimeSpan lifetime)
-    {
-        var host = _host ?? throw new InvalidOperationException(Texts.Get("Session.Error.OnlyHostInvites"));
-        var mapping = _portLease?.Mapping;
-        var external = mapping is { IsPubliclyReachable: true, ExternalAddress: { } address }
-            ? [new PeerEndpoint(address.ToString(), mapping.ExternalPort)]
-            : Array.Empty<PeerEndpoint>();
-        var endpoints = EndpointDiscovery.Discover(host.Port, [.. additionalEndpoints, .. external]);
-        if (endpoints.Count == 0)
-        {
-            // A computer without a network has nothing to put into an invitation.
-            throw new InvalidOperationException(Texts.Get("Session.Error.NoAddresses"));
-        }
-
-        return host.CreateInvite(endpoints, lifetime);
-    }
+        => (_hosting ?? throw new InvalidOperationException(Texts.Get("Session.Error.OnlyHostInvites"))).CreateInvite(additionalEndpoints, lifetime);
 
     /// <inheritdoc />
     public async Task JoinAsync(string inviteLink, string displayName, CancellationToken cancellationToken)
@@ -379,29 +329,29 @@ public sealed class SessionService : ISessionService, IReconnectionClient, IAsyn
 
     /// <inheritdoc />
     public Task RequestAsync(PlaybackRequest request, CancellationToken cancellationToken)
-        => _host is not null ? _host.RequestAsync(request, cancellationToken)
+        => Host is not null ? Host.RequestAsync(request, cancellationToken)
             : _participant is not null ? _participant.RequestAsync(request, cancellationToken)
             : Task.CompletedTask;
 
     /// <inheritdoc />
     public Task SwitchOffParticipantDevicesAsync(PeerId peerId, bool microphone, bool camera)
-        => (_host ?? throw new InvalidOperationException(Texts.Get("Session.Error.OnlyHostModerates")))
+        => (Host ?? throw new InvalidOperationException(Texts.Get("Session.Error.OnlyHostModerates")))
             .SwitchOffParticipantDevicesAsync(peerId, microphone, camera);
 
     /// <inheritdoc />
     public Task RemoveParticipantAsync(PeerId peerId)
-        => (_host ?? throw new InvalidOperationException(Texts.Get("Session.Error.OnlyHostModerates")))
+        => (Host ?? throw new InvalidOperationException(Texts.Get("Session.Error.OnlyHostModerates")))
             .RemoveParticipantAsync(peerId);
 
     /// <inheritdoc />
     public Task SendChatAsync(ChatKind kind, string text, CancellationToken cancellationToken)
-        => _host is not null ? _host.SendChatAsync(kind, text)
+        => Host is not null ? Host.SendChatAsync(kind, text)
             : _participant is not null ? _participant.SendChatAsync(kind, text, cancellationToken)
             : Task.CompletedTask;
 
     /// <inheritdoc />
     public Task SendDrawAsync(string strokeId, StrokePhase phase, IReadOnlyList<StrokePoint> points, CancellationToken cancellationToken)
-        => _host is not null ? _host.SendDrawAsync(strokeId, phase, points)
+        => Host is not null ? Host.SendDrawAsync(strokeId, phase, points)
             : _participant is not null ? _participant.SendDrawAsync(strokeId, phase, points, cancellationToken)
             : Task.CompletedTask;
 
@@ -410,34 +360,34 @@ public sealed class SessionService : ISessionService, IReconnectionClient, IAsyn
 
     /// <inheritdoc />
     public Task ShowGalleryAsync(GalleryFolder folder, bool stripMetadata, IProgress<int>? progress, CancellationToken cancellationToken)
-        => (_host ?? throw new InvalidOperationException(Texts.Get("Session.Error.OnlyHostShares"))).ShowGalleryAsync(folder, stripMetadata, progress, cancellationToken);
+        => (Host ?? throw new InvalidOperationException(Texts.Get("Session.Error.OnlyHostShares"))).ShowGalleryAsync(folder, stripMetadata, progress, cancellationToken);
 
     /// <inheritdoc />
     public Task CloseGalleryAsync()
-        => (_host ?? throw new InvalidOperationException(Texts.Get("Session.Error.OnlyHostShares"))).CloseGalleryAsync();
+        => (Host ?? throw new InvalidOperationException(Texts.Get("Session.Error.OnlyHostShares"))).CloseGalleryAsync();
 
     /// <inheritdoc />
     public Task ShowItemAsync(string catalogId, int index, CancellationToken cancellationToken)
-        => _host is not null ? _host.ShowItemAsync(catalogId, index, cancellationToken)
+        => Host is not null ? Host.ShowItemAsync(catalogId, index, cancellationToken)
             : _participant is not null ? _participant.ShowItemAsync(catalogId, index, cancellationToken)
             : Task.CompletedTask;
 
     /// <inheritdoc />
     public void SetGalleryView(int? index)
     {
-        _host?.SetGalleryView(index);
+        Host?.SetGalleryView(index);
         _participant?.SetGalleryView(index);
     }
 
     /// <inheritdoc />
     public Task<byte[]?> LoadThumbnailAsync(string catalogId, int index, CancellationToken cancellationToken)
-        => _host is not null ? _host.LoadThumbnailAsync(catalogId, index, cancellationToken)
+        => Host is not null ? Host.LoadThumbnailAsync(catalogId, index, cancellationToken)
             : _participant is not null ? _participant.LoadThumbnailAsync(catalogId, index, cancellationToken)
             : Task.FromResult<byte[]?>(null);
 
     /// <inheritdoc />
     public Task<byte[]> LoadPictureAsync(string catalogId, int index, CancellationToken cancellationToken)
-        => _host is not null ? _host.LoadPictureAsync(catalogId, index, cancellationToken)
+        => Host is not null ? Host.LoadPictureAsync(catalogId, index, cancellationToken)
             : _participant is not null ? _participant.LoadPictureAsync(catalogId, index, cancellationToken)
             : Task.FromException<byte[]>(new InvalidOperationException(Texts.Get("Session.Error.NotJoined")));
 
@@ -445,7 +395,7 @@ public sealed class SessionService : ISessionService, IReconnectionClient, IAsyn
     public Task SetAvatarAsync(byte[]? image, CancellationToken cancellationToken)
     {
         _avatar = image;
-        return _host is not null ? _host.SetAvatarAsync(image)
+        return Host is not null ? Host.SetAvatarAsync(image)
             : _participant is not null ? _participant.SendAvatarAsync(image, cancellationToken)
             : Task.CompletedTask;
     }
@@ -458,7 +408,7 @@ public sealed class SessionService : ISessionService, IReconnectionClient, IAsyn
     /// </remarks>
     public SessionSnapshot? GetSnapshot()
     {
-        if (_host is { } host)
+        if (Host is { } host)
         {
             return host.GetSnapshot();
         }
@@ -483,16 +433,12 @@ public sealed class SessionService : ISessionService, IReconnectionClient, IAsyn
 
         _reconnectInvite = null;
         ReconnectMessage = string.Empty;
-        var host = Interlocked.Exchange(ref _host, null);
+        var hosting = Interlocked.Exchange(ref _hosting, null);
         var participant = Interlocked.Exchange(ref _participant, null);
 
         // Every part is released on its own: one that fails must not leave the others behind (a session that keeps
         // its port, a mapping that stays on the router).
-        await ReleaseAsync(Interlocked.Exchange(ref _portLease, null)).ConfigureAwait(false);
-        await ReleaseAsync(Interlocked.Exchange(ref _relayLease, null)).ConfigureAwait(false);
-        await ReleaseAsync(Interlocked.Exchange(ref _relay, null)).ConfigureAwait(false);
-        await ReleaseAsync(Interlocked.Exchange(ref _rendezvousHost, null)).ConfigureAwait(false);
-        await ReleaseAsync(host).ConfigureAwait(false);
+        await ReleaseAsync(hosting).ConfigureAwait(false);
         await ReleaseAsync(participant).ConfigureAwait(false);
         Changed?.Invoke(this, EventArgs.Empty);
     }
@@ -521,60 +467,6 @@ public sealed class SessionService : ISessionService, IReconnectionClient, IAsyn
 
     /// <inheritdoc />
     public ValueTask DisposeAsync() => new(LeaveAsync());
-
-    /// <summary>
-    /// Opens the listening port on the router and reports the result in the event feed.
-    /// </summary>
-    /// <param name="host">The hosted session.</param>
-    /// <param name="port">The listening port.</param>
-    /// <param name="relayPort">The port of the TURN relay, or <see langword="null"/>.</param>
-    /// <returns>A task that completes when the router answered or gave up.</returns>
-    private async Task OpenPortAsync(HostSession host, int port, int? relayPort)
-    {
-        if (relayPort is { } relay)
-        {
-            var relayLease = await TryMapAsync(relay).ConfigureAwait(false);
-            if (relayLease is not null && (_host != host || Interlocked.CompareExchange(ref _relayLease, relayLease, null) is not null))
-            {
-                await relayLease.DisposeAsync().ConfigureAwait(false);
-            }
-            else if (relayLease is { Mapping.ExternalPort: var external } && external != relay)
-            {
-                _loggerFactory.CreateLogger<SessionService>().LogWarning("The router moved the relay port {Port} to {External}; relayed cameras from other networks will not connect", relay, external);
-            }
-        }
-
-        PortMappingLease? lease;
-        try
-        {
-            lease = await _portMapper!.MapAsync(port, CancellationToken.None).ConfigureAwait(false);
-        }
-        catch (Exception ex) when (ex is not OutOfMemoryException)
-        {
-            lease = null;
-            System.Diagnostics.Debug.WriteLine(ex);
-        }
-
-        if (lease is not null && (_host != host || Interlocked.CompareExchange(ref _portLease, lease, null) is not null))
-        {
-            // The session ended while the router was answering.
-            await lease.DisposeAsync().ConfigureAwait(false);
-            return;
-        }
-
-        var mapping = lease?.Mapping;
-        var text = mapping switch
-        {
-            null when HasTunnelAddress() => Texts.Format("Session.Router.NotOpenedTunnelFound", port),
-            null => Texts.Format("Session.Router.NotOpened", port),
-            { IsPubliclyReachable: true } => Texts.Format("Session.Router.Opened", mapping.Method, mapping.ExternalAddress, mapping.ExternalPort),
-            _ => Texts.Format("Session.Router.OpenedNotPublic", mapping.Method, mapping.ExternalAddress?.ToString() ?? Texts.Get("Session.Router.UnknownAddress")),
-        };
-        if (_host == host)
-        {
-            EventRaised?.Invoke(this, new SessionEvent(_timeProvider.GetLocalNow(), null, text));
-        }
-    }
 
     /// <summary>
     /// Tells the user when the Windows firewall would drop the participants. A fresh tunnel adapter counts as a
@@ -630,113 +522,6 @@ public sealed class SessionService : ISessionService, IReconnectionClient, IAsyn
 
         Changed?.Invoke(this, EventArgs.Empty);
         return !FirewallBlocked;
-    }
-
-    /// <summary>
-    /// Checks whether this device is on a tunnel network (AmneziaWG, WireGuard). Such an address reaches the other
-    /// computers of that network whatever the router does, so the failed port mapping is not the end of the story.
-    /// </summary>
-    /// <returns><see langword="true"/> when a tunnel address was found.</returns>
-    private static bool HasTunnelAddress()
-    {
-        try
-        {
-            return EndpointDiscovery.DiscoverTunnelAddresses().Count > 0;
-        }
-        catch (System.Net.NetworkInformation.NetworkInformationException)
-        {
-            return false;
-        }
-    }
-
-    /// <summary>
-    /// Asks the router to open a port.
-    /// </summary>
-    /// <param name="port">The port.</param>
-    /// <returns>The lease, or <see langword="null"/>.</returns>
-    private async Task<PortMappingLease?> TryMapAsync(int port)
-    {
-        try
-        {
-            return await _portMapper!.MapAsync(port, CancellationToken.None).ConfigureAwait(false);
-        }
-        catch (Exception ex) when (ex is not OutOfMemoryException)
-        {
-            _loggerFactory.CreateLogger<SessionService>().LogDebug(ex, "Port {Port} was not opened", port);
-            return null;
-        }
-    }
-
-    /// <summary>
-    /// Starts the TURN relay for cameras and voices on the port after the session port, or any free port.
-    /// </summary>
-    /// <param name="sessionPort">The session port.</param>
-    /// <returns>The relay, or <see langword="null"/> when no port could be used.</returns>
-    private TurnServer? StartRelay(int sessionPort)
-    {
-        foreach (var port in new[] { sessionPort < 65535 ? sessionPort + 1 : 0, 0 })
-        {
-            TurnServer? relay = null;
-            try
-            {
-                // Creating the relay opens a socket already, so it may fail like the start does.
-                relay = new TurnServer(
-                    new TurnServerOptions
-                    {
-                        Credentials = RelayCredentials.CreateRandom(port),
-                        ListenAddress = System.Net.Sockets.Socket.OSSupportsIPv6 ? System.Net.IPAddress.IPv6Any : System.Net.IPAddress.Any,
-                    },
-                    _timeProvider,
-                    _loggerFactory.CreateLogger<TurnServer>());
-                relay.Start();
-                return relay;
-            }
-            catch (System.Net.Sockets.SocketException ex)
-            {
-                _loggerFactory.CreateLogger<SessionService>().LogInformation("Relay port {Port} is busy: {Error}", port, ex.SocketErrorCode);
-                if (relay is not null)
-                {
-                    _ = relay.DisposeAsync();
-                }
-            }
-        }
-
-        return null;
-    }
-
-    /// <summary>
-    /// Takes the room of the hosted session on the rendezvous server. The connections punched to participants go to
-    /// the listener of the session, which authenticates and admits them like any other.
-    /// </summary>
-    /// <param name="host">The hosted session.</param>
-    /// <param name="listener">The listener of the session.</param>
-    /// <param name="point">The server and the room.</param>
-    /// <returns>The running agent.</returns>
-    private RendezvousHost StartRendezvous(HostSession host, TlsPeerListener listener, RendezvousPoint point)
-    {
-        var agent = new RendezvousHost(
-            point,
-            new RendezvousOwner(_identity.PublicCertificateDer, data => _identity.Sign(data)),
-            socket => listener.Adopt(socket),
-            timeProvider: _timeProvider,
-            logger: _loggerFactory.CreateLogger<RendezvousHost>());
-        agent.StateChanged += (_, _) =>
-        {
-            if (_host != host)
-            {
-                return;
-            }
-
-            var text = agent.IsRegistered
-                ? Texts.Get("Session.Rendezvous.Registered")
-                : agent.LastError is { } error ? Texts.Format("Session.Rendezvous.Lost", RendezvousException.Describe(error)) : null;
-            if (text is not null)
-            {
-                EventRaised?.Invoke(this, new SessionEvent(_timeProvider.GetLocalNow(), null, text));
-            }
-        };
-        agent.Start();
-        return agent;
     }
 
     /// <summary>

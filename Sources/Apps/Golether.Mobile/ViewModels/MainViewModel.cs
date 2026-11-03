@@ -14,6 +14,7 @@ using Golether.Core.Session;
 using Golether.Localization;
 using Golether.Media.Conference;
 using Golether.Media.Player.Mpv;
+using Golether.Media.Streaming.Files;
 using Golether.Mobile.Enums;
 using Golether.Mobile.Services;
 using Golether.Security.Invites;
@@ -24,7 +25,8 @@ using Golether.Sync.Protocol;
 namespace Golether.Mobile.ViewModels;
 
 /// <summary>
-/// The whole of the mobile client as a participant: joining by an invitation, waiting for the host, watching.
+/// The whole of the mobile client: joining by an invitation, waiting for the host and watching, or hosting a small
+/// session of its own: showing, inviting and letting people in.
 /// </summary>
 public sealed partial class MainViewModel : ObservableObject, ICameraTiles
 {
@@ -133,7 +135,12 @@ public sealed partial class MainViewModel : ObservableObject, ICameraTiles
     /// <summary>
     /// The place of this device in a session, or <see langword="null"/> outside one.
     /// </summary>
-    private IParticipantConnection? _connection;
+    private ISessionConnection? _connection;
+
+    /// <summary>
+    /// Asks the user, as the host, whether a participant may come in.
+    /// </summary>
+    private readonly MobileAdmissionPrompt _admissions = new();
 
     /// <summary>
     /// Cancels joining.
@@ -154,6 +161,11 @@ public sealed partial class MainViewModel : ObservableObject, ICameraTiles
     /// Whether the screen stands upright.
     /// </summary>
     private bool _uprightScreen = true;
+
+    /// <summary>
+    /// The name of a new session as it was offered last: the offer follows the language until the user writes another.
+    /// </summary>
+    private string _offeredSessionName = Texts.Get("Main.DefaultSessionName");
 
     /// <summary>
     /// Initializes a new instance of the <see cref="MainViewModel"/> class.
@@ -188,6 +200,8 @@ public sealed partial class MainViewModel : ObservableObject, ICameraTiles
         Drawing = new DrawingViewModel(_current, dispatcher, _features);
         Gallery = new GalleryViewModel(_current, _pictures);
         Gallery.PictureChanged += (_, _) => Drawing.Reset();
+        Media = new MediaChoiceViewModel(platform, storage);
+        _admissions.Changed += (_, _) => _dispatcher.Post(ShowAdmission);
     }
 
     /// <summary>
@@ -209,13 +223,83 @@ public sealed partial class MainViewModel : ObservableObject, ICameraTiles
     /// Gets or sets the current screen.
     /// </summary>
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(IsJoin), nameof(IsConnecting), nameof(IsApproval), nameof(IsWatch))]
+    [NotifyPropertyChangedFor(nameof(IsJoin), nameof(IsHostSetup), nameof(IsConnecting), nameof(IsApproval), nameof(IsWatch))]
     public partial MobileScreen Screen { get; set; }
 
     /// <summary>
     /// Gets a value indicating whether the join screen is shown.
     /// </summary>
     public bool IsJoin => Screen == MobileScreen.Join;
+
+    /// <summary>
+    /// Gets a value indicating whether the screen of a new hosted session is shown.
+    /// </summary>
+    public bool IsHostSetup => Screen == MobileScreen.Host;
+
+    /// <summary>
+    /// Gets or sets a value indicating whether this device hosts the session: then it shows, invites and moderates.
+    /// </summary>
+    [ObservableProperty]
+    public partial bool IsHost { get; set; }
+
+    /// <summary>
+    /// Gets or sets a value indicating whether the user is warned about hosting a session on a phone.
+    /// </summary>
+    [ObservableProperty]
+    public partial bool IsHostWarningShown { get; set; }
+
+    /// <summary>
+    /// Gets or sets a value indicating whether the warning about hosting stays away from now on.
+    /// </summary>
+    [ObservableProperty]
+    public partial bool HostWarningHidden { get; set; }
+
+    /// <summary>
+    /// Gets or sets the name of the session to host.
+    /// </summary>
+    [ObservableProperty]
+    public partial string NewSessionName { get; set; } = Texts.Get("Main.DefaultSessionName");
+
+    /// <summary>
+    /// Gets what the host chose to show.
+    /// </summary>
+    public MediaChoiceViewModel Media { get; }
+
+    /// <summary>
+    /// Gets or sets a value indicating whether the host chooses something else to show.
+    /// </summary>
+    [ObservableProperty]
+    public partial bool IsMediaChangeOpen { get; set; }
+
+    /// <summary>
+    /// Gets or sets a value indicating whether the host's session starts or the chosen pictures are prepared.
+    /// </summary>
+    [ObservableProperty]
+    public partial bool IsBusy { get; set; }
+
+    /// <summary>
+    /// Gets or sets the invitation the host gives, or <see langword="null"/> while it is not shown.
+    /// </summary>
+    [ObservableProperty]
+    public partial InviteViewModel? Invitation { get; set; }
+
+    /// <summary>
+    /// Gets or sets the participant who waits to come in, or <see langword="null"/>.
+    /// </summary>
+    [ObservableProperty]
+    public partial AdmissionViewModel? Admission { get; set; }
+
+    /// <summary>
+    /// Gets or sets the participant the host is about to remove, or <see langword="null"/>.
+    /// </summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(RemovalText))]
+    public partial ParticipantItemViewModel? RemovalAsked { get; set; }
+
+    /// <summary>
+    /// Gets the question before a participant is removed.
+    /// </summary>
+    public string RemovalText => RemovalAsked is { } person ? Texts.Format("Main.Moderation.Remove.Text", person.Name) : string.Empty;
 
     /// <summary>
     /// Gets a value indicating whether the search for the host is shown.
@@ -526,6 +610,18 @@ public sealed partial class MainViewModel : ObservableObject, ICameraTiles
     /// <returns><see langword="true"/> when the button was used here.</returns>
     public bool GoBack()
     {
+        if (IsHostWarningShown)
+        {
+            CancelHostWarning();
+            return true;
+        }
+
+        if (IsHostSetup)
+        {
+            CancelHostSetup();
+            return true;
+        }
+
         if (_connection is null)
         {
             return false;
@@ -615,26 +711,10 @@ public sealed partial class MainViewModel : ObservableObject, ICameraTiles
                 throw new SessionJoinException(Texts.Get("Session.Error.InviteExpired"));
             }
 
-            var name = ParticipantInfo.NormalizeDisplayName(DisplayName);
-            DisplayName = name;
-            await services.Settings.SetAsync(ClientSettings.DISPLAY_NAME, name, CancellationToken.None);
-
-            var access = await _platform.RequestCaptureAccessAsync(camera: true, microphone: true);
-            var conference = await UseConferenceAsync(services);
-            conference.SetMuted(MicrophoneMuted || !access.Microphone, CameraOff || !access.Camera);
-            ReadDevices();
-
+            var name = await SaveDisplayNameAsync(services);
+            var conference = await PrepareDevicesAsync(services);
             var connection = services.CreateConnection(conference, _current, name);
-            connection.Changed += (_, _) => _dispatcher.Post(Refresh);
-            connection.AvatarReceived += (_, update) => _dispatcher.Post(() => ShowAvatar(update));
-            _connection = connection;
-            if (_ownAvatar is { } avatar)
-            {
-                _avatars.Apply(new AvatarUpdate(services.Identity.PeerId, avatar, true));
-                await connection.SetAvatarAsync(avatar);
-            }
-
-            _platform.SetSessionActive(true);
+            await UseConnectionAsync(services, connection);
 
             await connection.JoinAsync(invite, cancellation.Token);
             Refresh();
@@ -643,6 +723,354 @@ public sealed partial class MainViewModel : ObservableObject, ICameraTiles
         {
             await FinishAsync(ex is OperationCanceledException ? null : ex.Message);
         }
+    }
+
+    /// <summary>
+    /// Begins a session hosted on this device: the user is warned about hosting on a phone first, unless they asked
+    /// not to be.
+    /// </summary>
+    /// <returns>A task that completes when the warning or the screen of the session is shown.</returns>
+    [RelayCommand]
+    private async Task CreateSessionAsync()
+    {
+        if (_services is not { } services)
+        {
+            return;
+        }
+
+        Error = string.Empty;
+        var hidden = await services.Settings.GetAsync(MobileSettings.HOST_WARNING_HIDDEN, CancellationToken.None);
+        if (bool.TryParse(hidden, out var isHidden) && isHidden)
+        {
+            OpenHostSetup();
+            return;
+        }
+
+        HostWarningHidden = false;
+        IsHostWarningShown = true;
+    }
+
+    /// <summary>
+    /// Goes on past the warning, remembering the wish not to see it again.
+    /// </summary>
+    /// <returns>A task that completes when the screen of the session is shown.</returns>
+    [RelayCommand]
+    private async Task ContinueHostWarningAsync()
+    {
+        IsHostWarningShown = false;
+        if (HostWarningHidden && _services is { } services)
+        {
+            await services.Settings.SetAsync(MobileSettings.HOST_WARNING_HIDDEN, bool.TrueString, CancellationToken.None);
+        }
+
+        OpenHostSetup();
+    }
+
+    /// <summary>
+    /// Stays on the join screen: the warning goes away.
+    /// </summary>
+    [RelayCommand]
+    private void CancelHostWarning()
+    {
+        IsHostWarningShown = false;
+        HostWarningHidden = false;
+    }
+
+    /// <summary>
+    /// Goes back from the screen of a new session to the join screen.
+    /// </summary>
+    [RelayCommand]
+    private void CancelHostSetup()
+    {
+        Media.Clear();
+        OpenedFiles.Clear();
+        Screen = MobileScreen.Join;
+    }
+
+    /// <summary>
+    /// Starts the session this device hosts and shows what the user chose.
+    /// </summary>
+    /// <returns>A task that completes when the session runs or could not start.</returns>
+    [RelayCommand]
+    private async Task StartHostingAsync()
+    {
+        if (_services is not { } services || IsBusy)
+        {
+            return;
+        }
+
+        if (!Media.HasChoice)
+        {
+            Media.Error = Texts.Get("Mobile.Host.NothingChosen");
+            return;
+        }
+
+        Error = string.Empty;
+        IsBusy = true;
+        try
+        {
+            var name = await SaveDisplayNameAsync(services);
+            var sessionName = string.IsNullOrWhiteSpace(NewSessionName) ? Texts.Get("Main.DefaultSessionName") : NewSessionName.Trim();
+            var conference = await PrepareDevicesAsync(services);
+            var host = services.CreateHost(conference, _current, _admissions);
+            await UseConnectionAsync(services, host);
+
+            await host.StartAsync(sessionName, name, CancellationToken.None);
+            IsHost = true;
+            await ShowChoiceAsync(host);
+            Refresh();
+        }
+        catch (Exception ex) when (ex is not (OutOfMemoryException or StackOverflowException))
+        {
+            await FinishAsync(ex.Message);
+        }
+        finally
+        {
+            IsBusy = false;
+        }
+    }
+
+    /// <summary>
+    /// Opens the choice of something else to show.
+    /// </summary>
+    [RelayCommand]
+    private void ChangeMedia()
+    {
+        if (!IsHost)
+        {
+            return;
+        }
+
+        Media.Clear();
+        IsMediaChangeOpen = true;
+    }
+
+    /// <summary>
+    /// Shows the newly chosen film or folder to everybody.
+    /// </summary>
+    /// <returns>A task that completes when everybody was told.</returns>
+    [RelayCommand]
+    private async Task ApplyMediaChangeAsync()
+    {
+        if (_connection is not IHostConnection host || !Media.HasChoice || IsBusy)
+        {
+            return;
+        }
+
+        IsMediaChangeOpen = false;
+        IsBusy = true;
+        try
+        {
+            await ShowChoiceAsync(host);
+        }
+        catch (Exception ex) when (ex is IOException or InvalidOperationException or UnauthorizedAccessException or InvalidDataException)
+        {
+            Error = ex.Message;
+        }
+        finally
+        {
+            IsBusy = false;
+        }
+    }
+
+    /// <summary>
+    /// Shows the invitation into the hosted session: a new link and a new key.
+    /// </summary>
+    [RelayCommand]
+    private void ShowInvitation()
+    {
+        if (_connection is IHostConnection host)
+        {
+            Invitation = new InviteViewModel(host.CreateInvite, _platform);
+        }
+    }
+
+    /// <summary>
+    /// Lets the waiting participant in.
+    /// </summary>
+    [RelayCommand]
+    private void Admit() => AnswerAdmission(true);
+
+    /// <summary>
+    /// Turns the waiting participant away.
+    /// </summary>
+    [RelayCommand]
+    private void Decline() => AnswerAdmission(false);
+
+    /// <summary>
+    /// Removes the participant the host confirmed.
+    /// </summary>
+    /// <returns>A task that completes when the participant was removed.</returns>
+    [RelayCommand]
+    private async Task ConfirmRemovalAsync()
+    {
+        var person = RemovalAsked;
+        RemovalAsked = null;
+        if (person is null || _connection is not IHostConnection host)
+        {
+            return;
+        }
+
+        try
+        {
+            await host.RemoveParticipantAsync(person.PeerId);
+        }
+        catch (Exception ex) when (ex is InvalidOperationException or IOException)
+        {
+            Error = Texts.Get("Main.Error.RemoveFailed");
+        }
+    }
+
+    /// <summary>
+    /// Keeps the participant the host was about to remove.
+    /// </summary>
+    [RelayCommand]
+    private void CancelRemoval() => RemovalAsked = null;
+
+    /// <summary>
+    /// Opens the screen of a new hosted session with what was chosen before forgotten.
+    /// </summary>
+    private void OpenHostSetup()
+    {
+        var offered = Texts.Get("Main.DefaultSessionName");
+        if (string.IsNullOrWhiteSpace(NewSessionName) || NewSessionName == _offeredSessionName)
+        {
+            NewSessionName = offered;
+        }
+
+        _offeredSessionName = offered;
+        Media.Clear();
+        Screen = MobileScreen.Host;
+    }
+
+    /// <summary>
+    /// Shows to everybody what the host chose: the film, or the folder.
+    /// </summary>
+    /// <param name="host">The hosted session.</param>
+    /// <returns>A task that completes when everybody was told.</returns>
+    private async Task ShowChoiceAsync(IHostConnection host)
+    {
+        if (Media.FilmPath is { } film)
+        {
+            await host.ShareMediaAsync(film, CancellationToken.None);
+        }
+        else if (Media.Folder is { } folder)
+        {
+            await host.ShowGalleryAsync(folder, Media.StripMetadata, CancellationToken.None);
+        }
+    }
+
+    /// <summary>
+    /// Shows the first participant who waits to come in, or nobody.
+    /// </summary>
+    private void ShowAdmission()
+    {
+        var request = _admissions.Current;
+        if (request is null)
+        {
+            Admission = null;
+        }
+        else if (!ReferenceEquals(Admission?.Request, request))
+        {
+            Admission = new AdmissionViewModel(request);
+        }
+    }
+
+    /// <summary>
+    /// Answers the participant who waits to come in.
+    /// </summary>
+    /// <param name="admit">Whether the participant may come in.</param>
+    private void AnswerAdmission(bool admit)
+    {
+        if (Admission is { } shown)
+        {
+            _admissions.Answer(shown.Request, admit);
+        }
+    }
+
+    /// <summary>
+    /// Switches devices of a participant off (host only); a failure is shown.
+    /// </summary>
+    /// <param name="peerId">The participant.</param>
+    /// <param name="microphone">Whether to switch the microphone off.</param>
+    /// <param name="camera">Whether to switch the camera off.</param>
+    /// <returns>A task that completes when the request was sent.</returns>
+    private async Task SwitchOffParticipantDevicesAsync(PeerId peerId, bool microphone, bool camera)
+    {
+        if (_connection is not IHostConnection host)
+        {
+            return;
+        }
+
+        try
+        {
+            await host.SwitchOffParticipantDevicesAsync(peerId, microphone, camera);
+        }
+        catch (Exception ex) when (ex is InvalidOperationException or IOException)
+        {
+            Error = Texts.Get("Main.Error.SwitchOffFailed");
+        }
+    }
+
+    /// <summary>
+    /// Asks the host before a participant is removed: coming back takes a new invitation.
+    /// </summary>
+    /// <param name="peerId">The participant.</param>
+    /// <returns>A completed task.</returns>
+    private Task AskRemovalAsync(PeerId peerId)
+    {
+        RemovalAsked = Participants.FirstOrDefault(p => p.PeerId == peerId);
+        return Task.CompletedTask;
+    }
+
+    /// <summary>
+    /// Takes the name of the user as the others will see it and remembers it.
+    /// </summary>
+    /// <param name="services">The services.</param>
+    /// <returns>The name.</returns>
+    private async Task<string> SaveDisplayNameAsync(IMobileServices services)
+    {
+        var name = ParticipantInfo.NormalizeDisplayName(DisplayName);
+        DisplayName = name;
+        await services.Settings.SetAsync(ClientSettings.DISPLAY_NAME, name, CancellationToken.None);
+
+        return name;
+    }
+
+    /// <summary>
+    /// Asks the system for the camera and the microphone and starts the cameras and voices.
+    /// </summary>
+    /// <param name="services">The services.</param>
+    /// <returns>The cameras and voices.</returns>
+    private async Task<IConferenceMedia> PrepareDevicesAsync(IMobileServices services)
+    {
+        var access = await _platform.RequestCaptureAccessAsync(camera: true, microphone: true);
+        var conference = await UseConferenceAsync(services);
+        conference.SetMuted(MicrophoneMuted || !access.Microphone, CameraOff || !access.Camera);
+        ReadDevices();
+
+        return conference;
+    }
+
+    /// <summary>
+    /// Makes a new session the session of the moment: the screen follows it, the picture of the user goes into it,
+    /// and the system keeps it alive.
+    /// </summary>
+    /// <param name="services">The services.</param>
+    /// <param name="connection">The session.</param>
+    /// <returns>A task that completes when the session is in use.</returns>
+    private async Task UseConnectionAsync(IMobileServices services, ISessionConnection connection)
+    {
+        connection.Changed += (_, _) => _dispatcher.Post(Refresh);
+        connection.AvatarReceived += (_, update) => _dispatcher.Post(() => ShowAvatar(update));
+        _connection = connection;
+        if (_ownAvatar is { } avatar)
+        {
+            _avatars.Apply(new AvatarUpdate(services.Identity.PeerId, avatar, true));
+            await connection.SetAvatarAsync(avatar);
+        }
+
+        _platform.SetSessionActive(true);
     }
 
     /// <summary>
@@ -1183,7 +1611,7 @@ public sealed partial class MainViewModel : ObservableObject, ICameraTiles
             var tile = Participants.FirstOrDefault(p => p.PeerId == view.Info.PeerId);
             if (tile is null)
             {
-                tile = new ParticipantItemViewModel(view.Info.PeerId, voiceVolumeChanged: ChangeVoiceVolume)
+                tile = new ParticipantItemViewModel(view.Info.PeerId, SwitchOffParticipantDevicesAsync, ChangeVoiceVolume, AskRemovalAsync)
                 {
                     AvatarImage = _avatars.Find(view.Info.PeerId),
                 };
@@ -1196,6 +1624,7 @@ public sealed partial class MainViewModel : ObservableObject, ICameraTiles
             }
 
             tile.Update(view, duration);
+            tile.CanModerate = IsHost && !tile.IsLocal;
         }
     }
 
@@ -1261,6 +1690,12 @@ public sealed partial class MainViewModel : ObservableObject, ICameraTiles
         _microphoneTaken = false;
         IsLeaveAsked = false;
         AvatarEditor = null;
+        IsHost = false;
+        IsMediaChangeOpen = false;
+        Invitation = null;
+        RemovalAsked = null;
+        _admissions.Clear();
+        Media.Clear();
         if (IsFullScreen)
         {
             ToggleFullScreen();

@@ -75,6 +75,11 @@
     <Setter Property="Foreground" Value="{StaticResource GoletherBad}" />
     <Setter Property="TextWrapping" Value="Wrap" />
   </Style>
+  <Style Selector="TextBlock.warningPoint">
+    <Setter Property="FontSize" Value="12.5" />
+    <Setter Property="Foreground" Value="#C4D0CE" />
+    <Setter Property="TextWrapping" Value="Wrap" />
+  </Style>
   <Style Selector="TextBlock.wordmark">
     <Setter Property="FontWeight" Value="ExtraBold" />
     <Setter Property="LetterSpacing" Value="0.3" />
@@ -87,6 +92,26 @@
     <Setter Property="BorderThickness" Value="1" />
     <Setter Property="CornerRadius" Value="18" />
     <Setter Property="Padding" Value="16" />
+  </Style>
+  <!-- A word of caution over the screen: a shade lighter than the cards, with a faint amber frame. -->
+  <Style Selector="Border.warning">
+    <Setter Property="Background" Value="{StaticResource GoletherPanel2}" />
+    <Setter Property="BorderBrush" Value="#73F0A860" />
+    <Setter Property="BorderThickness" Value="1" />
+    <Setter Property="CornerRadius" Value="18" />
+    <Setter Property="Padding" Value="18,16" />
+    <Setter Property="BoxShadow" Value="0 10 36 0 #26F0A860" />
+  </Style>
+  <Style Selector="Border.shade">
+    <Setter Property="Background" Value="#B8060A0B" />
+  </Style>
+  <!-- A text the user may copy, in a field of its own. -->
+  <Style Selector="Border.field">
+    <Setter Property="Background" Value="{StaticResource GoletherPanel2}" />
+    <Setter Property="BorderBrush" Value="{StaticResource GoletherLine}" />
+    <Setter Property="BorderThickness" Value="1" />
+    <Setter Property="CornerRadius" Value="11" />
+    <Setter Property="Padding" Value="12,9" />
   </Style>
   <Style Selector="Border.chip">
     <Setter Property="BorderBrush" Value="{StaticResource GoletherLine}" />
@@ -260,6 +285,40 @@
   </Style>
   <Style Selector="Button.ghost:pressed /template/ ContentPresenter#PART_ContentPresenter">
     <Setter Property="Background" Value="{StaticResource GoletherPanel2}" />
+  </Style>
+  <!-- An unobtrusive way to another path, under the card of the join screen. -->
+  <Style Selector="Button.subtle">
+    <Setter Property="Padding" Value="12,8" />
+    <Setter Property="FontSize" Value="14" />
+    <Setter Property="FontWeight" Value="SemiBold" />
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="Foreground" Value="{StaticResource GoletherAccent}" />
+    <Setter Property="Opacity" Value="0.85" />
+    <Setter Property="FocusAdorner" Value="{x:Null}" />
+  </Style>
+  <Style Selector="Button.subtle /template/ ContentPresenter#PART_ContentPresenter, Button.subtle:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="Foreground" Value="{StaticResource GoletherAccent}" />
+  </Style>
+  <Style Selector="Button.subtle:pressed /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="{StaticResource GoletherPanel}" />
+  </Style>
+  <!-- One of the two kinds of things to show: a film or a folder of photos. -->
+  <Style Selector="Button.choice">
+    <Setter Property="HorizontalAlignment" Value="Stretch" />
+    <Setter Property="HorizontalContentAlignment" Value="Center" />
+    <Setter Property="Padding" Value="10,14" />
+    <Setter Property="Background" Value="{StaticResource GoletherPanel2}" />
+    <Setter Property="BorderBrush" Value="{StaticResource GoletherLine}" />
+    <Setter Property="BorderThickness" Value="1" />
+    <Setter Property="Foreground" Value="{StaticResource GoletherText}" />
+  </Style>
+  <Style Selector="Button.choice:pressed /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="{StaticResource GoletherLine}" />
+  </Style>
+  <Style Selector="Button.choice.chosen /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="BorderBrush" Value="{StaticResource GoletherAccent}" />
+    <Setter Property="Foreground" Value="{StaticResource GoletherAccent}" />
   </Style>
 
   <!-- The keys of the dock. -->

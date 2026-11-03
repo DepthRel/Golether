@@ -11,7 +11,10 @@ using Golether.Localization;
 using Golether.Media.Conference;
 using Golether.Media.Conference.GStreamer;
 using Golether.Media.Player.Mpv;
+using Golether.Media.Streaming.Gallery;
+using Golether.Security.Admission;
 using Golether.Security.Identity;
+using Golether.Transports.PortMapping;
 
 namespace Golether.Mobile.Services;
 
@@ -46,9 +49,24 @@ public sealed class MobileServices : IMobileServices
     private readonly IMobilePlatform _platform;
 
     /// <summary>
+    /// The folder of the JPEG files of a shown folder in the cache folder.
+    /// </summary>
+    private const string GALLERY_FOLDER = "gallery";
+
+    /// <summary>
+    /// How the application names itself to the page of the project and to the routers.
+    /// </summary>
+    private const string USER_AGENT = "Golether/1.0";
+
+    /// <summary>
     /// The cameras and voices, once the first session needed them.
     /// </summary>
     private IConferenceMedia? _conference;
+
+    /// <summary>
+    /// The client of the web, once the first hosted session needed it.
+    /// </summary>
+    private HttpClient? _http;
 
     /// <summary>
     /// Initializes a new instance of the <see cref="MobileServices"/> class.
@@ -153,6 +171,7 @@ public sealed class MobileServices : IMobileServices
 
         var services = new MobileServices(provider, platform, identity, player!, language, paths.AvatarsDirectory);
         services.TrackFiles.Clear();
+        GalleryCatalog.DeleteLeftovers(Path.Combine(platform.CacheDirectory, GALLERY_FOLDER));
 
         return services;
     }
@@ -160,6 +179,34 @@ public sealed class MobileServices : IMobileServices
     /// <inheritdoc />
     public IParticipantConnection CreateConnection(IConferenceMedia conference, CurrentSession current, string displayName)
         => new ParticipantConnection(this, conference, current, displayName);
+
+    /// <inheritdoc />
+    public IHostConnection CreateHost(IConferenceMedia conference, CurrentSession current, IAdmissionPrompt prompt)
+    {
+        _http ??= CreateHttpClient();
+
+        return new HostConnection(
+            this,
+            conference,
+            current,
+            prompt,
+            new RendezvousDirectory(_http, Settings, logger: LoggerFactory.CreateLogger<RendezvousDirectory>()),
+            PortMapper.CreateDefault(_http, LoggerFactory),
+            _provider.GetRequiredService<IContactStore>(),
+            Path.Combine(_platform.CacheDirectory, GALLERY_FOLDER));
+    }
+
+    /// <summary>
+    /// Creates the client of the web for the page of the project and the routers; one serves the whole application.
+    /// </summary>
+    /// <returns>The client.</returns>
+    private static HttpClient CreateHttpClient()
+    {
+        var http = new HttpClient { Timeout = Timeout.InfiniteTimeSpan };
+        http.DefaultRequestHeaders.UserAgent.ParseAdd(USER_AGENT);
+
+        return http;
+    }
 
     /// <inheritdoc />
     public async Task<IConferenceMedia> GetConferenceAsync()

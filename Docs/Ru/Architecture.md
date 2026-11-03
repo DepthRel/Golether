@@ -55,6 +55,7 @@ Sources/
   Media/Golether.Media.Conference.GStreamer.Android  запуск GStreamer на Android
   Tunnels/Golether.Tunnels.AmneziaWG       ключи X25519, маскировка, .conf, подписанные пакеты, управление через CLI
   Session/Golether.Session                 HostSession и ParticipantSession
+  Session/Golether.Session.Hosting         проводимый сеанс в его сети: приём подключений, TURN-ретранслятор, комната на сервере встреч, порты роутера, приглашения
   Apps/Golether.Client                     общий слой клиента: сервисы, модели представления и элементы управления без окон, цвета темы, платные функции
   Apps/Golether.Mobile                     экраны мобильного клиента: Avalonia, один вид вместо окон, своя тема и значки
   Apps/Golether.Mobile.Android             пакет Android: Activity, foreground-сервис сессии, нативные компоненты

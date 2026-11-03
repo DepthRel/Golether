@@ -236,7 +236,7 @@ public sealed class GalleryCatalog : ISharedFileSet, IDisposable
         var name = MediaDescriptor.NormalizeFileName(Path.GetFileName(file.Path));
         if (file.Kind == GalleryItemKind.Video)
         {
-            return File.Exists(file.Path) ? Make(file, file.Path, null, file.Length, name) : null;
+            return MediaFiles.Exists(file.Path) ? Make(file, file.Path, null, file.Length, name) : null;
         }
 
         var served = file.Path;
@@ -269,7 +269,10 @@ public sealed class GalleryCatalog : ISharedFileSet, IDisposable
     {
         try
         {
-            using var file = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete, 4096);
+            // A file the system opened for the application is read through the system, a little at a time as well.
+            using Stream file = OpenedFiles.TryOpen(path, out var opened)
+                ? new BufferedStream(opened!, 4096)
+                : new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete, 4096);
             return PictureLayout.Read(file, stripMetadata);
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)

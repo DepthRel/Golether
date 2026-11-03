@@ -29,4 +29,9 @@ public enum MobileScreen
     /// The session: the video and its controls.
     /// </summary>
     Watch = 4,
+
+    /// <summary>
+    /// A new session this device hosts: its name and what it shows.
+    /// </summary>
+    Host = 5,
 }

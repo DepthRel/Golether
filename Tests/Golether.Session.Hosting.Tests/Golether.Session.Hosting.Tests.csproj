@@ -1,0 +1,9 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- Integration tests of a hosted session on loopback: its listener, its invitations and its size. -->
+  <ItemGroup>
+    <ProjectReference Include="../../Sources/Session/Golether.Session.Hosting/Golether.Session.Hosting.csproj" />
+    <ProjectReference Include="../../Sources/Media/Golether.Media.Player/Golether.Media.Player.csproj" />
+  </ItemGroup>
+
+</Project>

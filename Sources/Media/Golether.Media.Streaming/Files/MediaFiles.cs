@@ -70,12 +70,19 @@ public static class MediaFiles
     }
 
     /// <summary>
-    /// Opens a file for shared, random-access reading.
+    /// Opens a file for shared, random-access reading; a file the system opened for the application (see
+    /// <see cref="OpenedFiles"/>) is read through the system.
     /// </summary>
     /// <param name="path">The file path.</param>
     /// <returns>The stream.</returns>
-    public static FileStream OpenRead(string path)
-        => new(path, new FileStreamOptions
+    public static Stream OpenRead(string path)
+    {
+        if (OpenedFiles.TryOpen(path, out var opened))
+        {
+            return opened!;
+        }
+
+        return new FileStream(path, new FileStreamOptions
         {
             Mode = FileMode.Open,
             Access = FileAccess.Read,
@@ -83,6 +90,15 @@ public static class MediaFiles
             Options = FileOptions.Asynchronous | FileOptions.RandomAccess,
             BufferSize = 0,
         });
+    }
+
+    /// <summary>
+    /// Checks whether a file exists, a file the system opened for the application (see <see cref="OpenedFiles"/>)
+    /// included.
+    /// </summary>
+    /// <param name="path">The file path.</param>
+    /// <returns><see langword="true"/> when the file can be opened by its path.</returns>
+    public static bool Exists(string path) => OpenedFiles.Contains(path) || File.Exists(path);
 
     /// <summary>
     /// Returns the distinct sample offsets of a file.

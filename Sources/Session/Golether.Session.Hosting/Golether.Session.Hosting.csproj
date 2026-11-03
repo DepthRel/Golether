@@ -1,0 +1,24 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    A hosted session on its network: the host session with the listener of its port, the TURN relay of the cameras,
+    the room on the rendezvous server, the port opened on the router and the addresses of the invitations. Shared by
+    the desktop application and the mobile client; the session itself stays free of the concrete transports.
+  -->
+  <PropertyGroup>
+    <RootNamespace>Golether.Session.Hosting</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Golether.Session\Golether.Session.csproj" />
+    <ProjectReference Include="..\..\Transports\Golether.Transports.PortMapping\Golether.Transports.PortMapping.csproj" />
+    <ProjectReference Include="..\..\Transports\Golether.Transports.Relay\Golether.Transports.Relay.csproj" />
+    <ProjectReference Include="..\..\Transports\Golether.Transports.Rendezvous\Golether.Transports.Rendezvous.csproj" />
+    <ProjectReference Include="..\..\Transports\Golether.Transports.Tls\Golether.Transports.Tls.csproj" />
+  </ItemGroup>
+
+</Project>

@@ -8,6 +8,7 @@ using Golether.Media.Conference;
 using Golether.Media.Player;
 using Golether.Media.Player.Mpv;
 using Golether.Mobile.Services;
+using Golether.Security.Admission;
 using Golether.Security.Identity;
 
 namespace Golether.Mobile.Tests;
@@ -74,6 +75,16 @@ internal sealed class StubServices : IMobileServices, IDisposable
     /// </summary>
     public StubConnection Connection { get; } = new();
 
+    /// <summary>
+    /// Gets the session the next hosting gets.
+    /// </summary>
+    public StubHostConnection Host { get; } = new();
+
+    /// <summary>
+    /// Gets what asked the user whether a participant may come in, once a session was hosted.
+    /// </summary>
+    public IAdmissionPrompt? Prompt { get; private set; }
+
     /// <inheritdoc />
     public DeviceIdentity Identity { get; }
 
@@ -109,6 +120,13 @@ internal sealed class StubServices : IMobileServices, IDisposable
 
     /// <inheritdoc />
     public IParticipantConnection CreateConnection(IConferenceMedia conference, CurrentSession current, string displayName) => Connection;
+
+    /// <inheritdoc />
+    public IHostConnection CreateHost(IConferenceMedia conference, CurrentSession current, IAdmissionPrompt prompt)
+    {
+        Prompt = prompt;
+        return Host;
+    }
 
     /// <inheritdoc />
     public void Dispose()

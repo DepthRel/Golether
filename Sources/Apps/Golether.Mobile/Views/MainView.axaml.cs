@@ -268,12 +268,20 @@ public sealed partial class MainView : UserControl
         ReactionItems.ContainerPrepared += OnReactionPrepared;
         ChatScroll.ScrollChanged += (_, _) => ChatToEnd.IsVisible = !IsChatAtEnd();
         DataContextChanged += OnDataContextChanged;
-        foreach (var sheet in new[] { TracksSheet, ReactionsSheet, PersonSheet, PictureSheet, AvatarSheet, LeaveSheet, LanguageSheet })
+        foreach (var sheet in new[]
+        {
+            TracksSheet, ReactionsSheet, PersonSheet, PictureSheet, AvatarSheet, LeaveSheet, LanguageSheet,
+            InviteSheet, AdmissionSheet, RemoveSheet, MediaSheet,
+        })
         {
             sheet.Closed += OnSheetClosed;
         }
 
         LeaveSheet.Closed += OnLeaveSheetClosed;
+        InviteSheet.Closed += OnHostSheetClosed;
+        AdmissionSheet.Closed += OnHostSheetClosed;
+        RemoveSheet.Closed += OnHostSheetClosed;
+        MediaSheet.Closed += OnHostSheetClosed;
         AvatarSheet.Closed += OnAvatarSheetClosed;
         AvatarCrop.GestureRecognizers.Add(new PinchGestureRecognizer());
         AvatarCrop.AddHandler(PinchEvent, OnAvatarPinch);
@@ -696,6 +704,62 @@ public sealed partial class MainView : UserControl
         if (DataContext is MainViewModel model)
         {
             model.IsLeaveAsked = false;
+        }
+    }
+
+    /// <summary>
+    /// Forgets what a panel of the host was open for once it is closed, however it was closed. A participant who waits
+    /// to come in and whose panel was swept away is turned away: an answer is owed, and they may knock again.
+    /// </summary>
+    /// <param name="sender">The panel.</param>
+    /// <param name="e">The event.</param>
+    private void OnHostSheetClosed(object? sender, EventArgs e)
+    {
+        if (DataContext is not MainViewModel model)
+        {
+            return;
+        }
+
+        if (ReferenceEquals(sender, InviteSheet))
+        {
+            model.Invitation = null;
+        }
+        else if (ReferenceEquals(sender, AdmissionSheet) && model.Admission is not null)
+        {
+            model.DeclineCommand.Execute(null);
+        }
+        else if (ReferenceEquals(sender, RemoveSheet))
+        {
+            model.RemovalAsked = null;
+        }
+        else if (ReferenceEquals(sender, MediaSheet))
+        {
+            model.IsMediaChangeOpen = false;
+        }
+    }
+
+    /// <summary>
+    /// Leaves what is shown as it is.
+    /// </summary>
+    /// <param name="sender">The button.</param>
+    /// <param name="e">The event.</param>
+    private void OnMediaCancelled(object? sender, RoutedEventArgs e) => MediaSheet.Close();
+
+    /// <summary>
+    /// Opens a panel while the model has something for it and closes it when that is gone; a panel already open stays,
+    /// with what it shows replaced.
+    /// </summary>
+    /// <param name="sheet">The panel.</param>
+    /// <param name="wanted">Whether the model has something for it.</param>
+    private void Follow(BottomSheet sheet, bool wanted)
+    {
+        if (wanted && !sheet.IsOpen)
+        {
+            Show(sheet);
+        }
+        else if (!wanted && sheet.IsOpen)
+        {
+            sheet.Close();
         }
     }
 
@@ -1187,6 +1251,27 @@ public sealed partial class MainView : UserControl
             {
                 LeaveSheet.Close();
             }
+        }
+
+        if (sender is not MainViewModel host)
+        {
+            return;
+        }
+
+        switch (e.PropertyName)
+        {
+            case nameof(MainViewModel.Invitation):
+                Follow(InviteSheet, host.Invitation is not null);
+                break;
+            case nameof(MainViewModel.Admission):
+                Follow(AdmissionSheet, host.Admission is not null);
+                break;
+            case nameof(MainViewModel.RemovalAsked):
+                Follow(RemoveSheet, host.RemovalAsked is not null);
+                break;
+            case nameof(MainViewModel.IsMediaChangeOpen):
+                Follow(MediaSheet, host.IsMediaChangeOpen);
+                break;
         }
     }
 

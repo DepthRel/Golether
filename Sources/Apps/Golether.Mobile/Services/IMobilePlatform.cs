@@ -1,5 +1,6 @@
 using Golether.Client.Services;
 using Golether.Media.Conference;
+using Golether.Media.Streaming.Gallery;
 using Golether.Security.Secrets;
 
 namespace Golether.Mobile.Services;
@@ -91,6 +92,36 @@ public interface IMobilePlatform
     /// </summary>
     /// <returns>The text, or <see langword="null"/> when the clipboard holds none.</returns>
     string? ReadClipboardText();
+
+    /// <summary>
+    /// Puts a text into the clipboard of the system.
+    /// </summary>
+    /// <param name="text">The text.</param>
+    void CopyText(string text);
+
+    /// <summary>
+    /// Offers a text to the other applications of the device, such as a messenger, through the sharing of the system.
+    /// </summary>
+    /// <param name="text">The text.</param>
+    void ShareText(string text);
+
+    /// <summary>
+    /// Opens a file the user chose in the picker of the system for showing: the file is read through the system, by
+    /// the path this gives (see <see cref="Media.Streaming.Files.OpenedFiles"/>).
+    /// </summary>
+    /// <param name="document">The address of the chosen file, as the picker gave it.</param>
+    /// <returns>The path of the file.</returns>
+    /// <exception cref="IOException">The file cannot be read from any place in it, for example a file of a cloud
+    /// that is not on the device; the message says so in the words of the user.</exception>
+    string OpenDocument(Uri document);
+
+    /// <summary>
+    /// Opens a folder the user chose in the picker of the system for showing; its files are read through the system.
+    /// </summary>
+    /// <param name="folder">The address of the chosen folder, as the picker gave it.</param>
+    /// <returns>The folder.</returns>
+    /// <exception cref="IOException">The folder cannot be read.</exception>
+    IGalleryDirectory OpenFolder(Uri folder);
 
     /// <summary>
     /// Gets the player of the short sounds of the application, such as the one of a new message.

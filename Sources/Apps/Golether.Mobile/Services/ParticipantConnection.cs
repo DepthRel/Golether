@@ -148,7 +148,7 @@ public sealed class ParticipantConnection : IParticipantConnection, IReconnectio
 
         _ticket = null;
         var session = Interlocked.Exchange(ref _session, null);
-        _current.Attach(null);
+        _current.Detach();
 
         if (session is not null)
         {

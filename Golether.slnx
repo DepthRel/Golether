@@ -118,6 +118,7 @@
   </Folder>
   <Folder Name="/Sources/Session/">
     <Project Path="Sources/Session/Golether.Session/Golether.Session.csproj" />
+    <Project Path="Sources/Session/Golether.Session.Hosting/Golether.Session.Hosting.csproj" />
   </Folder>
   <Folder Name="/Sources/Sync/">
     <Project Path="Sources/Sync/Golether.Sync/Golether.Sync.csproj" />
@@ -152,6 +153,7 @@
       <Build Project="false" />
     </Project>
     <Project Path="Tests/Golether.Security.Tests/Golether.Security.Tests.csproj" />
+    <Project Path="Tests/Golether.Session.Hosting.Tests/Golether.Session.Hosting.Tests.csproj" />
     <Project Path="Tests/Golether.Session.Tests/Golether.Session.Tests.csproj" />
     <Project Path="Tests/Golether.Sync.Tests/Golether.Sync.Tests.csproj" />
     <Project Path="Tests/Golether.Transports.Tests/Golether.Transports.Tests.csproj" />

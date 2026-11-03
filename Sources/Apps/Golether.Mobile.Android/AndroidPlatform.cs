@@ -6,9 +6,12 @@ using Android.Media;
 using Android.Net;
 using Android.Views;
 using Golether.Client.Services;
+using Golether.Localization;
 using Golether.Media.Conference;
 using Golether.Media.Conference.GStreamer.Android;
 using Golether.Media.Player.Android;
+using Golether.Media.Streaming.Files;
+using Golether.Media.Streaming.Gallery;
 using Golether.Mobile.Services;
 using Golether.Security.Android;
 using Golether.Security.Secrets;
@@ -25,6 +28,16 @@ internal sealed class AndroidPlatform(Context context) : IMobilePlatform
     /// The number of the request for the camera and the microphone.
     /// </summary>
     public const int CAPTURE_REQUEST = 1;
+
+    /// <summary>
+    /// The label of a text the application puts into the clipboard; the system may show it.
+    /// </summary>
+    private const string CLIP_LABEL = "Golether";
+
+    /// <summary>
+    /// The type of a shared text.
+    /// </summary>
+    private const string PLAIN_TEXT = "text/plain";
 
     /// <summary>
     /// The activity on the screen, or <see langword="null"/>.
@@ -231,6 +244,65 @@ internal sealed class AndroidPlatform(Context context) : IMobilePlatform
             networks.UnregisterNetworkCallback(listener);
             _networks = null;
         }
+    }
+
+    /// <inheritdoc />
+    public void CopyText(string text)
+    {
+        var clipboard = (ClipboardManager?)context.GetSystemService(Context.ClipboardService);
+        if (clipboard is not null)
+        {
+            clipboard.PrimaryClip = ClipData.NewPlainText(CLIP_LABEL, text);
+        }
+    }
+
+    /// <inheritdoc />
+    public void ShareText(string text)
+    {
+        var send = new Intent(Intent.ActionSend);
+        send.SetType(PLAIN_TEXT);
+        send.PutExtra(Intent.ExtraText, text);
+        var chooser = Intent.CreateChooser(send, (string?)null)!;
+
+        // Outside the activity the system needs a task of its own for the sharing.
+        if (_activity is { } activity)
+        {
+            activity.StartActivity(chooser);
+        }
+        else
+        {
+            context.StartActivity(chooser.AddFlags(ActivityFlags.NewTask));
+        }
+    }
+
+    /// <inheritdoc />
+    public string OpenDocument(System.Uri document)
+    {
+        ArgumentNullException.ThrowIfNull(document);
+
+        var resolver = context.ContentResolver ?? throw new IOException(Texts.Get("Mobile.Document.NotSeekable"));
+        var address = global::Android.Net.Uri.Parse(document.OriginalString)!;
+        var name = ContentFiles.ReadName(resolver, address) ?? Path.GetFileName(document.LocalPath);
+
+        // A film is read from every place in it: a file the system gives only as a stream (a cloud) cannot be shown.
+        using (var probe = ContentFiles.Open(resolver, address))
+        {
+            if (!probe.CanSeek)
+            {
+                throw new IOException(Texts.Get("Mobile.Document.NotSeekable"));
+            }
+        }
+
+        return OpenedFiles.Add(name, () => ContentFiles.Open(resolver, address));
+    }
+
+    /// <inheritdoc />
+    public IGalleryDirectory OpenFolder(System.Uri folder)
+    {
+        ArgumentNullException.ThrowIfNull(folder);
+
+        var resolver = context.ContentResolver ?? throw new IOException(folder.OriginalString);
+        return DocumentTreeFolder.Open(resolver, global::Android.Net.Uri.Parse(folder.OriginalString)!);
     }
 
     /// <inheritdoc />

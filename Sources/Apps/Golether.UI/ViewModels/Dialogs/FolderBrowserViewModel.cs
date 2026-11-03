@@ -517,8 +517,8 @@ public sealed partial class FolderBrowserViewModel : ObservableObject, IDisposab
             Folder = folder;
             SummaryText = folder.Files.Count == 0
                 ? Texts.Get("Gallery.Browser.Nothing")
-                : Texts.Format("Gallery.Confirm.Summary", folder.Pictures, folder.Videos, DisplayFormat.Size(folder.TotalBytes));
-            NotesText = DescribeLeftOut(folder);
+                : DisplayFormat.GallerySummary(folder);
+            NotesText = DisplayFormat.GalleryLeftOut(folder);
             IsCounting = false;
         }
         catch (OperationCanceledException)
@@ -533,26 +533,5 @@ public sealed partial class FolderBrowserViewModel : ObservableObject, IDisposab
                 IsCounting = false;
             }
         }
-    }
-
-    /// <summary>
-    /// Words what of a folder is not shown.
-    /// </summary>
-    /// <param name="folder">The folder.</param>
-    /// <returns>One line for each kind of file left out, or an empty text.</returns>
-    private static string DescribeLeftOut(GalleryFolder folder)
-    {
-        var lines = new List<string>();
-        if (folder.Unsupported > 0)
-        {
-            lines.Add(Texts.Format("Gallery.Confirm.Unsupported", folder.Unsupported));
-        }
-
-        if (folder.Truncated)
-        {
-            lines.Add(Texts.Format("Gallery.Confirm.Truncated", GalleryItem.MAX_ITEMS));
-        }
-
-        return string.Join(Environment.NewLine, lines);
     }
 }

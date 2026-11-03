@@ -6,6 +6,7 @@ using Golether.Core.Data.Enums;
 using Golether.Core.Playback;
 using Golether.Localization;
 using Golether.Media.Player.Enums;
+using Golether.Media.Streaming.Files;
 
 namespace Golether.Media.Player.Mpv;
 
@@ -116,6 +117,11 @@ public sealed class MpvPlayer : IPlaybackController, ILocalPlayerControls, ISubt
     /// Guards the snapshot fields.
     /// </summary>
     private readonly Lock _gate = new();
+
+    /// <summary>
+    /// The stream through which mpv reads a file the system opened for the application, or <see langword="null"/>.
+    /// </summary>
+    private Uri? _openedSource;
 
     /// <summary>
     /// Whether a file is loaded.
@@ -448,9 +454,26 @@ public sealed class MpvPlayer : IPlaybackController, ILocalPlayerControls, ISubt
         ThrowIfDisposed();
         LibMpv.Check(LibMpv.SetPropertyString(_handle, "start", Seconds(startPosition)), "setting the start position");
         SetFlag("pause", paused);
-        var target = source.IsFile ? source.LocalPath : source.OriginalString;
+        var target = source.IsFile ? ResolveFile(source.LocalPath) : source.OriginalString;
         LibMpv.Check(LibMpv.Command(_handle, "loadfile", target, "replace"), "loading the file");
         return Task.CompletedTask;
+    }
+
+    /// <summary>
+    /// Gives mpv what it opens for a local file: the path itself, or for a file the system opened for the application
+    /// (which mpv cannot open by name) a stream read through the system. The stream of the file before is let go.
+    /// </summary>
+    /// <param name="path">The path of the file.</param>
+    /// <returns>What mpv loads.</returns>
+    private string ResolveFile(string path)
+    {
+        var opened = OpenedFiles.Contains(path) ? MpvStreamRegistry.Register(() => MediaFiles.OpenRead(path)) : null;
+        if (Interlocked.Exchange(ref _openedSource, opened) is { } previous)
+        {
+            MpvStreamRegistry.Unregister(previous);
+        }
+
+        return opened?.OriginalString ?? path;
     }
 
     /// <inheritdoc />
@@ -516,6 +539,10 @@ public sealed class MpvPlayer : IPlaybackController, ILocalPlayerControls, ISubt
             LibMpv.Wakeup(_handle);
             _eventThread.Join(TimeSpan.FromSeconds(5));
             LibMpv.TerminateDestroy(_handle);
+            if (Interlocked.Exchange(ref _openedSource, null) is { } opened)
+            {
+                MpvStreamRegistry.Unregister(opened);
+            }
         }
 
         return ValueTask.CompletedTask;

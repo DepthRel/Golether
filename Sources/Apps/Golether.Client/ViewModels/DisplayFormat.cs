@@ -1,6 +1,8 @@
 using System.Globalization;
 using Golether.Client.Enums;
+using Golether.Core.Media;
 using Golether.Localization;
+using Golether.Media.Streaming.Gallery;
 
 namespace Golether.Client.ViewModels;
 
@@ -111,5 +113,40 @@ public static class DisplayFormat
         }
 
         return $"{value.ToString(unit == 0 ? "0" : "0.0", Culture)} {units[unit]}";
+    }
+
+    /// <summary>
+    /// Words what a folder shows: <c>Pictures: 12 · videos: 2 · 48.0 MB</c>.
+    /// </summary>
+    /// <param name="folder">The folder.</param>
+    /// <returns>The text.</returns>
+    public static string GallerySummary(GalleryFolder folder)
+    {
+        ArgumentNullException.ThrowIfNull(folder);
+
+        return Texts.Format("Gallery.Confirm.Summary", folder.Pictures, folder.Videos, Size(folder.TotalBytes));
+    }
+
+    /// <summary>
+    /// Words what of a folder is not shown.
+    /// </summary>
+    /// <param name="folder">The folder.</param>
+    /// <returns>One line for each kind of file left out, or an empty text.</returns>
+    public static string GalleryLeftOut(GalleryFolder folder)
+    {
+        ArgumentNullException.ThrowIfNull(folder);
+
+        var lines = new List<string>();
+        if (folder.Unsupported > 0)
+        {
+            lines.Add(Texts.Format("Gallery.Confirm.Unsupported", folder.Unsupported));
+        }
+
+        if (folder.Truncated)
+        {
+            lines.Add(Texts.Format("Gallery.Confirm.Truncated", GalleryItem.MAX_ITEMS));
+        }
+
+        return string.Join(Environment.NewLine, lines);
     }
 }

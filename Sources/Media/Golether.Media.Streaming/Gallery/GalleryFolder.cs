@@ -131,7 +131,8 @@ public sealed record GalleryFolder(string Title, IReadOnlyList<GalleryFile> File
         var walk = new Walk(includeSubfolders, canDecode, cancellationToken);
         if (File.Exists(full))
         {
-            walk.Take(new FileInfo(full), string.Empty);
+            var file = new FileInfo(full);
+            walk.Take(new GalleryEntry(file.Name, file.FullName, file.Length, null), string.Empty);
             return walk.Result(Path.GetFileName(full));
         }
 
@@ -141,8 +142,72 @@ public sealed record GalleryFolder(string Title, IReadOnlyList<GalleryFile> File
             throw new DirectoryNotFoundException(full);
         }
 
-        walk.Visit(folder, string.Empty, 0);
+        walk.Visit(new DiskDirectory(folder), string.Empty, 0);
         return walk.Result(folder.Name.Length > 0 ? folder.Name : full);
+    }
+
+    /// <summary>
+    /// Looks at a folder that does not lie on the disk, such as one chosen on Android, with its nested folders.
+    /// </summary>
+    /// <param name="folder">The folder.</param>
+    /// <param name="includeSubfolders">Whether the nested folders are shown too.</param>
+    /// <param name="canDecode">Whether this device can turn HEIC, AVIF and TIFF into JPEG; without it they are left out.</param>
+    /// <param name="cancellationToken">The cancellation token.</param>
+    /// <returns>What can be shown.</returns>
+    public static GalleryFolder Describe(IGalleryDirectory folder, bool includeSubfolders = true, bool canDecode = true, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(folder);
+
+        var walk = new Walk(includeSubfolders, canDecode, cancellationToken);
+        walk.Visit(folder, string.Empty, 0);
+
+        return walk.Result(folder.Name);
+    }
+
+    /// <summary>
+    /// A folder on the disk.
+    /// </summary>
+    /// <param name="folder">The folder.</param>
+    private sealed class DiskDirectory(DirectoryInfo folder) : IGalleryDirectory
+    {
+        /// <inheritdoc />
+        public string Name => folder.Name;
+
+        /// <inheritdoc />
+        public IReadOnlyList<GalleryEntry> List()
+        {
+            var entries = new List<GalleryEntry>();
+            foreach (var entry in folder.EnumerateFileSystemInfos("*", _walk))
+            {
+                if (entry is DirectoryInfo nested)
+                {
+                    entries.Add(new GalleryEntry(nested.Name, string.Empty, 0, new DiskDirectory(nested)));
+                }
+                else if (entry is FileInfo file && TryLength(file) is { } length)
+                {
+                    entries.Add(new GalleryEntry(file.Name, file.FullName, length, null));
+                }
+            }
+
+            return entries;
+        }
+
+        /// <summary>
+        /// Reads the size of a file; a file that went away meanwhile has none.
+        /// </summary>
+        /// <param name="file">The file.</param>
+        /// <returns>The size, or <see langword="null"/>.</returns>
+        private static long? TryLength(FileInfo file)
+        {
+            try
+            {
+                return file.Length;
+            }
+            catch (IOException)
+            {
+                return null;
+            }
+        }
     }
 
     /// <summary>
@@ -204,13 +269,13 @@ public sealed record GalleryFolder(string Title, IReadOnlyList<GalleryFile> File
         /// <param name="folder">The folder.</param>
         /// <param name="relative">Its path relative to the shown folder.</param>
         /// <param name="depth">How deep it lies.</param>
-        public void Visit(DirectoryInfo folder, string relative, int depth)
+        public void Visit(IGalleryDirectory folder, string relative, int depth)
         {
             _cancellationToken.ThrowIfCancellationRequested();
-            List<FileSystemInfo> entries;
+            IReadOnlyList<GalleryEntry> entries;
             try
             {
-                entries = folder.EnumerateFileSystemInfos("*", _walk).ToList();
+                entries = folder.List();
             }
             catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or System.Security.SecurityException)
             {
@@ -218,7 +283,7 @@ public sealed record GalleryFolder(string Title, IReadOnlyList<GalleryFile> File
                 return;
             }
 
-            foreach (var file in entries.OfType<FileInfo>().OrderBy(f => f.Name, _naturalOrder))
+            foreach (var file in entries.Where(e => e.Folder is null).OrderBy(f => f.Name, _naturalOrder))
             {
                 if (_stopped || ++_scanned > MAX_SCANNED)
                 {
@@ -234,14 +299,14 @@ public sealed record GalleryFolder(string Title, IReadOnlyList<GalleryFile> File
                 return;
             }
 
-            foreach (var nested in entries.OfType<DirectoryInfo>().OrderBy(d => d.Name, _naturalOrder))
+            foreach (var nested in entries.Where(e => e.Folder is not null).OrderBy(d => d.Name, _naturalOrder))
             {
                 if (_stopped)
                 {
                     return;
                 }
 
-                Visit(nested, relative.Length == 0 ? nested.Name : relative + GalleryItem.FOLDER_SEPARATOR + nested.Name, depth + 1);
+                Visit(nested.Folder!, relative.Length == 0 ? nested.Name : relative + GalleryItem.FOLDER_SEPARATOR + nested.Name, depth + 1);
             }
         }
 
@@ -250,42 +315,34 @@ public sealed record GalleryFolder(string Title, IReadOnlyList<GalleryFile> File
         /// </summary>
         /// <param name="file">The file.</param>
         /// <param name="relative">The folder it lies in, relative to the shown folder.</param>
-        public void Take(FileInfo file, string relative)
+        public void Take(GalleryEntry file, string relative)
         {
-            long length;
-            try
-            {
-                length = file.Length;
-            }
-            catch (IOException)
-            {
-                return;
-            }
-
+            var length = file.Length;
+            var extension = Path.GetExtension(file.Name);
             var folder = GalleryItem.NormalizeFolder(relative);
             if (IsVideo(file.Name))
             {
                 if (length > 0)
                 {
-                    _files.Add(new GalleryFile(file.FullName, folder, GalleryItemKind.Video, length, false));
+                    _files.Add(new GalleryFile(file.Path, folder, GalleryItemKind.Video, length, false));
                 }
 
                 return;
             }
 
             var decoded = NeedsDecoding(file.Name);
-            if (_pictures.Contains(file.Extension) || decoded)
+            if (_pictures.Contains(extension) || decoded)
             {
                 if (length is > 0 and <= GalleryItem.MAX_LENGTH && (!decoded || _canDecode))
                 {
-                    _files.Add(new GalleryFile(file.FullName, folder, GalleryItemKind.Picture, length, decoded));
+                    _files.Add(new GalleryFile(file.Path, folder, GalleryItemKind.Picture, length, decoded));
                 }
                 else
                 {
                     _unsupported++;
                 }
             }
-            else if (_raw.Contains(file.Extension))
+            else if (_raw.Contains(extension))
             {
                 _unsupported++;
             }

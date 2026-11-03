@@ -4,6 +4,7 @@ using Golether.Core.Data.Stores;
 using Golether.Core.Playback;
 using Golether.Media.Conference;
 using Golether.Media.Player.Mpv;
+using Golether.Security.Admission;
 using Golether.Security.Identity;
 
 namespace Golether.Mobile.Services;
@@ -78,4 +79,13 @@ public interface IMobileServices
     /// <param name="displayName">The name shown to others.</param>
     /// <returns>The connection, not connected yet.</returns>
     IParticipantConnection CreateConnection(IConferenceMedia conference, CurrentSession current, string displayName);
+
+    /// <summary>
+    /// Prepares a session this device hosts.
+    /// </summary>
+    /// <param name="conference">The cameras and voices.</param>
+    /// <param name="current">What follows the session of the moment.</param>
+    /// <param name="prompt">Asks the user whether a participant may come in.</param>
+    /// <returns>The session, not started yet.</returns>
+    IHostConnection CreateHost(IConferenceMedia conference, CurrentSession current, IAdmissionPrompt prompt);
 }

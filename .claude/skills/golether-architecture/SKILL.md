@@ -23,10 +23,10 @@ Full design: `Docs/En/Architecture.md`, wire formats: `Docs/En/Protocol.md`.
 | `Sync/Golether.Sync` | session messages, clock estimation, `PlaybackAuthority` (host) / `PlaybackFollower` |
 | `Media.Streaming` / `Media.Player` / `Media.Conference*` | 256 KiB chunk serving + peer sharing / libmpv / GStreamer `webrtcbin` |
 | `Tunnels.AmneziaWG` | AWG keys, signed offer/answer packages, CLI control |
-| `Session` | `HostSession`, `ParticipantSession` |
+| `Session` | `HostSession`, `ParticipantSession`; `Session.Hosting`: `SessionHosting`, a hosted session with its listener, TURN relay, rendezvous room, router ports and invitations, shared by the desktop and the phone |
 | `Apps/Golether.Client` | client layer shared with the mobile client: services and view models without windows, the colours of the theme (`Styles/Palette.axaml`), `IFeatureAccess` (paid features) |
 | `Apps/Golether.UI` | Avalonia MVVM app, composition root `AppServices` |
-| `Apps/Golether.Mobile(.Android)` | Android participant client: one Avalonia view, its own theme and icons; the package with the activity and the foreground service. Projects with `Build="false"` in `Golether.slnx`, so CI never needs the Android workload; `*.Android` projects next to their abstraction (`Media.Player.Android`, `Media.Conference.GStreamer.Android`, `Security.Android`) |
+| `Apps/Golether.Mobile(.Android)` | Android client: a participant of any session, or the host of a session of up to 3 (`HostConnection`, files chosen in the system pickers are read through `OpenedFiles`): one Avalonia view, its own theme and icons; the package with the activity and the foreground service. Projects with `Build="false"` in `Golether.slnx`, so CI never needs the Android workload; `*.Android` projects next to their abstraction (`Media.Player.Android`, `Media.Conference.GStreamer.Android`, `Security.Android`) |
 | `Apps/Golether.Web.Server(.UI/.Contracts)` | rendezvous + STUN server, its monitor window, shared contracts |
 | `Apps/Golether.Pages` | static GitHub Pages site: landing, `join/` link page, `updates.json`, `config.json` |
 
