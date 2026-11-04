@@ -190,12 +190,26 @@ jobs:
         run: |
           sha256sum -- * > "SHA256SUMS-$VERSION.txt"
           cat "SHA256SUMS-$VERSION.txt"
+      # The release is made first and the files are attached one by one. A draft just made is not always visible to
+      # the upload service at once: its first uploads answer 404, so every file is tried again after a pause. Files of
+      # the same name are replaced, so the job may simply be run again over a release that got some of them.
       - name: Attach to the release
         run: |
           ls -l packages
-          if gh release view "$TAG" >/dev/null 2>&1; then
-            gh release upload "$TAG" packages/* --clobber
-          else
-            gh release create "$TAG" packages/* --draft --title "Golether $TAG" \
+          if ! gh release view "$TAG" >/dev/null 2>&1; then
+            gh release create "$TAG" --draft --title "Golether $TAG" \
               --notes "Every package of Golether $TAG. Write the notes, check the files, then publish and update updates.json."
           fi
+          for file in packages/*; do
+            for attempt in 1 2 3 4 5; do
+              if gh release upload "$TAG" "$file" --clobber; then
+                break
+              fi
+              if [ "$attempt" -eq 5 ]; then
+                echo "::error::$(basename "$file") was not attached to the release $TAG."
+                exit 1
+              fi
+              echo "Attaching $(basename "$file") failed (attempt $attempt), trying again."
+              sleep $((attempt * 15))
+            done
+          done
