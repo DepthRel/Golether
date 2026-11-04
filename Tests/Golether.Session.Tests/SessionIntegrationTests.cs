@@ -484,16 +484,27 @@ public sealed class SessionIntegrationTests : IAsyncLifetime
 
         // The host chooses an avatar; the participant sees it. The participant chooses one; it comes back to them and
         // the host sees it with the authenticated owner.
+        // The avatars already chosen are sent to a newcomer aside, after its welcome: an avatar chosen in that moment
+        // may arrive twice, once with them and once by itself. Both copies are the same picture, so what is checked
+        // is every copy, not how many came.
         await _host.SetAvatarAsync(Png(1));
         await guest.SendAvatarAsync(Png(2), token);
-        await WaitUntilAsync(() => guestAvatars.Count == 2 && hostAvatars.Any(a => a.Peer == _guestIdentity.PeerId), token);
+        await WaitUntilAsync(
+            () => guestAvatars.Any(a => a.Peer == _hostIdentity.PeerId) && guestAvatars.Any(a => a.Peer == _guestIdentity.PeerId) &&
+                hostAvatars.Any(a => a.Peer == _guestIdentity.PeerId),
+            token);
 
-        var hostAvatarAtGuest = guestAvatars.Single(a => a.Peer == _hostIdentity.PeerId);
-        Assert.Equal(Png(1), hostAvatarAtGuest.Image);
-        Assert.False(hostAvatarAtGuest.IsLocal);
-        var ownAtGuest = guestAvatars.Single(a => a.Peer == _guestIdentity.PeerId);
-        Assert.Equal(Png(2), ownAtGuest.Image);
-        Assert.True(ownAtGuest.IsLocal);
+        Assert.All(guestAvatars.Where(a => a.Peer == _hostIdentity.PeerId), avatar =>
+        {
+            Assert.Equal(Png(1), avatar.Image);
+            Assert.False(avatar.IsLocal);
+        });
+        Assert.All(guestAvatars.Where(a => a.Peer == _guestIdentity.PeerId), avatar =>
+        {
+            Assert.Equal(Png(2), avatar.Image);
+            Assert.True(avatar.IsLocal);
+        });
+        Assert.All(guestAvatars, avatar => Assert.True(avatar.Peer == _hostIdentity.PeerId || avatar.Peer == _guestIdentity.PeerId));
         Assert.Equal(Png(2), hostAvatars.Single(a => a.Peer == _guestIdentity.PeerId).Image);
 
         // A participant who joins now (with its own identity) is sent both avatars that were already chosen.
@@ -512,9 +523,9 @@ public sealed class SessionIntegrationTests : IAsyncLifetime
         var secondAvatars = new ConcurrentQueue<AvatarUpdate>();
         second.AvatarReceived += (_, e) => secondAvatars.Enqueue(e);
         await second.JoinAsync(_host.CreateInvite([new PeerEndpoint("127.0.0.1", _host.Port)]), token);
-        await WaitUntilAsync(() => secondAvatars.Count(a => a.Peer == _hostIdentity.PeerId || a.Peer == _guestIdentity.PeerId) == 2, token);
-        Assert.Equal(Png(1), secondAvatars.Single(a => a.Peer == _hostIdentity.PeerId).Image);
-        Assert.Equal(Png(2), secondAvatars.Single(a => a.Peer == _guestIdentity.PeerId).Image);
+        await WaitUntilAsync(() => secondAvatars.Any(a => a.Peer == _hostIdentity.PeerId) && secondAvatars.Any(a => a.Peer == _guestIdentity.PeerId), token);
+        Assert.All(secondAvatars.Where(a => a.Peer == _hostIdentity.PeerId), avatar => Assert.Equal(Png(1), avatar.Image));
+        Assert.All(secondAvatars.Where(a => a.Peer == _guestIdentity.PeerId), avatar => Assert.Equal(Png(2), avatar.Image));
     }
 
     /// <summary>
