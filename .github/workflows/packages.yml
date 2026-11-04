@@ -190,26 +190,49 @@ jobs:
         run: |
           sha256sum -- * > "SHA256SUMS-$VERSION.txt"
           cat "SHA256SUMS-$VERSION.txt"
-      # The release is made first and the files are attached one by one. A draft just made is not always visible to
-      # the upload service at once: its first uploads answer 404, so every file is tried again after a pause. Files of
-      # the same name are replaced, so the job may simply be run again over a release that got some of them.
+      # The release of the tag is looked up in the list of releases, not by its tag: a draft is not found by its tag,
+      # and a job run again would make a second draft of the same tag next to the first. More than one release of
+      # the tag stops the job: somebody has to keep one. The files go to the release by its number, one by one; a
+      # draft just made is not always visible to the upload service at once (404), so a file is tried again after a
+      # pause, and a file of the same name is replaced first. At the end the release must hold every package.
       - name: Attach to the release
         run: |
           ls -l packages
-          if ! gh release view "$TAG" >/dev/null 2>&1; then
-            gh release create "$TAG" --draft --title "Golether $TAG" \
-              --notes "Every package of Golether $TAG. Write the notes, check the files, then publish and update updates.json."
+          ids="$(gh api "repos/$GH_REPO/releases" --paginate --jq ".[] | select(.tag_name == \"$TAG\") | .id")"
+          count="$(printf '%s\n' "$ids" | grep -c . || true)"
+          if [ "$count" -gt 1 ]; then
+            echo "::error::There are $count releases of $TAG ($(echo $ids)). Keep one of them and run the job again."
+            exit 1
           fi
+          if [ "$count" -eq 0 ]; then
+            id="$(gh api "repos/$GH_REPO/releases" -f tag_name="$TAG" -f name="Golether $TAG" -F draft=true \
+              -f body="Every package of Golether $TAG. Write the notes, check the files, then publish and update updates.json." \
+              --jq .id)"
+          else
+            id="$ids"
+          fi
+          echo "Release $id of $TAG"
           for file in packages/*; do
+            name="$(basename "$file")"
             for attempt in 1 2 3 4 5; do
-              if gh release upload "$TAG" "$file" --clobber; then
+              for old in $(gh api "repos/$GH_REPO/releases/$id/assets" --paginate --jq ".[] | select(.name == \"$name\") | .id"); do
+                gh api -X DELETE "repos/$GH_REPO/releases/assets/$old" || true
+              done
+              if gh api -X POST "https://uploads.github.com/repos/$GH_REPO/releases/$id/assets?name=$name" \
+                -H "Content-Type: application/octet-stream" --input "$file" > /dev/null; then
                 break
               fi
               if [ "$attempt" -eq 5 ]; then
-                echo "::error::$(basename "$file") was not attached to the release $TAG."
+                echo "::error::$name was not attached to the release $TAG."
                 exit 1
               fi
-              echo "Attaching $(basename "$file") failed (attempt $attempt), trying again."
+              echo "Attaching $name failed (attempt $attempt), trying again."
               sleep $((attempt * 15))
             done
           done
+          missing="$(comm -23 <(ls packages | sort) <(gh api "repos/$GH_REPO/releases/$id/assets" --paginate --jq '.[].name' | sort))"
+          if [ -n "$missing" ]; then
+            echo "::error::The release $TAG lacks: $(echo $missing)"
+            exit 1
+          fi
+          echo "The release $TAG holds all $(ls packages | wc -l) packages of this run."
