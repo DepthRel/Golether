@@ -13,8 +13,8 @@ At the end it lists the packages of the version with their size and SHA-256 and 
 `artifacts/publish/SHA256SUMS-<version>.txt`. The macOS packages of the application are not part of it.
 
 The usual way is GitHub: the **Packages** workflow (`.github/workflows/packages.yml`) runs the same scripts on
-GitHub runners and builds every package of a release, the macOS application included. A version tag attaches them
-and the checksums to a draft release of that tag; a run by hand leaves them as artifacts of the run. Code signing
+GitHub runners and builds every package of a release, the macOS application included. Publishing a release on GitHub
+attaches them and the checksums to that release; a run by hand leaves them as artifacts of the run. Code signing
 belongs to its Windows jobs, between the build and the upload of the artifact. The **CI** workflow
 (`.github/workflows/ci.yml`) builds the solution and runs the tests on Windows and Linux for every push to `main` and
 every pull request.

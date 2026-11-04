@@ -187,11 +187,12 @@ Comment les construire sans machine Linux ni Mac sous la main :
   tests de conventions, une règle enfreinte rend l'exécution rouge. **Packages** (`.github/workflows/packages.yml`)
   construit tous les paquets d'une version : l'application pour Windows (installeur et `.zip`), Linux (`.deb`,
   `.tar.gz`, `.zip`) et macOS (Apple silicon et Intel), et le serveur pour Windows, Linux et macOS. Une exécution à la
-  main (Actions → Packages → Run workflow) les donne comme artefacts de l'exécution. Une étiquette de version égale à
-  `<Version>` de `Directory.Build.props` (`git tag 0.3.2; git push origin 0.3.2`) les joint en plus, avec
-  `SHA256SUMS-<version>.txt`, à la version de cette étiquette, créée en brouillon : écrivez les notes, vérifiez les
-  fichiers, publiez, et seulement ensuite mettez à jour `updates.json` de la page du projet. La signature du code va
-  dans les tâches Windows de ce workflow.
+  main (Actions → Packages → Run workflow) les donne comme artefacts de l'exécution. Publier une version sur GitHub
+  (Releases → Draft a new release → une nouvelle étiquette égale à `<Version>` de `Directory.Build.props`, comme
+  `0.3.2`, sur `main` → Publish) les construit depuis le commit de l'étiquette et les joint, avec
+  `SHA256SUMS-<version>.txt`, à cette même version environ une demi-heure plus tard ; s'il manque un paquet,
+  l'exécution est rouge. D'ici là, les liens de `updates.json` répondent 404 : mettez-le à jour quand l'exécution est
+  verte. La signature du code va dans les tâches Windows de ce workflow.
 
 ## Déboguer le réseau
 

@@ -3,10 +3,11 @@
 #
 # Two ways to start it:
 #   - by hand: Actions -> Packages -> Run workflow. The packages appear as "Artifacts" of the run; nothing is released.
-#   - by a version tag (git tag 0.3.2 && git push origin 0.3.2). The tag must equal <Version> of Directory.Build.props.
-#     The packages and SHA256SUMS-<version>.txt are attached to the release of that tag; a release that does not exist
-#     yet is created as a draft, so nothing is published by itself: write the notes, check the files, press Publish,
-#     then update Sources/Apps/Golether.Pages/updates.json. Files with the same names are replaced, others stay.
+#   - by publishing a release on GitHub (Releases -> Draft a new release -> a new tag such as 0.4.2 on main ->
+#     Publish). The tag must equal <Version> of Directory.Build.props. The packages are built from the commit of the
+#     tag and attached, with SHA256SUMS-<version>.txt, to that very release, found by its number from the event: no
+#     release is looked up or made here. They appear about half an hour after publishing; until then the links of
+#     updates.json answer 404. Running the job again replaces files of the same names and keeps the others.
 #
 # Code signing goes into the Windows jobs, between "Build" and the upload of the artifact (see the notes there):
 # a signing service such as SignPath signs the files of the artifact, and the signed ones are what the release gets.
@@ -15,9 +16,13 @@ name: Packages
 
 on:
   workflow_dispatch:
-  push:
-    tags:
-      - '[0-9]+.[0-9]+.[0-9]+'
+  release:
+    types: [published]
+
+# Two runs for the same release would replace each other's files; the second waits for the first.
+concurrency:
+  group: packages-${{ github.ref }}
+  cancel-in-progress: false
 
 permissions:
   contents: read
@@ -168,8 +173,8 @@ jobs:
           if-no-files-found: error
 
   release:
-    name: Draft release
-    if: startsWith(github.ref, 'refs/tags/')
+    name: Attach to the release
+    if: github.event_name == 'release'
     needs: [version, app-windows, app-linux, app-macos, server-windows, server-unix]
     runs-on: ubuntu-latest
     permissions:
@@ -177,7 +182,7 @@ jobs:
     env:
       GH_TOKEN: ${{ github.token }}
       GH_REPO: ${{ github.repository }}
-      TAG: ${{ github.ref_name }}
+      TAG: ${{ github.event.release.tag_name }}
       VERSION: ${{ needs.version.outputs.version }}
     steps:
       - uses: actions/download-artifact@v4
@@ -190,47 +195,26 @@ jobs:
         run: |
           sha256sum -- * > "SHA256SUMS-$VERSION.txt"
           cat "SHA256SUMS-$VERSION.txt"
-      # The release of the tag is looked up in the list of releases, not by its tag: a draft is not found by its tag,
-      # and a job run again would make a second draft of the same tag next to the first. More than one release of
-      # the tag stops the job: somebody has to keep one. The files go to the release by its number, one by one; a
-      # draft just made is not always visible to the upload service at once (404), so a file is tried again after a
-      # pause, and a file of the same name is replaced first. At the end the release must hold every package.
+      # The files go to the release that started this run, the one published: nothing is looked up or made. A file
+      # that fails (the service answers 404 or times out now and then) is tried again after a pause; a file of the
+      # same name is replaced. At the end the release must hold every package, or the run is red.
       - name: Attach to the release
         run: |
           ls -l packages
-          ids="$(gh api "repos/$GH_REPO/releases" --paginate --jq ".[] | select(.tag_name == \"$TAG\") | .id")"
-          count="$(printf '%s\n' "$ids" | grep -c . || true)"
-          if [ "$count" -gt 1 ]; then
-            echo "::error::There are $count releases of $TAG ($(echo $ids)). Keep one of them and run the job again."
-            exit 1
-          fi
-          if [ "$count" -eq 0 ]; then
-            id="$(gh api "repos/$GH_REPO/releases" -f tag_name="$TAG" -f name="Golether $TAG" -F draft=true \
-              -f body="Every package of Golether $TAG. Write the notes, check the files, then publish and update updates.json." \
-              --jq .id)"
-          else
-            id="$ids"
-          fi
-          echo "Release $id of $TAG"
           for file in packages/*; do
-            name="$(basename "$file")"
             for attempt in 1 2 3 4 5; do
-              for old in $(gh api "repos/$GH_REPO/releases/$id/assets" --paginate --jq ".[] | select(.name == \"$name\") | .id"); do
-                gh api -X DELETE "repos/$GH_REPO/releases/assets/$old" || true
-              done
-              if gh api -X POST "https://uploads.github.com/repos/$GH_REPO/releases/$id/assets?name=$name" \
-                -H "Content-Type: application/octet-stream" --input "$file" > /dev/null; then
+              if gh release upload "$TAG" "$file" --clobber; then
                 break
               fi
               if [ "$attempt" -eq 5 ]; then
-                echo "::error::$name was not attached to the release $TAG."
+                echo "::error::$(basename "$file") was not attached to the release $TAG."
                 exit 1
               fi
-              echo "Attaching $name failed (attempt $attempt), trying again."
+              echo "Attaching $(basename "$file") failed (attempt $attempt), trying again."
               sleep $((attempt * 15))
             done
           done
-          missing="$(comm -23 <(ls packages | sort) <(gh api "repos/$GH_REPO/releases/$id/assets" --paginate --jq '.[].name' | sort))"
+          missing="$(comm -23 <(ls packages | sort) <(gh release view "$TAG" --json assets --jq '.assets[].name' | sort))"
           if [ -n "$missing" ]; then
             echo "::error::The release $TAG lacks: $(echo $missing)"
             exit 1

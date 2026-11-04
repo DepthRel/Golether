@@ -184,10 +184,11 @@ How to build them without a Linux machine or a Mac at hand:
   a broken rule makes the run red. **Packages** (`.github/workflows/packages.yml`) builds every package of a release:
   the application for Windows (installer and `.zip`), Linux (`.deb`, `.tar.gz`, `.zip`) and macOS (Apple silicon and
   Intel), and the server for Windows, Linux and macOS. A run by hand (Actions → Packages → Run workflow) gives them as
-  artifacts of the run. A version tag equal to `<Version>` of `Directory.Build.props`
-  (`git tag 0.3.2; git push origin 0.3.2`) also attaches them with `SHA256SUMS-<version>.txt` to the release of that
-  tag, created as a draft: write the notes, check the files, publish, and only then update `updates.json` of the
-  project page. Code signing goes into the Windows jobs of this workflow.
+  artifacts of the run. Publishing a release on GitHub (Releases → Draft a new release → a new tag equal to
+  `<Version>` of `Directory.Build.props`, such as `0.3.2`, on `main` → Publish) builds them from the commit of the tag
+  and attaches them with `SHA256SUMS-<version>.txt` to that release about half an hour later; the run is red if a
+  package is missing. Until then the links of `updates.json` answer 404, so update it when the run is green. Code
+  signing goes into the Windows jobs of this workflow.
 
 ## Debugging the network
 

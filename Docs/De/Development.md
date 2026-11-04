@@ -187,11 +187,12 @@ So baut man sie ohne einen Linux-Rechner oder einen Mac zur Hand:
   Konventionstests macht eine verletzte Regel den Lauf rot. **Packages** (`.github/workflows/packages.yml`) baut jedes
   Paket eines Releases: die Anwendung für Windows (Installationsprogramm und `.zip`), Linux (`.deb`, `.tar.gz`,
   `.zip`) und macOS (Apple Silicon und Intel) sowie den Server für Windows, Linux und macOS. Ein Lauf von Hand
-  (Actions → Packages → Run workflow) liefert sie als Artefakte des Laufs. Ein Versions-Tag gleich `<Version>` aus
-  `Directory.Build.props` (`git tag 0.3.2; git push origin 0.3.2`) hängt sie außerdem mit `SHA256SUMS-<version>.txt`
-  an das Release dieses Tags, das als Entwurf angelegt wird: Notizen schreiben, Dateien prüfen, veröffentlichen und
-  erst dann `updates.json` der Projektseite aktualisieren. Die Codesignatur kommt in die Windows-Jobs dieses
-  Workflows.
+  (Actions → Packages → Run workflow) liefert sie als Artefakte des Laufs. Das Veröffentlichen eines Releases auf
+  GitHub (Releases → Draft a new release → ein neuer Tag gleich `<Version>` aus `Directory.Build.props`, etwa `0.3.2`,
+  auf `main` → Publish) baut sie aus dem Commit des Tags und hängt sie mit `SHA256SUMS-<version>.txt` etwa eine halbe
+  Stunde später an genau dieses Release; fehlt ein Paket, ist der Lauf rot. Bis dahin antworten die Links von
+  `updates.json` mit 404, aktualisieren Sie es also, wenn der Lauf grün ist. Die Codesignatur kommt in die
+  Windows-Jobs dieses Workflows.
 
 ## Netzwerk debuggen
 

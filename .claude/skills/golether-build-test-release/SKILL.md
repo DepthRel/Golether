@@ -38,10 +38,12 @@ dotnet run --project Sources/Apps/Golether.Web.Server        # rendezvous server
 ## Release
 
 1. Bump `<Version>` in `Directory.Build.props`.
-2. Tag `git tag X.Y.Z; git push origin X.Y.Z` (must equal `<Version>`) → the Packages workflow builds every package
-   (Windows, Linux `.deb`/`.tar.gz`, macOS, server) and `SHA256SUMS-<version>.txt` into a **draft** release.
-3. Write the notes, check the files, publish the release; only then update `Sources/Apps/Golether.Pages/updates.json`
-   (pushing the page folder deploys the site at once: an early `updates.json` sends every user to a 404).
+2. Publish a release on GitHub with a new tag `X.Y.Z` on `main` (must equal `<Version>`) → the Packages workflow
+   (`on: release: published`) builds every package (Windows, Linux `.deb`/`.tar.gz`, macOS, server) and
+   `SHA256SUMS-<version>.txt` from the commit of the tag and attaches them to **that** release (~30 min); the run is red
+   if any package is missing. Pushing a tag by hand starts nothing. A re-run uses the workflow of the tagged commit.
+3. `Sources/Apps/Golether.Pages/updates.json`: pushing the page folder deploys the site at once, so its links answer 404
+   until the packages are attached; push it when the Packages run is green.
 
 CI (`.github/workflows/ci.yml`) builds and tests every push to `main` and every PR on Windows and Linux; code signing
 belongs in the Windows jobs of `packages.yml`. `Scripts/build-release.ps1` builds the same packages locally (no macOS app).

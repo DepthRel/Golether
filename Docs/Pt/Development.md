@@ -185,10 +185,11 @@ Como compilá-los sem ter à mão uma máquina Linux ou um Mac:
   convenções, uma regra violada põe a execução a vermelho. **Packages** (`.github/workflows/packages.yml`) compila
   todos os pacotes de uma versão: a aplicação para Windows (instalador e `.zip`), Linux (`.deb`, `.tar.gz`, `.zip`) e
   macOS (Apple silicon e Intel), e o servidor para Windows, Linux e macOS. Uma execução à mão (Actions → Packages →
-  Run workflow) dá-os como artefactos da execução. Uma etiqueta de versão igual a `<Version>` de
-  `Directory.Build.props` (`git tag 0.3.2; git push origin 0.3.2`) anexa-os também, com `SHA256SUMS-<version>.txt`, à
-  versão dessa etiqueta, criada como rascunho: escreva as notas, verifique os ficheiros, publique e só depois atualize
-  `updates.json` da página do projeto. A assinatura de código entra nos trabalhos de Windows deste workflow.
+  Run workflow) dá-os como artefactos da execução. Publicar uma versão no GitHub (Releases → Draft a new release → uma
+  etiqueta nova igual a `<Version>` de `Directory.Build.props`, como `0.3.2`, em `main` → Publish) constrói-os a partir
+  do commit da etiqueta e anexa-os, com `SHA256SUMS-<version>.txt`, a essa mesma versão cerca de meia hora depois; se
+  faltar um pacote, a execução fica vermelha. Até lá as ligações de `updates.json` respondem 404, por isso atualize-o
+  quando a execução estiver verde. A assinatura de código entra nos trabalhos de Windows deste workflow.
 
 ## Depurar a rede
 
