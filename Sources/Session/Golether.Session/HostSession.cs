@@ -33,6 +33,23 @@ namespace Golether.Session;
 public sealed class HostSession : IAsyncDisposable
 {
     /// <summary>
+    /// The most connections that may wait at the door at once: opened, but not let in or turned away yet.
+    /// </summary>
+    private const int MAX_AT_THE_DOOR = 32;
+
+    /// <summary>
+    /// The most media data streams one participant may have open: four for the film, four for a picture and room
+    /// for the ones being replaced.
+    /// </summary>
+    private const int MAX_MEDIA_STREAMS = 16;
+
+    /// <summary>
+    /// The most relay clients one participant may have: one for each camera connection and room for the ones being
+    /// made again. The relay holds places for every participant together.
+    /// </summary>
+    private const int MAX_RELAY_CLIENTS = 16;
+
+    /// <summary>
     /// The local device.
     /// </summary>
     private readonly DeviceIdentity _identity;
@@ -169,6 +186,12 @@ public sealed class HostSession : IAsyncDisposable
     private readonly ConcurrentDictionary<PeerId, Connection> _participants = new();
 
     /// <summary>
+    /// Makes counting the free places and taking one a single step, so two newcomers approved at once cannot both
+    /// take the last place.
+    /// </summary>
+    private readonly Lock _placeGate = new();
+
+    /// <summary>
     /// The tickets that let admitted participants come back without a new invitation while the session runs.
     /// </summary>
     private readonly ConcurrentDictionary<PeerId, string> _reconnectTickets = new();
@@ -223,6 +246,11 @@ public sealed class HostSession : IAsyncDisposable
     /// Whether the session has ended.
     /// </summary>
     private int _ended;
+
+    /// <summary>
+    /// The connections that wait at the door: opened, but not let in or turned away yet.
+    /// </summary>
+    private int _atTheDoor;
 
     /// <summary>
     /// Initializes a new instance of the <see cref="HostSession"/> class.
@@ -374,7 +402,6 @@ public sealed class HostSession : IAsyncDisposable
             return;
         }
 
-        _follower.ApplyAsync(_authority.Current, CancellationToken.None).GetAwaiter().GetResult();
         try
         {
             GalleryCatalog.DeleteLeftovers(_galleryDirectory);
@@ -537,7 +564,11 @@ public sealed class HostSession : IAsyncDisposable
     /// <param name="index">The picture, or <see langword="null"/> when the host follows the common screen.</param>
     public void SetGalleryView(int? index)
     {
-        _galleryView = index;
+        lock (_stageGate)
+        {
+            _galleryView = index;
+        }
+
         Changed?.Invoke(this, EventArgs.Empty);
     }
 
@@ -842,20 +873,49 @@ public sealed class HostSession : IAsyncDisposable
                 {
                     await using var shared = new Transports.Relay.RelayMultiplexer(
                         stream.Stream,
-                        channel => relay.ServeAsync(channel, remote, local.Address, linked.Token),
+                        channel => ServeRelayClientAsync(owner, relay, channel, remote, local.Address, linked.Token),
                         _logger);
                     shared.Start();
                     await shared.Completion.ConfigureAwait(false);
                 }
                 else
                 {
-                    await relay.ServeAsync(stream.Stream, remote, local.Address, linked.Token).ConfigureAwait(false);
+                    await ServeRelayClientAsync(owner, relay, stream.Stream, remote, local.Address, linked.Token).ConfigureAwait(false);
                 }
             }
             catch (Exception ex) when (ex is IOException or InvalidDataException or OperationCanceledException or ObjectDisposedException)
             {
                 _logger.LogDebug("Relay stream of {Peer} ended: {Reason}", stream.RemotePeer.ToShortString(), ex.Message);
             }
+        }
+    }
+
+    /// <summary>
+    /// Serves one relay client of a participant within its share: the relay has a limited number of places for the
+    /// whole session, and one participant must not take them all.
+    /// </summary>
+    /// <param name="owner">The participant.</param>
+    /// <param name="relay">The relay.</param>
+    /// <param name="client">The stream of the client.</param>
+    /// <param name="remote">The address of the participant.</param>
+    /// <param name="local">The address of this device the participant reached.</param>
+    /// <param name="cancellationToken">Ends with the admission or the session.</param>
+    /// <returns>A task that completes when the client left or was refused.</returns>
+    private async Task ServeRelayClientAsync(Connection owner, Transports.Relay.IRelayStreamServer relay, Stream client, System.Net.IPEndPoint remote, System.Net.IPAddress local, CancellationToken cancellationToken)
+    {
+        if (!owner.TryOpenRelayClient())
+        {
+            _logger.LogWarning("Relay client of {Peer} refused: {Limit} are open already", owner.Info.PeerId.ToShortString(), MAX_RELAY_CLIENTS);
+            return;
+        }
+
+        try
+        {
+            await relay.ServeAsync(client, remote, local, cancellationToken).ConfigureAwait(false);
+        }
+        finally
+        {
+            owner.CloseRelayClient();
         }
     }
 
@@ -875,6 +935,13 @@ public sealed class HostSession : IAsyncDisposable
                 return;
             }
 
+            // Every stream holds the file open and a buffer of a piece: a participant gets a bounded number of them.
+            if (!owner.TryOpenMediaStream())
+            {
+                _logger.LogWarning("Media stream from {Peer} refused: {Limit} are open already", stream.RemotePeer.ToShortString(), MAX_MEDIA_STREAMS);
+                return;
+            }
+
             // The stream lives only as long as the admission: leaving, removal or a new connection closes it.
             using var linked = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, owner.Lifetime);
             using var closeOnEnd = linked.Token.Register(() => stream.Stream.Dispose());
@@ -886,6 +953,10 @@ public sealed class HostSession : IAsyncDisposable
             catch (Exception ex) when (ex is IOException or InvalidDataException or OperationCanceledException or ObjectDisposedException)
             {
                 _logger.LogDebug("Media stream of {Peer} ended: {Reason}", stream.RemotePeer.ToShortString(), ex.Message);
+            }
+            finally
+            {
+                owner.CloseMediaStream();
             }
         }
     }
@@ -901,6 +972,18 @@ public sealed class HostSession : IAsyncDisposable
         var peer = stream.RemotePeer;
         var channel = new SessionMessageChannel(stream.Stream);
         Connection? connection = null;
+
+        // Anybody can open a connection (the key of the other side is any key until the host approves it), so the
+        // connections that have not been let in yet are counted: a crowd at the door must not exhaust the host.
+        var atTheDoor = true;
+        if (Interlocked.Increment(ref _atTheDoor) > MAX_AT_THE_DOOR)
+        {
+            Interlocked.Decrement(ref _atTheDoor);
+            _logger.LogWarning("Control stream from {Peer} refused: {Limit} others wait at the door", peer.ToShortString(), MAX_AT_THE_DOOR);
+            await channel.DisposeAsync().ConfigureAwait(false);
+            return;
+        }
+
         try
         {
             HelloMessage? hello;
@@ -911,6 +994,8 @@ public sealed class HostSession : IAsyncDisposable
             }
 
             connection = await AdmitAsync(peer, hello, stream.RemoteAddress, channel, cancellationToken).ConfigureAwait(false);
+            Interlocked.Decrement(ref _atTheDoor);
+            atTheDoor = false;
             if (connection is null)
             {
                 return;
@@ -939,6 +1024,11 @@ public sealed class HostSession : IAsyncDisposable
         }
         finally
         {
+            if (atTheDoor)
+            {
+                Interlocked.Decrement(ref _atTheDoor);
+            }
+
             connection?.End();
             if (connection is not null && _participants.TryRemove(new KeyValuePair<PeerId, Connection>(peer, connection)) && _ended == 0)
             {
@@ -992,7 +1082,8 @@ public sealed class HostSession : IAsyncDisposable
             return null;
         }
 
-        if (hello.Version != SessionMessage.PROTOCOL_VERSION)
+        // A hello without a commitment cannot be given a code that resists a search, so it is not taken.
+        if (hello.Version != SessionMessage.PROTOCOL_VERSION || !SasCommitment.IsWellFormed(hello.SasCommit))
         {
             await channel.SendAsync(new RejectedMessage(RejectReason.IncompatibleVersion, nameof(RejectReason.IncompatibleVersion)), cancellationToken).ConfigureAwait(false);
             return null;
@@ -1034,8 +1125,11 @@ public sealed class HostSession : IAsyncDisposable
         }
 
         var name = ParticipantInfo.NormalizeDisplayName(hello.DisplayName);
-        var code = VerificationCode.Compute(_identity.PeerId, peer, hello.InviteToken ?? string.Empty);
-        await channel.SendAsync(new PendingApprovalMessage(), cancellationToken).ConfigureAwait(false);
+        if (await ExchangeNoncesAsync(peer, hello, channel, cancellationToken).ConfigureAwait(false) is not { } code)
+        {
+            return null;
+        }
+
         var decision = await _admission.DecideAsync(new AdmissionRequest(peer, name, code, trusted), cancellationToken).ConfigureAwait(false);
         if (decision != AdmissionDecision.Approved)
         {
@@ -1052,26 +1146,44 @@ public sealed class HostSession : IAsyncDisposable
             return null;
         }
 
-        _turnedAway.TryRemove(peer, out _);
-        await RememberContactAsync(peer, name, remoteAddress, cancellationToken).ConfigureAwait(false);
-
-        // The ticket lets the participant come back after a broken connection; the host is asked again every time.
-        var reconnectTicket = _reconnectTickets.GetOrAdd(peer, _ => Convert.ToHexString(System.Security.Cryptography.RandomNumberGenerator.GetBytes(24)));
+        // The place is taken only now: the room counted at the door may have been filled by others while the host was
+        // deciding (an approved contact does not even wait for the host).
         var connection = new Connection(new ParticipantInfo(peer, name, false), channel, _timeProvider.GetUtcNow())
         {
             SupportsGallery = hello.Gallery,
         };
-        if (_participants.TryGetValue(peer, out var previous))
+        if (!TryTakePlace(connection, out var previous))
+        {
+            await channel.SendAsync(new RejectedMessage(RejectReason.SessionFull, nameof(RejectReason.SessionFull)), cancellationToken).ConfigureAwait(false);
+            return null;
+        }
+
+        if (previous is not null)
         {
             previous.End();
             await previous.Channel.DisposeAsync().ConfigureAwait(false);
         }
 
-        _participants[peer] = connection;
-        var participants = GetSnapshot().Participants.Select(p => p.Info).ToArray();
-        await channel.SendAsync(
-            new WelcomeMessage(SessionName, participants, _authority.Current, _media.Descriptor, _options.MediaDataStreams) { Relay = Relay, RelayOverSession = Relay is not null && RelayServer is not null, RelayShared = Relay is not null && RelayServer is not null, ReconnectTicket = reconnectTicket },
-            cancellationToken).ConfigureAwait(false);
+        try
+        {
+            _turnedAway.TryRemove(peer, out _);
+            await RememberContactAsync(peer, name, remoteAddress, cancellationToken).ConfigureAwait(false);
+
+            // The ticket lets the participant come back after a broken connection; the host is asked again every time.
+            var reconnectTicket = _reconnectTickets.GetOrAdd(peer, _ => Convert.ToHexString(System.Security.Cryptography.RandomNumberGenerator.GetBytes(24)));
+            var participants = GetSnapshot().Participants.Select(p => p.Info).ToArray();
+            await channel.SendAsync(
+                new WelcomeMessage(SessionName, participants, _authority.Current, _media.Descriptor, _options.MediaDataStreams) { Relay = Relay, RelayOverSession = Relay is not null && RelayServer is not null, RelayShared = Relay is not null && RelayServer is not null, ReconnectTicket = reconnectTicket },
+                cancellationToken).ConfigureAwait(false);
+        }
+        catch
+        {
+            // The newcomer never got the welcome: the place is given back, or it would stay taken by nobody.
+            connection.End();
+            _participants.TryRemove(new KeyValuePair<PeerId, Connection>(peer, connection));
+            throw;
+        }
+
         _logger.LogInformation("Admitted {Peer}", peer.ToShortString());
         Raise(peer, Texts.Format("Session.Event.ParticipantJoined", name));
         SyncConference();
@@ -1082,6 +1194,68 @@ public sealed class HostSession : IAsyncDisposable
         // have all arrived.
         _ = SendExtrasAsync(connection);
         return connection;
+    }
+
+    /// <summary>
+    /// Adds the random numbers of both sides to the verification code: names the number of the host, takes the
+    /// number the participant committed to in the hello and checks it against that commitment. The host user is
+    /// asked only after this, with a code neither side could choose.
+    /// </summary>
+    /// <param name="peer">The authenticated participant.</param>
+    /// <param name="hello">Its hello, with a well-formed commitment.</param>
+    /// <param name="channel">The control channel.</param>
+    /// <param name="cancellationToken">Stops the session.</param>
+    /// <returns>The code, or <see langword="null"/> when the participant revealed no number or another one; its
+    /// connection is then closed without a word, as no honest participant does that.</returns>
+    private async Task<VerificationCode?> ExchangeNoncesAsync(PeerId peer, HelloMessage hello, SessionMessageChannel channel, CancellationToken cancellationToken)
+    {
+        var hostNonce = SasCommitment.CreateNonce();
+        await channel.SendAsync(new PendingApprovalMessage { SasNonce = hostNonce }, cancellationToken).ConfigureAwait(false);
+
+        SessionMessage? message;
+        using (var revealTimeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken))
+        {
+            // An honest participant answers at once; the limit is the one of the hello.
+            revealTimeout.CancelAfter(_options.HelloTimeout);
+            message = await channel.ReceiveAsync(revealTimeout.Token).ConfigureAwait(false);
+        }
+
+        if (message is not SasRevealMessage { Nonce: { } participantNonce } || !SasCommitment.Matches(hello.SasCommit, participantNonce))
+        {
+            _logger.LogWarning("Refused {Peer}: the number of the verification code does not match its commitment", peer.ToShortString());
+            return null;
+        }
+
+        return VerificationCode.ComputeForSession(_identity.PeerId, peer, hello.InviteToken ?? string.Empty, participantNonce, hostNonce);
+    }
+
+    /// <summary>
+    /// Gives an approved participant its place, unless the session is full. A device that comes back replaces its
+    /// earlier connection and needs no new place.
+    /// </summary>
+    /// <param name="connection">The approved participant.</param>
+    /// <param name="previous">The earlier connection of the same device, to be closed by the caller.</param>
+    /// <returns><see langword="false"/> when the session has no free place.</returns>
+    private bool TryTakePlace(Connection connection, out Connection? previous)
+    {
+        var peer = connection.Info.PeerId;
+        lock (_placeGate)
+        {
+            if (_participants.TryGetValue(peer, out previous))
+            {
+                _participants[peer] = connection;
+                return true;
+            }
+
+            // The host takes a place too.
+            if (_participants.Count + 1 >= _options.MaxParticipants)
+            {
+                return false;
+            }
+
+            _participants[peer] = connection;
+            return true;
+        }
     }
 
     /// <summary>
@@ -1186,6 +1360,11 @@ public sealed class HostSession : IAsyncDisposable
                 await TrySendAsync(connection, new ClockPongMessage(ping.ClientSendTime, received, _clock.NowMicroseconds)).ConfigureAwait(false);
                 break;
 
+            case PlaybackRequestMessage when !connection.RequestLimiter.TryAcquire(_timeProvider.GetTimestamp(), _timeProvider):
+                // Every request moves the player of the host and goes to everybody: a flood is dropped.
+                _logger.LogDebug("Request of {Peer} dropped: too many", connection.Info.PeerId.ToShortString());
+                break;
+
             case PlaybackRequestMessage request:
                 PlaybackState? state;
                 try
@@ -1205,7 +1384,9 @@ public sealed class HostSession : IAsyncDisposable
 
                 break;
 
-            case ConferenceSignalMessage { Kind.Length: <= 16, Payload.Length: <= 64 * 1024 } signal:
+            // The host passes signals between participants: a flood from one is dropped instead of being passed on.
+            case ConferenceSignalMessage { Kind.Length: <= 16, Payload.Length: <= 64 * 1024 } signal
+                when connection.SignalLimiter.TryAcquire(_timeProvider.GetTimestamp(), _timeProvider):
                 if (signal.Peer == _identity.PeerId)
                 {
                     _conference?.Receive(connection.Info.PeerId, signal.Kind, signal.Payload);
@@ -1340,6 +1521,7 @@ public sealed class HostSession : IAsyncDisposable
         var lastBroadcast = _timeProvider.GetTimestamp();
         try
         {
+            await ApplyInitialStateAsync(cancellationToken).ConfigureAwait(false);
             while (await timer.WaitForNextTickAsync(cancellationToken).ConfigureAwait(false))
             {
                 await _playerGate.WaitAsync(cancellationToken).ConfigureAwait(false);
@@ -1397,12 +1579,43 @@ public sealed class HostSession : IAsyncDisposable
     }
 
     /// <summary>
+    /// Puts the local player into the state the session starts with. It runs here, not in <see cref="Start"/>: that is
+    /// called on the thread of the interface, which must not wait for the player. A state applied in the meantime (a
+    /// film shared at once) is newer and is kept.
+    /// </summary>
+    /// <param name="cancellationToken">Stops the session.</param>
+    /// <returns>A task that completes when the state was applied or the player refused it.</returns>
+    private async Task ApplyInitialStateAsync(CancellationToken cancellationToken)
+    {
+        await _playerGate.WaitAsync(cancellationToken).ConfigureAwait(false);
+        try
+        {
+            await _follower.ApplyAsync(_authority.Current, cancellationToken).ConfigureAwait(false);
+        }
+        catch (Exception ex) when (ex is not (OperationCanceledException or OutOfMemoryException))
+        {
+            // The follower applies the state again on its next tick.
+            _logger.LogWarning(ex, "The initial state was not applied to the local player");
+        }
+        finally
+        {
+            _playerGate.Release();
+        }
+    }
+
+    /// <summary>
     /// Builds the status of the host itself.
     /// </summary>
     /// <returns>The status.</returns>
     private ParticipantStatus BuildLocalStatus()
     {
         var local = _localStatus;
+        int? galleryView;
+        lock (_stageGate)
+        {
+            galleryView = _galleryView;
+        }
+
         return new ParticipantStatus
         {
             PeerId = _identity.PeerId,
@@ -1413,7 +1626,7 @@ public sealed class HostSession : IAsyncDisposable
             UsesLocalCopy = true,
             MicrophoneOff = _conference?.MicrophoneOff ?? true,
             CameraOff = _conference?.CameraOff ?? true,
-            GalleryView = _galleryView,
+            GalleryView = galleryView,
         };
     }
 
@@ -1473,8 +1686,10 @@ public sealed class HostSession : IAsyncDisposable
             await using var preview = await catalog.OpenPreviewAsync(index, _stopping.Token).ConfigureAwait(false);
             return preview is null ? null : await Task.Run(() => _thumbnails!.Render(preview)).ConfigureAwait(false);
         }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidDataException or OperationCanceledException or ObjectDisposedException)
+        catch (Exception ex) when (ex is not OutOfMemoryException)
         {
+            // The task is kept for every participant who asks: a failure stored in it would be thrown at each of them
+            // for the rest of the showing, so it becomes "no small picture" here, whatever the decoder threw.
             _logger.LogWarning("The small picture of {Index} was not made: {Reason}", index, ex.Message);
             return null;
         }
@@ -1911,6 +2126,50 @@ public sealed class HostSession : IAsyncDisposable
         public SlidingRateLimiter ThumbnailLimiter { get; } = new(TimeSpan.FromSeconds(10), 400);
 
         /// <summary>
+        /// The limit of the playback requests of the participant: a person presses play, pause and seek a few times a
+        /// second at most, and each request moves the player of the host and goes to everybody.
+        /// </summary>
+        public SlidingRateLimiter RequestLimiter { get; } = new(TimeSpan.FromSeconds(1), 10);
+
+        /// <summary>
+        /// The limit of the camera signals of the participant: the candidates of a few connections come in bursts of
+        /// some dozens, far below it.
+        /// </summary>
+        public SlidingRateLimiter SignalLimiter { get; } = new(TimeSpan.FromSeconds(1), 100);
+
+        /// <summary>
+        /// The media data streams the participant has open.
+        /// </summary>
+        private int _mediaStreams;
+
+        /// <summary>
+        /// The relay clients the participant has open.
+        /// </summary>
+        private int _relayClients;
+
+        /// <summary>
+        /// Counts a new media data stream, unless the participant has <see cref="MAX_MEDIA_STREAMS"/> already.
+        /// </summary>
+        /// <returns><see langword="false"/> when the stream is one too many.</returns>
+        public bool TryOpenMediaStream() => TryTake(ref _mediaStreams, MAX_MEDIA_STREAMS);
+
+        /// <summary>
+        /// Notes that a media data stream ended.
+        /// </summary>
+        public void CloseMediaStream() => Interlocked.Decrement(ref _mediaStreams);
+
+        /// <summary>
+        /// Counts a new relay client, unless the participant has <see cref="MAX_RELAY_CLIENTS"/> already.
+        /// </summary>
+        /// <returns><see langword="false"/> when the client is one too many.</returns>
+        public bool TryOpenRelayClient() => TryTake(ref _relayClients, MAX_RELAY_CLIENTS);
+
+        /// <summary>
+        /// Notes that a relay client ended.
+        /// </summary>
+        public void CloseRelayClient() => Interlocked.Decrement(ref _relayClients);
+
+        /// <summary>
         /// Gets a token that is cancelled when the admission ends.
         /// </summary>
         public CancellationToken Lifetime => _lifetime.Token;
@@ -1929,5 +2188,22 @@ public sealed class HostSession : IAsyncDisposable
         /// Notes that the control channel has been read to its end and closed.
         /// </summary>
         public void MarkClosed() => _closed.TrySetResult();
+
+        /// <summary>
+        /// Takes one of a limited number of places.
+        /// </summary>
+        /// <param name="counter">The places taken.</param>
+        /// <param name="limit">The number of places.</param>
+        /// <returns><see langword="false"/> when every place is taken.</returns>
+        private static bool TryTake(ref int counter, int limit)
+        {
+            if (Interlocked.Increment(ref counter) <= limit)
+            {
+                return true;
+            }
+
+            Interlocked.Decrement(ref counter);
+            return false;
+        }
     }
 }

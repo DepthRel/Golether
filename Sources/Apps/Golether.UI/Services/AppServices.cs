@@ -2,6 +2,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Golether.Client.Localization;
 using Golether.Client.Services;
+using Golether.Components.Catalog;
 using Golether.Components.Installation;
 using Golether.Core.Configuration;
 using Golether.Core.Data;
@@ -77,7 +78,7 @@ public sealed class AppServices : IAsyncDisposable
             identity,
             provider.GetRequiredService<ITunnelStore>(),
             protector,
-            new AwgCliTunnelController(new ProcessRunner(), CreateTunnelOptions(paths), LoggerFactory.CreateLogger<AwgCliTunnelController>()),
+            new AwgCliTunnelController(new ProcessRunner(), CreateTunnelOptions(paths), LoggerFactory.CreateLogger<AwgCliTunnelController>(), guard: CreateTunnelGuard()),
             TimeProvider.System,
             raisedStatePath: Path.Combine(paths.TunnelsDirectory, "raised.txt"));
 
@@ -293,6 +294,18 @@ public sealed class AppServices : IAsyncDisposable
         // Looked up on every call: the component can be installed while the application is running.
         return options with { FindCarriedExecutable = () => FindAmneziaWg(paths) };
     }
+
+    /// <summary>
+    /// Creates what gives a tunnel service only files that no program without administrator rights can change: the
+    /// engine checked against the hashes of the official package of this processor, and the configuration written anew.
+    /// Used by the application and by its elevated tunnel helper alike.
+    /// </summary>
+    /// <returns>The guard.</returns>
+    public static ITunnelEngineGuard CreateTunnelGuard()
+        => new ProtectedTunnelFiles(
+            ProtectedTunnelFiles.DefaultRoot,
+            AmneziaWgBundle.FileHashes(ComponentCatalog.CurrentRuntimeIdentifier),
+            ProtectedTunnelFiles.DefaultTrustedRoots);
 
     /// <summary>
     /// Returns the AmneziaWG the application carries itself, or <see langword="null"/> to fall back to the one

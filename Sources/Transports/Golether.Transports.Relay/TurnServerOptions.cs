@@ -23,10 +23,10 @@ public sealed record TurnServerOptions
     public string Realm { get; init; } = "golether";
 
     /// <summary>
-    /// Gets the maximum number of simultaneous allocations (a session has at most four participants, each with
-    /// a couple of ICE components).
+    /// Gets the maximum number of simultaneous allocations: a session has at most four participants, each with a
+    /// connection to every other one and the ones being made again (the session gives each participant 16 at most).
     /// </summary>
-    public int MaxAllocations { get; init; } = 16;
+    public int MaxAllocations { get; init; } = 64;
 
     /// <summary>
     /// Gets the longest allocation lifetime granted.

@@ -240,6 +240,7 @@ public sealed partial class MainViewModel : ObservableObject, ICameraTiles
     /// Gets or sets a value indicating whether this device hosts the session: then it shows, invites and moderates.
     /// </summary>
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(CanStartNow))]
     public partial bool IsHost { get; set; }
 
     /// <summary>
@@ -377,10 +378,31 @@ public sealed partial class MainViewModel : ObservableObject, ICameraTiles
     public partial double DurationSeconds { get; set; } = 1;
 
     /// <summary>
-    /// Gets or sets a value indicating whether the film is paused.
+    /// Gets or sets a value indicating whether the host decided that the film plays, a start that is still counted
+    /// down included. The local player may stand meanwhile; the button follows the decision, as on the desktop.
     /// </summary>
     [ObservableProperty]
-    public partial bool IsPaused { get; set; } = true;
+    [NotifyPropertyChangedFor(nameof(ShowsPause))]
+    public partial bool IsPlaying { get; set; }
+
+    /// <summary>
+    /// Gets or sets a value indicating whether the start waits for participants that are not ready yet; the button
+    /// then cancels the start.
+    /// </summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(ShowsPause))]
+    [NotifyPropertyChangedFor(nameof(CanStartNow))]
+    public partial bool IsWaiting { get; set; }
+
+    /// <summary>
+    /// Gets a value indicating whether the button shows "pause": the film plays or its start is on the way.
+    /// </summary>
+    public bool ShowsPause => IsPlaying || IsWaiting;
+
+    /// <summary>
+    /// Gets a value indicating whether the host may start without those who are not ready.
+    /// </summary>
+    public bool CanStartNow => IsWaiting && IsHost;
 
     /// <summary>
     /// Gets or sets a value indicating whether the film played to its end, so the button starts it again from the start.
@@ -591,7 +613,8 @@ public sealed partial class MainViewModel : ObservableObject, ICameraTiles
         Drawing.Tick();
         Chat.Tick();
         VideoAspect = Gallery.ShowsPicture ? Gallery.PictureAspect : services.Controls.GetVideoAspect();
-        IsPaused = player.IsPaused;
+        IsPlaying = snapshot.Playback?.State == PlayState.Playing;
+        IsWaiting = snapshot.Playback is { State: PlayState.Paused, Cause: PlaybackCause.WaitingForParticipants };
         IsEnded = snapshot.Playback is { State: PlayState.Paused, Cause: PlaybackCause.Ended };
         StartText = DescribeStart(snapshot);
         PositionText = DisplayFormat.Position(player.Position);
@@ -1269,13 +1292,23 @@ public sealed partial class MainViewModel : ObservableObject, ICameraTiles
     }
 
     /// <summary>
-    /// Starts or pauses the film for everybody; a film that played to its end starts again from the start.
+    /// Starts or pauses the film for everybody; a film that played to its end starts again from the start, and a start
+    /// that waits for participants is cancelled. A pause carries the frame this device stands at, so everybody stops
+    /// on it.
     /// </summary>
     [RelayCommand]
     private void TogglePlay()
         => Request(IsEnded
             ? new PlaybackRequest(PlaybackRequestKind.Play, TimeSpan.Zero)
-            : new PlaybackRequest(IsPaused ? PlaybackRequestKind.Play : PlaybackRequestKind.Pause, null));
+            : ShowsPause
+                ? new PlaybackRequest(PlaybackRequestKind.Pause, TimeSpan.FromSeconds(PositionSeconds))
+                : new PlaybackRequest(PlaybackRequestKind.Play, null));
+
+    /// <summary>
+    /// Starts the film for everybody at once, without waiting for those who are not ready (host).
+    /// </summary>
+    [RelayCommand]
+    private void StartNow() => Request(new PlaybackRequest(PlaybackRequestKind.PlayNow, null));
 
     /// <summary>
     /// Moves the film back for everybody.
@@ -1704,6 +1737,8 @@ public sealed partial class MainViewModel : ObservableObject, ICameraTiles
         Screen = MobileScreen.Join;
         StartText = string.Empty;
         IsEnded = false;
+        IsPlaying = false;
+        IsWaiting = false;
         Error = reason ?? string.Empty;
         ReconnectMessage = string.Empty;
         Gallery.Update(null, Participants);

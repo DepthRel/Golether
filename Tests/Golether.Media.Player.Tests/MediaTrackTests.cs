@@ -121,13 +121,13 @@ public sealed class MediaTrackTests
             player.TracksChanged += (_, _) => Interlocked.Increment(ref changes);
 
             await player.LoadAsync(new Uri(sound), TimeSpan.Zero, paused: true, TestContext.Current.CancellationToken);
-            await WaitFor(() => player.GetTracks().Any(t => t.Kind == MediaTrackKind.Audio));
-            var audio = Assert.Single(player.GetTracks(), t => t.Kind == MediaTrackKind.Audio);
+            // mpv lists a track before it selects it: under load the two come apart, so the selection is waited for.
+            await WaitFor(() => player.GetTracks().Any(t => t is { Kind: MediaTrackKind.Audio, IsSelected: true }));
+            Assert.Single(player.GetTracks(), t => t.Kind == MediaTrackKind.Audio);
             await WaitFor(() => player.GetSnapshot().Buffered is { Count: > 0 });
             var cached = player.GetSnapshot().Buffered![0];
             Assert.Equal(TimeSpan.Zero, cached.Start);
             Assert.InRange(cached.End.TotalSeconds, 0.5, 3.5);
-            Assert.True(audio.IsSelected);
 
             player.AddSubtitleFile(subtitles);
             await WaitFor(() => player.GetTracks().Any(t => t is { Kind: MediaTrackKind.Subtitle, IsSelected: true }));

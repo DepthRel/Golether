@@ -81,6 +81,53 @@ public sealed class VerificationAndAdmissionTests
     }
 
     /// <summary>
+    /// The code of a session entry is the same on both sides and depends on the numbers of both: a side that chose
+    /// another number would see another code.
+    /// </summary>
+    [Fact]
+    public void SessionCode_IsSymmetricAndDependsOnBothNumbers()
+    {
+        var participantNonce = SasCommitment.CreateNonce();
+        var hostNonce = SasCommitment.CreateNonce();
+
+        var host = VerificationCode.ComputeForSession(_first, _second, "token", participantNonce, hostNonce);
+        var participant = VerificationCode.ComputeForSession(_second, _first, "token", participantNonce, hostNonce);
+        var codes = new[]
+        {
+            host.ToString(),
+            VerificationCode.ComputeForSession(_first, _second, "token", SasCommitment.CreateNonce(), hostNonce).ToString(),
+            VerificationCode.ComputeForSession(_first, _second, "token", participantNonce, SasCommitment.CreateNonce()).ToString(),
+            VerificationCode.ComputeForSession(_first, _second, "token", hostNonce, participantNonce).ToString(),
+            VerificationCode.Compute(_first, _second, "token").ToString(),
+        };
+
+        Assert.Equal(host.ToString(), participant.ToString());
+        Assert.Equal(codes.Length, codes.Distinct().Count());
+        Assert.Throws<ArgumentException>(() => VerificationCode.ComputeForSession(_first, _second, "token", "short", hostNonce));
+    }
+
+    /// <summary>
+    /// A revealed number matches only its own commitment, and text of another form is never taken for either.
+    /// </summary>
+    [Fact]
+    public void Commitment_MatchesOnlyItsNumber()
+    {
+        var nonce = SasCommitment.CreateNonce();
+        var commitment = SasCommitment.Commit(nonce);
+
+        Assert.True(SasCommitment.IsWellFormed(nonce));
+        Assert.True(SasCommitment.IsWellFormed(commitment));
+        Assert.True(SasCommitment.Matches(commitment, nonce));
+        Assert.False(SasCommitment.Matches(commitment, SasCommitment.CreateNonce()));
+        Assert.False(SasCommitment.Matches(commitment, nonce.ToUpperInvariant()));
+        Assert.False(SasCommitment.Matches(null, nonce));
+        Assert.False(SasCommitment.Matches(commitment, null));
+        Assert.False(SasCommitment.IsWellFormed(new string('g', SasCommitment.TEXT_LENGTH)));
+        Assert.False(SasCommitment.IsWellFormed(nonce[1..]));
+        Assert.Throws<ArgumentException>(() => SasCommitment.Commit("not a number"));
+    }
+
+    /// <summary>
     /// The host answer decides.
     /// </summary>
     /// <param name="answer">The host answer.</param>

@@ -177,8 +177,12 @@ public sealed partial class VideoHost : NativeControlHost
     /// <inheritdoc />
     protected override void DestroyNativeControlCore(IPlatformHandle control)
     {
-        // libmpv must stop rendering before its window disappears.
-        Player?.DetachAsync().GetAwaiter().GetResult();
+        // libmpv must stop rendering before its window disappears, so the window waits for it. The release runs on the
+        // thread pool: nothing in it can then wait for this blocked interface thread.
+        if (Player is { } player)
+        {
+            Task.Run(player.DetachAsync).GetAwaiter().GetResult();
+        }
         if (OperatingSystem.IsWindows())
         {
             Subclass.Remove(control.Handle);

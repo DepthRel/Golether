@@ -13,7 +13,9 @@ namespace Golether.Tunnels.AmneziaWG.Control;
 /// <para>
 /// On Windows the application does not need to run as administrator. For each tunnel change it starts its own
 /// executable with <see cref="SWITCH"/> through the UAC prompt; that process only calls <c>amneziawg.exe</c> for a
-/// configuration of the tunnels folder and ends. No service or privileged process stays behind.
+/// configuration of the tunnels folder and ends. No privileged process of the application stays behind; the tunnel
+/// service it leaves is made of copies that only administrators can change (<see cref="ITunnelEngineGuard"/>), never
+/// of files of the data folder, which every program of the user can write.
 /// </para>
 /// <para>Arguments: <c>--tunnel-helper up &lt;config.conf&gt; &lt;result file&gt;</c> or
 /// <c>--tunnel-helper down &lt;config.conf&gt; &lt;result file&gt;</c>. The result file receives the error text.</para>
@@ -69,35 +71,37 @@ public static class TunnelHelper
         => args is { Count: > 0 } && args[0] == SWITCH;
 
     /// <summary>
+    /// The beginning of a result that says a file of the engine is not the known one; the name of the file follows.
+    /// </summary>
+    private const string ENGINE_CHANGED_PREFIX = "engine-changed\t";
+
+    /// <summary>
+    /// A result that says the configuration is not one the application writes.
+    /// </summary>
+    private const string CONFIGURATION_REJECTED = "configuration-rejected";
+
+    /// <summary>
     /// Runs the helper mode.
     /// </summary>
     /// <param name="args">The command-line arguments including <see cref="SWITCH"/>.</param>
     /// <param name="runner">Runs AmneziaWG.</param>
-    /// <param name="windowsExecutable">The path of <c>amneziawg.exe</c>.</param>
+    /// <param name="windowsExecutable">The path of <c>amneziawg.exe</c> the application found.</param>
+    /// <param name="guard">Gives the engine and the configuration that no program without administrator rights can
+    /// change.</param>
     /// <returns>The exit code.</returns>
-    public static int Run(IReadOnlyList<string> args, IProcessRunner runner, string windowsExecutable)
+    public static int Run(IReadOnlyList<string> args, IProcessRunner runner, string windowsExecutable, ITunnelEngineGuard guard)
     {
         ArgumentNullException.ThrowIfNull(args);
         ArgumentNullException.ThrowIfNull(runner);
+        ArgumentNullException.ThrowIfNull(guard);
         if (!TryParse(args, out var verb, out var configPath, out var resultPath))
         {
             return INVALID_ARGUMENTS;
         }
 
-        var interfaceName = Path.GetFileNameWithoutExtension(configPath);
         try
         {
-            if (verb == UP_VERB)
-            {
-                // Replace an existing service so a changed configuration takes effect.
-                Call(runner, windowsExecutable, ["/uninstalltunnelservice", interfaceName], ignoreFailure: true);
-                Call(runner, windowsExecutable, ["/installtunnelservice", configPath], ignoreFailure: false);
-            }
-            else
-            {
-                Call(runner, windowsExecutable, ["/uninstalltunnelservice", interfaceName], ignoreFailure: false);
-            }
-
+            Execute(verb, configPath, runner, windowsExecutable, guard);
             return SUCCESS;
         }
         catch (Exception ex) when (ex is TunnelControlException or Win32Exception or TimeoutException or InvalidOperationException)
@@ -106,6 +110,52 @@ public static class TunnelHelper
             return FAILURE;
         }
     }
+
+    /// <summary>
+    /// Brings a tunnel up or down with administrator rights: in the helper, or in the application when it runs with
+    /// those rights itself. The service is made of the protected copies only.
+    /// </summary>
+    /// <param name="verb"><see cref="UP_VERB"/> or <see cref="DOWN_VERB"/>.</param>
+    /// <param name="configPath">The configuration file the application wrote.</param>
+    /// <param name="runner">Runs AmneziaWG.</param>
+    /// <param name="windowsExecutable">The path of <c>amneziawg.exe</c> the application found.</param>
+    /// <param name="guard">Gives the protected copies.</param>
+    /// <exception cref="TunnelControlException">A step failed.</exception>
+    public static void Execute(string verb, string configPath, IProcessRunner runner, string windowsExecutable, ITunnelEngineGuard guard)
+    {
+        ArgumentNullException.ThrowIfNull(runner);
+        ArgumentNullException.ThrowIfNull(guard);
+
+        var interfaceName = Path.GetFileNameWithoutExtension(configPath);
+        TunnelNames.Validate(interfaceName);
+        var engine = guard.PrepareEngine(windowsExecutable);
+
+        if (verb == UP_VERB)
+        {
+            // Replace an existing service so a changed configuration takes effect.
+            var protectedConfig = guard.PrepareConfiguration(interfaceName, configPath);
+            Call(runner, engine, ["/uninstalltunnelservice", interfaceName], ignoreFailure: true);
+            Call(runner, engine, ["/installtunnelservice", protectedConfig], ignoreFailure: false);
+        }
+        else
+        {
+            Call(runner, engine, ["/uninstalltunnelservice", interfaceName], ignoreFailure: false);
+            guard.ForgetConfiguration(interfaceName);
+        }
+    }
+
+    /// <summary>
+    /// Encodes the fact that a file of the engine is not the known one, for the application to word.
+    /// </summary>
+    /// <param name="file">The name of the file.</param>
+    /// <returns>The language-neutral result.</returns>
+    public static string EncodeEngineChanged(string file) => ENGINE_CHANGED_PREFIX + file;
+
+    /// <summary>
+    /// Encodes the fact that the configuration is not one the application writes.
+    /// </summary>
+    /// <returns>The language-neutral result.</returns>
+    public static string EncodeConfigurationRejected() => CONFIGURATION_REJECTED;
 
     /// <summary>
     /// Builds the helper arguments for a tunnel change.
@@ -217,7 +267,12 @@ public static class TunnelHelper
             return Texts.Format("Tunnel.Error.ToolFailed", tool, code, detail);
         }
 
-        return text;
+        if (text.StartsWith(ENGINE_CHANGED_PREFIX, StringComparison.Ordinal))
+        {
+            return Texts.Format("Tunnel.Error.EngineChanged", text[ENGINE_CHANGED_PREFIX.Length..]);
+        }
+
+        return text == CONFIGURATION_REJECTED ? Texts.Get("Tunnel.Error.ConfigurationRejected") : text;
     }
 
     /// <summary>
@@ -229,7 +284,16 @@ public static class TunnelHelper
     {
         try
         {
-            File.WriteAllText(path, text, Encoding.UTF8);
+            // The folder belongs to the user and the helper has administrator rights: a folder replaced by a link, or a
+            // file put there beforehand, would make it write somewhere else. Only a new file in a real folder is written.
+            if (new DirectoryInfo(Path.GetDirectoryName(path)!).Attributes.HasFlag(FileAttributes.ReparsePoint))
+            {
+                Trace.WriteLine($"Golether tunnel helper: {text}");
+                return;
+            }
+
+            using var stream = new FileStream(path, FileMode.CreateNew, FileAccess.Write, FileShare.None);
+            stream.Write(Encoding.UTF8.GetBytes(text));
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {

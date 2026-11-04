@@ -22,9 +22,16 @@ public sealed record TlsTransportOptions
     public TimeSpan HandshakeTimeout { get; init; } = TimeSpan.FromSeconds(20);
 
     /// <summary>
-    /// Gets the maximum number of handshakes the listener runs at once (default 32).
+    /// Gets the maximum number of handshakes the listener runs at once (default 128).
     /// </summary>
-    public int MaxPendingHandshakes { get; init; } = 32;
+    public int MaxPendingHandshakes { get; init; } = 128;
+
+    /// <summary>
+    /// Gets the maximum number of handshakes the listener runs at once for one remote address (default 16): a few
+    /// silent connections from one place must not take every handshake and keep the participants out. A whole
+    /// company behind one router opens a few streams each, one after another, which stays well below it.
+    /// </summary>
+    public int MaxPendingHandshakesPerAddress { get; init; } = 16;
 
     /// <summary>
     /// Gets the socket buffer size for media streams (default 4 MiB).
@@ -45,6 +52,7 @@ public sealed record TlsTransportOptions
         }
 
         ArgumentOutOfRangeException.ThrowIfLessThan(MaxPendingHandshakes, 1);
+        ArgumentOutOfRangeException.ThrowIfLessThan(MaxPendingHandshakesPerAddress, 1);
         ArgumentOutOfRangeException.ThrowIfLessThan(MediaSocketBufferSize, 64 * 1024);
     }
 }

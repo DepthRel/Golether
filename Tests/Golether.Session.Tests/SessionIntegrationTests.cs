@@ -6,6 +6,7 @@ using Golether.Core.Data.Enums;
 using Golether.Core.Enums;
 using Golether.Core.Identity;
 using Golether.Core.Networking;
+using Golether.Core.Playback;
 using Golether.Core.Session;
 using Golether.Core.Time;
 using Golether.Localization;
@@ -15,6 +16,7 @@ using Golether.Media.Streaming.Caching;
 using Golether.Security.Admission;
 using Golether.Security.Identity;
 using Golether.Security.Invites;
+using Golether.Security.Verification;
 using Golether.Sync.Protocol;
 using Golether.Transports;
 using Golether.Transports.Tls;
@@ -191,10 +193,7 @@ public sealed class SessionIntegrationTests : IAsyncLifetime
         var connector = new TlsPeerConnector(_guestIdentity, _transport);
         await using var stream = await connector.ConnectAsync(new PeerEndpoint("127.0.0.1", _host.Port), _hostIdentity.PeerId, StreamPurpose.Control, token);
         await using var channel = new SessionMessageChannel(stream.Stream);
-        await channel.SendAsync(new HelloMessage(SessionMessage.PROTOCOL_VERSION, "Марина", invite.Token), token);
-        while (await channel.ReceiveAsync(token) is not WelcomeMessage)
-        {
-        }
+        await EnterByHandAsync(channel, invite.Token, token);
 
         await WaitUntilAsync(() => _host.GetSnapshot().Participants.Count == 2, token);
 
@@ -693,6 +692,88 @@ public sealed class SessionIntegrationTests : IAsyncLifetime
     }
 
     /// <summary>
+    /// Two guests who waited for the host at the same time cannot both take the last place: the place is counted
+    /// again when the host has said yes, and the second guest is told that the session is full.
+    /// </summary>
+    [Fact]
+    public async Task LastPlace_GoesToOneOfTwoApprovedGuests()
+    {
+        var token = TestContext.Current.CancellationToken;
+        var approve = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var prompt = Substitute.For<IAdmissionPrompt>();
+        prompt.AskAsync(Arg.Any<AdmissionRequest>(), Arg.Any<CancellationToken>()).Returns(_ => approve.Task);
+        var listener = new TlsPeerListener(_hostIdentity, _transport);
+        listener.Start();
+        await using var host = new HostSession(
+            _hostIdentity,
+            listener,
+            new InviteRegistry(TimeProvider.System),
+            new AdmissionService(prompt, new AdmissionOptions(), TimeProvider.System),
+            contacts: null,
+            new SimulatedPlayer(SystemMonotonicClock.Instance, TimeSpan.FromHours(2)),
+            SystemMonotonicClock.Instance,
+            TimeProvider.System,
+            "Вечер кино",
+            "Вы",
+            _options with { MaxParticipants = 2 });
+        host.Start();
+        var invite = host.CreateInvite([new PeerEndpoint("127.0.0.1", host.Port)]);
+        using var secondIdentity = DeviceIdentity.CreateNew(TimeProvider.System);
+        await using var first = CreateGuest(_guestIdentity, "Марина");
+        await using var second = CreateGuest(secondIdentity, "Олег");
+
+        // Both are past the door, where the place was still free, before the host answers.
+        Task[] joins = [first.JoinAsync(invite, token), second.JoinAsync(invite, token)];
+        await WaitUntilAsync(
+            () => first.GetSnapshot().State == SessionState.AwaitingApproval && second.GetSnapshot().State == SessionState.AwaitingApproval,
+            token);
+        approve.SetResult(true);
+        var outcomes = await Task.WhenAll(joins.Select(async join =>
+        {
+            try
+            {
+                await join;
+                return (string?)null;
+            }
+            catch (SessionJoinException ex)
+            {
+                return ex.Message;
+            }
+        }));
+
+        Assert.Single(outcomes, outcome => outcome is null);
+        Assert.Single(outcomes, outcome => outcome == SessionTexts.DescribeRejection(RejectReason.SessionFull));
+        Assert.Equal(2, host.GetSnapshot().Participants.Count);
+    }
+
+    /// <summary>
+    /// Every playback request moves the player of the host and goes to everybody, so a flood of them from one
+    /// participant is cut to a few a second.
+    /// </summary>
+    [Fact]
+    public async Task PlaybackRequests_AreLimited()
+    {
+        var token = TestContext.Current.CancellationToken;
+        await using var guest = CreateGuest();
+        await guest.JoinAsync(_host.CreateInvite([new PeerEndpoint("127.0.0.1", _host.Port)]), token);
+        var before = _host.GetSnapshot().Playback!.Version;
+        var after = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        _host.ChatReceived += (_, _) => after.TrySetResult();
+
+        for (var second = 1; second <= 30; second++)
+        {
+            await guest.RequestAsync(new PlaybackRequest(PlaybackRequestKind.Seek, TimeSpan.FromSeconds(second)), token);
+        }
+
+        // The chat line travels behind the requests: when it arrives, the host has read all of them.
+        await guest.SendChatAsync(ChatKind.Text, "Всё", token);
+        await after.Task.WaitAsync(TimeSpan.FromSeconds(10), token);
+
+        var applied = _host.GetSnapshot().Playback!.Version - before;
+        Assert.InRange(applied, 1, 10);
+    }
+
+    /// <summary>
     /// A guest the host declined cannot keep asking with the shared link: the host is not asked again until the
     /// guest has a newer invitation. A host who simply did not answer has declined nobody.
     /// </summary>
@@ -985,6 +1066,132 @@ public sealed class SessionIntegrationTests : IAsyncLifetime
         }
 
         return total;
+    }
+
+    /// <summary>
+    /// Goes through the door of the host by hand, as a participant does: the hello with the commitment, the number
+    /// once the host named its own, and the welcome.
+    /// </summary>
+    /// <param name="channel">The control channel of the participant.</param>
+    /// <param name="inviteToken">The token to present.</param>
+    /// <param name="cancellationToken">The cancellation token.</param>
+    /// <returns>A task that completes when the welcome arrived.</returns>
+    private static async Task EnterByHandAsync(SessionMessageChannel channel, string inviteToken, CancellationToken cancellationToken)
+    {
+        var nonce = SasCommitment.CreateNonce();
+        await channel.SendAsync(new HelloMessage(SessionMessage.PROTOCOL_VERSION, "Марина", inviteToken) { SasCommit = SasCommitment.Commit(nonce) }, cancellationToken);
+        while (true)
+        {
+            var message = await channel.ReceiveAsync(cancellationToken);
+            Assert.NotNull(message);
+            if (message is WelcomeMessage)
+            {
+                return;
+            }
+
+            if (message is PendingApprovalMessage)
+            {
+                await channel.SendAsync(new SasRevealMessage(nonce), cancellationToken);
+            }
+        }
+    }
+
+    /// <summary>
+    /// The host and the participant see the same code, made with the numbers of both sides.
+    /// </summary>
+    [Fact]
+    public async Task VerificationCode_IsTheSameOnBothSides()
+    {
+        var token = TestContext.Current.CancellationToken;
+        await using var guest = CreateGuest();
+
+        await guest.JoinAsync(_host.CreateInvite([new PeerEndpoint("127.0.0.1", _host.Port)]), token);
+
+        var asked = (AdmissionRequest)_prompt.ReceivedCalls().Single(call => call.GetMethodInfo().Name == nameof(IAdmissionPrompt.AskAsync)).GetArguments()[0]!;
+        Assert.Equal(asked.VerificationCode.ToString(), guest.GetSnapshot().VerificationCode?.ToString());
+    }
+
+    /// <summary>
+    /// A participant that reveals another number than the one it committed to (a man in the middle who would choose
+    /// it after seeing the host's) is not let in, and the host user is not even asked.
+    /// </summary>
+    [Fact]
+    public async Task Host_RefusesANumberThatDoesNotMatchItsCommitment()
+    {
+        var token = TestContext.Current.CancellationToken;
+        var invite = _host.CreateInvite([new PeerEndpoint("127.0.0.1", _host.Port)]);
+        var connector = new TlsPeerConnector(_guestIdentity, _transport);
+        await using var stream = await connector.ConnectAsync(new PeerEndpoint("127.0.0.1", _host.Port), _hostIdentity.PeerId, StreamPurpose.Control, token);
+        await using var channel = new SessionMessageChannel(stream.Stream);
+
+        await channel.SendAsync(new HelloMessage(SessionMessage.PROTOCOL_VERSION, "Марина", invite.Token) { SasCommit = SasCommitment.Commit(SasCommitment.CreateNonce()) }, token);
+        Assert.IsType<PendingApprovalMessage>(await channel.ReceiveAsync(token));
+        await channel.SendAsync(new SasRevealMessage(SasCommitment.CreateNonce()), token);
+
+        Assert.Null(await channel.ReceiveAsync(token));
+        await _prompt.DidNotReceive().AskAsync(Arg.Any<AdmissionRequest>(), Arg.Any<CancellationToken>());
+    }
+
+    /// <summary>
+    /// A participant of the first version, which has no numbers for the code, is told that its version does not fit
+    /// instead of being given a code an outsider could search for.
+    /// </summary>
+    [Fact]
+    public async Task Host_RefusesAHelloWithoutCommitment()
+    {
+        var token = TestContext.Current.CancellationToken;
+        var invite = _host.CreateInvite([new PeerEndpoint("127.0.0.1", _host.Port)]);
+        var connector = new TlsPeerConnector(_guestIdentity, _transport);
+        await using var stream = await connector.ConnectAsync(new PeerEndpoint("127.0.0.1", _host.Port), _hostIdentity.PeerId, StreamPurpose.Control, token);
+        await using var channel = new SessionMessageChannel(stream.Stream);
+
+        await channel.SendAsync(new HelloMessage(1, "Марина", invite.Token), token);
+
+        var refusal = Assert.IsType<RejectedMessage>(await channel.ReceiveAsync(token));
+        Assert.Equal(RejectReason.IncompatibleVersion, refusal.Reason);
+    }
+
+    /// <summary>
+    /// A participant does not take part in an entry that skips the numbers of the code: a host (or somebody posing
+    /// as one) that names no number, or admits without asking, leaves nothing to compare.
+    /// </summary>
+    /// <param name="skipPending">Whether the host sends the welcome at once instead of a "pending" without a number.</param>
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Participant_RefusesAnEntryWithoutTheNumbers(bool skipPending)
+    {
+        var token = TestContext.Current.CancellationToken;
+        using var hostIdentity = DeviceIdentity.CreateNew(TimeProvider.System);
+        await using var listener = new TlsPeerListener(hostIdentity, _transport);
+        listener.Start();
+        var invite = new Invite
+        {
+            HostPeerId = hostIdentity.PeerId,
+            HostName = "Хост",
+            SessionName = "Вечер",
+            Endpoints = [new PeerEndpoint("127.0.0.1", listener.Port)],
+            Token = Invite.CreateToken(),
+            ExpiresAt = TimeProvider.System.GetUtcNow().AddMinutes(5),
+        };
+        var playing = Task.Run(
+            async () =>
+            {
+                await using var stream = await listener.AcceptAsync(token);
+                await using var channel = new SessionMessageChannel(stream.Stream);
+                Assert.IsType<HelloMessage>(await channel.ReceiveAsync(token));
+                SessionMessage answer = skipPending
+                    ? new WelcomeMessage("Вечер", [], PlaybackState.Initial(hostIdentity.PeerId, 0), null, 1)
+                    : new PendingApprovalMessage();
+                await channel.SendAsync(answer, token);
+            },
+            token);
+        await using var guest = CreateGuest();
+
+        var refusal = await Assert.ThrowsAsync<SessionJoinException>(() => guest.JoinAsync(invite, token));
+
+        Assert.Equal(SessionTexts.DescribeRejection(RejectReason.IncompatibleVersion), refusal.Message);
+        await playing.WaitAsync(TimeSpan.FromSeconds(10), token);
     }
 
     /// <summary>
@@ -1556,10 +1763,7 @@ public sealed class SessionIntegrationTests : IAsyncLifetime
         var connector = new TlsPeerConnector(_guestIdentity, _transport);
         await using var stream = await connector.ConnectAsync(new PeerEndpoint("127.0.0.1", _host.Port), _hostIdentity.PeerId, StreamPurpose.Control, token);
         await using var channel = new SessionMessageChannel(stream.Stream);
-        await channel.SendAsync(new HelloMessage(SessionMessage.PROTOCOL_VERSION, "Марина", invite.Token), token);
-        while (await channel.ReceiveAsync(token) is not WelcomeMessage)
-        {
-        }
+        await EnterByHandAsync(channel, invite.Token, token);
 
         await _host.RequestAsync(new PlaybackRequest(PlaybackRequestKind.PlayNow, null), token);
         await channel.SendAsync(

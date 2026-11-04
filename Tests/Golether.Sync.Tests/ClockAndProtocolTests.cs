@@ -93,8 +93,9 @@ public sealed class ClockAndProtocolTests
         var media = new MediaDescriptor { FileName = "Dune.mkv", Length = 64_200_000_000, QuickId = new string('e', 64) };
         SessionMessage[] messages =
         [
-            new HelloMessage(1, "Марина", "token"),
-            new PendingApprovalMessage(),
+            new HelloMessage(SessionMessage.PROTOCOL_VERSION, "Марина", "token") { SasCommit = new string('a', 64) },
+            new PendingApprovalMessage { SasNonce = new string('b', 64) },
+            new SasRevealMessage(new string('c', 64)),
             new WelcomeMessage("Вечер", [new ParticipantInfo(peer, "Вы", true)], state, media, 4),
             new RejectedMessage(RejectReason.SessionFull, "full"),
             new ClockPingMessage(1),

@@ -1,4 +1,4 @@
-# Protocole réseau de Golether (version 1)
+# Protocole réseau de Golether (version 2)
 
 ## Transport
 
@@ -11,6 +11,13 @@ TCP, le port de l'hôte est **47800** par défaut. Chaque connexion :
    `03` Relay, `04` RelayShared).
 3. La réponse de l'hôte, 1 octet : `01` signifie accepté.
 
+L'hôte borne ce que les connexions peuvent occuper, pour qu'une foule à la porte ne laisse pas les participants dehors :
+au plus 16 négociations à la fois depuis une adresse distante (128 en tout ; les connexions de l'ordinateur de l'hôte
+lui-même ne comptent pas), au plus 32 connexions Control qui n'ont été ni admises ni refusées et, pour un participant
+admis, au plus 16 flux MediaData et 16 clients du relais (flux `Relay` et canaux `RelayShared` ensemble). Une connexion
+au-delà d'une limite est fermée. Au plus 100 signaux `rtc` par seconde d'un participant sont transmis ; le reste est
+rejeté.
+
 `PeerId` = SHA-256 en hexadécimal minuscule du SubjectPublicKeyInfo DER de la clé de l'appareil (ECDSA P-256).
 
 ## Control
@@ -20,8 +27,9 @@ noms de champs sont en camelCase. H est l'hôte, P un participant.
 
 | `$t` | Sens | Champs | Signification |
 |---|---|---|---|
-| `hello` | P → H | `version`, `displayName`, `inviteToken`, `gallery` | le premier message |
-| `pending` | H → P | — | en attente de la décision de l'hôte |
+| `hello` | P → H | `version`, `displayName`, `inviteToken`, `gallery`, `sasCommit` | le premier message ; `sasCommit` est le SHA-256 du nombre aléatoire du participant pour le code de vérification |
+| `pending` | H → P | `sasNonce` | en attente de la décision de l'hôte ; `sasNonce` est le nombre aléatoire de l'hôte pour le code |
+| `sasReveal` | P → H | `nonce` | le nombre du participant lui-même, envoyé seulement après `pending` ; l'hôte le vérifie avec `sasCommit` |
 | `welcome` | H → P | `sessionName`, `participants[]`, `playback`, `media`, `mediaDataStreams`, `relay`, `relayOverSession`, `relayShared`, `reconnectTicket` | le participant est admis ; `relay` sont le port et les identifiants du TURN de l'hôte, créés pour une séance ; `relayOverSession` signifie que l'hôte accepte le TURN sur des flux `Relay` et qu'aucun port séparé n'est nécessaire ; `relayShared` signifie qu'il les accepte aussi tous dans un flux `RelayShared` ; `reconnectTicket` est le ticket pour revenir dans cette séance sans nouvelle invitation |
 | `rejected` | H → P | `reason`, `message` | refus, la connexion est fermée |
 | `ping` | P → H | `clientSendTime` | une sonde d'horloge (t0, µs) |
@@ -51,7 +59,8 @@ Tout ce qui est arrivé par le réseau est vérifié avant usage :
 - **Un état** n'est accepté par un participant que si le mode est connu, que la position est entre zéro et 30 jours et
   que `rate` est un nombre fini de 0,5 à 2. Sinon l'état est ignoré (dans `welcome`, l'entrée est refusée).
 - **Une intention** avec un `kind` inconnu est rejetée par l'hôte. La position demandée est ramenée à la durée du fichier
-  et, tant que celle-ci est inconnue, aux mêmes 30 jours.
+  et, tant que celle-ci est inconnue, aux mêmes 30 jours. L'hôte accepte au plus 10 intentions par seconde d'un
+  participant (une fenêtre glissante) et rejette le reste.
 - **Le statut d'un participant** est borné par l'hôte avant tout calcul ou diffusion : des temps dans ±30 jours, un ping
   de 0 à 600 000 ms, des compteurs d'octets non négatifs. Un participant borne de la même façon les statuts de
   `participants`.
@@ -69,7 +78,12 @@ l'affiche pas, mais formule le motif dans la langue de sa propre interface à pa
 `bye` sans `reason` pour la même raison : les textes destinés aux personnes ne circulent pas sur le réseau. Un
 participant ignore le champ même quand un hôte d'une autre version le remplit, et formule lui-même la fin de la séance.
 
-L'ordre d'une connexion : `hello` → (`pending`) → `welcome` | `rejected`. Le jeton d'une invitation fonctionne jusqu'à la
+L'ordre d'une connexion : `hello` → `pending` → `sasReveal` → `welcome` | `rejected`. L'hôte interroge son utilisateur
+seulement après `sasReveal`, et un nombre qui ne correspond pas à `sasCommit` ferme la connexion sans réponse. Un
+`hello` d'une autre `version` ou sans `sasCommit` reçoit `rejected` avec le motif `4` ; un participant ne rejoint pas un
+hôte dont le `pending` n'a pas de `sasNonce` ou qui envoie `welcome` avant `pending`.
+
+Le jeton d'une invitation fonctionne jusqu'à la
 fin de sa durée de validité et sert à tous les invités, mais apporte au plus 16 demandes d'entrée ; les contacts de
 confiance peuvent se connecter sans jeton. Un appareil que l'hôte a retiré ou refusé a besoin d'un jeton émis plus
 tard : pour un jeton antérieur, il reçoit aussitôt `rejected` avec le motif `5` ou `1`, sans qu'on demande à l'hôte.
@@ -230,14 +244,24 @@ décrit dans [RendezvousServer.md](RendezvousServer.md#protocole-version-1).
 Les deux côtés calculent le code chacun de leur côté ; il ne circule jamais sur le réseau.
 
 ```
-hash   = SHA-256(UTF-8("golether-sas-v1|" + low + "|" + high + "|" + context))
+hash   = SHA-256(UTF-8("golether-sas-v2|" + low + "|" + high + "|" + context + "|" + nP + "|" + nH))
 mots   = les 24 bits de hash[0..2] (big-endian), découpés en trois nombres de 6 bits (0–63), le plus fort d'abord
 nombre = uint16 little-endian de hash[3..4] modulo 100
 ```
 
 `low` et `high` sont les deux `PeerId` dans l'ordre ordinal, donc le résultat ne dépend pas de qui le calcule. Le
 contexte d'une entrée est le jeton que le participant présente dans `hello` : le jeton de l'invitation, ou le
-`reconnectTicket` au retour. Le contexte d'un tunnel est l'`offerId` de son offre (voir plus bas).
+`reconnectTicket` au retour. `nP` et `nH` sont les nombres aléatoires du participant et de l'hôte, de 32 octets chacun,
+écrits en 64 chiffres hexadécimaux minuscules.
+
+Le participant s'engage sur `nP` dans `hello` (`sasCommit` = SHA-256 de ses octets) avant de connaître `nH`, et ne le
+révèle qu'après. Un intermédiaire qui a mis sa propre clé dans une invitation doit fixer son choix de chaque côté avant
+de connaître le nombre du côté honnête. Il ne peut pas chercher des clés qui donnent le même code aux deux côtés et n'a
+qu'une chance sur 26 214 400 par tentative, alors qu'une invitation apporte au plus 16 tentatives.
+
+Un tunnel (voir plus bas) utilise la première version, sans nombres : `SHA-256(UTF-8("golether-sas-v1|" + low + "|" +
+high + "|" + offerId))`. Ses paquets sont portés par des personnes, et il n'y a pas de troisième étape où révéler un
+nombre.
 
 Un numéro de mot ne devient un mot qu'à l'écran, par le paquet de langue (`Verification.Word.00` …
 `Verification.Word.63`). Chaque langue nomme les mêmes 64 choses dans le même ordre, donc le code est le même dans toutes

@@ -1,4 +1,7 @@
 using System.Buffers.Binary;
+using System.Net;
+using System.Net.NetworkInformation;
+using System.Net.Sockets;
 using Golether.Core.Data.Enums;
 using Golether.Core.Networking;
 using Golether.Security.Identity;
@@ -144,6 +147,82 @@ public sealed class TransportTests
         var connector = new TlsPeerConnector(client, _options);
         await Assert.ThrowsAsync<IOException>(() => connector.ConnectAsync(
             new PeerEndpoint("127.0.0.1", port), server.PeerId, StreamPurpose.Control, TestContext.Current.CancellationToken));
+    }
+
+    /// <summary>
+    /// Silent connections from one address cannot take every handshake of the listener: beyond the share of an
+    /// address its next connections are dropped at once, and the share comes back when they end.
+    /// </summary>
+    /// <returns>A task that completes when the test is done.</returns>
+    [Fact]
+    public async Task Tls_LimitsTheHandshakesOfOneAddress()
+    {
+        // Loopback is not counted, so the listener is reached at an address of the network of this device.
+        var address = NetworkInterface.GetAllNetworkInterfaces()
+            .Where(n => n.OperationalStatus == OperationalStatus.Up)
+            .SelectMany(n => n.GetIPProperties().UnicastAddresses)
+            .Select(u => u.Address)
+            .FirstOrDefault(a => a.AddressFamily == AddressFamily.InterNetwork && !IPAddress.IsLoopback(a));
+        Assert.SkipWhen(address is null, "This device has no network address besides loopback.");
+        var token = TestContext.Current.CancellationToken;
+        using var server = DeviceIdentity.CreateNew(TimeProvider.System);
+        using var client = DeviceIdentity.CreateNew(TimeProvider.System);
+        await using var listener = new TlsPeerListener(server, _options with { MaxPendingHandshakesPerAddress = 1 });
+        listener.Start();
+        var endpoint = new PeerEndpoint(address.ToString(), listener.Port);
+
+        // Two silent connections: the listener keeps the one it counted first and drops the other.
+        using var first = new TcpClient();
+        using var second = new TcpClient();
+        await first.ConnectAsync(address, listener.Port, token);
+        await second.ConnectAsync(address, listener.Port, token);
+        var firstClosed = WaitClosedAsync(first, token);
+        var secondClosed = WaitClosedAsync(second, token);
+        var dropped = await Task.WhenAny(firstClosed, secondClosed).WaitAsync(TimeSpan.FromSeconds(5), token);
+        using var silent = dropped == firstClosed ? second : first;
+
+        var connector = new TlsPeerConnector(client, _options);
+        await Assert.ThrowsAnyAsync<IOException>(() => connector.ConnectAsync(endpoint, server.PeerId, StreamPurpose.Control, token));
+
+        silent.Dispose();
+        var accepting = listener.AcceptAsync(token).AsTask();
+        var deadline = DateTime.UtcNow.AddSeconds(10);
+        while (true)
+        {
+            try
+            {
+                await using var outgoing = await connector.ConnectAsync(endpoint, server.PeerId, StreamPurpose.Control, token);
+                await using var incoming = await accepting.WaitAsync(TimeSpan.FromSeconds(10), token);
+                Assert.Equal(client.PeerId, incoming.RemotePeer);
+                break;
+            }
+            catch (IOException) when (DateTime.UtcNow < deadline)
+            {
+                // The listener has not noticed the end of the silent connection yet.
+                await Task.Delay(100, token);
+            }
+        }
+    }
+
+    /// <summary>
+    /// Waits until the other side closes a connection.
+    /// </summary>
+    /// <param name="client">The connection.</param>
+    /// <param name="cancellationToken">The cancellation token.</param>
+    /// <returns>A task that completes when the connection was closed.</returns>
+    private static async Task WaitClosedAsync(TcpClient client, CancellationToken cancellationToken)
+    {
+        var buffer = new byte[64];
+        try
+        {
+            while (await client.GetStream().ReadAsync(buffer, cancellationToken) > 0)
+            {
+            }
+        }
+        catch (Exception ex) when (ex is IOException or ObjectDisposedException)
+        {
+            // A reset closes it as well, and so does this side closing it.
+        }
     }
 
     /// <summary>

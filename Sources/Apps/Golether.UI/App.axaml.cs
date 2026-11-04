@@ -141,7 +141,9 @@ public sealed class App : Application
             };
             desktop.MainWindow = window;
             desktop.ShutdownMode = ShutdownMode.OnMainWindowClose;
-            desktop.Exit += (_, _) => services.DisposeAsync().AsTask().GetAwaiter().GetResult();
+            // The exit has to wait for the tunnels and the sessions to close, and the event cannot wait asynchronously.
+            // The work runs on the thread pool: nothing in it can then wait for this blocked interface thread.
+            desktop.Exit += (_, _) => Task.Run(() => services.DisposeAsync().AsTask()).GetAwaiter().GetResult();
             window.Show();
         }
         catch (Exception ex) when (ex is not OutOfMemoryException)

@@ -113,8 +113,11 @@ Every stream is a separate TLS connection with the `GLTH` preamble, a version an
   UDP). A port of its own is needed only by participants of earlier versions. The relay credentials are created for
   one session and reach a participant only in the welcome after admission; the relay forwards packets only to
   addresses the client created a permission for. No permission is given for the addresses of the host's own computer
-  (loopback) or for broadcast and multicast addresses: every participant knows the relay password, and it must not
-  open a way to the host's services. An allocation the client did not refresh before its lifetime ended is closed
+  (loopback), for broadcast and multicast addresses (the broadcast address of a network of the host included) or for
+  the reserved blocks `0.0.0.0/8` and `240.0.0.0/4`, and datagrams to ports below 1024 are not relayed at all: every
+  participant knows the relay password, and it must not open a way to the services of the host or of its network. The
+  other addresses of the host stay allowed: the cameras of a participant reach the host through them. One participant
+  holds at most 16 relay clients, so it cannot take the places of the others. An allocation the client did not refresh before its lifetime ended is closed
   together with the connection, so vanished clients do not hold a place. The media stays encrypted with DTLS-SRTP;
   the host cannot see it.
 - **Meeting through the rendezvous server**: if no address of the invitation answered within 4 seconds, the
@@ -252,8 +255,11 @@ and the rate `Rate`". Every node computes the needed position itself: `Position 
     (`ISessionService.ClosedByHost`): the event feed disappears together with the session.
 - **Connection:** the participant pins the host's key during the TLS handshake. The host accepts any certificate,
   computes the `PeerId`, checks the token (trusted contacts do not need one) and asks the user.
-- **Verification code:** three words and a number from both `PeerId`s and the context; the sides compare it by voice.
-  The words are shown in the language of each side (see "Interface languages").
+- **Verification code:** three words and a number from both `PeerId`s, the context and a random number of each side;
+  the sides compare it by voice. The participant commits to its number before the host names its own and reveals it
+  after (`SasCommitment`), so a man in the middle cannot search for keys that give both sides the same code: he has one
+  guess per attempt. A side of protocol version 1, which has no numbers, is refused. The words are shown in the
+  language of each side (see "Interface languages").
 - **The file** is given only to admitted participants; when a participant leaves, is removed or connects again, their
   data streams are closed.
 - **Cameras and voice** are encrypted with DTLS-SRTP. `webrtcbin` does not check the peer's certificate against the
@@ -285,6 +291,21 @@ and the rate `Rate`". Every node computes the needed position itself: `Position 
   **before every call** (`AwgCliOptions.FindCarriedExecutable`), not once at start: the component can be installed
   without restarting the application. It is installed from the tunnel window, which shows the component card; without
   the engine `UpAsync` and `DownAsync` give a clear error at once instead of a failed process start.
+- **Only protected copies run with administrator rights.** The tunnel service runs as SYSTEM and starts the engine
+  and reads the configuration on every start, while the data folder can be written by every program of the user. So
+  the helper (or the application itself when it runs as administrator) never starts the engine from there:
+  `ProtectedTunnelFiles` copies it into `Program Files\Golether Tunnel\engine`, which only administrators can change,
+  and checks every copied file against the SHA-256 of the official package of version 3.1.0 built into the application
+  (`AmneziaWgBundle.FileHashes`). The configuration is read, written anew with only the keys Golether knows (no
+  commands to run on the way up) and put into `configurations` beside it, readable by administrators and the system
+  only, since it holds a private key. A file that differs stops the change with a message that the engine was
+  replaced. An AmneziaWG installed by an administrator into Program Files is started as it is. When the last tunnel
+  goes down, the folder is removed: nothing of Golether stays in Program Files.
+- **The same rule on Linux and macOS.** `awg-quick` runs the commands of a configuration (`PostUp` and the like) as
+  root, so it is never given the file of the data folder. `pkexec` or `osascript` starts a short fixed script
+  (`QuickScript`) that copies the configuration into `/etc/amnezia/amneziawg`, where only root writes, checks the
+  copy line by line against the keys Golether writes and starts `awg-quick` on the copy; one line more and nothing
+  runs. What is checked is what runs. "Up" takes a tunnel of the same name down first, with one password prompt.
 - The tunnel address range `10.64–127.x.0/24` is chosen not to overlap typical home networks (`192.168.x`,
   `10.0.0.x`) and tunnels the user brought up themselves.
 - **Public address and NAT traversal** (`NatTraversal`). Before creating an offer and before accepting an answer, a

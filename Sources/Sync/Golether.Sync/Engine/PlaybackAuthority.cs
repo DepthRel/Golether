@@ -180,7 +180,9 @@ public sealed class PlaybackAuthority
                     break;
 
                 case PlaybackRequestKind.Pause:
-                    if (_current.State == PlayState.Paused && request.Position is null)
+                    // A pause while the start waits for participants cancels the start, even without a frame: otherwise
+                    // the film would start by itself after somebody asked it to stay.
+                    if (_current.State == PlayState.Paused && request.Position is null && !_holding)
                     {
                         return null;
                     }

@@ -189,6 +189,14 @@ public sealed class EngineTests
         Assert.Empty(authority.WaitingFor());
         _clock.Advance(TimeSpan.FromMinutes(5));
         Assert.Null(authority.EvaluateBuffering([absent], TimeSpan.Zero));
+
+        // A pause without a frame cancels it as well, instead of being taken for "already paused".
+        authority.Apply(_host, new PlaybackRequest(PlaybackRequestKind.Play, null), TimeSpan.Zero);
+        var cancelled = authority.Apply(_guest, new PlaybackRequest(PlaybackRequestKind.Pause, null), TimeSpan.Zero);
+        Assert.Equal(PlaybackCause.Pause, cancelled?.Cause);
+        Assert.Empty(authority.WaitingFor());
+        _clock.Advance(TimeSpan.FromMinutes(5));
+        Assert.Null(authority.EvaluateBuffering([absent], TimeSpan.Zero));
     }
 
     /// <summary>

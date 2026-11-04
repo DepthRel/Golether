@@ -1,6 +1,7 @@
 using System.Buffers.Binary;
 using System.Collections.Concurrent;
 using System.Net;
+using System.Net.NetworkInformation;
 using System.Net.Sockets;
 using System.Security.Cryptography;
 using Microsoft.Extensions.Logging;
@@ -20,6 +21,12 @@ namespace Golether.Transports.Relay;
 /// </remarks>
 public sealed class TurnServer : IRelayStreamServer, IAsyncDisposable
 {
+    /// <summary>
+    /// The lowest port datagrams are relayed to. WebRTC never uses the ports below it, and the services of a system
+    /// (DNS, NetBIOS, the setup of a router) do: the relay must not carry a participant to them.
+    /// </summary>
+    private const int LOWEST_PEER_PORT = 1024;
+
     /// <summary>
     /// The lifetime of a permission (RFC 5766).
     /// </summary>
@@ -511,7 +518,7 @@ public sealed class TurnServer : IRelayStreamServer, IAsyncDisposable
 
             var number = message.Get(Stun.ATTR_CHANNEL_NUMBER) is { Length: 4 } raw ? BinaryPrimitives.ReadUInt16BigEndian(raw) : (ushort)0;
             var peer = message.GetXorAddress(Stun.ATTR_XOR_PEER_ADDRESS);
-            if (peer is not null && !server.IsRelayablePeer(peer.Address))
+            if (peer is not null && (!server.IsRelayablePeer(peer.Address) || peer.Port < LOWEST_PEER_PORT))
             {
                 return Error(message, 403, "Forbidden", signed: true);
             }
@@ -728,7 +735,7 @@ public sealed class TurnServer : IRelayStreamServer, IAsyncDisposable
         public async ValueTask SendAsync(IPEndPoint peer, ReadOnlyMemory<byte> data)
         {
             peer = Normalize(peer);
-            if (!IsPermitted(peer.Address) || IsExpired)
+            if (peer.Port < LOWEST_PEER_PORT || !IsPermitted(peer.Address) || IsExpired)
             {
                 return;
             }
@@ -832,21 +839,61 @@ public sealed class TurnServer : IRelayStreamServer, IAsyncDisposable
     /// <summary>
     /// Checks whether the relay may send to a peer. The relay runs on the device of the host, and every admitted
     /// participant knows its password: it must not become a way to reach the services of that device itself
-    /// (loopback) or to send to everybody at once (multicast, broadcast). Loopback is allowed only when the relay
-    /// itself listens on a loopback address, which is how it is tested.
+    /// (loopback) or to send to everybody at once (multicast, broadcast, the broadcast of a network of the host).
+    /// Loopback is allowed only when the relay itself listens on a loopback address, which is how it is tested. The
+    /// other addresses of the host stay allowed: the cameras of a participant reach the host through them.
     /// </summary>
     /// <param name="peer">The address of the peer.</param>
     /// <returns><see langword="true"/> when datagrams may be relayed to the address.</returns>
     private bool IsRelayablePeer(IPAddress peer)
     {
         peer = Normalize(peer);
-        if (peer.Equals(IPAddress.Any) || peer.Equals(IPAddress.IPv6Any) || peer.Equals(IPAddress.Broadcast) ||
-            peer.IsIPv6Multicast || (peer.AddressFamily == AddressFamily.InterNetwork && peer.GetAddressBytes()[0] is >= 224 and <= 239))
+        if (peer.Equals(IPAddress.IPv6Any) || peer.IsIPv6Multicast)
+        {
+            return false;
+        }
+
+        // 0.0.0.0/8 is "this network"; from 224 on lie multicast, the reserved block and the limited broadcast.
+        if (peer.AddressFamily == AddressFamily.InterNetwork && (peer.GetAddressBytes()[0] is 0 or >= 224 || IsNetworkBroadcast(peer)))
         {
             return false;
         }
 
         return !IPAddress.IsLoopback(peer) || IPAddress.IsLoopback(_options.ListenAddress);
+    }
+
+    /// <summary>
+    /// Tells whether an address is the broadcast address of a network this device is in, such as
+    /// <c>192.168.1.255</c>.
+    /// </summary>
+    /// <param name="peer">The IPv4 address.</param>
+    /// <returns><see langword="true"/> when a datagram to it would reach every device of that network.</returns>
+    private static bool IsNetworkBroadcast(IPAddress peer)
+    {
+        var target = BinaryPrimitives.ReadUInt32BigEndian(peer.GetAddressBytes());
+        try
+        {
+            foreach (var unicast in NetworkInterface.GetAllNetworkInterfaces().SelectMany(n => n.GetIPProperties().UnicastAddresses))
+            {
+                if (unicast.Address.AddressFamily != AddressFamily.InterNetwork || unicast.IPv4Mask is not { } mask)
+                {
+                    continue;
+                }
+
+                // Networks of one or two addresses have no broadcast address.
+                var bits = BinaryPrimitives.ReadUInt32BigEndian(mask.GetAddressBytes());
+                if (bits < 0xFFFF_FFFE && (BinaryPrimitives.ReadUInt32BigEndian(unicast.Address.GetAddressBytes()) | ~bits) == target)
+                {
+                    return true;
+                }
+            }
+        }
+        catch (Exception ex) when (ex is NetworkInformationException or PlatformNotSupportedException)
+        {
+            // The networks cannot be read on this system: nothing more to rule out than the fixed blocks above.
+        }
+
+        return false;
     }
 
     /// <summary>

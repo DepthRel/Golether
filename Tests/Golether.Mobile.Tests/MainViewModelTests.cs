@@ -555,6 +555,71 @@ public sealed class MainViewModelTests : IDisposable
     }
 
     /// <summary>
+    /// The button follows what the host decided, not the local player: during the countdown of a start and while
+    /// the participants are waited for it pauses, and so cancels the start, as on the desktop.
+    /// </summary>
+    /// <param name="cause">Why the film stands or plays.</param>
+    /// <param name="state">The decided state.</param>
+    /// <returns>A task that completes when the test ends.</returns>
+    [Theory]
+    [InlineData(PlaybackCause.Play, PlayState.Playing)]
+    [InlineData(PlaybackCause.WaitingForParticipants, PlayState.Paused)]
+    public async Task TogglePlay_WhileTheStartIsOnTheWay_Pauses(PlaybackCause cause, PlayState state)
+    {
+        await JoinAsync(SessionState.Active);
+        _services.Connection.Snapshot = Snapshot(SessionState.Active) with
+        {
+            Playback = new PlaybackState
+            {
+                State = state,
+                Position = TimeSpan.FromMinutes(5),
+                ReferenceTime = 0,
+                Version = 2,
+                Origin = _host,
+                Cause = cause,
+            },
+        };
+        _model.Refresh();
+
+        _model.TogglePlayCommand.Execute(null);
+
+        Assert.True(_model.ShowsPause);
+        var request = Assert.Single(_services.Connection.Requests);
+        Assert.Equal(PlaybackRequestKind.Pause, request.Kind);
+        Assert.NotNull(request.Position);
+    }
+
+    /// <summary>
+    /// The host may start without those who are not ready; a participant is not offered it.
+    /// </summary>
+    /// <returns>A task that completes when the test ends.</returns>
+    [Fact]
+    public async Task StartNow_IsTheHostsChoiceWhileWaiting()
+    {
+        await JoinAsync(SessionState.Active);
+        _services.Connection.Snapshot = Snapshot(SessionState.Active) with
+        {
+            Playback = new PlaybackState
+            {
+                State = PlayState.Paused,
+                Position = TimeSpan.Zero,
+                ReferenceTime = 0,
+                Version = 2,
+                Origin = _host,
+                Cause = PlaybackCause.WaitingForParticipants,
+            },
+        };
+        _model.Refresh();
+        Assert.False(_model.CanStartNow);
+
+        _model.IsHost = true;
+        _model.StartNowCommand.Execute(null);
+
+        Assert.True(_model.CanStartNow);
+        Assert.Equal(PlaybackRequestKind.PlayNow, Assert.Single(_services.Connection.Requests).Kind);
+    }
+
+    /// <summary>
     /// A start pressed here comes a few seconds later: the screen counts them, and says when the participants are
     /// waited for.
     /// </summary>

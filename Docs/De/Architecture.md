@@ -115,8 +115,12 @@ Jeder Stream ist eine eigene TLS-Verbindung mit der Präambel `GLTH`, einer Vers
   UDP). Einen eigenen Port brauchen nur Teilnehmer früherer Versionen. Die Zugangsdaten des Relays werden für eine
   Sitzung erzeugt und erreichen einen Teilnehmer erst im Willkommen nach dem Einlass; das Relay leitet Pakete nur an
   Adressen weiter, für die der Client eine Berechtigung angelegt hat. Für die Adressen des Gastgeber-Computers selbst
-  (Loopback) und für Broadcast- und Multicast-Adressen gibt es keine Berechtigung: Jeder Teilnehmer kennt das
-  Relay-Passwort, und es darf keinen Weg zu den Diensten des Gastgebers öffnen. Eine Zuweisung, die der Client vor
+  (Loopback), für Broadcast- und Multicast-Adressen (die Broadcast-Adresse eines Netzes des Gastgebers eingeschlossen)
+  und für die reservierten Blöcke `0.0.0.0/8` und `240.0.0.0/4` gibt es keine Berechtigung, und Datagramme an Ports
+  unter 1024 werden gar nicht weitergeleitet: Jeder Teilnehmer kennt das Relay-Passwort, und es darf keinen Weg zu den
+  Diensten des Gastgebers oder seines Netzes öffnen. Die übrigen Adressen des Gastgebers bleiben erlaubt: Über sie
+  erreichen die Kameras eines Teilnehmers den Gastgeber. Ein Teilnehmer hat höchstens 16 Relay-Clients, damit er den
+  anderen die Plätze nicht wegnimmt. Eine Zuweisung, die der Client vor
   Ablauf nicht erneuert hat, wird zusammen mit der Verbindung geschlossen, damit verschwundene Clients keinen Platz
   belegen. Die Medien bleiben mit DTLS-SRTP verschlüsselt; der Gastgeber kann sie nicht sehen.
 - **Treffen über den Vermittlungsserver**: Hat keine Adresse der Einladung innerhalb von 4 Sekunden geantwortet, trifft
@@ -264,8 +268,12 @@ Der Zustand der Sitzung (`PlaybackState`): „Im Moment `ReferenceTime` nach der
 - **Verbindung:** Der Teilnehmer fixiert den Schlüssel des Gastgebers während des TLS-Handshakes. Der Gastgeber nimmt
   jedes Zertifikat an, berechnet die `PeerId`, prüft das Token (vertraute Kontakte brauchen keines) und fragt den
   Benutzer.
-- **Prüfcode:** drei Wörter und eine Zahl aus beiden `PeerId` und dem Kontext; die Seiten vergleichen ihn per Sprache.
-  Die Wörter werden in der Sprache jeder Seite angezeigt (siehe „Sprachen der Oberfläche“).
+- **Prüfcode:** drei Wörter und eine Zahl aus beiden `PeerId`, dem Kontext und einer Zufallszahl jeder Seite; die
+  Seiten vergleichen ihn per Sprache. Der Teilnehmer legt sich auf seine Zahl fest, bevor der Gastgeber seine nennt,
+  und gibt sie danach preis (`SasCommitment`), sodass ein Mann in der Mitte nicht nach Schlüsseln suchen kann, die
+  beiden Seiten denselben Code geben: Er hat einen Versuch pro Anlauf. Eine Seite der Protokollversion 1, die keine
+  Zahlen hat, wird abgewiesen. Die Wörter werden in der Sprache jeder Seite angezeigt (siehe „Sprachen der
+  Oberfläche“).
 - **Die Datei** wird nur eingelassenen Teilnehmern gegeben; verlässt ein Teilnehmer die Sitzung, wird er entfernt oder
   verbindet er sich neu, werden seine Datenstreams geschlossen.
 - **Kameras und Sprache** werden mit DTLS-SRTP verschlüsselt. `webrtcbin` prüft das Zertifikat der Gegenseite nicht
@@ -301,6 +309,23 @@ Der Zustand der Sitzung (`PlaybackState`): „Im Moment `ReferenceTime` nach der
   (`AwgCliOptions.FindCarriedExecutable`), nicht einmal beim Start: Die Komponente lässt sich ohne Neustart der
   Anwendung installieren. Installiert wird sie aus dem Tunnelfenster, das die Komponentenkarte zeigt; ohne die Engine
   geben `UpAsync` und `DownAsync` sofort einen klaren Fehler statt eines gescheiterten Prozessstarts.
+- **Mit Administratorrechten laufen nur geschützte Kopien.** Der Tunneldienst läuft als SYSTEM, startet die Engine und
+  liest die Konfiguration bei jedem Start, während jedes Programm des Benutzers in den Datenordner schreiben kann.
+  Deshalb startet das Hilfsprogramm (oder die Anwendung selbst, wenn sie als Administrator läuft) die Engine nie von
+  dort: `ProtectedTunnelFiles` kopiert sie nach `Program Files\Golether Tunnel\engine`, das nur Administratoren ändern
+  können, und prüft jede kopierte Datei gegen das in die Anwendung eingebaute SHA-256 des offiziellen Pakets der
+  Version 3.1.0 (`AmneziaWgBundle.FileHashes`). Die Konfiguration wird gelesen, nur mit den Schlüsseln neu geschrieben,
+  die Golether kennt (keine Befehle beim Hochfahren), und daneben in `configurations` abgelegt, lesbar nur für
+  Administratoren und das System, denn sie enthält einen privaten Schlüssel. Eine abweichende Datei stoppt die Änderung
+  mit der Meldung, dass die Engine ersetzt wurde. Ein von einem Administrator nach Program Files installiertes
+  AmneziaWG wird so gestartet, wie es ist. Wenn der letzte Tunnel abgebaut wird, wird der Ordner entfernt: Nichts von
+  Golether bleibt in Program Files.
+- **Dieselbe Regel unter Linux und macOS.** `awg-quick` führt die Befehle einer Konfiguration (`PostUp` und Ähnliches)
+  als root aus, daher bekommt es nie die Datei des Datenordners. `pkexec` oder `osascript` startet ein kurzes festes
+  Skript (`QuickScript`), das die Konfiguration nach `/etc/amnezia/amneziawg` kopiert, wohin nur root schreibt, die
+  Kopie Zeile für Zeile gegen die Schlüssel prüft, die Golether schreibt, und `awg-quick` mit der Kopie startet; eine
+  Zeile mehr, und nichts läuft. Was geprüft wird, ist das, was läuft. „Up“ baut zuerst einen Tunnel gleichen Namens
+  ab, mit einer einzigen Passwortabfrage.
 - Der Adressbereich der Tunnel `10.64–127.x.0/24` ist so gewählt, dass er sich nicht mit typischen Heimnetzen
   (`192.168.x`, `10.0.0.x`) und vom Benutzer selbst aufgebauten Tunneln überschneidet.
 - **Öffentliche Adresse und NAT-Traversal** (`NatTraversal`). Vor dem Erstellen eines Angebots und vor dem Annehmen

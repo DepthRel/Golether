@@ -115,10 +115,13 @@ Chaque flux est une connexion TLS séparée avec le préambule `GLTH`, une versi
   UDP). Seuls les participants de versions antérieures ont besoin d'un port à part. Les identifiants du relais sont créés
   pour une séance et n'atteignent un participant que dans l'accueil après l'admission ; le relais ne transmet les paquets
   qu'aux adresses pour lesquelles le client a créé une autorisation. Aucune autorisation n'est donnée pour les adresses
-  de l'ordinateur de l'hôte lui-même (loopback) ni pour les adresses de diffusion et de multidiffusion : chaque
-  participant connaît le mot de passe du relais, et il ne doit pas ouvrir un chemin vers les services de l'hôte. Une
-  allocation que le client n'a pas renouvelée avant la fin de sa durée de vie est fermée avec la connexion, pour que les
-  clients disparus n'occupent pas de place. Les médias restent chiffrés avec DTLS-SRTP ; l'hôte ne peut pas les voir.
+  de l'ordinateur de l'hôte lui-même (loopback), pour les adresses de diffusion et de multidiffusion (l'adresse de
+  diffusion d'un réseau de l'hôte comprise) ni pour les blocs réservés `0.0.0.0/8` et `240.0.0.0/4`, et les datagrammes
+  vers les ports inférieurs à 1024 ne sont jamais relayés : chaque participant connaît le mot de passe du relais, et il
+  ne doit pas ouvrir un chemin vers les services de l'hôte ou de son réseau. Les autres adresses de l'hôte restent
+  permises : c'est par elles que les caméras d'un participant atteignent l'hôte. Un participant a au plus 16 clients du
+  relais, pour ne pas prendre la place des autres. Une allocation que le client n'a pas renouvelée avant la fin de sa
+  durée de vie est fermée avec la connexion, pour que les clients disparus n'occupent pas de place. Les médias restent chiffrés avec DTLS-SRTP ; l'hôte ne peut pas les voir.
 - **Rencontre via le serveur de rendez-vous** : si aucune adresse de l'invitation n'a répondu en 4 secondes, le
   participant rencontre l'hôte via le serveur indiqué dans l'invitation : tous deux se connectent au serveur depuis les
   ports à partir desquels ils vont percer, apprennent les adresses publiques l'un de l'autre et se connectent directement
@@ -263,8 +266,11 @@ L'état de la séance (`PlaybackState`) : « à l'instant `ReferenceTime` selon 
 - **Connexion :** le participant épingle la clé de l'hôte pendant la poignée de main TLS. L'hôte accepte n'importe quel
   certificat, calcule le `PeerId`, vérifie le jeton (les contacts de confiance n'en ont pas besoin) et demande à
   l'utilisateur.
-- **Code de vérification :** trois mots et un nombre à partir des deux `PeerId` et du contexte ; les côtés le comparent
-  à voix haute. Les mots s'affichent dans la langue de chaque côté (voir « Langues de l'interface »).
+- **Code de vérification :** trois mots et un nombre à partir des deux `PeerId`, du contexte et d'un nombre aléatoire de
+  chaque côté ; les côtés le comparent à voix haute. Le participant s'engage sur son nombre avant que l'hôte donne le
+  sien et le révèle ensuite (`SasCommitment`), si bien qu'un intermédiaire ne peut pas chercher des clés qui donnent le
+  même code aux deux côtés : il a un essai par tentative. Un côté de la version 1 du protocole, qui n'a pas de nombres,
+  est refusé. Les mots s'affichent dans la langue de chaque côté (voir « Langues de l'interface »).
 - **Le fichier** n'est donné qu'aux participants admis ; quand un participant part, est retiré ou se reconnecte, ses
   flux de données sont fermés.
 - **Les caméras et la voix** sont chiffrées avec DTLS-SRTP. `webrtcbin` ne vérifie pas le certificat de l'autre côté
@@ -298,6 +304,23 @@ L'état de la séance (`PlaybackState`) : « à l'instant `ReferenceTime` selon 
   pas une fois au démarrage : le composant peut s'installer sans redémarrer l'application. Il s'installe depuis la
   fenêtre des tunnels, qui affiche la carte du composant ; sans le moteur, `UpAsync` et `DownAsync` donnent aussitôt une
   erreur claire au lieu d'un lancement de processus raté.
+- **Avec les droits d'administrateur, seules des copies protégées s'exécutent.** Le service du tunnel tourne en tant que
+  SYSTEM, démarre le moteur et lit la configuration à chaque démarrage, alors que tout programme de l'utilisateur peut
+  écrire dans le dossier de données. L'assistant (ou l'application elle-même quand elle tourne en administrateur) ne
+  démarre donc jamais le moteur depuis là : `ProtectedTunnelFiles` le copie dans `Program Files\Golether Tunnel\engine`,
+  que seuls les administrateurs peuvent modifier, et vérifie chaque fichier copié avec le SHA-256 du paquet officiel de
+  la version 3.1.0 intégré à l'application (`AmneziaWgBundle.FileHashes`). La configuration est lue, réécrite avec les
+  seules clés que Golether connaît (sans commandes à exécuter à la montée du tunnel) et placée à côté dans
+  `configurations`, lisible par les administrateurs et le système seulement, car elle contient une clé privée. Un fichier
+  différent arrête la modification avec un message indiquant que le moteur a été remplacé. Un AmneziaWG installé par un
+  administrateur dans Program Files est démarré tel quel. Quand le dernier tunnel est descendu, le dossier est supprimé :
+  rien de Golether ne reste dans Program Files.
+- **La même règle sous Linux et macOS.** `awg-quick` exécute en root les commandes d'une configuration (`PostUp` et
+  autres), il ne reçoit donc jamais le fichier du dossier de données. `pkexec` ou `osascript` lance un court script fixe
+  (`QuickScript`) qui copie la configuration dans `/etc/amnezia/amneziawg`, où seul root écrit, vérifie la copie ligne
+  par ligne avec les clés qu'écrit Golether et lance `awg-quick` sur la copie ; une ligne de plus et rien ne s'exécute.
+  Ce qui est vérifié est ce qui s'exécute. « Up » descend d'abord un tunnel du même nom, avec une seule demande de mot de
+  passe.
 - La plage d'adresses des tunnels `10.64–127.x.0/24` est choisie pour ne pas chevaucher les réseaux domestiques typiques
   (`192.168.x`, `10.0.0.x`) ni les tunnels que l'utilisateur a montés lui-même.
 - **Adresse publique et traversée du NAT** (`NatTraversal`). Avant de créer une offre et avant d'accepter une réponse, un

@@ -51,6 +51,25 @@ public sealed class TunnelComponentTests : IDisposable
     }
 
     /// <summary>
+    /// Every file of the engine of every package in the catalog has a known hash: a program with administrator rights
+    /// starts only those. A new version of the package without new hashes fails here, not on a tunnel.
+    /// </summary>
+    [Fact]
+    public void Catalog_EngineFilesHaveKnownHashes()
+    {
+        foreach (var package in ComponentCatalog.Packages.Where(p => p.Id == ComponentId.Tunnel))
+        {
+            Assert.Equal(AmneziaWgBundle.HASHED_VERSION, package.Version);
+            var hashes = AmneziaWgBundle.FileHashes(package.RuntimeIdentifier);
+            Assert.NotNull(hashes);
+            Assert.Equal(AmneziaWgBundle.Files.Order(StringComparer.OrdinalIgnoreCase), hashes.Keys.Order(StringComparer.OrdinalIgnoreCase));
+            Assert.All(hashes.Values, hash => Assert.Matches("^[0-9a-f]{64}$", hash));
+        }
+
+        Assert.Null(AmneziaWgBundle.FileHashes("linux-x64"));
+    }
+
+    /// <summary>
     /// The three files of the package are taken out of the installer, put together and found afterwards; the copy of
     /// the <c>.msi</c> the administrative install leaves behind is not kept.
     /// </summary>

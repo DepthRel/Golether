@@ -22,7 +22,7 @@ public static class Program
         // AmneziaWG as the application itself: the one carried in the data folder when it is there.
         if (TunnelHelper.IsHelperInvocation(args))
         {
-            return TunnelHelper.Run(args, new ProcessRunner(), ResolveAmneziaWg());
+            return TunnelHelper.Run(args, new ProcessRunner(), ResolveAmneziaWg(), AppServices.CreateTunnelGuard());
         }
 
         // The elevated firewall helper adds or removes the inbound rule of this copy and exits.

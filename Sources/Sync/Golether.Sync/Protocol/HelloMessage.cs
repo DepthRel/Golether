@@ -14,4 +14,10 @@ public sealed record HelloMessage(int Version, string DisplayName, string? Invit
     /// connection.
     /// </summary>
     public bool Gallery { get; init; }
+
+    /// <summary>
+    /// Gets the commitment to the random number of the participant for the verification code: the SHA-256 of the
+    /// number, 64 lowercase hexadecimal digits. The number itself follows only after the host named its own.
+    /// </summary>
+    public string? SasCommit { get; init; }
 }

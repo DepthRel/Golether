@@ -114,8 +114,12 @@ Cada fluxo é uma ligação TLS separada com o preâmbulo `GLTH`, uma versão e 
   UDP). Só os participantes de versões anteriores precisam de uma porta própria. As credenciais do relé são criadas para
   uma sessão e só chegam a um participante nas boas-vindas após a admissão; o relé só reencaminha pacotes para endereços
   para os quais o cliente criou uma permissão. Não é dada permissão para os endereços do próprio computador do anfitrião
-  (loopback) nem para endereços de difusão e multidifusão: todos os participantes conhecem a palavra-passe do relé, e ela
-  não pode abrir caminho para os serviços do anfitrião. Uma atribuição que o cliente não renovou antes de expirar é
+  (loopback), para endereços de difusão e multidifusão (incluindo o endereço de difusão de uma rede do anfitrião) nem
+  para os blocos reservados `0.0.0.0/8` e `240.0.0.0/4`, e os datagramas para portas abaixo de 1024 nunca são
+  retransmitidos: todos os participantes conhecem a palavra-passe do relé, e ela não pode abrir caminho para os serviços
+  do anfitrião nem da sua rede. Os outros endereços do anfitrião continuam permitidos: é por eles que as câmaras de um
+  participante chegam ao anfitrião. Um participante tem no máximo 16 clientes do relé, para não tirar o lugar aos
+  outros. Uma atribuição que o cliente não renovou antes de expirar é
   fechada juntamente com a ligação, para que clientes desaparecidos não ocupem lugar. Os meios continuam cifrados com
   DTLS-SRTP; o anfitrião não os consegue ver.
 - **Encontro através do servidor de encontro**: se nenhum endereço do convite respondeu em 4 segundos, o participante
@@ -253,8 +257,11 @@ O estado da sessão (`PlaybackState`): “no momento `ReferenceTime` segundo o r
     própria (`ISessionService.ClosedByHost`): a lista de eventos desaparece juntamente com a sessão.
 - **Ligação:** o participante fixa a chave do anfitrião durante o handshake TLS. O anfitrião aceita qualquer certificado,
   calcula o `PeerId`, verifica o token (os contactos de confiança não precisam dele) e pergunta ao utilizador.
-- **Código de verificação:** três palavras e um número a partir de ambos os `PeerId` e do contexto; os lados comparam-no
-  de viva voz. As palavras aparecem no idioma de cada lado (ver “Idiomas da interface”).
+- **Código de verificação:** três palavras e um número a partir de ambos os `PeerId`, do contexto e de um número
+  aleatório de cada lado; os lados comparam-no de viva voz. O participante compromete-se com o seu número antes de o
+  anfitrião dizer o seu e revela-o depois (`SasCommitment`), por isso um intermediário não pode procurar chaves que deem
+  aos dois lados o mesmo código: tem uma tentativa por ligação. Um lado da versão 1 do protocolo, que não tem números, é
+  recusado. As palavras aparecem no idioma de cada lado (ver “Idiomas da interface”).
 - **O ficheiro** só é entregue a participantes admitidos; quando um participante sai, é removido ou volta a ligar-se, os
   seus fluxos de dados são fechados.
 - **As câmaras e a voz** são cifradas com DTLS-SRTP. O `webrtcbin` não verifica o certificado do outro lado com a
@@ -286,6 +293,22 @@ O estado da sessão (`PlaybackState`): “no momento `ReferenceTime` segundo o r
   **antes de cada chamada** (`AwgCliOptions.FindCarriedExecutable`), não uma vez no arranque: o componente pode ser
   instalado sem reiniciar a aplicação. É instalado a partir da janela dos túneis, que mostra o cartão do componente; sem
   o motor, `UpAsync` e `DownAsync` dão de imediato um erro claro em vez de um arranque de processo falhado.
+- **Com direitos de administrador só correm cópias protegidas.** O serviço do túnel corre como SYSTEM, arranca o motor e
+  lê a configuração em cada arranque, enquanto qualquer programa do utilizador pode escrever na pasta de dados. Por isso
+  o assistente (ou a própria aplicação quando corre como administrador) nunca arranca o motor a partir daí:
+  `ProtectedTunnelFiles` copia-o para `Program Files\Golether Tunnel\engine`, que só os administradores podem alterar,
+  e confere cada ficheiro copiado com o SHA-256 do pacote oficial da versão 3.1.0 incorporado na aplicação
+  (`AmneziaWgBundle.FileHashes`). A configuração é lida, escrita de novo só com as chaves que o Golether conhece (sem
+  comandos a executar ao levantar o túnel) e guardada ao lado em `configurations`, legível só pelos administradores e
+  pelo sistema, porque contém uma chave privada. Um ficheiro diferente para a alteração com uma mensagem de que o motor
+  foi substituído. Um AmneziaWG instalado por um administrador em Program Files é arrancado tal como está. Quando o
+  último túnel é desligado, a pasta é removida: nada do Golether fica em Program Files.
+- **A mesma regra no Linux e no macOS.** O `awg-quick` executa como root os comandos de uma configuração (`PostUp` e
+  semelhantes), por isso nunca recebe o ficheiro da pasta de dados. O `pkexec` ou o `osascript` arranca um script curto
+  e fixo (`QuickScript`) que copia a configuração para `/etc/amnezia/amneziawg`, onde só o root escreve, confere a
+  cópia linha a linha com as chaves que o Golether escreve e arranca o `awg-quick` com a cópia; uma linha a mais e nada
+  corre. O que é conferido é o que corre. "Up" desliga primeiro um túnel com o mesmo nome, com um só pedido de
+  palavra-passe.
 - O intervalo de endereços dos túneis `10.64–127.x.0/24` foi escolhido para não se sobrepor a redes domésticas típicas
   (`192.168.x`, `10.0.0.x`) nem a túneis que o utilizador ligou por si.
 - **Endereço público e travessia de NAT** (`NatTraversal`). Antes de criar uma oferta e antes de aceitar uma resposta, um

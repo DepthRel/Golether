@@ -8,6 +8,7 @@ namespace Golether.Sync.Protocol;
 [JsonPolymorphic(TypeDiscriminatorPropertyName = "$t")]
 [JsonDerivedType(typeof(HelloMessage), "hello")]
 [JsonDerivedType(typeof(PendingApprovalMessage), "pending")]
+[JsonDerivedType(typeof(SasRevealMessage), "sasReveal")]
 [JsonDerivedType(typeof(WelcomeMessage), "welcome")]
 [JsonDerivedType(typeof(RejectedMessage), "rejected")]
 [JsonDerivedType(typeof(ClockPingMessage), "ping")]
@@ -29,7 +30,8 @@ namespace Golether.Sync.Protocol;
 public abstract record SessionMessage
 {
     /// <summary>
-    /// The protocol version implemented by this build.
+    /// The protocol version implemented by this build. Version 2 added the random numbers of the verification code;
+    /// a side of version 1 is refused rather than given the code an outsider could search for.
     /// </summary>
-    public const int PROTOCOL_VERSION = 1;
+    public const int PROTOCOL_VERSION = 2;
 }

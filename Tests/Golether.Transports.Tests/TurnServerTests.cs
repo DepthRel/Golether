@@ -1,5 +1,6 @@
 using System.Buffers.Binary;
 using System.Net;
+using System.Net.NetworkInformation;
 using System.Net.Sockets;
 using System.Security.Cryptography;
 using Golether.Transports.Relay;
@@ -298,8 +299,9 @@ public sealed class TurnServerTests : IAsyncLifetime
 
     /// <summary>
     /// The relay runs on the device of the host and every participant knows its password, so it does not send where
-    /// it must not: to everybody at once (multicast, broadcast), to nowhere, or to the device itself (loopback) when
-    /// it serves the network.
+    /// it must not: to everybody at once (multicast, broadcast, the broadcast of a network of the device), to nowhere
+    /// or reserved blocks, to the device itself (loopback) when it serves the network, or to the ports of the
+    /// services of a system.
     /// </summary>
     /// <returns>A task that completes when the test is done.</returns>
     [Fact]
@@ -317,7 +319,7 @@ public sealed class TurnServerTests : IAsyncLifetime
         var allocated = await client.RequestAsync(Signed(Stun.ALLOCATE, realm, nonce).Add(Stun.ATTR_REQUESTED_TRANSPORT, [17, 0, 0, 0]), key, token);
         Assert.Equal(Stun.CLASS_SUCCESS, allocated.Class);
 
-        foreach (var address in new[] { "127.0.0.1", "239.255.255.250", "255.255.255.255", "0.0.0.0" })
+        foreach (var address in new[] { "127.0.0.1", "239.255.255.250", "255.255.255.255", "0.0.0.0", "0.1.2.3", "240.0.0.1", "::" })
         {
             var peer = new IPEndPoint(IPAddress.Parse(address), 1900);
             var permission = await client.RequestAsync(Signed(Stun.CREATE_PERMISSION, realm, nonce).AddXorAddress(Stun.ATTR_XOR_PEER_ADDRESS, peer), key, token);
@@ -328,9 +330,27 @@ public sealed class TurnServerTests : IAsyncLifetime
             Assert.Equal(403, channel.GetErrorCode());
         }
 
-        // An ordinary address of another network is still served.
+        // The broadcast address of a network of this device reaches everybody in it.
+        var network = NetworkInterface.GetAllNetworkInterfaces().SelectMany(n => n.GetIPProperties().UnicastAddresses)
+            .FirstOrDefault(u => u.Address.AddressFamily == AddressFamily.InterNetwork && !IPAddress.IsLoopback(u.Address) &&
+                u.IPv4Mask is { } mask && BinaryPrimitives.ReadUInt32BigEndian(mask.GetAddressBytes()) < 0xFFFF_FFFE);
+        if (network is not null)
+        {
+            var bits = BinaryPrimitives.ReadUInt32BigEndian(network.IPv4Mask.GetAddressBytes());
+            var broadcast = new byte[4];
+            BinaryPrimitives.WriteUInt32BigEndian(broadcast, BinaryPrimitives.ReadUInt32BigEndian(network.Address.GetAddressBytes()) | ~bits);
+            var refused = await client.RequestAsync(
+                Signed(Stun.CREATE_PERMISSION, realm, nonce).AddXorAddress(Stun.ATTR_XOR_PEER_ADDRESS, new IPEndPoint(new IPAddress(broadcast), 5000)), key, token);
+            Assert.Equal(403, refused.GetErrorCode());
+        }
+
+        // An ordinary address of another network is still served, but not on the ports of the services of a system.
         var allowed = await client.RequestAsync(
             Signed(Stun.CREATE_PERMISSION, realm, nonce).AddXorAddress(Stun.ATTR_XOR_PEER_ADDRESS, new IPEndPoint(IPAddress.Parse("192.168.77.5"), 5000)), key, token);
         Assert.Equal(Stun.CLASS_SUCCESS, allowed.Class);
+        var service = await client.RequestAsync(Signed(Stun.CHANNEL_BIND, realm, nonce)
+            .Add(Stun.ATTR_CHANNEL_NUMBER, [0x40, 0x03, 0, 0])
+            .AddXorAddress(Stun.ATTR_XOR_PEER_ADDRESS, new IPEndPoint(IPAddress.Parse("192.168.77.5"), 53)), key, token);
+        Assert.Equal(403, service.GetErrorCode());
     }
 }

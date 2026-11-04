@@ -1,4 +1,4 @@
-# Golether network protocol (version 1)
+# Golether network protocol (version 2)
 
 ## Transport
 
@@ -11,6 +11,12 @@ TCP, the host's port is **47800** by default. Every connection:
    `03` Relay, `04` RelayShared).
 3. The host's answer, 1 byte: `01` means accepted.
 
+The host bounds what connections can take, so a crowd at the door cannot keep the participants out: at most 16
+handshakes at once from one remote address (128 in all; connections of the host's own computer are not counted), at
+most 32 Control connections that have been neither let in nor turned away yet, and for an admitted participant at most
+16 MediaData streams and 16 relay clients (`Relay` streams and `RelayShared` channels together). A connection beyond a
+limit is closed. At most 100 `rtc` signals a second from a participant are passed on; the rest are dropped.
+
 `PeerId` = lowercase hex SHA-256 of the DER SubjectPublicKeyInfo of the device key (ECDSA P-256).
 
 ## Control
@@ -20,8 +26,9 @@ names are in camelCase. H is the host, P a participant.
 
 | `$t` | Direction | Fields | Meaning |
 |---|---|---|---|
-| `hello` | P → H | `version`, `displayName`, `inviteToken`, `gallery` | the first message |
-| `pending` | H → P | — | waiting for the host's decision |
+| `hello` | P → H | `version`, `displayName`, `inviteToken`, `gallery`, `sasCommit` | the first message; `sasCommit` is the SHA-256 of the participant's random number for the verification code |
+| `pending` | H → P | `sasNonce` | waiting for the host's decision; `sasNonce` is the host's random number for the code |
+| `sasReveal` | P → H | `nonce` | the participant's number itself, sent only after `pending`; the host checks it against `sasCommit` |
 | `welcome` | H → P | `sessionName`, `participants[]`, `playback`, `media`, `mediaDataStreams`, `relay`, `relayOverSession`, `relayShared`, `reconnectTicket` | the participant is admitted; `relay` is the port and the credentials of the host's TURN, created for one session; `relayOverSession` means the host accepts TURN over `Relay` streams and no separate port is needed; `relayShared` means it also accepts all of them in one `RelayShared` stream; `reconnectTicket` is the ticket for coming back to this session without a new invitation |
 | `rejected` | H → P | `reason`, `message` | refusal, the connection is closed |
 | `ping` | P → H | `clientSendTime` | a clock probe (t0, µs) |
@@ -50,7 +57,8 @@ Everything that came over the network is checked before use:
 - **A state** is accepted by a participant only when the mode is known, the position lies between zero and 30 days,
   and `rate` is a finite number from 0.5 to 2. Otherwise the state is skipped (in `welcome`, the entry is refused).
 - **An intention** with an unknown `kind` is dropped by the host. The requested position is clamped to the duration
-  of the file and, while that is unknown, to the same 30 days.
+  of the file and, while that is unknown, to the same 30 days. The host takes at most 10 intentions a second from a
+  participant (a sliding window) and drops the rest.
 - **A participant's status** is bounded by the host before any computation or broadcast: times within ±30 days, ping
   from 0 to 600,000 ms, byte counters not below zero. A participant bounds the statuses from `participants` the same
   way.
@@ -68,7 +76,12 @@ does not show it but words the reason in the language of their own interface fro
 `bye` without `reason` for the same reason: texts for people do not travel over the network. A participant ignores
 the field even when a host of another build fills it, and words the end of the session itself.
 
-The order of a connection: `hello` → (`pending`) → `welcome` | `rejected`. The token of an invitation works until
+The order of a connection: `hello` → `pending` → `sasReveal` → `welcome` | `rejected`. The host asks its user only
+after `sasReveal`, and a number that does not match `sasCommit` closes the connection without an answer. A `hello` of
+another `version` or without `sasCommit` gets `rejected` with reason `4`; a participant does not join a host whose
+`pending` has no `sasNonce` or that sends `welcome` before `pending`.
+
+The token of an invitation works until
 its lifetime ends and serves everybody who was invited, but brings at most 16 join requests; trusted contacts may
 connect without a token. A device the host removed or declined needs a token issued later: for an earlier one it gets
 `rejected` with reason `5` or `1` at once, without the host being asked.
@@ -228,14 +241,23 @@ Old versions do not read these fields. The protocol of the server itself is desc
 Both sides compute the code on their own; it never travels over the network.
 
 ```
-hash   = SHA-256(UTF-8("golether-sas-v1|" + low + "|" + high + "|" + context))
+hash   = SHA-256(UTF-8("golether-sas-v2|" + low + "|" + high + "|" + context + "|" + nP + "|" + nH))
 words  = the 24 bits of hash[0..2] (big-endian), cut into three numbers of 6 bits (0–63), the highest first
 number = uint16 little-endian of hash[3..4] mod 100
 ```
 
 `low` and `high` are the two `PeerId`s in ordinal order, so the result does not depend on who computes it. The
 context of an entry is the token the participant presents in `hello`: the invitation token, or the
-`reconnectTicket` when coming back. The context of a tunnel is the `offerId` of its offer (see below).
+`reconnectTicket` when coming back. `nP` and `nH` are the random numbers of the participant and the host, 32 bytes
+each, written as 64 lowercase hexadecimal digits.
+
+The participant commits to `nP` in `hello` (`sasCommit` = SHA-256 of its bytes) before it learns `nH`, and reveals it
+only after. A man in the middle who put his own key into an invitation has to fix his choice on each side before he
+learns the number of the honest side there. He cannot search for keys that give both sides the same code and has one
+chance in 26,214,400 per attempt, while an invitation brings at most 16 attempts.
+
+A tunnel (see below) uses the first version without numbers: `SHA-256(UTF-8("golether-sas-v1|" + low + "|" + high +
+"|" + offerId))`. Its packages are carried by people, and there is no third step to reveal a number in.
 
 A word number is turned into a word only on the screen, by the language pack (`Verification.Word.00` …
 `Verification.Word.63`). Every language names the same 64 things in the same order, so the code is the same in every

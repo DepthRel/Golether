@@ -393,6 +393,10 @@ public sealed partial class MainView : UserControl
             ? new Thickness(0, 0, 0, _keyboardHeight)
             : new Thickness(safe.Left, safe.Top, safe.Right, safe.Bottom + _keyboardHeight);
         Controls.Margin = immersive ? safe : default;
+
+        // The picture fills the cut-out of the screen as well, so the shade under the controls reaches over it too:
+        // otherwise a strip of a light picture stays bright beside the darkened rest.
+        ControlsShade.Margin = immersive ? new Thickness(-safe.Left, -safe.Top, -safe.Right, -safe.Bottom) : default;
         Side.Margin = immersive ? new Thickness(0, safe.Top, safe.Right, safe.Bottom) : default;
         Tiles.IsVisible = !typing && !_landscape;
         Dock.IsVisible = !typing && !_landscape;
@@ -1031,7 +1035,7 @@ public sealed partial class MainView : UserControl
             return;
         }
 
-        var busy = (model.IsPaused && !model.Gallery.ShowsPicture) || model.Drawing.IsPenActive || _openSheet is not null || _chatOpen;
+        var busy = (!model.IsPlaying && !model.Gallery.ShowsPicture) || model.Drawing.IsPenActive || _openSheet is not null || _chatOpen;
 
         if (!busy)
         {

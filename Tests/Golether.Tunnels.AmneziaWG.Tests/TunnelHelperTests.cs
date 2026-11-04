@@ -66,7 +66,7 @@ public sealed class TunnelHelperTests : IDisposable
         foreach (var args in rejected)
         {
             Assert.False(TunnelHelper.TryParse(args, out _, out _, out _), string.Join(' ', args));
-            Assert.Equal(TunnelHelper.INVALID_ARGUMENTS, TunnelHelper.Run(args, Substitute.For<IProcessRunner>(), _amneziaWg));
+            Assert.Equal(TunnelHelper.INVALID_ARGUMENTS, TunnelHelper.Run(args, Substitute.For<IProcessRunner>(), _amneziaWg, PassThrough()));
         }
     }
 
@@ -84,11 +84,11 @@ public sealed class TunnelHelperTests : IDisposable
         runner.RunAsync(_amneziaWg, Arg.Is<IReadOnlyList<string>>(a => a[0] == "/installtunnelservice"), Arg.Any<TimeSpan>(), Arg.Any<CancellationToken>())
             .Returns(new ProcessResult(0, string.Empty, string.Empty), new ProcessResult(5, string.Empty, "Access is denied"));
 
-        Assert.Equal(TunnelHelper.SUCCESS, TunnelHelper.Run(TunnelHelper.BuildArguments("up", config, result), runner, _amneziaWg));
+        Assert.Equal(TunnelHelper.SUCCESS, TunnelHelper.Run(TunnelHelper.BuildArguments("up", config, result), runner, _amneziaWg, PassThrough()));
         Assert.False(File.Exists(result));
         runner.Received(1).RunAsync(_amneziaWg, Arg.Is<IReadOnlyList<string>>(a => a.SequenceEqual(new[] { "/installtunnelservice", config })), Arg.Any<TimeSpan>(), Arg.Any<CancellationToken>());
 
-        Assert.Equal(TunnelHelper.FAILURE, TunnelHelper.Run(TunnelHelper.BuildArguments("up", config, result), runner, _amneziaWg));
+        Assert.Equal(TunnelHelper.FAILURE, TunnelHelper.Run(TunnelHelper.BuildArguments("up", config, result), runner, _amneziaWg, PassThrough()));
         Assert.Contains("Access is denied", File.ReadAllText(result), StringComparison.Ordinal);
     }
 
@@ -105,7 +105,7 @@ public sealed class TunnelHelperTests : IDisposable
         runner.RunAsync(_amneziaWg, Arg.Any<IReadOnlyList<string>>(), Arg.Any<TimeSpan>(), Arg.Any<CancellationToken>())
             .Returns(new ProcessResult(5, string.Empty, "Access is denied"));
 
-        Assert.Equal(TunnelHelper.FAILURE, TunnelHelper.Run(TunnelHelper.BuildArguments("down", config, result), runner, _amneziaWg));
+        Assert.Equal(TunnelHelper.FAILURE, TunnelHelper.Run(TunnelHelper.BuildArguments("down", config, result), runner, _amneziaWg, PassThrough()));
         var text = File.ReadAllText(result);
 
         Assert.DoesNotContain("завершился", text, StringComparison.Ordinal);
@@ -163,7 +163,8 @@ public sealed class TunnelHelperTests : IDisposable
     }
 
     /// <summary>
-    /// On macOS awg-quick runs through the administrator prompt with every argument quoted.
+    /// On macOS the checking script runs through the administrator prompt with every argument quoted: the
+    /// configuration of the data folder is only an argument of the script, never handed to awg-quick itself.
     /// </summary>
     [Fact]
     public async Task Controller_UsesAppleScriptOnMacOs()
@@ -176,9 +177,110 @@ public sealed class TunnelHelperTests : IDisposable
         await controller.DownAsync("golether0", TestContext.Current.CancellationToken);
 
         var path = controller.GetConfigPath("golether0");
-        var expected = $"do shell script (quoted form of \"awg-quick\" & \" \" & quoted form of \"down\" & \" \" & quoted form of {AwgCliTunnelController.AppleScriptString(path)}) with administrator privileges";
+        var quoted = string.Join(" & \" \" & ", new[] { "/bin/sh" }.Concat(QuickScript.BuildArguments("down", path, "golether0", "awg-quick")).Select(a => "quoted form of " + AwgCliTunnelController.AppleScriptString(a)));
+        var expected = $"do shell script ({quoted}) with administrator privileges";
         await runner.Received(1).RunAsync("osascript", Arg.Is<IReadOnlyList<string>>(a => a.SequenceEqual(new[] { "-e", expected })), Arg.Any<TimeSpan>(), Arg.Any<CancellationToken>());
+        Assert.StartsWith("do shell script (quoted form of \"/bin/sh\" & \" \" & quoted form of \"-c\"", expected, StringComparison.Ordinal);
         Assert.Equal("\"a\\\"b\\\\c\"", AwgCliTunnelController.AppleScriptString("a\"b\\c"));
+    }
+
+    /// <summary>
+    /// On Linux the script runs through pkexec, and a configuration the script refuses is reported as such.
+    /// </summary>
+    /// <returns>A task that completes when the test is done.</returns>
+    [Fact]
+    public async Task Controller_UsesTheCheckingScriptOnLinux()
+    {
+        var token = TestContext.Current.CancellationToken;
+        var runner = Substitute.For<IProcessRunner>();
+        runner.RunAsync(default!, default!, default, Arg.Any<CancellationToken>()).ReturnsForAnyArgs(new ProcessResult(QuickScript.REJECTED, string.Empty, string.Empty));
+        var options = new AwgCliOptions { ConfigDirectory = _directory.FullName, ElevationCommand = "pkexec" };
+        var controller = new AwgCliTunnelController(runner, options, isWindows: false);
+
+        var error = await Assert.ThrowsAsync<TunnelControlException>(() => controller.UpAsync("golether0", HostTunnelInterface.Create().BuildConfiguration([]), token));
+
+        Assert.Equal(Texts.Get("Tunnel.Error.ConfigurationRejected"), error.Message);
+        var expected = new[] { "/bin/sh" }.Concat(QuickScript.BuildArguments("up", controller.GetConfigPath("golether0"), "golether0", "awg-quick"));
+        await runner.Received(1).RunAsync("pkexec", Arg.Is<IReadOnlyList<string>>(a => a.SequenceEqual(expected)), Arg.Any<TimeSpan>(), Arg.Any<CancellationToken>());
+    }
+
+    /// <summary>
+    /// The service is made of the protected copies only: the helper installs the configuration and starts the engine
+    /// the guard gave, never the files of the data folder, and forgets the configuration when the tunnel goes down.
+    /// </summary>
+    [Fact]
+    public void Helper_UsesTheProtectedCopies()
+    {
+        var config = WriteConfig("golether0");
+        var result = Path.Combine(_directory.FullName, "p.result");
+        const string ENGINE = @"C:\Program Files\Golether Tunnel\engine\amneziawg.exe";
+        const string PROTECTED_CONFIG = @"C:\Program Files\Golether Tunnel\configurations\golether0.conf";
+        var guard = Substitute.For<ITunnelEngineGuard>();
+        guard.PrepareEngine(_amneziaWg).Returns(ENGINE);
+        guard.PrepareConfiguration("golether0", config).Returns(PROTECTED_CONFIG);
+        var runner = Substitute.For<IProcessRunner>();
+        runner.RunAsync(default!, default!, default, Arg.Any<CancellationToken>()).ReturnsForAnyArgs(new ProcessResult(0, string.Empty, string.Empty));
+
+        Assert.Equal(TunnelHelper.SUCCESS, TunnelHelper.Run(TunnelHelper.BuildArguments("up", config, result), runner, _amneziaWg, guard));
+        Assert.Equal(TunnelHelper.SUCCESS, TunnelHelper.Run(TunnelHelper.BuildArguments("down", config, result), runner, _amneziaWg, guard));
+
+        runner.Received(1).RunAsync(ENGINE, Arg.Is<IReadOnlyList<string>>(a => a.SequenceEqual(new[] { "/installtunnelservice", PROTECTED_CONFIG })), Arg.Any<TimeSpan>(), Arg.Any<CancellationToken>());
+        runner.DidNotReceive().RunAsync(_amneziaWg, Arg.Any<IReadOnlyList<string>>(), Arg.Any<TimeSpan>(), Arg.Any<CancellationToken>());
+        guard.Received(1).ForgetConfiguration("golether0");
+    }
+
+    /// <summary>
+    /// A file of the engine that is not the official one stops the change, and the application says so in the
+    /// language of the user.
+    /// </summary>
+    [Fact]
+    public void Helper_StopsOnAChangedEngine()
+    {
+        var config = WriteConfig("golether0");
+        var result = Path.Combine(_directory.FullName, "e.result");
+        var guard = Substitute.For<ITunnelEngineGuard>();
+        guard.PrepareEngine(Arg.Any<string>()).Returns<string>(_ => throw new TunnelControlException(TunnelHelper.EncodeEngineChanged("wintun.dll")));
+        var runner = Substitute.For<IProcessRunner>();
+
+        Assert.Equal(TunnelHelper.FAILURE, TunnelHelper.Run(TunnelHelper.BuildArguments("up", config, result), runner, _amneziaWg, guard));
+
+        Assert.Equal(Texts.Format("Tunnel.Error.EngineChanged", "wintun.dll"), TunnelHelper.DescribeFailure(File.ReadAllText(result)));
+        runner.DidNotReceiveWithAnyArgs().RunAsync(default!, default!, default, TestContext.Current.CancellationToken);
+    }
+
+    /// <summary>
+    /// An application that runs with administrator rights changes tunnels from the protected copies as well, and
+    /// without a guard it changes none.
+    /// </summary>
+    /// <returns>A task that completes when the test is done.</returns>
+    [Fact]
+    public async Task Controller_WithAdministratorRights_UsesTheGuard()
+    {
+        var token = TestContext.Current.CancellationToken;
+        var runner = Substitute.For<IProcessRunner>();
+        runner.RunAsync(default!, default!, default, Arg.Any<CancellationToken>()).ReturnsForAnyArgs(new ProcessResult(0, string.Empty, string.Empty));
+        var options = new AwgCliOptions { ConfigDirectory = _directory.FullName, WindowsExecutable = _amneziaWg };
+        var guard = PassThrough();
+        var controller = new AwgCliTunnelController(runner, options, isWindows: true, guard: guard);
+
+        await controller.UpAsync("golether0", HostTunnelInterface.Create().BuildConfiguration([]), token);
+
+        guard.Received(1).PrepareEngine(_amneziaWg);
+        guard.Received(1).PrepareConfiguration("golether0", controller.GetConfigPath("golether0"));
+        var unguarded = new AwgCliTunnelController(runner, options, isWindows: true);
+        await Assert.ThrowsAsync<TunnelControlException>(() => unguarded.DownAsync("golether0", token));
+    }
+
+    /// <summary>
+    /// A guard that gives the files as they are, for the tests of the steps around it.
+    /// </summary>
+    /// <returns>The guard.</returns>
+    private static ITunnelEngineGuard PassThrough()
+    {
+        var guard = Substitute.For<ITunnelEngineGuard>();
+        guard.PrepareEngine(Arg.Any<string>()).Returns(call => call.Arg<string>());
+        guard.PrepareConfiguration(Arg.Any<string>(), Arg.Any<string>()).Returns(call => call.ArgAt<string>(1));
+        return guard;
     }
 
     /// <summary>

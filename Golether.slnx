@@ -74,9 +74,7 @@
   <Folder Name="/Sources/" />
   <Folder Name="/Sources/Apps/">
     <Project Path="Sources/Apps/Golether.Client/Golether.Client.csproj" />
-    <Project Path="Sources/Apps/Golether.Mobile/Golether.Mobile.csproj">
-      <Build Project="false" />
-    </Project>
+    <Project Path="Sources/Apps/Golether.Mobile/Golether.Mobile.csproj" />
     <Project Path="Sources/Apps/Golether.Mobile.Android/Golether.Mobile.Android.csproj">
       <Build Project="false" />
     </Project>
@@ -149,9 +147,7 @@
     <Project Path="Tests/Golether.Media.Conference.GStreamer.Tests/Golether.Media.Conference.GStreamer.Tests.csproj" />
     <Project Path="Tests/Golether.Media.Player.Tests/Golether.Media.Player.Tests.csproj" />
     <Project Path="Tests/Golether.Media.Streaming.Tests/Golether.Media.Streaming.Tests.csproj" />
-    <Project Path="Tests/Golether.Mobile.Tests/Golether.Mobile.Tests.csproj">
-      <Build Project="false" />
-    </Project>
+    <Project Path="Tests/Golether.Mobile.Tests/Golether.Mobile.Tests.csproj" />
     <Project Path="Tests/Golether.Security.Tests/Golether.Security.Tests.csproj" />
     <Project Path="Tests/Golether.Session.Hosting.Tests/Golether.Session.Hosting.Tests.csproj" />
     <Project Path="Tests/Golether.Session.Tests/Golether.Session.Tests.csproj" />

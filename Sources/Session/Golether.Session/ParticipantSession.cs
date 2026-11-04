@@ -453,10 +453,15 @@ public sealed class ParticipantSession : IAsyncDisposable
 
         _invite = invite;
         _sessionName = invite.SessionName;
-        _code = VerificationCode.Compute(invite.HostPeerId, _identity.PeerId, invite.Token);
         var stream = await ConnectAnyAsync(invite, cancellationToken).ConfigureAwait(false);
         _channel = new SessionMessageChannel(stream.Stream);
-        await _channel.SendAsync(new HelloMessage(SessionMessage.PROTOCOL_VERSION, DisplayName, invite.Token) { Gallery = true }, cancellationToken).ConfigureAwait(false);
+
+        // The number of this side goes into the code; the hello carries only the commitment to it, and the number
+        // itself follows when the host has named its own.
+        var nonce = SasCommitment.CreateNonce();
+        await _channel.SendAsync(
+            new HelloMessage(SessionMessage.PROTOCOL_VERSION, DisplayName, invite.Token) { Gallery = true, SasCommit = SasCommitment.Commit(nonce) },
+            cancellationToken).ConfigureAwait(false);
 
         WelcomeMessage welcome;
         while (true)
@@ -473,9 +478,22 @@ public sealed class ParticipantSession : IAsyncDisposable
 
             switch (message)
             {
-                case PendingApprovalMessage:
+                case PendingApprovalMessage pending when _code is null:
+                    if (!SasCommitment.IsWellFormed(pending.SasNonce))
+                    {
+                        // A host without its number would give a code that can be searched for: not joined.
+                        SetState(SessionState.Ended);
+                        throw new SessionJoinException(SessionTexts.DescribeRejection(RejectReason.IncompatibleVersion));
+                    }
+
+                    await _channel.SendAsync(new SasRevealMessage(nonce), cancellationToken).ConfigureAwait(false);
+                    _code = VerificationCode.ComputeForSession(invite.HostPeerId, _identity.PeerId, invite.Token, nonce, pending.SasNonce!);
                     SetState(SessionState.AwaitingApproval);
                     continue;
+                case WelcomeMessage when _code is null:
+                    // Admitted without the numbers of the code: nothing could be compared, so nothing is trusted.
+                    SetState(SessionState.Ended);
+                    throw new SessionJoinException(SessionTexts.DescribeRejection(RejectReason.IncompatibleVersion));
                 case RejectedMessage rejected:
                     // A host that did not answer in time or has no free place may be asked again; any other
                     // refusal is its decision.
@@ -682,7 +700,11 @@ public sealed class ParticipantSession : IAsyncDisposable
     /// <param name="index">The picture, or <see langword="null"/> when following the common screen.</param>
     public void SetGalleryView(int? index)
     {
-        _galleryView = index;
+        lock (_gate)
+        {
+            _galleryView = index;
+        }
+
         Changed?.Invoke(this, EventArgs.Empty);
     }
 
@@ -917,7 +939,17 @@ public sealed class ParticipantSession : IAsyncDisposable
             }
         }
 
-        cancellationToken.ThrowIfCancellationRequested();
+        if (cancellationToken.IsCancellationRequested)
+        {
+            // A route may have won just before the user gave up: its connection would stay open at the host.
+            if (winner is { } abandoned)
+            {
+                await abandoned.Stream.DisposeAsync().ConfigureAwait(false);
+            }
+
+            cancellationToken.ThrowIfCancellationRequested();
+        }
+
         if (winner is { } won)
         {
             // A route that verified the pinned key wins even if another address presented a foreign one.
@@ -1581,6 +1613,13 @@ public sealed class ParticipantSession : IAsyncDisposable
     {
         var local = _localStatus;
         var roundTrip = _estimator.RoundTrip;
+        int? galleryView;
+        lock (_gate)
+        {
+            // The lock may be held already (a snapshot is being built): it lets the same thread in again.
+            galleryView = _galleryView;
+        }
+
         return new ParticipantStatus
         {
             PeerId = _identity.PeerId,
@@ -1594,7 +1633,7 @@ public sealed class ParticipantSession : IAsyncDisposable
             CameraOff = _conference?.CameraOff ?? true,
             BytesFromPeers = _swarm?.BytesFromPeers ?? 0,
             BytesToPeers = _sharing?.Exchange.BytesSent ?? 0,
-            GalleryView = _galleryView,
+            GalleryView = galleryView,
         };
     }
 

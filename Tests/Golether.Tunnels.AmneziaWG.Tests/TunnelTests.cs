@@ -219,7 +219,8 @@ public sealed class TunnelTests
     }
 
     /// <summary>
-    /// On Linux and macOS the controller writes the configuration and calls awg-quick with the file path.
+    /// On Linux and macOS the controller writes the configuration and runs the checking script with its path, once for
+    /// "up": the script takes the old tunnel down itself.
     /// </summary>
     [Fact]
     public async Task Controller_UsesAwgQuick()
@@ -236,7 +237,9 @@ public sealed class TunnelTests
 
             var path = controller.GetConfigPath("golether0");
             Assert.Equal(configuration.Render(), await File.ReadAllTextAsync(path, TestContext.Current.CancellationToken));
-            await runner.Received(1).RunAsync("pkexec", Arg.Is<IReadOnlyList<string>>(a => a.SequenceEqual(new[] { "awg-quick", "up", path })), Arg.Any<TimeSpan>(), Arg.Any<CancellationToken>());
+            var expected = new[] { "/bin/sh" }.Concat(QuickScript.BuildArguments("up", path, "golether0", "awg-quick"));
+            await runner.Received(1).RunAsync("pkexec", Arg.Is<IReadOnlyList<string>>(a => a.SequenceEqual(expected)), Arg.Any<TimeSpan>(), Arg.Any<CancellationToken>());
+            Assert.Single(runner.ReceivedCalls());
             Assert.Throws<ArgumentException>(() => controller.GetConfigPath("../evil"));
         }
         finally
@@ -259,7 +262,7 @@ public sealed class TunnelTests
             var engine = Path.Combine(directory.FullName, "amneziawg.exe");
             File.WriteAllText(engine, "engine");
             var options = new AwgCliOptions { ConfigDirectory = directory.FullName, WindowsExecutable = engine };
-            var controller = new AwgCliTunnelController(runner, options, isWindows: true);
+            var controller = new AwgCliTunnelController(runner, options, isWindows: true, guard: new PassThroughGuard());
 
             var error = await Assert.ThrowsAsync<TunnelControlException>(() =>
                 controller.UpAsync("golether0", HostTunnelInterface.Create().BuildConfiguration([]), TestContext.Current.CancellationToken));
@@ -294,7 +297,7 @@ public sealed class TunnelTests
                 WindowsExecutable = Path.Combine(directory.FullName, "nowhere", "amneziawg.exe"),
                 FindCarriedExecutable = () => File.Exists(carried) ? carried : null,
             };
-            var controller = new AwgCliTunnelController(runner, options, isWindows: true);
+            var controller = new AwgCliTunnelController(runner, options, isWindows: true, guard: new PassThroughGuard());
             var configuration = HostTunnelInterface.Create().BuildConfiguration([]);
 
             Assert.Contains("не установлен", await controller.CheckAvailabilityAsync(token) ?? string.Empty, StringComparison.Ordinal);

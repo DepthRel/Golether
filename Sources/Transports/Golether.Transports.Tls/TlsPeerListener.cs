@@ -52,6 +52,16 @@ public sealed class TlsPeerListener : IPeerListener
     private readonly SemaphoreSlim _handshakeSlots;
 
     /// <summary>
+    /// The handshakes running now by remote address; an address that has none is not kept.
+    /// </summary>
+    private readonly Dictionary<IPAddress, int> _handshakesByAddress = [];
+
+    /// <summary>
+    /// Guards <see cref="_handshakesByAddress"/>.
+    /// </summary>
+    private readonly Lock _addressGate = new();
+
+    /// <summary>
     /// Stops the accept loop.
     /// </summary>
     private readonly CancellationTokenSource _stopping = new();
@@ -213,9 +223,21 @@ public sealed class TlsPeerListener : IPeerListener
     private async Task HandshakeAsync(Socket socket, CancellationToken cancellationToken)
     {
         var remote = socket.RemoteEndPoint?.ToString();
+        var address = TlsProtocol.GetEndPoint(socket.RemoteEndPoint)?.Address;
+
+        // Connections of this device itself are not counted: only a remote crowd can keep the participants out.
+        var counted = address is not null && !IPAddress.IsLoopback(address);
         SslStream? ssl = null;
         try
         {
+            if (counted && !TryCountHandshake(address!))
+            {
+                counted = false;
+                _logger.LogWarning("Dropped {Remote}: too many handshakes from that address at once", remote);
+                socket.Dispose();
+                return;
+            }
+
             using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
             timeout.CancelAfter(_options.HandshakeTimeout);
 
@@ -268,7 +290,51 @@ public sealed class TlsPeerListener : IPeerListener
                 await ssl.DisposeAsync().ConfigureAwait(false);
             }
 
+            if (counted)
+            {
+                ReleaseHandshake(address!);
+            }
+
             _handshakeSlots.Release();
+        }
+    }
+
+    /// <summary>
+    /// Counts a handshake of a remote address, unless that address runs as many as it may already.
+    /// </summary>
+    /// <param name="address">The remote address.</param>
+    /// <returns><see langword="false"/> when the handshake is one too many.</returns>
+    private bool TryCountHandshake(IPAddress address)
+    {
+        lock (_addressGate)
+        {
+            var count = _handshakesByAddress.GetValueOrDefault(address);
+            if (count >= _options.MaxPendingHandshakesPerAddress)
+            {
+                return false;
+            }
+
+            _handshakesByAddress[address] = count + 1;
+            return true;
+        }
+    }
+
+    /// <summary>
+    /// Notes that a counted handshake of a remote address ended.
+    /// </summary>
+    /// <param name="address">The remote address.</param>
+    private void ReleaseHandshake(IPAddress address)
+    {
+        lock (_addressGate)
+        {
+            if (_handshakesByAddress.TryGetValue(address, out var count) && count > 1)
+            {
+                _handshakesByAddress[address] = count - 1;
+            }
+            else
+            {
+                _handshakesByAddress.Remove(address);
+            }
         }
     }
 }
